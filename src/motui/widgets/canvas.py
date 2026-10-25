@@ -37,7 +37,7 @@ from __future__ import annotations
 
 from ..kernel.cell import Cell, Line, Segment, Surface
 from ..kernel.glyphs import GLYPHS, Border, Glyphs
-from ..kernel.layout import Constraints, as_constraints
+from ..kernel.layout import Constraints
 from ..kernel.style import NONE, Style
 from ..kernel.text import visible_width
 from .base import Widget
@@ -432,14 +432,13 @@ class Canvas(Widget):
         self._surface = Surface(width=self._width, rows=tuple(lines))
         return self._surface
 
-    def render(self, c: Constraints | int) -> Surface:
+    def render(self, c: Constraints) -> Surface:
         """The canvas clipped to ``c``: ``max_height`` rows, at most ``width``.
 
         A natural-height constraint (``max_height is None``) takes the whole
         canvas; a budget takes the leading rows.  Rows are clipped, never
         padded, and the surface width is the constraint's width.
         """
-        c = as_constraints(c)
         image = self.surface()
         height = image.height if c.max_height is None else min(image.height, c.max_height)
         if height == image.height and c.width == image.width:
@@ -623,9 +622,8 @@ class Sparkline:
         """The row cache's snapshot: the values and the drawing knobs."""
         return (tuple(self.values), self.marker, self.style, self.glyphs)
 
-    def render(self, c: Constraints | int) -> Surface:
+    def render(self, c: Constraints) -> Surface:
         """Plot the values into a canvas at the constraint's size."""
-        c = as_constraints(c)
         height = 1 if c.max_height is None else c.max_height
         if c.width <= 0 or height <= 0:
             return Surface(width=c.width, rows=())

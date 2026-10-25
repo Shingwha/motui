@@ -8,7 +8,6 @@ import pytest
 
 from motui.kernel.cell import Cell, Line, Segment, Style, Surface
 from motui.kernel.geom import Size
-from motui.kernel.layout import Constraints, as_constraints
 
 # -- the content door -------------------------------------------------------
 
@@ -259,17 +258,3 @@ def test_surface_of_pads_by_contract_by_default() -> None:
 
 
 # -- constraints ------------------------------------------------------------
-
-
-def test_as_constraints_normalizes_both_spellings() -> None:
-    constraints = Constraints(width=12, max_height=3)
-    assert as_constraints(constraints) is constraints
-    assert as_constraints(12) == Constraints(width=12)
-    assert as_constraints(0) == Constraints(width=0)
-
-
-def test_as_constraints_rejects_negative_width_and_other_types() -> None:
-    with pytest.raises(ValueError):
-        as_constraints(-1)
-    with pytest.raises(TypeError):
-        as_constraints("12")  # type: ignore[arg-type]

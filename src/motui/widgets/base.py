@@ -10,13 +10,14 @@ and reads the role group it paints when it renders, so assigning a new
 
 Subclasses implement :meth:`render` and override only the verbs they take.
 A pure renderer need not inherit this class at all: :class:`Component` --
-one ``render(width)`` -- remains the rendering obligation.
+one ``render(c) -> Surface`` -- remains the rendering obligation.
 """
 
 from __future__ import annotations
 
 from ..kernel.events import Event
-from ..kernel.cell import Line
+from ..kernel.cell import Surface
+from ..kernel.layout import Constraints
 from ..kernel.theme import DEFAULT_THEME, Styles, Theme
 
 __all__ = ["Widget"]
@@ -60,7 +61,7 @@ class Widget:
                 return override
         return getattr(self._theme, name)
 
-    def render(self, width: int) -> list[Line]:
+    def render(self, c: Constraints) -> Surface:
         """Paint the widget's rows; every concrete widget implements this."""
         raise NotImplementedError
 

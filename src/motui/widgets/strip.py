@@ -16,7 +16,7 @@ from typing import Sequence
 
 from ..widgets.cursor import Cursor
 from ..kernel.cell import Line, Surface
-from ..kernel.layout import Constraints, as_constraints
+from ..kernel.layout import Constraints
 from ..kernel.text import visible_width
 from ..widgets.base import Widget
 
@@ -211,18 +211,16 @@ class LabelStrip(ClampedCursor, Widget):
             x += span
         return tuple(spans)
 
-    def render(self, c: Constraints | int) -> Surface:
+    def render(self, c: Constraints) -> Surface:
         """The strip's one row (or one empty row for an empty strip), ``fit``.
 
-        A bare ``int`` is the 1.x spelling and is normalized through
-        :func:`motui.kernel.layout.as_constraints`; the subclass's
-        :meth:`_layout` supplies the row and its span table, and the render
+        The subclass's :meth:`_layout` supplies the row and its span table,
+        and the render
         records both for the hits.  A ``max_height`` of zero paints no row
         at all (the strip's height budget is its one row), while
         ``_last_width`` still records the width the cells were measured
         against.  The surface is :meth:`Surface.clipped`, not padded.
         """
-        c = as_constraints(c)
         self._last_width = c.width  # the geometry ``click`` maps a column against
         line, spans = self._layout(c.width)
         self._spans = spans

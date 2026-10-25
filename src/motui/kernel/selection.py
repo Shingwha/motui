@@ -29,7 +29,7 @@ from dataclasses import replace
 
 from .cell import Line, cut_line
 from .document import Document
-from .layout import ScreenLayout
+from .layout import Constraints, ScreenLayout
 from .style import Style
 
 __all__ = ["Selection", "SelectionAnchor", "extract", "highlight"]
@@ -295,7 +295,7 @@ def extract(document: Document, selection: Selection | None, *, width: int) -> s
     for block in blocks:
         if not resolved.holds(block.id):
             continue  # outside the range (or already removed): nothing to render
-        for row_index, row in enumerate(block.rows_view(width)):
+        for row_index, row in enumerate(block.rows_view(Constraints(width=width))):
             span = resolved.row_range(block.id, row_index)
             if span is None:
                 continue

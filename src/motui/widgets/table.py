@@ -111,7 +111,7 @@ from typing import NamedTuple
 from ..widgets.cursor import Cursor
 from ..kernel.glyphs import GLYPHS, Border, Glyphs, pair_seat, seat_width
 from ..kernel.cell import Line, Segment, Surface, fuse, overlay, rest, wrap_line
-from ..kernel.layout import Constraints, as_constraints
+from ..kernel.layout import Constraints
 from ..widgets.mark import MarkSet
 from ..kernel.style import NONE, Style
 from ..kernel.text import visible_width
@@ -806,11 +806,10 @@ class Table(Widget):
         """
         return self._revision()
 
-    def render(self, c: Constraints | int) -> Surface:
+    def render(self, c: Constraints) -> Surface:
         """The grid at the constraint width, remembered while the snapshot holds.
 
-        A bare ``int`` is the 1.x spelling and is normalized through
-        :func:`motui.kernel.layout.as_constraints`; a ``max_height`` budget
+        A ``max_height`` budget
         truncates the leading grid rows, so a table inside a shorter pane
         never paints past its slot.  The budget is deliberately not part of
         the memory's key: the full grid at the width is remembered once and
@@ -827,7 +826,6 @@ class Table(Widget):
         :meth:`click` / :meth:`hover_at` -- the last render's full layout,
         which also describes the untruncated rows a host may have pinned.
         """
-        c = as_constraints(c)
         width = c.width
         revision = self._revision()
         rows = self._memo_rows

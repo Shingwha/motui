@@ -90,7 +90,7 @@ from ..widgets.cursor import Cursor
 from ..kernel.events import Event, KeyEvent
 from ..kernel.glyphs import GLYPHS, Glyphs, pair_seat, seat, seat_width
 from ..kernel.cell import Line, Segment, Surface, rest
-from ..kernel.layout import Constraints, as_constraints
+from ..kernel.layout import Constraints
 from ..widgets.mark import MarkSet
 from ..kernel.style import Style
 from ..kernel.theme import Styles, Theme
@@ -509,11 +509,10 @@ class List(Widget):
             self.styles,
         )
 
-    def render(self, c: Constraints | int) -> Surface:
+    def render(self, c: Constraints) -> Surface:
         """The window of item rows and the counter rows, fitted to the width.
 
-        A bare ``int`` is the 1.x spelling and is normalized through
-        :func:`motui.kernel.layout.as_constraints`; a ``max_height`` budget
+        The constraint carries the width; a ``max_height`` budget
         truncates the leading rows (the window never grows past the height
         it was offered).  Every row goes through the row-band contract
         (:func:`~motui.kernel.cell.rest`): the
@@ -523,7 +522,6 @@ class List(Widget):
         band on a disabled item.  The surface is :meth:`Surface.clipped`,
         not padded, so the bytes a layout paints are the 1.x rows.
         """
-        c = as_constraints(c)
         count = len(self.items)
         if count == 0:
             return Surface.clipped([], c.width)

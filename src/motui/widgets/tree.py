@@ -55,7 +55,7 @@ from __future__ import annotations
 from ..widgets.cursor import Cursor
 from ..kernel.glyphs import GLYPHS, Glyphs, pair_seat, seat_width
 from ..kernel.cell import Line, Segment, Surface, rest
-from ..kernel.layout import Constraints, as_constraints
+from ..kernel.layout import Constraints
 from ..kernel.style import Style
 from ..kernel.theme import Styles, Theme
 from ..widgets.base import Widget
@@ -409,16 +409,14 @@ class Tree(Widget):
         walk(self.root_nodes)
         return tuple(out)
 
-    def render(self, c: Constraints | int) -> Surface:
+    def render(self, c: Constraints) -> Surface:
         """One row per visible node, each through the row-band contract.
 
-        A bare ``int`` is the 1.x spelling and is normalized through
-        :func:`motui.kernel.layout.as_constraints`; a ``max_height`` budget
+        The constraint carries the width; a ``max_height`` budget
         truncates the leading visible rows (the tree never grows past the
         height it was offered).  The rows are :meth:`Surface.clipped`, not
         padded, so short rows keep the bytes they always had.
         """
-        c = as_constraints(c)
         visible = self._visible()
         cursor = self._cursor_index(visible)
         out: list[Line] = []

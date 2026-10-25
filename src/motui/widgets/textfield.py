@@ -53,7 +53,7 @@ import re
 from ..kernel.events import Event, PasteEvent
 from ..kernel.glyphs import GLYPHS, Glyphs, seat
 from ..kernel.cell import Line, Segment, Surface
-from ..kernel.layout import Constraints, as_constraints
+from ..kernel.layout import Constraints
 from ..kernel.text import visible_width
 from ..kernel.theme import Styles, Theme
 from ..widgets.base import Widget
@@ -508,11 +508,10 @@ class _TextField(Widget):
         """
         return self._revision()
 
-    def render(self, c: Constraints | int) -> Surface:
+    def render(self, c: Constraints) -> Surface:
         """The rendered rows at the constrained width, remembered while the snapshot holds.
 
-        A bare ``int`` is the 1.x width spelling and is normalized through
-        :func:`~motui.kernel.layout.as_constraints`.  While the width and
+        While the width and
         :meth:`_revision` are unchanged, the remembered rows of the last
         render come back as a list copy -- no re-walk over the buffer's
         visual geometry, no row bodies rebuilt (the component's memory).  A
@@ -528,7 +527,6 @@ class _TextField(Widget):
         surface is :meth:`~motui.kernel.cell.Surface.clipped`, not padded --
         the painted bytes are the rows the 1.x list answer produced.
         """
-        c = as_constraints(c)
         width = c.width
         self._buf.last_width = width
         revision = self._revision()

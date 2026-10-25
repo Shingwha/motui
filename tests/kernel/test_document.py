@@ -33,42 +33,42 @@ class _SurfaceRows:
 def test_block_render_forwards_to_its_component():
     component = Rows("hello")
     block = Section("b1", component)
-    assert block.render(42) == [Line.from_text("hello")]
-    assert Section("b1", Rows("second")).render(10) == [Line.from_text("second")]
+    assert block.render(Constraints(width=42)) == [Line.from_text("hello")]
+    assert Section("b1", Rows("second")).render(Constraints(width=10)) == [Line.from_text("second")]
 
 
 def test_block_rows_follow_the_component_and_the_width():
     block = Section("b", Text("hello world"))
-    assert [row.text for row in block.rows(20)] == ["hello world"]
-    assert [row.text for row in block.rows(5)] == ["hello", "world"]
+    assert [row.text for row in block.rows(Constraints(width=20))] == ["hello world"]
+    assert [row.text for row in block.rows(Constraints(width=5))] == ["hello", "world"]
     block.component.text = "changed"
-    assert [row.text for row in block.rows(20)] == ["changed"]
+    assert [row.text for row in block.rows(Constraints(width=20))] == ["changed"]
 
 
 def test_block_rows_return_a_fresh_list_the_caller_owns():
     block = Section("b", Rows("a", "b"))
-    rows = block.rows(10)
+    rows = block.rows(Constraints(width=10))
     rows.append(Line.from_text("extra"))
-    assert [row.text for row in block.rows(10)] == ["a", "b"]
+    assert [row.text for row in block.rows(Constraints(width=10))] == ["a", "b"]
 
 
 def test_block_rows_view_borrows_the_same_list_on_a_hit():
     block = Section("b", Text("hello world"))
-    first = block.rows_view(20)
-    second = block.rows_view(20)
+    first = block.rows_view(Constraints(width=20))
+    second = block.rows_view(Constraints(width=20))
     assert first is second  # the cache list itself: borrowed, not copied
     assert [row.text for row in first] == ["hello world"]
     block.component.text = "changed"
-    assert [row.text for row in block.rows_view(20)] == ["changed"]
+    assert [row.text for row in block.rows_view(Constraints(width=20))] == ["changed"]
 
 
 def test_block_row_count_matches_len_rows_in_both_cache_states():
     block = Section("b", Text("hello world"))  # cacheable
     for _ in range(2):  # first pass fills the cache (miss), second reads it (hit)
-        assert block.row_count(5) == len(block.rows(5)) == 2
+        assert block.row_count(Constraints(width=5)) == len(block.rows(Constraints(width=5))) == 2
     plain = Section("p", Rows("a", "b", "c"))  # no revision protocol: never cached
     for _ in range(2):
-        assert plain.row_count(20) == len(plain.rows(20)) == 3
+        assert plain.row_count(Constraints(width=20)) == len(plain.rows(Constraints(width=20))) == 3
 
 
 def test_document_auto_ids_skip_explicit_ones():
@@ -183,7 +183,7 @@ def test_section_render_stays_a_list_convenience_door():
     rendered = block.render(Constraints(width=10))
     assert isinstance(rendered, list)
     assert rendered == [Line.from_text("hello")]
-    assert block.render(10) == rendered
+    assert block.render(Constraints(width=10)) == rendered
 
 
 # -- placement, sizing and fill ---------------------------------------------

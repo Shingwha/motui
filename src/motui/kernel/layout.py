@@ -42,7 +42,6 @@ __all__ = [
     "ScrollState",
     "Scrollable",
     "Viewport",
-    "as_constraints",
 ]
 
 
@@ -64,23 +63,6 @@ class Constraints:
             raise ValueError(
                 f"constraints max_height must not be negative, got {self.max_height}"
             )
-
-
-def as_constraints(value: Constraints | int) -> Constraints:
-    """Normalize a render argument: an ``int`` width becomes constraints.
-
-    The 2.0 component signature takes :class:`Constraints`; the 1.x tests and
-    call sites still pass a bare width.  Accepting both at the seam keeps the
-    old spelling working while a component migrates, without each component
-    re-spelling the conversion.  A negative width is rejected by
-    ``Constraints`` itself, so both spellings fail with the same
-    ``ValueError``.
-    """
-    if isinstance(value, Constraints):
-        return value
-    if isinstance(value, int):
-        return Constraints(width=value)
-    raise TypeError(f"expected Constraints or int, got {type(value).__name__}")
 
 
 @dataclass(frozen=True, slots=True, kw_only=True)

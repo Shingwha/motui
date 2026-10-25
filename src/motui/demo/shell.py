@@ -19,7 +19,7 @@ from __future__ import annotations
 from typing import TYPE_CHECKING, Sequence
 
 from motui import Line, Text, Theme
-from motui.kernel import Component
+from motui.kernel import Component, Constraints, Surface
 from motui.widgets import Column, MenuBar, NavList, ShortcutBar, StatusLine
 
 from .assets import THEMES
@@ -77,16 +77,23 @@ class Header(Component):
         self.theme = theme
         self._menu_width = 0
 
-    def render(self, width: int) -> list[Line]:
-        right = Text(f"theme: {self.label}", style=self.theme.text.faint).render(width)
+    def render(self, c: Constraints) -> Surface:
+        width = c.width
+        right = Text(f"theme: {self.label}", style=self.theme.text.faint).render(
+            Constraints(width=width)
+        )
         right_line = right[0] if right else Line()
         menu_width = max(0, width - right_line.width - 2)
         self._menu_width = menu_width
-        menu_line = self.menu.render(menu_width)[0] if menu_width else Line()
+        menu_line = (
+            self.menu.render(Constraints(width=menu_width))[0] if menu_width else Line()
+        )
         gap = width - menu_line.width - right_line.width
         if gap < 0:
-            return [Line.from_text("motui studio").fit(width)]
-        return [(menu_line + Line.filled(gap) + right_line).fit(width)]
+            rows = [Line.from_text("motui studio").fit(width)]
+        else:
+            rows = [(menu_line + Line.filled(gap) + right_line).fit(width)]
+        return Surface.clipped(rows, width)
 
     def child_at(self, row: int, col: int) -> tuple[Component, int, int] | None:
         if row == 0 and 0 <= col < self._menu_width:

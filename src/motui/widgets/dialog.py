@@ -35,7 +35,7 @@ from ..kernel.document import Component, Revisioned
 from ..kernel.events import Event, KeyEvent
 from ..kernel.glyphs import GLYPHS, Border, Glyphs
 from ..kernel.cell import Line, Segment, Surface
-from ..kernel.layout import Constraints, as_constraints
+from ..kernel.layout import Constraints
 from ..widgets.text import Text
 from ..kernel.style import Style
 from ..kernel.text import ellipsize_tail, visible_width
@@ -423,7 +423,7 @@ class Dialog(Widget):
 
     # -- rendering ---------------------------------------------------------------
 
-    def render(self, c: Constraints | int) -> Surface:
+    def render(self, c: Constraints) -> Surface:
         """The box: the title edge, the body, the button row, the bottom edge.
 
         The box's width is ``width`` when the constructor pinned one, else
@@ -435,14 +435,11 @@ class Dialog(Widget):
         truncates instead of overflowing.  Borderless, the frame rows and
         the title are gone and the body is the box's first row.
 
-        A bare ``int`` is the 1.x width spelling and is normalized through
-        :func:`~motui.kernel.layout.as_constraints`; the body and buttons
-        still render at their int widths.  A ``max_height`` budget truncates
+        The body and buttons render at their inner widths.  A ``max_height`` budget truncates
         the assembled rows, the body/button geometry (:attr:`_body_rows`,
         :attr:`_hit`) stays the untruncated table :meth:`child_at` maps
         through, and the surface is clipped, not padded.
         """
-        c = as_constraints(c)
         width = c.width
         box = self.width if self.width is not None else min(72, max(24, width * 3 // 5))
         box = max(0, min(box, width))
@@ -463,7 +460,7 @@ class Dialog(Widget):
             return Surface.clipped(rows, c.width)
         lead = 2 if self.frame else 1  # the border and one pad column, or the pad alone
         inner = max(0, box - 2 * lead)  # the text's cells
-        self._body_rows = list(self.body.render(inner))
+        self._body_rows = list(self.body.render(Constraints(width=inner)))
         self._body_start = 1 if self.frame else 0
         self._body_lead = lead
         self._body_inner = inner
@@ -551,7 +548,7 @@ class Dialog(Widget):
         box's left edge -- are remembered for :meth:`click`.
         """
         lines = [
-            button.render(visible_width(button.label) + 2)[0] for button in self._buttons
+            button.render(Constraints(width=visible_width(button.label) + 2))[0] for button in self._buttons
         ]
         content = Line()
         offsets: list[int] = []

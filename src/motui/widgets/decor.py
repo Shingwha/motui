@@ -17,7 +17,7 @@ from __future__ import annotations
 from ..kernel.document import Component, Revisioned
 from ..kernel.glyphs import GLYPHS, Border, Glyphs
 from ..kernel.cell import Line, Segment, Surface
-from ..kernel.layout import Constraints, as_constraints
+from ..kernel.layout import Constraints
 from ..kernel.style import Style
 from ..kernel.text import ellipsize_tail, visible_width
 from ..kernel.theme import Styles, Theme
@@ -145,13 +145,12 @@ class Divider(Widget):
             self.styles,
         )
 
-    def render(self, c: Constraints | int) -> Surface:
+    def render(self, c: Constraints) -> Surface:
         """The rule at the constraints' width, as a clipped surface.
 
         A bare ``int`` is the 1.x spelling; ``max_height`` truncates (a rule
         is one row, so a zero budget answers an empty surface).
         """
-        c = as_constraints(c)
         width = c.width
         style = self.group("borders").base
         label_style = self.group("text").muted
@@ -273,14 +272,13 @@ class Panel(Widget):
             _child_key(self.child),
         )
 
-    def render(self, c: Constraints | int) -> Surface:
+    def render(self, c: Constraints) -> Surface:
         """Wrap the child in the panel and answer a clipped surface.
 
         The 1.x bare width is accepted and the child still receives an inner
         width as an int; ``max_height`` truncates the final rows (the wrap
         memo keeps the untruncated ones).
         """
-        c = as_constraints(c)
         width = c.width
         if self.frame:
             style = self.group("borders").base
@@ -295,7 +293,7 @@ class Panel(Widget):
         inner = width - 2 * lead  # never negative: the lead is 0 below the minimum
         self._width = width
         self._inner = inner
-        child_rows = list(self.child.render(inner))
+        child_rows = list(self.child.render(Constraints(width=inner)))
         key = (tuple(map(id, child_rows)), width, self.title, self.frame, style, self._border)
         memo = self._memo
         if memo is not None and memo[0] == key:

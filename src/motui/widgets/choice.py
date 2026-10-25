@@ -82,7 +82,7 @@ from typing import Sequence
 from ..widgets.cursor import Cursor
 from ..kernel.glyphs import GLYPHS, Glyphs, pair_seat, seat, seat_width
 from ..kernel.cell import Line, Segment, Surface, rest
-from ..kernel.layout import Constraints, as_constraints
+from ..kernel.layout import Constraints
 from ..widgets.mark import MarkSet
 from ..kernel.style import Style
 from ..kernel.text import visible_width
@@ -629,11 +629,10 @@ class Select(Widget):
         """
         return self._revision()
 
-    def render(self, c: Constraints | int) -> Surface:
+    def render(self, c: Constraints) -> Surface:
         """The window's rows, the title and the counter, each on its band.
 
-        A bare ``int`` is the 1.x spelling and is normalized through
-        :func:`motui.kernel.layout.as_constraints`; a ``max_height`` budget
+        The constraint carries the width; a ``max_height`` budget
         truncates the leading rows (the title row included when it is the
         only row offered).  Every row goes through the row-band contract
         (:func:`~motui.kernel.cell.rest`): the item rows, the title row and
@@ -645,7 +644,6 @@ class Select(Widget):
         surface is :meth:`Surface.clipped`, not padded: short rows keep
         their natural width, so the bytes a layout paints do not change.
         """
-        c = as_constraints(c)
         text = self.group("text")
         rows = self._rows()
         start, stop = self._visible_range()

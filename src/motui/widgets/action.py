@@ -37,7 +37,7 @@ from __future__ import annotations
 
 from ..kernel.glyphs import GLYPHS, Glyphs
 from ..kernel.cell import Line, Segment, Surface
-from ..kernel.layout import Constraints, as_constraints
+from ..kernel.layout import Constraints
 from ..kernel.style import NONE, Style
 from ..kernel.theme import Styles, Theme
 from ..widgets.base import Widget
@@ -158,17 +158,15 @@ class Button(Widget):
             self.styles,
         )
 
-    def render(self, c: Constraints | int) -> Surface:
+    def render(self, c: Constraints) -> Surface:
         """The one fitted row, under the render constraints.
 
-        A bare ``int`` is the 1.x width spelling and goes through
-        :func:`~motui.kernel.layout.as_constraints`; a ``max_height`` budget
-        truncates the single row (``0`` paints nothing).  The answer is
+        The constraint carries the width; a ``max_height`` budget truncates
+        the single row (``0`` paints nothing).  The answer is
         :meth:`~motui.kernel.cell.Surface.clipped`, not padded: the row keeps
         the natural width of the fitted label, so the bytes match the old
         list answer.
         """
-        c = as_constraints(c)
         if self.disabled:
             style = self.group("text").faint
         else:
@@ -288,14 +286,12 @@ class Checkbox(Widget):
             self.styles,
         )
 
-    def render(self, c: Constraints | int) -> Surface:
+    def render(self, c: Constraints) -> Surface:
         """The mark-plus-label row, under the render constraints.
 
-        See :meth:`Button.render`: the width normalizes through
-        :func:`~motui.kernel.layout.as_constraints`, ``max_height`` truncates
-        (``0`` paints nothing) and the surface is clipped, not padded.
+        See :meth:`Button.render`: ``max_height`` truncates (``0`` paints
+        nothing) and the surface is clipped, not padded.
         """
-        c = as_constraints(c)
         if self.disabled:
             mark_style = label_style = self.group("text").faint
         else:
@@ -412,14 +408,12 @@ class Link(Widget):
             self.styles,
         )
 
-    def render(self, c: Constraints | int) -> Surface:
+    def render(self, c: Constraints) -> Surface:
         """The fitted row, under the render constraints.
 
-        See :meth:`Button.render`: the width normalizes through
-        :func:`~motui.kernel.layout.as_constraints`, ``max_height`` truncates
-        (``0`` paints nothing) and the surface is clipped, not padded.
+        See :meth:`Button.render`: ``max_height`` truncates (``0`` paints
+        nothing) and the surface is clipped, not padded.
         """
-        c = as_constraints(c)
         if self.disabled:
             style = self.group("text").faint
         else:

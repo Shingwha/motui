@@ -2,8 +2,9 @@
 
 from __future__ import annotations
 
-from motui.kernel.cell import Line
+from motui.kernel.cell import Line, Surface
 from motui.kernel.document import Document
+from motui.kernel.layout import Constraints
 
 __all__ = ["RecordingScreen", "Rows", "document", "many"]
 
@@ -14,8 +15,13 @@ class Rows:
     def __init__(self, *texts: str) -> None:
         self.texts = list(texts)
 
-    def render(self, width: int) -> list[Line]:
-        return [Line.from_text(t) for t in self.texts]
+    def render(self, c: Constraints) -> Surface:
+        # Deliberately raw: the double leaves width fitting to its host, the
+        # same division of labour the 1.x double had.
+        rows = tuple(Line.from_text(t) for t in self.texts)
+        if c.max_height is not None:
+            rows = rows[: c.max_height]
+        return Surface(width=c.width, rows=rows)
 
 
 class RecordingScreen:

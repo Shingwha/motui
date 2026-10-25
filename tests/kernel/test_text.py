@@ -19,6 +19,7 @@ from motui.widgets.text import Text
 
 ACCENT = Style(fg="#58a6ff", bold=True)
 DIM = Style(dim=True)
+from motui.kernel.layout import Constraints
 from motui.kernel.text import (
     ellipsize_tail,
     fit_text,
@@ -214,13 +215,13 @@ def test_text_renders_verbatim_lines_and_keeps_blank_rows():
 
 
 def test_text_wraps_lines_at_the_width():
-    rows = Text("hello world").render(5)
+    rows = Text("hello world").render(Constraints(width=5))
     assert [row.text for row in rows] == ["hello", "world"]
     assert all(row.width <= 5 for row in rows)
 
 
 def test_text_applies_its_style_to_every_row():
-    rows = Text("ab\ncd", style=DIM).render(10)
+    rows = Text("ab\ncd", style=DIM).render(Constraints(width=10))
     assert all(segment.style == DIM for row in rows for segment in row.segments)
 
 
@@ -258,7 +259,7 @@ class SpanText(Text):
 
 def test_text_inline_spans_answer_a_click_once():
     field = SpanText()
-    field.render(40)
+    field.render(Constraints(width=40))
     assert field.click(0, 0) is False
     assert field.click(0, 12) is False
     assert field.click(0, 5) is True
@@ -269,9 +270,9 @@ def test_text_inline_spans_answer_a_click_once():
 def test_text_hover_merges_the_themed_band_over_the_span():
     band = Style(fg="#ff00ff", reverse=True)
     field = SpanText(theme=replace(DEFAULT_THEME, surfaces=replace(DEFAULT_THEME.surfaces, hover=band)))
-    field.render(40)
+    field.render(Constraints(width=40))
     assert field.hover_at(0, 5) is True
-    hovered = field.render(40)[0]
+    hovered = field.render(Constraints(width=40))[0]
     assert hovered.segments[1].style == ACCENT.merge(band)
     assert hovered.segments[1].text == "docs"
     assert field.hover_at(0, 5) is False
@@ -280,7 +281,7 @@ def test_text_hover_merges_the_themed_band_over_the_span():
 
 def test_plain_text_rows_decline_clicks_and_hovers():
     field = Text("hello")
-    field.render(10)
+    field.render(Constraints(width=10))
     assert field.hover_at(0, 0) is False
     assert field.click(0, 0) is False
     assert field.take_result() is None

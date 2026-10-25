@@ -7,14 +7,7 @@ from dataclasses import FrozenInstanceError
 
 import pytest
 
-from motui.kernel.layout import Constraints, Scroll, ScrollAxis, ScrollState, as_constraints
-
-
-def test_layout_exports_as_constraints() -> None:
-    import motui.kernel.layout as layout
-
-    assert as_constraints in vars(layout).values()
-    assert "as_constraints" in layout.__all__
+from motui.kernel.layout import Constraints, Scroll, ScrollAxis, ScrollState
 
 
 def test_constraints_defaults_and_validation() -> None:

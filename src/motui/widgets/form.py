@@ -34,7 +34,7 @@ from dataclasses import dataclass
 from ..kernel.document import Component, Controller, Focusable, Revisioned
 from ..kernel.events import Event, KeyEvent
 from ..kernel.cell import Line, Surface
-from ..kernel.layout import Constraints, as_constraints
+from ..kernel.layout import Constraints
 from ..kernel.theme import Styles, Theme
 from ..widgets.base import Widget
 
@@ -252,19 +252,16 @@ class Form(Widget):
 
     # -- rendering ----------------------------------------------------------------
 
-    def render(self, c: Constraints | int) -> Surface:
+    def render(self, c: Constraints) -> Surface:
         """Stack label, component and error rows per field, with gaps between.
 
         The label and error styles are the theme's ``content.accent`` and
         ``status.danger`` read on every call, so a rethemed form repaints.
-        A bare ``int`` is the 1.x width spelling and is normalized through
-        :func:`~motui.kernel.layout.as_constraints`; the field components
-        still receive that int width.  ``_spans`` records the untruncated
+        The field components render at the constraint's width.  ``_spans`` records the untruncated
         component-row geometry :meth:`child_at` maps through (the W2a
         container precedent), while a ``max_height`` budget truncates only
         the returned rows.  The surface is clipped, not padded.
         """
-        c = as_constraints(c)
         width = c.width
         label_style = self.group("content").accent
         error_style = self.group("status").danger
@@ -275,7 +272,7 @@ class Form(Widget):
                 out.extend(Line() for _ in range(self._gap))
             if field.label:
                 out.append(Line.from_text(field.label, label_style).fit(width))
-            rows = list(field.component.render(width))
+            rows = list(field.component.render(Constraints(width=width)))
             spans.append((len(out), len(rows)))
             out.extend(row.fit(width) for row in rows)
             if field.error:
