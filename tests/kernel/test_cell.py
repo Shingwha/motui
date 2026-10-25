@@ -25,6 +25,7 @@ from motui.kernel.cell import (
 from motui.kernel.document import Document
 from motui.kernel.layout import Viewport
 from motui.kernel.style import NONE, RESET, Style
+from motui.kernel.text import WrapMode
 from motui.terminal.paint import Painter
 from motui.terminal.render import styled_line
 from motui.terminal.screen import HeadlessScreen
@@ -192,33 +193,135 @@ def test_wrap_line_normalizes_tabs_and_drops_whitespace():
     assert wrap_line(Line.from_text("   "), 10) == [Line()]
 
 
-def test_fit_returns_the_line_itself_when_it_fits():
+def test_ellipsis_clip_returns_the_line_itself_when_it_fits():
     row = Line.from_text("abc")
-    assert row.fit(3) is row
-    assert row.fit(10) is row
+    assert row.clip(WrapMode.ELLIPSIS, 3) is row
+    assert row.clip(WrapMode.ELLIPSIS, 10) is row
 
 
-def test_fit_truncates_with_the_marker():
-    fitted = Line.from_text("abcdef").fit(4)
+def test_ellipsis_clip_truncates_with_the_marker():
+    fitted = Line.from_text("abcdef").clip(WrapMode.ELLIPSIS, 4)
     assert fitted.text == "abc\u2026" and fitted.width == 4
     assert fitted.segments == (Segment("abc\u2026", Style()),)
-    assert Line.from_text("abc").fit(1).text == "\u2026"
-    assert Line.from_text("abc").fit(0).text == ""
-    assert Line.from_text("abc").fit(-2).text == ""
-    assert Line.from_text("\u65e5\u672c\u8a9e").fit(4).text == "\u65e5\u2026"
+    assert Line.from_text("abc").clip(WrapMode.ELLIPSIS, 1).text == "\u2026"
+    assert Line.from_text("abc").clip(WrapMode.ELLIPSIS, 0).text == ""
+    assert Line.from_text("abc").clip(WrapMode.ELLIPSIS, -2).text == ""
+    assert Line.from_text("\u65e5\u672c\u8a9e").clip(WrapMode.ELLIPSIS, 4).text == "\u65e5\u2026"
 
 
-def test_fit_marker_inherits_the_kept_run_style():
-    fitted = Line((Segment("abcdef", ACCENT),)).fit(4)
+def test_ellipsis_clip_marker_inherits_the_kept_run_style():
+    fitted = Line((Segment("abcdef", ACCENT),)).clip(WrapMode.ELLIPSIS, 4)
     assert fitted.segments == (Segment("abc\u2026", ACCENT),)
     assert styled_line(fitted) == ACCENT.prefix() + "abc\u2026" + RESET
 
 
-def test_fit_postcondition_holds_for_nasty_rows():
+def test_ellipsis_clip_postcondition_holds_for_nasty_rows():
     for text in NASTY:
         row = Line.from_text(text)
         for width in range(row.width + 3):
-            assert row.fit(width).width <= width, (text, width)
+            assert row.clip(WrapMode.ELLIPSIS, width).width <= width, (text, width)
+
+
+#: Width/character matrix for the five modes: ASCII, CJK, emoji, combining
+#: marks, a ZWJ family, whitespace and the empty row.
+REFLOW_TEXTS = [
+    "abcdef",
+    "hello world and more",
+    "\u65e5\u672c\u8a9e\u306e\u30c6\u30b9\u30c8",
+    "e\u0301e\u0301e\u0301",
+    "\U0001F600x\U0001F600y",
+    "caf\u00e9 \u4e2d\u6587 \U0001F468\u200D\U0001F469\u200D\U0001F467\u200D\U0001F466",
+    "  ",
+    "",
+]
+
+SINGLE_ROW_MODES = (WrapMode.ELLIPSIS, WrapMode.CLIP, WrapMode.OVERFLOW)
+MULTI_ROW_MODES = (WrapMode.WORD, WrapMode.CHAR)
+
+
+@pytest.mark.parametrize("mode", tuple(WrapMode))
+@pytest.mark.parametrize("width", [0, 1, 2, 3, 7])
+@pytest.mark.parametrize("text", REFLOW_TEXTS)
+def test_reflow_obeys_the_row_contract(mode: WrapMode, width: int, text: str) -> None:
+    rows = Line.from_text(text).reflow(mode, width)
+    assert rows
+    if mode in MULTI_ROW_MODES:
+        assert len(rows) >= 1
+    else:
+        assert len(rows) == 1
+    if mode is WrapMode.OVERFLOW:
+        assert rows == [Line.from_text(text)]
+    else:
+        assert all(row.width <= width for row in rows), (
+            text,
+            width,
+            mode,
+            [row.text for row in rows],
+        )
+
+
+def test_reflow_word_matches_the_shared_break_rule() -> None:
+    line = Line.from_text("hello world")
+    assert [row.text for row in line.reflow(WrapMode.WORD, 5)] == ["hello", "world"]
+    assert [row.text for row in line.reflow(WrapMode.WORD, 3)] == [
+        "hel",
+        "lo",
+        "wor",
+        "ld",
+    ]
+    assert line.clip(WrapMode.WORD, 5).text == "hello"
+
+
+def test_reflow_char_breaks_between_cells_only() -> None:
+    line = Line.from_text("\u65e5\u672c\u8a9e")
+    assert [row.text for row in line.reflow(WrapMode.CHAR, 4)] == ["\u65e5\u672c", "\u8a9e"]
+    # A cluster wider than the width owns its row and is then trimmed to fit.
+    assert [row.text for row in line.reflow(WrapMode.CHAR, 1)] == [
+        "\u2026",
+        "\u2026",
+        "\u2026",
+    ]
+    assert line.clip(WrapMode.CHAR, 4).text == "\u65e5\u672c"
+
+
+def test_reflow_keeps_styles_and_payloads_across_rows() -> None:
+    line = Line(
+        (
+            Segment("red green", ACCENT, link="u", action="a"),
+            Segment(" tail", MUTED),
+        )
+    )
+    rows = line.reflow(WrapMode.WORD, 5)
+    assert [row.text for row in rows] == ["red", "green", "tail"]
+    assert rows[0].segments == (Segment("red", ACCENT, link="u"),)
+    assert rows[0].segments[0].action == "a"
+    assert rows[1].segments == (Segment("green", ACCENT, link="u"),)
+    assert rows[1].segments[0].action == "a"
+    assert rows[2].segments == (Segment("tail", MUTED),)
+
+
+def test_clip_mode_cuts_without_a_marker() -> None:
+    assert Line.from_text("abcdef").clip(WrapMode.CLIP, 3).text == "abc"
+    assert Line.from_text("\u65e5\u672c\u8a9e").clip(WrapMode.CLIP, 3).text == "\u65e5"
+    assert Line.from_text("abc").clip(WrapMode.CLIP, 0).text == ""
+    assert Line.from_text("abc").clip(WrapMode.CLIP, 10).text == "abc"
+
+
+def test_overflow_keeps_the_row_whole() -> None:
+    line = Line.from_text("abcdef")
+    assert line.clip(WrapMode.OVERFLOW, 2) is line
+    assert line.clip(WrapMode.OVERFLOW, 0) is line
+
+
+def test_reflow_rejects_an_unknown_mode() -> None:
+    with pytest.raises(ValueError):
+        Line.from_text("abc").reflow(object(), 3)  # type: ignore[arg-type]
+
+
+def test_reflow_zero_width_yields_one_empty_row() -> None:
+    for mode in (m for m in WrapMode if m is not WrapMode.OVERFLOW):
+        rows = Line.from_text("abc").reflow(mode, 0)
+        assert rows == [Line()], mode
 
 
 def test_fill_pads_with_plain_spaces_by_default():

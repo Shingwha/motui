@@ -14,8 +14,13 @@ break rule.  The Markdown renderer lives in :mod:`motui.widgets.markdown`,
 and the plain-text component beside the rows it renders through:
 :class:`motui.widgets.text.Text`.
 
-:class:`WrapMode` names *how* a row responds to a width limit; the algorithms
-that consume it arrive with the 2.0 render contract (W2.5).
+:class:`WrapMode` names *how* a row responds to a width limit; the
+corresponding layout lives on :class:`motui.kernel.cell.Line`
+(``reflow`` / ``clip``), which measures through this module.
+
+The short names below (``width`` / ``wrap`` / ``spans`` / ``fit`` /
+``ellipsize`` / ``index_at`` / ``bounds``) are the 2.0 vocabulary; the
+1.x names stay exported beside them until W5 removes the old spellings.
 """
 
 from __future__ import annotations
@@ -29,11 +34,18 @@ from wcwidth import wcswidth, wcwidth
 __all__ = [
     "ELLIPSIS",
     "WrapMode",
+    "bounds",
+    "ellipsize",
     "ellipsize_tail",
+    "fit",
     "fit_text",
+    "index_at",
     "index_bounds_at_columns",
     "index_pair_at_columns",
+    "spans",
     "visible_width",
+    "width",
+    "wrap",
     "wrap_spans",
     "wrap_text",
 ]
@@ -660,3 +672,21 @@ def wrap_text(text: str, width: int) -> list[str]:
         return [""]
     text = _normalize_tabs(text)
     return [text[s:e] for s, e in wrap_spans(text, width)]
+
+
+# -- the 2.0 short names (1.x names stay until W5) -------------------------
+
+#: Display width of ``text`` in columns (:func:`visible_width`).
+width = visible_width
+#: Word-aware wrap of plain text (:func:`wrap_text`).
+wrap = wrap_text
+#: Character spans of each wrapped row (:func:`wrap_spans`).
+spans = wrap_spans
+#: Longest prefix fitting a column budget (:func:`fit_text`).
+fit = fit_text
+#: Tail truncation with the ``…`` marker (:func:`ellipsize_tail`).
+ellipsize = ellipsize_tail
+#: Both boundary indices of a column range (:func:`index_pair_at_columns`).
+index_at = index_pair_at_columns
+#: One boundary index per column (:func:`index_bounds_at_columns`).
+bounds = index_bounds_at_columns

@@ -8,6 +8,7 @@ import pytest
 
 from motui.kernel.cell import Cell, Line, Segment, Style, Surface
 from motui.kernel.geom import Size
+from motui.kernel.text import WrapMode
 
 # -- the content door -------------------------------------------------------
 
@@ -134,23 +135,23 @@ def test_line_is_immutable() -> None:
     ("😀x", 2, "😀"),
 ])
 def test_line_clip(text: str, width: int, expected: str) -> None:
-    clipped = Line.from_text(text).clip(width)
+    clipped = Line.from_text(text).clip(WrapMode.CLIP, width)
     assert clipped.text == expected
     assert clipped.width <= width
 
 
 def test_line_clip_keeps_styles_and_payloads() -> None:
     line = Line((Segment("ab", Style(bold=True), link="u"), Segment("cd", action="act")))
-    clipped = line.clip(3)
+    clipped = line.clip(WrapMode.CLIP, 3)
     assert clipped.text == "abc"
     assert clipped.segments[0] == Segment("ab", Style(bold=True), link="u")
     assert clipped.segments[1].text == "c"
     assert clipped.segments[1].action == "act"
 
 
-def test_line_clip_rejects_negative_width() -> None:
+def test_line_cut_width_rejects_negative_width() -> None:
     with pytest.raises(ValueError):
-        Line().clip(-1)
+        Line()._cut_width(-1)
 
 
 def test_line_pad() -> None:

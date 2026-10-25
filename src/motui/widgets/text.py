@@ -11,7 +11,7 @@ from __future__ import annotations
 from ..kernel.cell import Line, Surface, action_at
 from ..kernel.layout import Constraints
 from ..kernel.style import Style
-from ..kernel.text import wrap_text
+from ..kernel.text import WrapMode
 from ..kernel.theme import Theme, Themed
 
 __all__ = ["Text"]
@@ -22,9 +22,9 @@ class Text(Themed):
 
     ``text`` is a mutable attribute (streaming text assigns to it).  Each
     logical line (``split("\\n")``) is word-wrapped with
-    :func:`motui.kernel.text.wrap_text` into rows of at most ``width``
-    columns, so blank lines survive as blank rows.  Every row carries
-    ``style`` and is ``fit`` to ``width`` as a final guard.
+    :meth:`motui.kernel.cell.Line.reflow` (``WrapMode.WORD``) into rows of at
+    most ``width`` columns, so blank lines survive as blank rows.  Every row
+    carries ``style``; the wrap itself is the final width guard.
 
     ``style`` defaults to ``None``, which renders as the unstyled default
     (``NONE``).  ``theme`` is read for exactly one thing: the ``hover`` band
@@ -108,8 +108,7 @@ class Text(Themed):
         """
         out: list[Line] = []
         for row in self.text.split("\n"):
-            for piece in wrap_text(row, width):
-                out.append(Line.from_text(piece, self.style).fit(width))
+            out.extend(Line.from_text(row, self.style).reflow(WrapMode.WORD, width))
         return out
 
     def _revision(self) -> object:
