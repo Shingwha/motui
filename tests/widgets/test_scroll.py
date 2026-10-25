@@ -7,7 +7,7 @@ from motui.kernel.cell import Line, Surface
 from motui.kernel.document import descend_chain
 from motui.kernel.events import KeyEvent
 from motui.kernel.glyphs import GLYPHS
-from motui.kernel.layout import Constraints
+from motui.kernel.layout import Constraints, Scroll
 from motui.widgets import Input, ScrollPanel
 from tests.testing import Rows, key, many, texts, wheel
 
@@ -241,6 +241,26 @@ def test_a_200_column_child_reaches_its_last_column_in_an_80_column_view():
     assert scroll.x_offset == 120
     surface = scroll.render(Constraints(width=80))
     assert [row.text for row in surface] == [child.slice(i, 120, 200) for i in range(3)]
+
+
+def test_the_panel_exposes_a_two_axis_non_sticky_scroll_value():
+    child = Wide(rows=10)
+    scroll = ScrollPanel(child, height=3, axis="both")
+    scroll.render(Constraints(width=20))
+    value = scroll.scroll
+    assert isinstance(value, Scroll)
+    assert (value.y.offset, value.y.content, value.y.viewport) == (
+        scroll.offset,
+        scroll.total_rows,
+        scroll.viewport_height,
+    )
+    assert (value.x.offset, value.x.content, value.x.viewport) == (
+        scroll.x_offset,
+        scroll.total_columns,
+        scroll.viewport_width,
+    )
+    # The view must never inherit Scroll()'s tail-following y default.
+    assert value.y.sticky is False and value.x.sticky is False
 
 
 def test_both_axes_clamp_independently():

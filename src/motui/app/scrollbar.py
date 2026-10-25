@@ -55,7 +55,7 @@ from ..kernel.frame import Chrome, Pane, Rect
 from ..kernel.geom import Axis
 from ..kernel.glyphs import GLYPHS, Glyphs
 from ..kernel.cell import Line, Segment
-from ..kernel.layout import ScrollAxis, ScrollState, ScreenLayout
+from ..kernel.layout import ScrollAxis, ScreenLayout
 from ..kernel.style import Style
 from ..kernel.theme import DEFAULT_THEME, Theme
 from ..widgets.scroll import ScrollPanel
@@ -100,9 +100,9 @@ class _Thumb(NamedTuple):
 def _thumb_of(layout: ScreenLayout, height: int, min_thumb: int) -> _Thumb | None:
     """The thumb a laid-out pane maps onto a strip ``height`` rows tall.
 
-    A :class:`~motui.kernel.layout.ScrollState` is built from the layout --
+    A :class:`~motui.kernel.layout.ScrollAxis` is built from the layout --
     its ``offset``, its ``total_rows`` and its window rows -- and
-    :meth:`~motui.kernel.layout.ScrollState.thumb` answers the position and
+    :meth:`~motui.kernel.layout.ScrollAxis.thumb` answers the position and
     length; this wrapper only re-derives the two spans the drag mapping
     needs from the same numbers (``track`` is what the thumb leaves it,
     ``scroll`` the document rows the window may move).  The arithmetic is
@@ -115,17 +115,17 @@ def _thumb_of(layout: ScreenLayout, height: int, min_thumb: int) -> _Thumb | Non
     A strip with no thumb paints its plain track, which reads as "nothing
     to scroll here".
     """
-    state = ScrollState(
+    axis = ScrollAxis(
         offset=layout.offset,
-        content_height=layout.total_rows,
-        viewport_height=len(layout.body_rows),
+        content=layout.total_rows,
+        viewport=len(layout.body_rows),
     )
-    span = state.thumb(height, min_thumb)
+    span = axis.thumb(height, min_thumb)
     if span is None:
         return None
     pos, length = span
     track = max(1, height - length)
-    scroll = max(1, state.content_height - state.viewport_height)
+    scroll = max(1, axis.max_offset)
     return _Thumb(pos, length, track, scroll)
 
 
@@ -458,11 +458,7 @@ class Scrollbar:
         if length <= 0 or target is None:
             return []
         track_style, thumb_style = self._resolve_track(), self._resolve_thumb()
-        axis = ScrollAxis(
-            offset=target.x_offset,
-            content=target.total_columns,
-            viewport=target.viewport_width,
-        )
+        axis = target.scroll.x
         span = axis.thumb(length, self._min_thumb)
         first, last = (span[0], span[0] + span[1]) if span is not None else (0, 0)
         cells = [

@@ -44,7 +44,7 @@ from typing import Protocol
 from .cell import Line, cut_line, slice_line
 from .document import Document, Placement, Section, Sizing
 from .geom import Axis, Rect
-from .layout import ScreenLayout, Viewport
+from .layout import ScreenLayout, Scroll, Viewport
 from .overlay import LAYERS, Overlay, apply_overlays
 from .style import Style
 from .text import index_bounds_at_columns
@@ -356,9 +356,9 @@ class Pane:
         return self.viewport.document
 
     @property
-    def scroll_state(self):
-        """The pane's scroll geometry, delegated to its viewport."""
-        return self.viewport.scroll_state
+    def scroll(self) -> Scroll:
+        """The pane's immutable scroll value, delegated to its viewport."""
+        return self.viewport.scroll
 
     def scroll_to(self, offset: int) -> bool:
         """Scroll the pane's viewport to ``offset``; whether it moved.

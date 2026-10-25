@@ -59,7 +59,7 @@ from ..kernel.document import Component
 from ..kernel.geom import Pos
 from ..kernel.events import KeyEvent, MouseEvent
 from ..kernel.glyphs import GLYPHS, Glyphs
-from ..kernel.layout import Constraints, ScrollAxis, ScrollState
+from ..kernel.layout import Constraints, Scroll, ScrollAxis
 from ..kernel.text import WrapMode
 from ..kernel.theme import Styles, Theme
 from ..widgets.base import Widget
@@ -102,8 +102,7 @@ class ScrollPanel(Widget):
         "_last_offset",
         "_last_x",
         "_rendered",
-        "_state",
-        "_x",
+        "_scroll",
         "axis",
         "bar",
         "child",
@@ -159,17 +158,16 @@ class ScrollPanel(Widget):
         # The old focus default of the data/navigation family; a ScrollPanel
         # renders the same either way, but the flag stays part of the base.
         self.focused = True
-        # The view never follows the tail: its state holds the offset plus
-        # the last render's content and window rows, with stick-to-bottom
-        # off.  Before the first render the upper clamp is unknown, so a
-        # fixed-height view accepts a requested offset and clamps it then
-        # (the ``_rendered`` flag keeps that one rule).
-        self._state = ScrollState(offset=max(0, offset))
-        # The horizontal axis is the immutable 2.0 value: one offset plus the
-        # last render's content columns and window columns, re-derived by a
-        # pure ``clamp`` on every render.  No tail-follow rule: a wide
-        # document has no analogous "bottom".
-        self._x = ScrollAxis()
+        # The view never follows the tail: its scroll value holds the two
+        # offsets plus the last render's content and window extents, with
+        # stick-to-bottom off on both axes.  Before the first render the
+        # upper clamp is unknown, so a fixed-height view accepts a requested
+        # offset and clamps it then (the ``_rendered`` flag keeps that one
+        # rule).  A wide document has no analogous "bottom", so x is plain.
+        self._scroll = Scroll(
+            x=ScrollAxis(),
+            y=ScrollAxis(offset=max(0, offset)),
+        )
         # The last render's geometry: the child's row count, the inner
         # width, the offsets actually painted, the painted row count and
         # which bars were painted.
@@ -202,43 +200,43 @@ class ScrollPanel(Widget):
     @property
     def offset(self) -> int:
         """The first visible child row (the last render's clamped value)."""
-        return self._state.offset
+        return self._scroll.y.offset
 
     @property
     def x_offset(self) -> int:
         """The first visible child column (the last render's clamped value)."""
-        return self._x.offset
+        return self._scroll.x.offset
 
     @property
     def total_rows(self) -> int:
         """The child rows the last render produced (``0`` before one)."""
-        return self._state.content_height
+        return self._scroll.y.content
 
     @property
     def total_columns(self) -> int:
         """The child columns the last render produced (``0`` before one)."""
-        return self._x.content
+        return self._scroll.x.content
 
     @property
     def viewport_height(self) -> int:
         """The visible content rows (a bottom bar's row excluded)."""
         bar = 1 if self._bar_horizontal else 0
         if self.height is None:
-            return max(0, self._state.content_height - bar)
+            return max(0, self._scroll.y.content - bar)
         return max(0, self.height - bar)
 
     @property
     def viewport_width(self) -> int:
         """The visible content columns: the last render's inner width."""
-        return self._x.viewport
+        return self._scroll.x.viewport
 
     @property
-    def scroll_state(self) -> ScrollState:
-        """The view's live scroll geometry (offset, content and window rows)."""
-        return self._state
+    def scroll(self) -> Scroll:
+        """The view's immutable scroll value: the vertical and horizontal windows."""
+        return self._scroll
 
     def _max_offset(self) -> int:
-        return self._state.max_offset()
+        return self._scroll.y.max_offset
 
     # -- scrolling --------------------------------------------------------------
 
@@ -248,32 +246,31 @@ class ScrollPanel(Widget):
         The clamp uses the last render's row count; before the first render
         a fixed-height view accepts the offset and clamps it on that render,
         while ``height=None`` never scrolls (every row is visible).  The
-        view never follows the tail, so the state's stick flag stays off.
+        view never follows the tail, so the y axis stays non-sticky.
         """
-        state = self._state
+        y = self._scroll.y
         target = max(0, int(offset))
         if self.height is None:
             target = 0
         elif self._rendered:
-            target = min(target, state.max_offset())
-        if target == state.offset:
+            target = min(target, y.max_offset)
+        if target == y.offset:
             return False
-        state.offset = target
-        state.stick_to_bottom = False
+        self._scroll = self._scroll.with_y(replace(y, offset=target, sticky=False))
         self.touch()
         return True
 
     def scroll_up(self, n: int = 1) -> bool:
         """Scroll up ``n`` rows; ``True`` when the offset moved."""
-        return self.scroll_to(self._state.offset - max(0, int(n)))
+        return self.scroll_to(self._scroll.y.offset - max(0, int(n)))
 
     def scroll_down(self, n: int = 1) -> bool:
         """Scroll down ``n`` rows; ``True`` when the offset moved."""
-        return self.scroll_to(self._state.offset + max(0, int(n)))
+        return self.scroll_to(self._scroll.y.offset + max(0, int(n)))
 
     def scroll_by(self, delta: int) -> bool:
         """Step the window ``delta`` rows (clamped); ``True`` when it moved."""
-        return self.scroll_to(self._state.offset + int(delta))
+        return self.scroll_to(self._scroll.y.offset + int(delta))
 
     def scroll_to_x(self, offset: int) -> bool:
         """Move the window's first column to ``offset`` (clamped).
@@ -285,22 +282,23 @@ class ScrollPanel(Widget):
         """
         if self.axis == "y":
             return False
+        x = self._scroll.x
         target = max(0, int(offset))
         if self._rendered:
-            target = min(target, self._x.max_offset)
-        if target == self._x.offset:
+            target = min(target, x.max_offset)
+        if target == x.offset:
             return False
-        self._x = replace(self._x, offset=target)
+        self._scroll = self._scroll.with_x(replace(x, offset=target))
         self.touch()
         return True
 
     def scroll_x(self, delta: int) -> bool:
         """Step the window ``delta`` columns (clamped); ``True`` when it moved."""
-        return self.scroll_to_x(self._x.offset + int(delta))
+        return self.scroll_to_x(self._scroll.x.offset + int(delta))
 
     def scroll_x_to_end(self) -> bool:
         """Move the window to the last column (clamped); ``True`` when it moved."""
-        return self.scroll_to_x(self._x.max_offset)
+        return self.scroll_to_x(self._scroll.x.max_offset)
 
     def scroll_x_by(self, delta: int) -> bool:
         """The structural horizontal-wheel face: step ``delta`` columns.
@@ -319,8 +317,10 @@ class ScrollPanel(Widget):
         (or a view that shows everything) moves nothing.  ``False`` before
         the first render, for an empty child, or when the row was visible.
         """
-        moved = self._state.reveal(row)
-        self._state.stick_to_bottom = False
+        y = self._scroll.y
+        revealed = y.reveal(row)
+        moved = revealed.offset != y.offset
+        self._scroll = self._scroll.with_y(replace(revealed, sticky=False))
         if moved:
             self.touch()
         return moved
@@ -398,11 +398,11 @@ class ScrollPanel(Widget):
         at -- while a press on the track pages one viewport toward the
         pointer's side.  A motion while grabbed maps the row delta through
         the thumb geometry anchored at the grab (the same ``(start,
-        length)`` :meth:`ScrollState.thumb` paints), so the thumb never
-        jumps; a release ends the drag and answers whether there was a grab
-        to end.  A view without a vertical bar, a content that fits the
-        window (no thumb to map) and a press outside the bar column all
-        decline.
+        length)`` :meth:`~motui.kernel.layout.ScrollAxis.thumb` paints), so
+        the thumb never jumps; a release ends the drag and answers whether
+        there was a grab to end.  A view without a vertical bar, a content
+        that fits the window (no thumb to map) and a press outside the bar
+        column all decline.
         """
         row, col = pos.y, pos.x
         if phase == "release":
@@ -415,21 +415,21 @@ class ScrollPanel(Widget):
             return False
         if phase == "motion" and self._grab is None:
             return False
-        state = self._state
-        thumb = state.thumb(self._last_height)
+        y = self._scroll.y
+        thumb = y.thumb(self._last_height)
         if thumb is None:
             return False
         start, length = thumb
         if phase == "press":
             if start <= row < start + length:
-                self._grab = (row, state.offset)
+                self._grab = (row, y.offset)
             else:
                 page = self.viewport_height
                 self.scroll_by(page if row >= start + length else -page)
             return True
         grab_row, grab_offset = self._grab
         track = max(1, self._last_height - length)
-        span = max(1, state.content_height - state.viewport_height)
+        span = max(1, y.content - y.viewport)
         self.scroll_to(grab_offset + round((row - grab_row) * span / track))
         return True
 
@@ -469,9 +469,9 @@ class ScrollPanel(Widget):
             return None
         local_row = self._last_offset + row
         local_col = self._last_x + col
-        if local_row >= self._state.content_height:
+        if local_row >= self._scroll.y.content:
             return None
-        if self.axis in ("x", "both") and local_col >= self._x.content:
+        if self.axis in ("x", "both") and local_col >= self._scroll.x.content:
             return None
         return self.child, local_row, local_col
 
@@ -505,13 +505,14 @@ class ScrollPanel(Widget):
             height = min(height, c.max_height)
         height = max(0, height)
         inner_h = max(0, height - (1 if bar_x else 0))
-        state = self._state
-        state.content_height = content_h
-        state.viewport_height = inner_h
-        state.clamp()
-        x = ScrollAxis(offset=self._x.offset, content=content_w, viewport=inner_w).clamp()
-        self._x = x
-        start = state.offset
+        y = replace(
+            self._scroll.y, content=content_h, viewport=inner_h
+        ).clamp()
+        x = replace(
+            self._scroll.x, content=content_w, viewport=inner_w
+        ).clamp()
+        self._scroll = Scroll(x=x, y=y)
+        start = y.offset
         start_x = x.offset
         self._last_inner = inner_w
         self._last_offset = start
@@ -521,7 +522,7 @@ class ScrollPanel(Widget):
         self._last_bar_x = bar_x and height > 0
         self._rendered = True
         horizontal = self.axis in ("x", "both")
-        thumb = state.thumb(inner_h)
+        thumb = y.thumb(inner_h)
         thumb_start, thumb_length = thumb if thumb is not None else (0, 0)
         # The chrome roles resolve once per render: track and thumb.
         chrome = self.group("chrome") if (bar_y or bar_x) else None
@@ -567,8 +568,8 @@ class ScrollPanel(Widget):
 
     def __repr__(self) -> str:
         return (
-            f"ScrollPanel(axis={self.axis!r}, offset={self._state.offset}, "
-            f"x_offset={self._x.offset}, height={self.height!r}, "
-            f"bar={self.bar}, total_rows={self._state.content_height}, "
-            f"total_columns={self._x.content})"
+            f"ScrollPanel(axis={self.axis!r}, offset={self._scroll.y.offset}, "
+            f"x_offset={self._scroll.x.offset}, height={self.height!r}, "
+            f"bar={self.bar}, total_rows={self._scroll.y.content}, "
+            f"total_columns={self._scroll.x.content})"
         )
