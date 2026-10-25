@@ -1,5 +1,7 @@
 """ComboBox: the editable field over a filtered dropdown it owns the state of."""
 
+from motui.kernel.cell import Surface
+from motui.kernel.layout import Constraints
 from motui.widgets import ComboBox, Option
 
 from tests.testing import key, paste, press
@@ -105,3 +107,16 @@ def test_enter_with_no_match_closes_and_leaves_nothing_pending():
         assert combo.handle(key(char, char)) is True
     assert combo.handle(key("enter")) is True
     assert combo.take_result() is None and not combo.is_open
+
+
+# -- the 2.0 render contract -------------------------------------------------
+
+
+def test_a_combo_takes_constraints_and_honours_the_height_budget():
+    combo = ComboBox(OPTIONS, text="Dialog")
+    assert isinstance(combo.render(Constraints(width=40)), Surface)
+    assert combo.render(40) == combo.render(Constraints(width=40))
+    assert list(combo.render(Constraints(width=40, max_height=0))) == []
+    assert combo.render(Constraints(width=40, max_height=1)).height == 1
+    # The child geometry is the untruncated field render's.
+    assert combo.child_at(0, 0) == (combo.input, 0, 0)

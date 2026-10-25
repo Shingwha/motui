@@ -19,6 +19,8 @@ from __future__ import annotations
 from typing import Sequence
 
 from ..kernel.glyphs import GLYPHS, Glyphs
+from ..kernel.cell import Surface
+from ..kernel.layout import Constraints, as_constraints
 from ..kernel.theme import Styles, Theme
 from .choice import Option, Select
 
@@ -97,6 +99,21 @@ class Autocomplete(Select):
     def _rows(self) -> Sequence[Option]:
         """The current matches -- the rows the inherited cursor walks."""
         return self._matches
+
+    def render(self, c: Constraints | int) -> Surface:
+        """The inherited ``Select`` row trunk, under the render constraints.
+
+        The window, cursor row, description column and ``(i/n)`` counter all
+        stay :class:`~motui.widgets.choice.Select`'s; the base component
+        still receives the bare int width (the 1.x seam) and this layer only
+        normalizes the constraints, truncates by ``max_height`` and answers a
+        clipped (never padded) surface, so the painted bytes are unchanged.
+        """
+        c = as_constraints(c)
+        rows = list(super().render(c.width))
+        if c.max_height is not None:
+            rows = rows[: c.max_height]
+        return Surface.clipped(rows, c.width)
 
     def _revision(self) -> object:
         """The menu's snapshot plus the query the matches were filtered by.

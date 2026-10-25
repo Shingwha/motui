@@ -26,7 +26,8 @@ from collections.abc import Sequence
 from ..kernel.document import Component
 from ..kernel.events import Event, KeyEvent, MouseEvent
 from ..kernel.glyphs import GLYPHS, Glyphs
-from ..kernel.cell import Line
+from ..kernel.cell import Surface
+from ..kernel.layout import Constraints, as_constraints
 from ..kernel.theme import Styles, Theme
 from ..widgets.base import Widget
 from .autocomplete import Autocomplete
@@ -303,13 +304,24 @@ class ComboBox(Widget):
 
     # -- the render ---------------------------------------------------------------
 
-    def render(self, width: int) -> list[Line]:
-        """The field's rows -- the dropdown paints through the host's modal."""
+    def render(self, c: Constraints | int) -> Surface:
+        """The field's rows -- the dropdown paints through the host's modal.
+
+        A bare ``int`` is the 1.x width spelling and is normalized through
+        :func:`~motui.kernel.layout.as_constraints`; the field still renders
+        at that int width.  ``_last_count`` keeps the untruncated row count
+        :meth:`child_at` maps through (the W2a container precedent), while a
+        ``max_height`` budget truncates only the returned rows.  The surface
+        is clipped, not padded.
+        """
+        c = as_constraints(c)
         self._skin()
-        self._last_width = width
-        rows = self.input.render(width)
+        self._last_width = c.width
+        rows = list(self.input.render(c.width))
         self._last_count = len(rows)
-        return rows
+        if c.max_height is not None:
+            rows = rows[: c.max_height]
+        return Surface.clipped(rows, c.width)
 
     def __repr__(self) -> str:
         return (
