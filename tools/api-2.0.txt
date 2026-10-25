@@ -116,14 +116,18 @@ motui.kernel	slice_line	function	(line: 'Line', start: 'int', end: 'int') -> 'Li
 motui.kernel	visible_width	function	(text: 'str') -> 'int'
 motui.kernel	wrap_line	function	(line: 'Line', width: 'int') -> 'list[Line]'
 motui.kernel	wrap_text	function	(text: 'str', width: 'int') -> 'list[str]'
+motui.terminal	Capability	class	(*, color_mode: 'ColorMode', size: 'tuple[int, int]', live: 'bool', encoding: 'str | None' = None) -> None
 motui.terminal	Clipboard	class	(*args, **kwargs)
 motui.terminal	HeadlessScreen	class	(width: 'int' = 80, height: 'int' = 24, *, mouse: 'bool' = True, paste: 'bool' = True, hover: 'bool' = False, focus_events: 'bool' = False, color_mode: 'ColorMode' = 'truecolor') -> 'None'
 motui.terminal	KeyDecoder	class	() -> 'None'
 motui.terminal	MemoryClipboard	class	() -> 'None'
+motui.terminal	MouseMode	class	(*values)
 motui.terminal	Painter	class	(screen: 'Screen', *, sync: 'bool' = True) -> 'None'
 motui.terminal	RawTerminalKeys	class	(fd: 'int | None' = None, *, hover: 'bool' = False) -> 'None'
 motui.terminal	Screen	class	()
 motui.terminal	ScreenClipboard	class	(screen: 'Screen') -> 'None'
+motui.terminal	Terminal	class	(options: 'TerminalOptions' = TerminalOptions(stream=None, input=None, mouse=<MouseMode.MOVE: 'move'>, paste=True, focus_events=False, color_mode='auto', sync=True, screen=None), *, screen: 'Screen | None' = None) -> 'None'
+motui.terminal	TerminalOptions	class	(*, stream: 'TextIO | None' = None, input: 'EventSource | None' = None, mouse: 'MouseMode' = <MouseMode.MOVE: 'move'>, paste: 'bool' = True, focus_events: 'bool' = False, color_mode: "ColorMode | Literal['auto']" = 'auto', sync: 'bool' = True, screen: 'Screen | None' = None) -> None
 motui.terminal	TerminalScreen	class	(stream: 'io.TextIOBase | None' = None, *, mouse: 'bool' = True, paste: 'bool' = True, hover: 'bool' = False, focus_events: 'bool' = False, color_mode: "ColorMode | Literal['auto']" = 'auto') -> 'None'
 motui.terminal	auto_theme	function	(env: 'Mapping[str, str] | None' = None) -> 'Theme'
 motui.terminal	detect_color_mode	function	(env: 'Mapping[str, str] | None' = None) -> 'ColorMode'
