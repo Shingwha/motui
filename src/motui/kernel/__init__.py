@@ -9,14 +9,18 @@ from __future__ import annotations
 
 from .cell import Cell, Line, Segment, Surface
 from .geom import Axis, Pos, Rect, Size
+from .layout import Constraints, Scroll, ScrollAxis
 from .text import WrapMode
 
 __all__ = [
     "Axis",
     "Cell",
+    "Constraints",
     "Line",
     "Pos",
     "Rect",
+    "Scroll",
+    "ScrollAxis",
     "Segment",
     "Size",
     "Surface",
