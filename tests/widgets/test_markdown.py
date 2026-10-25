@@ -2,7 +2,7 @@
 
 from dataclasses import replace
 
-from motui.kernel.cell import Line, Surface
+from motui.kernel.cell import Line, Segment, Surface
 from motui.kernel.layout import Constraints
 from motui.kernel.style import Style
 from motui.kernel.text import WrapMode
@@ -147,6 +147,64 @@ def test_fences_reports_the_top_level_code_blocks():
     md = Markdown("```python\nx = 1\n```\n\ntext\n\n```\nplain\n```")
     assert md.fences() == [("python", "x = 1"), ("", "plain")]
     assert md.fences() == [("python", "x = 1"), ("", "plain")]
+
+
+# -- fenced code wrap: the W2.5b default -------------------------------------
+
+
+class _OneRunHighlighter:
+    """A highlighter that paints every code line with one uniform style."""
+
+    def __init__(self, style: Style) -> None:
+        self.style = style
+
+    def highlight(self, code: str, lang: str) -> list[Line]:
+        return [Line((Segment(line, self.style),)) for line in code.split("\n")]
+
+
+def test_a_long_code_line_wraps_whole_by_default():
+    line = "value=" + "x" * 200
+    rows = texts(Markdown(f"```python\n{line}\n```"), 40)
+    assert rows[0] == "```python" and rows[-1] == "```"
+    body = rows[1:-1]
+    assert len(body) > 1
+    assert all("…" not in row and len(row) <= 40 for row in body)
+    assert "".join(body) == line
+
+
+def test_code_wrap_ellipsis_keeps_one_marked_code_row():
+    line = "value=" + "x" * 200
+    rows = texts(Markdown(f"```python\n{line}\n```", code_wrap=WrapMode.ELLIPSIS), 40)
+    assert len(rows) == 3
+    assert rows[1].endswith("…") and len(rows[1]) == 40
+
+
+def test_a_wrapped_code_line_keeps_the_highlighter_style():
+    style = Style(fg="#abcdef")
+    line = "value=" + "x" * 200
+    md = Markdown(f"```custom\n{line}\n```", highlighter=_OneRunHighlighter(style))
+    body = list(md.render(Constraints(width=40)))[1:-1]
+    assert len(body) > 1
+    assert all(seg.style == style for row in body for seg in row.segments)
+
+
+def test_the_fence_delimiters_stay_single_row_in_every_code_wrap():
+    fence = "```" + "toolong" * 10
+    rows = texts(Markdown(f"{fence}\nx\n```"), 20)
+    assert len(rows) == 3
+    assert rows[0].endswith("…") and len(rows[0]) == 20
+
+
+def test_code_wrap_is_part_of_the_revision_and_the_render_answer():
+    text = "```\n" + "x" * 80 + "\n```"
+    assert Markdown(text).code_wrap is WrapMode.WORD
+    assert Markdown(text).revision() != Markdown(text, code_wrap=WrapMode.CLIP).revision()
+    md = Markdown(text)
+    assert len(texts(md, 20)) > 3
+    md.code_wrap = WrapMode.ELLIPSIS
+    assert md.code_wrap is WrapMode.ELLIPSIS
+    assert len(texts(md, 20)) == 3
+    assert md.revision() == Markdown(text, code_wrap=WrapMode.ELLIPSIS).revision()
 
 
 def test_a_custom_block_rule_interrupts_a_paragraph():

@@ -7,6 +7,7 @@ from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
 from ...kernel.glyphs import GLYPHS, Glyphs
+from ...kernel.text import WrapMode
 from ...kernel.theme import DEFAULT_THEME, Theme
 from ..syntax import Highlighter
 
@@ -31,6 +32,9 @@ class RenderContext:
     and the ``quote`` bar, each seated through
     :func:`~motui.kernel.glyphs.pair_seat` or
     :func:`~motui.kernel.glyphs.seat` so the states keep one column.
+    ``code_wrap`` is the fenced-code row policy (:class:`~motui.kernel.text.WrapMode`):
+    ``WORD`` by default, so a long code line wraps instead of losing its tail;
+    the fence delimiter lines stay single-row no matter what it says.
     """
 
     theme: Theme = DEFAULT_THEME
@@ -39,3 +43,4 @@ class RenderContext:
     divider_max_width: int | None = 80
     block_rules: Sequence[BlockRule] = ()
     inline_rules: Sequence[InlineRule] = ()
+    code_wrap: WrapMode = WrapMode.WORD
