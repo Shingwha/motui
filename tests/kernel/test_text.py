@@ -21,6 +21,7 @@ ACCENT = Style(fg="#58a6ff", bold=True)
 DIM = Style(dim=True)
 from motui.kernel.layout import Constraints
 from motui.kernel.text import (
+    WrapMode,
     ellipsize_tail,
     fit_text,
     index_bounds_at_columns,
@@ -253,7 +254,7 @@ class SpanText(Text):
                     ),
                     Segment(" now", Style()),
                 ]
-            ).fit(width)
+            ).clip(WrapMode.ELLIPSIS, width)
         ]
 
 
@@ -285,3 +286,19 @@ def test_plain_text_rows_decline_clicks_and_hovers():
     assert field.hover_at(0, 0) is False
     assert field.click(0, 0) is False
     assert field.take_result() is None
+
+
+def test_short_names_are_the_same_functions() -> None:
+    from motui.kernel import text
+
+    assert text.width is text.visible_width
+    assert text.wrap is text.wrap_text
+    assert text.spans is text.wrap_spans
+    assert text.fit is text.fit_text
+    assert text.ellipsize is text.ellipsize_tail
+    assert text.index_at is text.index_pair_at_columns
+    assert text.bounds is text.index_bounds_at_columns
+    assert set(text.__all__) <= set(dir(text))
+    assert {"width", "wrap", "spans", "fit", "ellipsize", "index_at", "bounds"} <= set(
+        text.__all__
+    )

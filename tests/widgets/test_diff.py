@@ -5,6 +5,7 @@ import pytest
 from motui.kernel.cell import Surface
 from motui.kernel.layout import Constraints
 from motui.kernel.style import NONE
+from motui.kernel.text import WrapMode
 from motui.kernel.theme import DEFAULT_THEME
 from motui.widgets import Diff
 from dataclasses import replace
@@ -95,3 +96,31 @@ def test_the_diff_cache_keys_on_the_width_not_the_height_budget():
     diff.render(Constraints(width=20, max_height=1))
     assert diff.render(Constraints(width=20)).height == 5
     assert all(row.width <= 20 for row in diff.render(Constraints(width=20)))
+
+
+def test_wrap_selects_how_a_long_diff_line_fits():
+    before, after = "x" * 30, "y" * 30
+    default = texts(Diff(before, after, context=0), 20)
+    assert default[-1] == "+" + "y" * 18 + "\u2026"
+
+    clip = texts(Diff(before, after, context=0, wrap=WrapMode.CLIP), 20)
+    assert clip[-1] == "+" + "y" * 19
+    assert not any("\u2026" in row for row in clip)
+
+    wrapped = texts(
+        Diff("hello world hello world", "", context=0, wrap=WrapMode.WORD), 12
+    )
+    assert len(wrapped) > 2 and all(len(row) <= 12 for row in wrapped)
+
+    # CONTRACT ONLY: OVERFLOW keeps the line whole through reflow; the
+    # surface guard clips it until W2.6 connects a scroll container.
+    overflow = Diff(before, after, context=0, wrap=WrapMode.OVERFLOW)
+    assert all(row.width <= 20 for row in overflow.render(Constraints(width=20)))
+
+
+def test_wrap_is_part_of_the_revision_and_render_key():
+    plain = Diff("a" * 30, "b" * 30)
+    clipped = Diff("a" * 30, "b" * 30, wrap=WrapMode.CLIP)
+    assert plain.revision() != clipped.revision()
+    assert plain.render(Constraints(width=20)) != clipped.render(Constraints(width=20))
+    assert plain.render(Constraints(width=20)) == plain.render(Constraints(width=20))

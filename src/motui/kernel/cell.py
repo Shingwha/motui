@@ -40,6 +40,8 @@ from .geom import Size
 from .style import NONE, Style
 from .text import (
     ELLIPSIS,
+    WrapMode,
+    _cell_spans,
     _normalize_tabs,
     fit_text,
     index_pair_at_columns,
@@ -256,14 +258,16 @@ class Line:
 
     # -- sizing ------------------------------------------------------------
 
-    def fit(self, width: int) -> Line:
+    def _fit(self, width: int) -> Line:
         """Truncate *this* row to ``width`` columns, marking the cut with ``…``.
 
-        Over-wide lines lose their tail; the marker takes one column and
-        inherits the style of the last kept segment -- fused onto that
-        segment when something survived, a plain unstyled marker when
-        nothing did.  ``width <= 0`` yields an empty line, and a line that
-        already fits is returned unchanged (the same object).
+        The private trim behind ``WrapMode.ELLIPSIS``; components reach it
+        through :meth:`clip` / :meth:`reflow`.  Over-wide lines lose their
+        tail; the marker takes one column and inherits the style of the last
+        kept segment -- fused onto that segment when something survived, a
+        plain unstyled marker when nothing did.  ``width <= 0`` yields an
+        empty line, and a line that already fits is returned unchanged (the
+        same object).
         """
         if width <= 0:
             return Line()
@@ -306,8 +310,9 @@ class Line:
     def fill(self, width: int, style: Style = NONE) -> Line:
         """Grow *this* row to ``width`` columns, ``style`` laid underneath.
 
-        The sizing family's growing member -- ``fit`` trims, ``fill``
-        extends, ``filled`` builds a blank row from scratch.  It is where
+        The sizing family's growing member -- ``clip(WrapMode.ELLIPSIS,
+        width)`` trims, ``fill`` extends, ``filled`` builds a blank row from
+        scratch.  It is where
         the removed ``pad_to`` was absorbed: the ``NONE`` fast path is
         byte-identical to what ``pad_to`` answered.
 
@@ -316,9 +321,9 @@ class Line:
         segment comes back through :meth:`Segment.with_style` as
         ``style.merge(seg.style)`` -- ``style`` is the base, the segment's
         own colors win where it has them -- and a gap becomes one
-        ``Segment(" " * gap, style)``.  ``fill`` never truncates; ``fit`` is
-        the trim, so the canonical band pipeline is ``row.fit(w).fill(w,
-        band)``.
+        ``Segment(" " * gap, style)``.  ``fill`` never truncates;
+        ``clip(WrapMode.ELLIPSIS, w)`` is the trim, so the canonical band
+        pipeline is ``row.clip(WrapMode.ELLIPSIS, w).fill(w, band)``.
 
         The ``NONE`` fast path (``style == NONE``; ``NONE`` is ``Style()``,
         so ``==`` catches both the constant and any equal style): no gap
@@ -389,14 +394,56 @@ class Line:
 
     # -- the 2.0 width vocabulary -----------------------------------------
 
-    def clip(self, width: int) -> Line:
-        """A prefix of this row no wider than ``width`` columns.
+    def reflow(self, mode: WrapMode, width: int) -> list[Line]:
+        """Lay *this* row out in ``width`` columns under ``mode``.
 
-        A cut never splits a cell: a double-width character that would
-        straddle the edge is dropped, leaving the line narrower than the
-        limit.  Styling and inline payloads ride along on the kept runs.
-        This is the minimal form for W1; W2.5 replaces it with the shared
-        ``reflow`` vocabulary.
+        The one entry for every width response in the toolkit:
+
+        - ``WORD``: word-aware wrap (:func:`wrap_line`), each row closed
+          with :meth:`_fit` so a cluster measuring wider than ``width``
+          still cannot overflow it;
+        - ``CHAR``: hard character wrap (:func:`_wrap_chars`), same closing
+          trim;
+        - ``ELLIPSIS``: one row, tail cut and marked with ``…``;
+        - ``CLIP``: one row, hard cut at the width (no marker);
+        - ``OVERFLOW``: the row itself, even when wider than ``width`` --
+          the container owns the clipping.
+
+        An empty row (or ``width <= 0``) yields ``[Line()]`` for every mode
+        except ``OVERFLOW``.  Styles and inline payloads survive every row
+        the wrap emits, and an unknown mode raises ``ValueError``.
+        """
+        if mode is WrapMode.WORD:
+            return [row._fit(width) for row in wrap_line(self, width)]
+        if mode is WrapMode.CHAR:
+            return [row._fit(width) for row in _wrap_chars(self, width)]
+        if mode is WrapMode.ELLIPSIS:
+            return [self._fit(width)]
+        if mode is WrapMode.CLIP:
+            return [cut_line(self, 0, width)]
+        if mode is WrapMode.OVERFLOW:
+            return [self]
+        raise ValueError(f"unknown wrap mode: {mode!r}")
+
+    def clip(self, mode: WrapMode, width: int) -> Line:
+        """The single-row form of :meth:`reflow`: its first row.
+
+        ``WORD`` / ``CHAR`` answer the first wrapped row; the other modes
+        are single-row by definition.  Use this when the caller wants one
+        row (a header, a label, a status line) and :meth:`reflow` when it
+        wants the whole block.
+        """
+        return self.reflow(mode, width)[0]
+
+    def _cut_width(self, width: int) -> Line:
+        """A prefix of this row no wider than ``width`` columns -- hard cut.
+
+        The private hard cut behind :meth:`Surface.of` /
+        :meth:`Surface.clipped` (the surface invariant guard);
+        ``clip(WrapMode.CLIP, width)`` is the public spelling.  A cut never
+        splits a cell: a double-width character that would straddle the
+        edge is dropped, leaving the line narrower than the limit.  Styling
+        and inline payloads ride along on the kept runs.
         """
         if width < 0:
             raise ValueError(f"clip width must not be negative, got {width}")
@@ -466,15 +513,16 @@ def _fit_prefix(text: str, width: int) -> str:
 
 
 def rest(row: Line, width: int, band: Style) -> Line:
-    """One row on its band: ``fit`` then ``fill`` at the fitted row's width.
+    """One row on its band: trim then fill at the trimmed row's width.
 
     The band rests under the row's own segments (the Rich
     ``Padding(style=...)`` rule); the ``NONE`` fast path leaves a resting
     row byte-for-byte unchanged.  The row widgets share this one lay-down
-    beside :meth:`Line.fit` / :meth:`Line.fill`, the two primitives it
-    composes.
+    beside the public :meth:`Line.clip` / :meth:`Line.fill` pair -- the
+    trim is :meth:`Line._fit`, the same truncation ``clip(ELLIPSIS, w)``
+    performs.
     """
-    fitted = row.fit(width)
+    fitted = row._fit(width)
     return fitted if band == NONE else fitted.fill(fitted.width, band)
 
 
@@ -574,6 +622,34 @@ def wrap_line(line: Line, width: int) -> list[Line]:
         return [Line()]
     text = _normalize_tabs(text)
     return [slice_line(line, s, e) for s, e in wrap_spans(text, width)]
+
+
+def _wrap_chars(line: Line, width: int) -> list[Line]:
+    """Hard character wrap of ``line`` into rows of ``width`` columns.
+
+    Walks the line's printing cells (:func:`motui.kernel.text._cell_spans`)
+    and starts a new row before any cell that would overflow, so a grapheme
+    cluster never straddles a break.  A cluster wider than ``width`` owns its
+    row and the caller's closing :meth:`Line._fit` trims it with the marker.
+    Styles and inline payloads survive through :func:`slice_line`; an empty
+    line (or ``width <= 0``) yields ``[Line()]``.
+    """
+    if width <= 0:
+        return [Line()]
+    if line.width <= width:
+        return [line]
+    text = line.text
+    spans: list[tuple[int, int]] = []
+    start = 0
+    used = 0
+    for cell_start, _cell_end, cell_width in _cell_spans(text):
+        if used and used + cell_width > width:
+            spans.append((start, cell_start))
+            start = cell_start
+            used = 0
+        used += cell_width
+    spans.append((start, len(text)))
+    return [slice_line(line, s, e) for s, e in spans]
 
 
 def fuse(segments: Iterable[Segment]) -> list[Segment]:
@@ -693,9 +769,9 @@ class Surface:
         if width < 0:
             raise ValueError(f"surface width must not be negative, got {width}")
         if pad:
-            normalized = tuple(row.clip(width).pad(width) for row in rows)
+            normalized = tuple(row._cut_width(width).pad(width) for row in rows)
         else:
-            normalized = tuple(row.clip(width) for row in rows)
+            normalized = tuple(row._cut_width(width) for row in rows)
         return cls(width=width, rows=normalized)
 
     @classmethod

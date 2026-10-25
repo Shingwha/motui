@@ -53,7 +53,7 @@ from ..kernel.events import Event, KeyEvent
 from ..kernel.frame import splice_row
 from ..kernel.glyphs import GLYPHS, Glyphs
 from ..kernel.cell import Line, cut_line, overlay
-from ..kernel.text import visible_width
+from ..kernel.text import WrapMode, visible_width
 from ..kernel.theme import Theme, Themed
 from ..kernel.layout import ScreenLayout
 from ..widgets.textfield import Input
@@ -411,7 +411,7 @@ class Find(Themed):
             return layout
         cell = Line.from_text(self._counter(), self._theme.text.faint)
         room = max(1, rect.width - cell.width - 1)  # one gap column before the counter
-        query_rows = [row.fit(room) for row in self.input.render(Constraints(width=room))] or [Line()]
+        query_rows = [row.clip(WrapMode.ELLIPSIS, room) for row in self.input.render(Constraints(width=room))] or [Line()]
         rows = [
             *query_rows[:-1],
             query_rows[-1].fill(room) + Line.from_text(" ") + cell,

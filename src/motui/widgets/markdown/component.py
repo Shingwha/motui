@@ -16,7 +16,7 @@ from dataclasses import replace
 from ...kernel.glyphs import GLYPHS, Glyphs
 from ...kernel.cell import Line, Segment, Surface, slice_line
 from ...kernel.layout import Constraints
-from ...kernel.text import _normalize_tabs, wrap_spans
+from ...kernel.text import WrapMode, _normalize_tabs, wrap_spans
 from ...kernel.theme import Styles, Theme
 from ...widgets.base import Widget
 from .blocks import (
@@ -217,7 +217,7 @@ class _Paragraph:
             (start + piece_start, start + piece_end) for piece_start, piece_end in tail
         ]
         rows = self.rows[:reuse] + [
-            slice_line(line, piece_start, piece_end).fit(width)
+            slice_line(line, piece_start, piece_end).clip(WrapMode.ELLIPSIS, width)
             for piece_start, piece_end in spans[reuse:]
         ]
         return list(rows), _Paragraph(text, line, spans, rows)

@@ -19,7 +19,7 @@ from __future__ import annotations
 from typing import TYPE_CHECKING, Sequence
 
 from motui import Line, Text, Theme
-from motui.kernel import Component, Constraints, Surface
+from motui.kernel import Component, Constraints, Surface, WrapMode
 from motui.widgets import Column, MenuBar, NavList, ShortcutBar, StatusLine
 
 from .assets import THEMES
@@ -90,9 +90,9 @@ class Header(Component):
         )
         gap = width - menu_line.width - right_line.width
         if gap < 0:
-            rows = [Line.from_text("motui studio").fit(width)]
+            rows = [Line.from_text("motui studio").clip(WrapMode.ELLIPSIS, width)]
         else:
-            rows = [(menu_line + Line.filled(gap) + right_line).fit(width)]
+            rows = [(menu_line + Line.filled(gap) + right_line).clip(WrapMode.ELLIPSIS, width)]
         return Surface.clipped(rows, width)
 
     def child_at(self, row: int, col: int) -> tuple[Component, int, int] | None:

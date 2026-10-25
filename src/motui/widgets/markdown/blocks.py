@@ -21,8 +21,8 @@ from __future__ import annotations
 import re
 from typing import TYPE_CHECKING, Protocol
 
-from ...kernel.cell import Line, slice_line, wrap_line
-from ...kernel.text import _normalize_tabs, wrap_spans
+from ...kernel.cell import Line, slice_line
+from ...kernel.text import WrapMode, _normalize_tabs, wrap_spans
 from ...kernel.theme import Theme
 from ..decor import Divider
 from .inline import inline_segments
@@ -96,7 +96,7 @@ class HeadingRule:
         if level >= 3:
             text = f"{matched.group(1)} {text}"  # the hashes stay visible
         line = Line(inline_segments(text, ctx, base))
-        return [row.fit(width) for row in wrap_line(line, width)]
+        return line.reflow(WrapMode.WORD, width)
 
 
 def _fence_highlighter(theme: Theme | None) -> Highlighter:
@@ -186,12 +186,12 @@ class FenceRule:
         closed = len(lines) > 1 and _FENCE_RE.match(lines[-1])
         body = lines[1:-1] if closed else lines[1:]
         code = "\n".join(body)
-        out = [Line.from_text(lines[0].strip(), theme.text.muted).fit(width)]
+        out = [Line.from_text(lines[0].strip(), theme.text.muted).clip(WrapMode.ELLIPSIS, width)]
         out.extend(
-            row.fit(width) for row in engine.highlight(code, _fence_lang(lines[0]))
+            row.clip(WrapMode.ELLIPSIS, width) for row in engine.highlight(code, _fence_lang(lines[0]))
         )
         if closed:
-            out.append(Line.from_text(lines[-1].strip(), theme.text.muted).fit(width))
+            out.append(Line.from_text(lines[-1].strip(), theme.text.muted).clip(WrapMode.ELLIPSIS, width))
         return out
 
 
@@ -245,7 +245,7 @@ def _wrap_paragraph(
     line = Line(inline_segments(text, ctx))
     normalized = _normalize_tabs(line.text)
     spans = wrap_spans(normalized, width)
-    rows = [slice_line(line, start, end).fit(width) for start, end in spans]
+    rows = [slice_line(line, start, end).clip(WrapMode.ELLIPSIS, width) for start, end in spans]
     return line, spans, rows
 
 

@@ -10,6 +10,7 @@ from motui.kernel.document import Activable, Focusable, descend_chain
 from motui.kernel.events import KeyEvent
 from motui.kernel.hit import Hit
 from motui.kernel.cell import Line
+from motui.kernel.text import WrapMode
 from motui.widgets import Padding
 from motui.kernel.layout import Constraints
 
@@ -21,7 +22,7 @@ class Plain:
         self.focused = True
 
     def render(self, c: Constraints) -> Surface:
-        return Surface.clipped([Line.from_text("plain").fit(c.width)], c.width)
+        return Surface.clipped([Line.from_text("plain").clip(WrapMode.ELLIPSIS, c.width)], c.width)
 
 
 class Cursor(Plain):

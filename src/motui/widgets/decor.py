@@ -19,7 +19,7 @@ from ..kernel.glyphs import GLYPHS, Border, Glyphs
 from ..kernel.cell import Line, Segment, Surface
 from ..kernel.layout import Constraints
 from ..kernel.style import Style
-from ..kernel.text import ellipsize_tail, visible_width
+from ..kernel.text import WrapMode, ellipsize_tail, visible_width
 from ..kernel.theme import Styles, Theme
 from ..widgets.base import Widget
 
@@ -159,7 +159,7 @@ class Divider(Widget):
         paint = width if self.max_width is None else max(0, min(width, self.max_width))
         label = ellipsize_tail(self.label, paint - 4) if self.label else ""
         segments = _labelled_rule(self.char, 2, label, label_style, style, paint)
-        return _answer([Line(segments).fit(width)], c)
+        return _answer([Line(segments).clip(WrapMode.ELLIPSIS, width)], c)
 
     def __repr__(self) -> str:
         if self.label:
@@ -304,7 +304,7 @@ class Panel(Widget):
             self._child_rows = len(rows)
             self._memo = (key, rows, child_rows)
             return _answer(rows, c)
-        rows = [row.fit(inner).fill(inner) for row in child_rows]
+        rows = [row.clip(WrapMode.ELLIPSIS, inner).fill(inner) for row in child_rows]
         self._child_rows = len(rows)
         out = [self._top_row(width, style)]
         for row in rows:
@@ -313,7 +313,7 @@ class Panel(Widget):
                 + row
                 + Line((Segment(f" {self._border.right}", style),))
             )
-            out.append(framed_row.fit(width))
+            out.append(framed_row.clip(WrapMode.ELLIPSIS, width))
         out.append(self._bottom_row(width, style))
         self._memo = (key, out, child_rows)
         return _answer(out, c)
@@ -331,16 +331,16 @@ class Panel(Widget):
         borderless panel's below two): the row is the child's, fitted,
         ground or not.
 
-        The composition is ``(lead pad + row).fit(width).fill(width, pad)``:
+        The composition is ``(lead pad + row).clip(WrapMode.ELLIPSIS, width).fill(width, pad)``:
         ``fill`` grows the row to the full width and merges the ground
         underneath (the Rich ``Padding(style=...)`` rule), taking the
         ``NONE`` fast path when there is no band -- and it never truncates,
         which the fit already handled.
         """
         if lead == 0:
-            return row.fit(width)
+            return row.clip(WrapMode.ELLIPSIS, width)
         pad = ground
-        return (Line((Segment(" " * lead, pad),)) + row).fit(width).fill(width, pad)
+        return (Line((Segment(" " * lead, pad),)) + row).clip(WrapMode.ELLIPSIS, width).fill(width, pad)
 
     def child_at(self, row: int, col: int) -> tuple[Component, int, int] | None:
         """The child owning a content cell of the last render, in its coords.

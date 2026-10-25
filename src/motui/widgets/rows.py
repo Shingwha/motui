@@ -26,7 +26,8 @@ computed here, never drawn.
 Overflow ruling for the status row (decided and documented here): the **left
 part is preserved first** and the **right part is cut from its tail** -- the
 row is composed at full length and closed with the kernel's
-:meth:`~motui.kernel.cell.Line.fit`, which ellipsizes the end.  A narrow
+:meth:`~motui.kernel.cell.Line.clip` (``WrapMode.ELLIPSIS``), which
+ellipsizes the end.  A narrow
 terminal therefore drops the tail of the right-hand information -- typically
 the end of a model name or mode -- while the left-hand counters stay
 readable.
@@ -40,7 +41,7 @@ from ..kernel.glyphs import GLYPHS, Glyphs, seat
 from ..kernel.cell import Line, Segment, Surface, fuse
 from ..kernel.layout import Constraints
 from ..kernel.style import NONE, Style
-from ..kernel.text import visible_width
+from ..kernel.text import WrapMode, visible_width
 from ..kernel.theme import Styles, Theme
 from ..widgets.base import Widget
 
@@ -131,7 +132,7 @@ class StatusLine(Widget):
         used = _width(self.left, default) + _width(self.right, default)
         gutter = max(1, c.width - used - 1)  # one trailing column of right margin
         parts = [*self.left, (" " * gutter, gap_style), *self.right]
-        rows = [_row(parts, default).fit(c.width)]
+        rows = [_row(parts, default).clip(WrapMode.ELLIPSIS, c.width)]
         if c.max_height is not None:
             rows = rows[: c.max_height]
         return Surface.clipped(rows, c.width)
@@ -198,7 +199,7 @@ class ShortcutBar(Widget):
                 segments.append(Segment(self.glyphs.separator, NONE))
             segments.append(Segment(key, key_style))
             segments.append(Segment(f" {label}", label_style))
-        rows = [Line(segments).fit(c.width)]
+        rows = [Line(segments).clip(WrapMode.ELLIPSIS, c.width)]
         if c.max_height is not None:
             rows = rows[: c.max_height]
         return Surface.clipped(rows, c.width)
@@ -266,10 +267,10 @@ class Notice(Widget):
         glyph, style = self._level_style()
         prefix = seat(glyph)
         if not prefix:
-            rows = [Line.from_text(self.text, NONE).fit(c.width)]
+            rows = [Line.from_text(self.text, NONE).clip(WrapMode.ELLIPSIS, c.width)]
         else:
             line = Line((Segment(prefix, style), Segment(self.text, NONE)))
-            rows = [line.fit(c.width)]
+            rows = [line.clip(WrapMode.ELLIPSIS, c.width)]
         if c.max_height is not None:
             rows = rows[: c.max_height]
         return Surface.clipped(rows, c.width)

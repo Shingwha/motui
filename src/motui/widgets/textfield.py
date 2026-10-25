@@ -54,7 +54,7 @@ from ..kernel.events import Event, PasteEvent
 from ..kernel.glyphs import GLYPHS, Glyphs, seat
 from ..kernel.cell import Line, Segment, Surface
 from ..kernel.layout import Constraints
-from ..kernel.text import visible_width
+from ..kernel.text import WrapMode, visible_width
 from ..kernel.theme import Styles, Theme
 from ..widgets.base import Widget
 from ..kernel.keymap import (
@@ -128,6 +128,7 @@ class _TextField(Widget):
         "_memo_revision",
         "_memo_rows",
         "_memo_width",
+        "_wrap",
         "placeholder",
     )
 
@@ -141,6 +142,7 @@ class _TextField(Widget):
         keymap: Keymap,
         mask: str = "",
         read_only: bool = False,
+        wrap: WrapMode = WrapMode.ELLIPSIS,
     ) -> None:
         super().__init__(theme, styles)
         self.placeholder = placeholder
@@ -150,6 +152,12 @@ class _TextField(Widget):
         # The display mask: the first character stands in for every rendered
         # character (see ``_mask_row``); ``""`` renders the text itself.
         self._mask = mask
+        # The single-row response to a row wider than the field.  The buffer
+        # geometry is always word-aware; this only shapes the final row
+        # guard, so the editing algorithm does not move.  The plain Input
+        # keeps the 1.x ellipsis (W2.5b switches it to OVERFLOW); Editor
+        # opts into WORD.
+        self._wrap = wrap
         # The memory: the rows of the last render while ``_memo_revision``
         # and ``_memo_width`` still describe the field.  ``None`` rows mean
         # "nothing remembered" -- the revision never answers ``None`` here,
@@ -491,6 +499,7 @@ class _TextField(Widget):
             self.hover,
             self.placeholder,
             self._mask,
+            self._wrap,
             self.theme,
             self.styles,
             self._indent(),
@@ -597,7 +606,15 @@ class _TextField(Widget):
                     seg.with_style(seg.style.merge(band))
                     for seg in line.segments
                 )
-            out.append(line.fit(width))
+            if line.width <= width:
+                # The buffer's geometry already fits (and keeps trailing
+                # spaces the word rule would drop), so the default is the row
+                # itself; only an over-wide cluster reaches the guard.
+                out.append(line)
+            elif self._wrap in (WrapMode.WORD, WrapMode.CHAR):
+                out.extend(line.reflow(self._wrap, width))
+            else:
+                out.append(line.clip(self._wrap, width))
         return out
 
     def __repr__(self) -> str:
@@ -742,6 +759,13 @@ class Editor(_TextField):
     declares ``cursor_shape = "beam"``: a text buffer reads best with the
     terminal's bar cursor, and the host reads the attribute off the focused
     leaf and passes it to :meth:`~motui.app.TUI.set_cursor_shape`.
+
+    ``wrap`` (``WrapMode.WORD``, the current behavior) is the final row
+    guard: ``WORD`` / ``CHAR`` reflow a row wider than the field, the
+    single-row modes truncate it (``ELLIPSIS`` marks, ``CLIP`` cuts hard,
+    ``OVERFLOW`` leaves it for the host -- W2.5b).  The buffer's own
+    word-aware geometry does not move, so the cursor always reads the rows
+    the editor paints.
     """
 
     __slots__ = ("max_rows",)
@@ -760,6 +784,7 @@ class Editor(_TextField):
         keymap: Keymap | None = None,
         max_rows: int | None = None,
         read_only: bool = False,
+        wrap: WrapMode = WrapMode.WORD,
     ) -> None:
         super().__init__(
             text,
@@ -769,8 +794,23 @@ class Editor(_TextField):
             keymap=keymap if keymap is not None else DEFAULT_EDITOR_KEYMAP,
             mask=mask,
             read_only=read_only,
+            wrap=wrap,
         )
         self.max_rows = max_rows
+
+    @property
+    def wrap(self) -> WrapMode:
+        """How a row wider than the field responds to ``render``'s width.
+
+        A write only changes this policy: the row memory keys on
+        :meth:`_revision`, which includes it, so the next render rebuilds
+        the guard while the buffer geometry stays put.
+        """
+        return self._wrap
+
+    @wrap.setter
+    def wrap(self, value: WrapMode) -> None:
+        self._wrap = value
 
     # -- visual geometry -------------------------------------------------------
 

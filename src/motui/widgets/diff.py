@@ -61,6 +61,7 @@ from ..kernel.cell import Line, Segment, Surface
 from ..kernel.layout import Constraints
 from ..kernel.style import NONE, Style
 from ..kernel.theme import Styles, Theme
+from ..kernel.text import WrapMode
 from ..widgets.base import Widget
 
 __all__ = ["LCS_LIMIT", "Diff"]
@@ -358,10 +359,12 @@ class Diff(Widget):
     the context, ``-`` and ``+``
     rows all read weight-neutral, and bold stays what it is everywhere else
     in the toolkit -- the markdown ``**...**`` syntax (the rule
-    ``kernel/style.py``'s palette note spells out).  ``render(c)`` fits
-    every row to the width, so a long line is truncated with ``\u2026`` like
-    anywhere else, and caches the fitted rows for that width: a repaint
-    answers from the cache, a resize rebuilds it.
+    ``kernel/style.py``'s palette note spells out).  ``render(c)`` reflows
+    every row under ``wrap`` (``WrapMode.ELLIPSIS`` by default, so a long
+    line is truncated with ``\u2026`` like anywhere else; ``WORD`` / ``CHAR``
+    wrap, ``CLIP`` cuts hard, ``OVERFLOW`` keeps the row whole) and caches
+    the rows for that width: a repaint answers from the cache, a resize
+    rebuilds it.
 
     A middle past :data:`LCS_LIMIT` line pairs is split at the lines unique
     to both sides, each piece is walked on its own, and a piece that has no
@@ -396,6 +399,7 @@ class Diff(Widget):
         "_rendered_rows",
         "_rows",
         "_glyphs",
+        "wrap",
     )
 
     def __init__(
@@ -408,6 +412,7 @@ class Diff(Widget):
         glyphs: Glyphs = GLYPHS,
         theme: Theme | None = None,
         styles: Styles | None = None,
+        wrap: WrapMode = WrapMode.ELLIPSIS,
     ) -> None:
         super().__init__(theme, styles)
         self._before = before
@@ -415,6 +420,10 @@ class Diff(Widget):
         self._context = _checked_context(context)
         self._numbers = numbers
         self._glyphs = glyphs
+        #: How an over-wide row responds to the width: ``ELLIPSIS`` (the
+        #: default) truncates, ``WORD`` / ``CHAR`` wrap, ``CLIP`` cuts hard
+        #: and ``OVERFLOW`` keeps the row whole for the container to clip.
+        self.wrap = wrap
         # The constructor builds once, through the same private path every
         # setter takes afterwards: one build site for both.
         self._rebuild()
@@ -560,15 +569,15 @@ class Diff(Widget):
     def revision(self) -> object:
         """The row cache's snapshot: every input ``render`` reads.
 
-        The two texts (``before`` / ``after``), ``context``, ``numbers`` and
-        ``glyphs`` determine the built rows; ``theme`` and ``styles``
-        determine how those rows paint.  There is no cursor, hover or focus
-        state in this component -- every change it has is an assignment to
-        one of the public inputs -- so these seven values are the complete
-        snapshot.  Equal snapshots therefore mean equal rows at one width,
-        which is what makes a **sealed** block's next assignment reach the
-        screen: the class's "never a stale frame" promise is exactly this
-        key moving.
+        The two texts (``before`` / ``after``), ``context``, ``numbers``,
+        ``glyphs`` and ``wrap`` determine the built rows; ``theme`` and
+        ``styles`` determine how those rows paint.  There is no cursor,
+        hover or focus state in this component -- every change it has is an
+        assignment to one of the public inputs -- so these eight values are
+        the complete snapshot.  Equal snapshots therefore mean equal rows at
+        one width, which is what makes a **sealed** block's next assignment
+        reach the screen: the class's "never a stale frame" promise is
+        exactly this key moving.
         """
         return (
             self._before,
@@ -576,16 +585,17 @@ class Diff(Widget):
             self._context,
             self._numbers,
             self._glyphs,
+            self.wrap,
             self.theme,
             self.styles,
         )
 
     def render(self, c: Constraints) -> Surface:
-        """The diff rows, each fitted to the width (``fit`` truncates).
+        """The diff rows, each reflowed to the width under ``wrap``.
 
         One render is cached, the way :class:`~.markdown.Markdown` caches its
-        own: the rows are a pure function of the width and the resolved
-        bands, a host repaints the
+        own: the rows are a pure function of the width, ``wrap`` and the
+        resolved bands, a host repaints the
         same frame many times (the pointer tier re-renders every frame) and
         resizes rarely, so a repeated key answers from the cache and a new
         one rebuilds it.  One entry, not a history -- the previous width's
@@ -596,7 +606,9 @@ class Diff(Widget):
         The cache key stays the width (never ``max_height``), so a smaller budget truncates the
         returned rows without rebuilding them.  The surface is
         :meth:`~motui.kernel.cell.Surface.clipped`, not padded.  Long lines
-        still truncate through ``fit`` exactly as before (the W2.5 decision).
+        still truncate with ``\u2026`` by default (the W2.5 decision);
+        ``wrap`` selects another response without changing the default
+        bytes.
 
         With ``numbers`` the content rows carry one more segment in front of
         their own: the muted line-number cell :meth:`_build` already made.
@@ -604,7 +616,7 @@ class Diff(Widget):
         ``numbers`` left at ``False`` the rows are the single-segment lines
         they have always been, byte for byte.
         """
-        key = (c.width, self.theme, self.styles)
+        key = (c.width, self.wrap, self.theme, self.styles)
         if self._rendered_rows is None or self._rendered_key != key:
             # The deletion band loses its weight here: the ``status.danger``
             # hue tells a reader what the row is, and weight is reserved for
@@ -621,10 +633,14 @@ class Diff(Widget):
                 _ELIDE: muted,
             }
             self._rendered_key = key
-            self._rendered_rows = [
-                self._paint(text, styles[kind], gutter, muted).fit(c.width)
-                for kind, text, gutter in self._rows
-            ]
+            rendered: list[Line] = []
+            for kind, text, gutter in self._rows:
+                rendered.extend(
+                    self._paint(text, styles[kind], gutter, muted).reflow(
+                        self.wrap, c.width
+                    )
+                )
+            self._rendered_rows = rendered
         rows = list(self._rendered_rows)
         if c.max_height is not None:
             rows = rows[: c.max_height]

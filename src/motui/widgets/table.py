@@ -7,16 +7,19 @@ every two rows -- a full grid (an empty body leaves the frame alone).  A
 column's natural width is the widest cell in it (header included) plus one
 padding cell per side.
 
-Two width policies share that frame.  With ``wrap=True`` (the default) the
-natural widths are capped at ``max_col_width`` and floored at
-``min_col_width``; when the capped total still exceeds ``width`` the budgets
-shrink proportionally above the floor, and every cell wraps word-aware
-inside its budget (``wrap_line`` keeps each ``Segment``, its ``link`` and its
+Two width policies share that frame.  ``cell_wrap`` (``WrapMode.WORD`` by
+default) selects how an over-long cell responds to its budget.  ``WORD`` and
+``CHAR`` cap the natural widths at ``max_col_width``, floor them at
+``min_col_width`` and, when the capped total still exceeds ``width``, shrink
+the budgets proportionally above the floor; every cell then wraps inside its
+budget (``Line.reflow`` keeps each ``Segment``, its ``link`` and its
 ``action``) -- a record as tall as its tallest cell, a rule only under its
-last visual line, and the mark prefix on its first visual line alone.  With
-``wrap=False`` the old policy holds byte for byte: no cap, no floor beyond
-one column, and over-long cells are ellipsized.  Below ``width`` the grid
-keeps its natural size: the right edge is never stretched.
+last visual line, and the mark prefix on its first visual line alone.
+``ELLIPSIS`` and ``CLIP`` keep the old one-row policy byte for byte: no cap,
+no floor beyond one column, and over-long cells are ellipsized or hard-cut.
+``OVERFLOW`` is accepted for symmetry but follows the ``ELLIPSIS`` path this
+wave; the natural-width path arrives with ``ScrollPanel`` (W2.6).  Below
+``width`` the grid keeps its natural size: the right edge is never stretched.
 
 Cells are ``str``, ``(str, Style)`` or ``Sequence[Segment]``.  ``str`` and
 tuple cells normalize to a single segment (a tuple's style replaces the
@@ -29,7 +32,7 @@ the header row and ``text.base`` on data rows' first column
 (``left`` / ``center`` / ``right``; anything else, and any column past
 the list, reads as left) and is applied with pad segments inside the
 column budget.  All rows of one table share exactly one width (frame
-consistency); each is still ``fit`` to ``width`` as a final guard.
+consistency); each is still clipped to ``width`` as a final guard.
 
 The grid lines use ``borders.grid`` (uncolored by default, which reads
 cleanest on any background); a ``styles=`` override can tint them.
@@ -110,11 +113,11 @@ from typing import NamedTuple
 
 from ..widgets.cursor import Cursor
 from ..kernel.glyphs import GLYPHS, Border, Glyphs, pair_seat, seat_width
-from ..kernel.cell import Line, Segment, Surface, fuse, overlay, rest, wrap_line
+from ..kernel.cell import Line, Segment, Surface, fuse, overlay, rest
 from ..kernel.layout import Constraints
 from ..widgets.mark import MarkSet
 from ..kernel.style import NONE, Style
-from ..kernel.text import visible_width
+from ..kernel.text import WrapMode, visible_width
 from ..kernel.theme import Styles, Theme
 from ..widgets.base import Widget
 
@@ -243,10 +246,11 @@ class Table(Widget):
 
     ``headers`` names the columns; ``rows`` holds the records (a short row
     is padded with empty cells, a long row is truncated at the last
-    header).  Column widths follow the width policy above: ``wrap=True``
-    (the default) caps at ``max_col_width``, floors at ``min_col_width`` and
-    wraps over-long cells, while ``wrap=False`` keeps the old
-    natural/shrink/ellipsis behavior byte for byte.  The
+    header).  Column widths follow the width policy above: ``cell_wrap``
+    (``WrapMode.WORD`` by default) caps at ``max_col_width``, floors at
+    ``min_col_width`` and wraps over-long cells, while ``ELLIPSIS`` /
+    ``CLIP`` keep the old natural/shrink/truncate behavior byte for byte
+    (``OVERFLOW`` follows ``ELLIPSIS`` this wave).  The
     header row always uses ``text.muted``, and ``text.base`` only touches
     data rows' first column.  ``aligns`` aligns
     each column (``left`` / ``center`` / ``right``, default left).  Grid
@@ -352,7 +356,7 @@ class Table(Widget):
         "max_col_width",
         "min_col_width",
         "rows",
-        "wrap",
+        "cell_wrap",
     )
 
     def __init__(
@@ -369,7 +373,7 @@ class Table(Widget):
         disabled_items: Iterable[int] = (),
         theme: Theme | None = None,
         styles: Styles | None = None,
-        wrap: bool = True,
+        cell_wrap: WrapMode = WrapMode.WORD,
         max_col_width: int | None = 40,
         min_col_width: int = 3,
     ) -> None:
@@ -377,9 +381,9 @@ class Table(Widget):
         self.headers = list(headers)
         self.rows = [list(row) for row in rows]
         self.aligns = list(aligns) if aligns is not None else None
-        #: Wrap over-long cells instead of ellipsizing them.  ``False`` keeps
-        #: the 1.2-before width policy byte for byte (see the module doc).
-        self.wrap = wrap
+        #: How an over-long cell responds to its column budget: ``WORD`` /
+        #: ``CHAR`` wrap the record, the single-row modes truncate it.
+        self.cell_wrap = cell_wrap
         #: The wrapped policy's per-column cap (``None``: no cap) and floor.
         self.max_col_width = max_col_width
         self.min_col_width = min_col_width
@@ -700,8 +704,8 @@ class Table(Widget):
         the same budgets and alignment pads as :meth:`render` uses, so the
         list is the grid's header block exactly.  A table with no columns
         answers an empty list: its render is one blank row and there is no
-        header to pin.  With ``wrap=False`` this is the single old header
-        row.
+        header to pin.  With a single-row ``cell_wrap`` this is the old
+        header row.
         """
         if not self.headers:
             return []
@@ -789,7 +793,7 @@ class Table(Widget):
             self.focused,
             self.disabled,
             tuple(sorted(self.disabled_items)),
-            self.wrap,
+            self.cell_wrap,
             self.max_col_width,
             self.min_col_width,
             self.theme,
@@ -897,9 +901,9 @@ class Table(Widget):
         One entry per visual line: the frame rows and every visual line of a
         (possibly wrapped) header record and data record.  A record's
         ``row_rule`` follows its **last** visual line; the final rule is the
-        frame's bottom.  ``wrap=False`` gives every record exactly one
-        visual line, so the structure -- and every line's bytes -- is the
-        old one.
+        frame's bottom.  A single-row ``cell_wrap`` gives every record
+        exactly one visual line, so the structure -- and every line's bytes
+        -- is the old one.
         """
         ncols = len(self.headers)
         if ncols == 0:
@@ -1024,8 +1028,12 @@ class Table(Widget):
         border_style: Style,
         aligns: list[str],
     ) -> list[Line]:
-        """One record's visual lines: the old single row, or the wrapped block."""
-        if not self.wrap:
+        """One record's visual lines: one row, or the wrapped block.
+
+        ``WORD`` and ``CHAR`` take the wrapping policy; the single-row
+        modes keep exactly one visual line per record.
+        """
+        if self.cell_wrap not in (WrapMode.WORD, WrapMode.CHAR):
             return [self._row(cells, budgets, border_style, aligns)]
         return self._wrapped_row(cells, budgets, border_style, aligns)
 
@@ -1038,14 +1046,15 @@ class Table(Widget):
     ) -> list[Line]:
         """One record wrapped to ``budgets``: as many visual lines as its tallest cell.
 
-        Every cell is word-wrapped through :func:`~motui.kernel.cell.wrap_line`
-        (styles, links and actions survive), each visual line is padded to
-        its column budget with the cell's base style, and every visual line
-        carries its own left and right border.  A cell shorter than the
-        record's tallest one pads blank on the lines past its end.
+        Every cell is wrapped through :meth:`~motui.kernel.cell.Line.reflow`
+        under ``cell_wrap`` (``WORD`` or ``CHAR``; styles, links and actions
+        survive), each visual line is padded to its column budget with the
+        cell's base style, and every visual line carries its own left and
+        right border.  A cell shorter than the record's tallest one pads
+        blank on the lines past its end.
         """
         wrapped = [
-            wrap_line(Line(segments), budgets[i])
+            Line(segments).reflow(self.cell_wrap, budgets[i])
             for i, (segments, _) in enumerate(cells)
         ]
         height = max(len(lines) for lines in wrapped)
@@ -1056,7 +1065,7 @@ class Table(Widget):
                 line = wrapped[i][visual] if visual < len(wrapped[i]) else Line()
                 parts.extend(
                     self._cell_parts(
-                        list(line.segments), base, budgets[i], aligns, i
+                        list(line.segments), base, budgets[i], self.cell_wrap, aligns, i
                     )
                 )
                 parts.append(Segment(self._border.right, border_style))
@@ -1144,12 +1153,12 @@ class Table(Widget):
 
         ``set_widths``' pinned budgets replace the measured ones column by
         column (a column past the pinned list keeps its measured width, a
-        pinned value below one reads as one).  With ``wrap=False`` the old
-        fits/shrink rule then runs exactly as it always did: a total that
-        fits keeps the budgets (never stretched), a total that does not
-        shrinks proportionally, floored at one column each.  With
-        ``wrap=True`` the wrapped policy runs instead -- cap, floor,
-        proportional split -- see :func:`_wrap_budgets`.
+        pinned value below one reads as one).  With a single-row
+        ``cell_wrap`` the old fits/shrink rule then runs exactly as it
+        always did: a total that fits keeps the budgets (never stretched),
+        a total that does not shrinks proportionally, floored at one column
+        each.  With ``WORD`` / ``CHAR`` the wrapped policy runs instead --
+        cap, floor, proportional split -- see :func:`_wrap_budgets`.
         """
         ncols = len(self.headers)
         pins = self._widths
@@ -1157,7 +1166,7 @@ class Table(Widget):
             natural = [
                 max(1, pins[i]) if i < len(pins) else natural[i] for i in range(ncols)
             ]
-        if self.wrap:
+        if self.cell_wrap in (WrapMode.WORD, WrapMode.CHAR):
             return _wrap_budgets(
                 natural, width, ncols, self.max_col_width, self.min_col_width
             )
@@ -1188,12 +1197,12 @@ class Table(Widget):
         """
         if not self.headers:
             return [_Slot("empty", None, 0)]
-        if width is None or not self.wrap:
+        if width is None or self.cell_wrap not in (WrapMode.WORD, WrapMode.CHAR):
             return self._unwrapped_layout()
         return self._plan(width)[0]
 
     def _unwrapped_layout(self) -> list[_Slot]:
-        """The one-visual-line-per-record structure (``wrap=False`` and no render yet)."""
+        """The one-visual-line-per-record structure (single-row modes, no render yet)."""
         layout: list[_Slot] = [
             _Slot("top", None, 0),
             _Slot("header", None, 0),
@@ -1222,17 +1231,21 @@ class Table(Widget):
     ) -> Line:
         """One ``│ cell │ cell │`` row, every cell keeping its own segments.
 
-        A cell is truncated to its column budget through ``Line.fit``
-        (the marker is one column, like the ellipsis of any other
-        truncation); the alignment pad fills the remaining budget as a
-        ``Segment`` in the cell's base style.  ``str`` and tuple cells
-        have one style throughout, so the fused row is byte-identical to
-        the single-segment rendering.  Columns past ``aligns`` read as
-        left.
+        A cell is truncated to its column budget through
+        ``Line.clip(cell_wrap, inner)`` (the marker is one column in
+        ``ELLIPSIS`` mode, absent in ``CLIP``); the alignment pad fills the
+        remaining budget as a ``Segment`` in the cell's base style.  ``str``
+        and tuple cells have one style throughout, so the fused row is
+        byte-identical to the single-segment rendering.  Columns past
+        ``aligns`` read as left.
         """
         segments: list[Segment] = [Segment(self._border.left, border_style)]
         for i, (cell_segments, base) in enumerate(cells):
-            segments.extend(self._cell_parts(cell_segments, base, budgets[i], aligns, i))
+            segments.extend(
+                self._cell_parts(
+                    cell_segments, base, budgets[i], self.cell_wrap, aligns, i
+                )
+            )
             segments.append(Segment(self._border.right, border_style))
         return Line(segments)
 
@@ -1241,12 +1254,16 @@ class Table(Widget):
         cell: list[Segment],
         base: Style,
         inner: int,
+        mode: WrapMode,
         aligns: list[str],
         column: int,
     ) -> list[Segment]:
         """The padded, truncated, space-wrapped interior of one cell."""
         line = Line(cell)
-        fitted = line if line.width <= inner else line.fit(inner)
+        # OVERFLOW has no natural-width path inside a fixed grid yet (W2.6
+        # connects ScrollPanel); this wave it falls back to ELLIPSIS.
+        effective = WrapMode.ELLIPSIS if mode is WrapMode.OVERFLOW else mode
+        fitted = line if line.width <= inner else line.clip(effective, inner)
         gap = max(inner - fitted.width, 0)
         align = aligns[column] if column < len(aligns) else "left"
         parts = list(fitted.segments)

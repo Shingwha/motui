@@ -52,6 +52,7 @@ from ..kernel.glyphs import GLYPHS, Glyphs
 from ..kernel.cell import Line, Segment
 from ..kernel.style import Style
 from ..kernel.theme import Styles, Theme
+from ..kernel.text import WrapMode
 from .choice import Option, Select
 from .strip import LabelStrip
 
@@ -192,7 +193,7 @@ class MenuBar(LabelStrip):
                 )
             segments.append(Segment(label, self._style_of(i)))
         segments.append(Segment(" "))
-        line = Line(segments).fit(width)
+        line = Line(segments).clip(WrapMode.ELLIPSIS, width)
         return line, self._spans_of(line)
 
     def revision(self) -> object:

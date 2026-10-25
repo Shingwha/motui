@@ -36,6 +36,7 @@ from ..kernel.events import Event, KeyEvent
 from ..kernel.cell import Line, Surface
 from ..kernel.layout import Constraints
 from ..kernel.theme import Styles, Theme
+from ..kernel.text import WrapMode
 from ..widgets.base import Widget
 
 __all__ = ["Field", "Form"]
@@ -271,12 +272,12 @@ class Form(Widget):
             if position and self._gap:
                 out.extend(Line() for _ in range(self._gap))
             if field.label:
-                out.append(Line.from_text(field.label, label_style).fit(width))
+                out.append(Line.from_text(field.label, label_style).clip(WrapMode.ELLIPSIS, width))
             rows = list(field.component.render(Constraints(width=width)))
             spans.append((len(out), len(rows)))
-            out.extend(row.fit(width) for row in rows)
+            out.extend(row.clip(WrapMode.ELLIPSIS, width) for row in rows)
             if field.error:
-                out.append(Line.from_text(field.error, error_style).fit(width))
+                out.append(Line.from_text(field.error, error_style).clip(WrapMode.ELLIPSIS, width))
         self._spans = spans
         if c.max_height is not None:
             out = out[: c.max_height]

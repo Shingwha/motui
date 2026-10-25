@@ -41,7 +41,7 @@ from ..kernel.document import Component, Revisioned
 from ..kernel.glyphs import GLYPHS, Glyphs, seat
 from ..kernel.cell import Line, Segment, Surface
 from ..kernel.layout import Constraints
-from ..kernel.text import visible_width
+from ..kernel.text import WrapMode, visible_width
 from ..kernel.theme import Styles, Theme
 from ..widgets.base import Widget
 
@@ -255,7 +255,7 @@ class Collapsible(Widget):
         mark = seat(
             self.glyphs.fold_open if self.open else self.glyphs.fold_closed
         )
-        out = [Line((Segment(mark, style), Segment(self.title, style))).fit(width)]
+        out = [Line((Segment(mark, style), Segment(self.title, style))).clip(WrapMode.ELLIPSIS, width)]
         if self.open:
             indent = visible_width(mark)
             body_rows = list(self.body.render(Constraints(width=max(0, width - indent))))
@@ -266,7 +266,7 @@ class Collapsible(Widget):
                 out.extend(memo[1])
             else:
                 rows = [
-                    Line((Segment(" " * indent), *row.segments)).fit(width)
+                    Line((Segment(" " * indent), *row.segments)).clip(WrapMode.ELLIPSIS, width)
                     for row in body_rows
                 ]
                 self._body_memo = (key, rows, body_rows)

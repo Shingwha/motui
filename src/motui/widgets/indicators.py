@@ -34,6 +34,7 @@ from ..kernel.cell import Line, Segment, Surface
 from ..kernel.layout import Constraints
 from ..kernel.style import NONE
 from ..kernel.theme import Styles, Theme
+from ..kernel.text import WrapMode
 from ..widgets.base import Widget
 
 __all__ = ["ProgressBar", "Slider", "Spinner"]
@@ -132,7 +133,7 @@ class ProgressBar(Widget):
                 Segment("]"),
             )
         )
-        rows = [row.fit(c.width)]
+        rows = [row.clip(WrapMode.ELLIPSIS, c.width)]
         if c.max_height is not None:
             rows = rows[: c.max_height]
         return Surface.clipped(rows, c.width)
@@ -441,7 +442,7 @@ class Slider(Widget):
             if self.focused:
                 band = band.merge(self.group("controls").focus)
             segments = [seg.with_style(seg.style.merge(band)) for seg in segments]
-        rows = [Line(segments).fit(width)]
+        rows = [Line(segments).clip(WrapMode.ELLIPSIS, width)]
         if c.max_height is not None:
             rows = rows[: c.max_height]
         return Surface.clipped(rows, c.width)
@@ -506,7 +507,7 @@ class Spinner(Widget):
         not padded.
         """
         style = self.group("content").accent
-        rows = [Line.from_text(self.frame + self.text, style).fit(c.width)]
+        rows = [Line.from_text(self.frame + self.text, style).clip(WrapMode.ELLIPSIS, c.width)]
         if c.max_height is not None:
             rows = rows[: c.max_height]
         return Surface.clipped(rows, c.width)

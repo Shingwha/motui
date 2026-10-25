@@ -28,7 +28,7 @@ surface, ``active`` the cursor row's band and ``hover`` the pointer's, and a
 ``Styles(rows=...)`` override replaces the group wholesale.  A row is its
 text-styled segments -- the marker seat, the
 mark, the label and the description in their own styles -- then
-``.fit(width).fill(fitted.width, band)``: the W1 primitive, the band
+``.clip(WrapMode.ELLIPSIS, width).fill(fitted.width, band)``: the W1 primitive, the band
 underneath, the text styles on top.  The band merges under the row's own
 cells -- a pill behind the text, never a ribbon across the pane; a
 full-surface band is the host's container's job

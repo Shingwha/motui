@@ -14,7 +14,7 @@ from typing import TYPE_CHECKING
 
 from ...kernel.glyphs import pair_seat
 from ...kernel.cell import Line, Segment, wrap_line
-from ...kernel.text import visible_width
+from ...kernel.text import WrapMode, visible_width
 from .blocks import _run_blocks
 from .inline import inline_segments
 
@@ -95,7 +95,7 @@ class QuoteRule:
                 for seg in row.segments
             )
             out.append(
-                (Line((Segment(f"{ctx.glyphs.quote} ", theme.text.muted),)) + body).fit(width)
+                (Line((Segment(f"{ctx.glyphs.quote} ", theme.text.muted),)) + body).clip(WrapMode.ELLIPSIS, width)
             )
         return out
 
@@ -192,7 +192,7 @@ class ListRule:
                 if k == 0
                 else Line.from_text(" " * prefix_w)
             )
-            out.append((lead + row).fit(width))
+            out.append((lead + row).clip(WrapMode.ELLIPSIS, width))
         if continuation:
             # The item's own blocks: strip the text column's indent, render
             # through the live registry at the content width, indent back.
@@ -203,7 +203,7 @@ class ListRule:
                 inner.append(line[drop:])
             inner_rows = _run_blocks(inner, budget, ctx, gap=0)
             out.extend(
-                (Line.from_text(" " * prefix_w) + row).fit(width) for row in inner_rows
+                (Line.from_text(" " * prefix_w) + row).clip(WrapMode.ELLIPSIS, width) for row in inner_rows
             )
         return out
 
@@ -260,7 +260,7 @@ class ListRule:
         out: list[Line] = []
         for k, row in enumerate(rows):
             first = lead if k == 0 else Line.from_text(" " * prefix_w)
-            out.append((first + row).fit(width))
+            out.append((first + row).clip(WrapMode.ELLIPSIS, width))
         if continuation:
             strip = prefix_w
             inner = []
@@ -269,6 +269,6 @@ class ListRule:
                 inner.append(line[drop:])
             inner_rows = _run_blocks(inner, budget, ctx, gap=0)
             out.extend(
-                (Line.from_text(" " * prefix_w) + row).fit(width) for row in inner_rows
+                (Line.from_text(" " * prefix_w) + row).clip(WrapMode.ELLIPSIS, width) for row in inner_rows
             )
         return out

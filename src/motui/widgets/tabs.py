@@ -67,6 +67,7 @@ from ..kernel.glyphs import GLYPHS, Glyphs
 from ..kernel.cell import Line, Segment
 from ..kernel.style import Style
 from ..kernel.theme import Styles, Theme
+from ..kernel.text import WrapMode
 from .strip import LabelStrip
 
 __all__ = ["Tabs"]
@@ -212,7 +213,7 @@ class Tabs(LabelStrip):
                 )
             segments.append(Segment(name, style_of(i)))
         segments.append(Segment(" "))
-        line = Line(segments).fit(width)
+        line = Line(segments).clip(WrapMode.ELLIPSIS, width)
         return line, self._spans_of(line)
 
     def __repr__(self) -> str:

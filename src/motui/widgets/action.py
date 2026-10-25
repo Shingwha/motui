@@ -40,6 +40,7 @@ from ..kernel.cell import Line, Segment, Surface
 from ..kernel.layout import Constraints
 from ..kernel.style import NONE, Style
 from ..kernel.theme import Styles, Theme
+from ..kernel.text import WrapMode
 from ..widgets.base import Widget
 
 __all__ = ["Button", "Checkbox", "Link"]
@@ -177,7 +178,7 @@ class Button(Widget):
                 focused=self.focused,
                 focus_band=self.group("controls").focus,
             )
-        rows = [Line.from_text(f" {self.label} ", style).fit(c.width)]
+        rows = [Line.from_text(f" {self.label} ", style).clip(WrapMode.ELLIPSIS, c.width)]
         if c.max_height is not None:
             rows = rows[: c.max_height]
         return Surface.clipped(rows, c.width)
@@ -312,9 +313,9 @@ class Checkbox(Widget):
         mark = self.glyphs.check_on if self.checked else self.glyphs.check_off
         mark_text = f"{mark} " if mark else ""
         rows = [
-            Line((Segment(mark_text, mark_style), Segment(self.label, label_style))).fit(
-                c.width
-            )
+            Line(
+                (Segment(mark_text, mark_style), Segment(self.label, label_style))
+            ).clip(WrapMode.ELLIPSIS, c.width)
         ]
         if c.max_height is not None:
             rows = rows[: c.max_height]
@@ -424,7 +425,7 @@ class Link(Widget):
                 focused=self.focused,
                 focus_band=self.group("controls").focus,
             )
-        rows = [Line.from_text(self.text, style).fit(c.width)]
+        rows = [Line.from_text(self.text, style).clip(WrapMode.ELLIPSIS, c.width)]
         if c.max_height is not None:
             rows = rows[: c.max_height]
         return Surface.clipped(rows, c.width)
