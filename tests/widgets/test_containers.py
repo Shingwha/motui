@@ -6,6 +6,7 @@ import pytest
 
 from motui.widgets.text import Text
 from motui.kernel.cell import Line, Surface
+from motui.kernel.geom import Pos
 from motui.kernel.layout import Constraints
 from motui.kernel.style import Style
 from motui.kernel.theme import DEFAULT_THEME, Styles
@@ -337,3 +338,25 @@ def test_walk_visits_a_shared_child_once():
 
     assert list(row.walk()) == [row, shared]
     assert shared.parent is row
+
+
+def test_a_collapsible_adopts_its_body_and_answers_the_toggle_action():
+    body = Text("body")
+    section = Collapsible("options", body)
+
+    assert section.children == [body] and body.parent is section
+    assert list(section.walk()) == [section, body]
+    assert (
+        section.focusable,
+        section.clickable,
+        section.hoverable,
+        section.activatable,
+    ) == (True, True, True, True)
+
+    assert section.on_action("unknown") is False
+    assert section.on_action("toggle") is True
+    assert (section.open, section.take()) == (False, False)
+    assert section.on_click(Pos(y=0, x=40)) is True
+    assert (section.open, section.take_result()) == (True, True)
+    assert section.on_click(Pos(y=1, x=0)) is False
+    assert section.take() is None
