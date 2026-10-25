@@ -1,63 +1,44 @@
-"""The demo: a master-detail browser shipped inside the package.
+"""The showcase: ``python -m motui`` is one interactive page, not a tour.
 
-``python -m motui`` runs the browser on a real terminal; a piped run
-replays the scripted tour headless and dumps the final screen;
-``python -m motui --pages`` renders every topic as plain text.  The shell is
-built from the library it shows: header and footer are real docks, the
-catalog is a grouped ``NavList``, the stage is a pane with its own
-scrollbar, and the palette, find, stats, tooltip and copy gesture are the
-shipped tiers.
+Three scenes share one widget: a splash animates in, the menu offers the
+demos, and the gallery shows the 2.0 components side by side.  The package
+owns the three entry modes:
 
-``render_topic`` is the one rendering path ``--pages`` and
-``tools/golden.py`` share, so the golden frames are exactly the dumps the
-command writes.
+* a real terminal runs the showcase live (alt screen, mouse, 30 Hz ticks);
+* a piped run -- or ``--headless`` -- prints the menu's frame and exits 0;
+* ``--pages`` prints every scene as plain text at a fixed phase.
+
+``render_scene`` and ``scene_output`` are the two rendering paths the tools
+share: the first is the plain-text dump ``--pages`` writes, the second the
+real painter bytes the semantic golden records.  Both take the scene name,
+the geometry and an explicit phase, so a snapshot is a value, never a
+clock reading.
 """
 
 from __future__ import annotations
 
-import asyncio
+import contextlib
 import sys
+from collections.abc import Sequence
+from dataclasses import dataclass
 
-from motui.app import Runtime
-from motui.terminal import HeadlessScreen, MouseMode, TerminalOptions
-from motui.testing import ScriptedEvents
+from ..app import App, Runtime
+from ..kernel.layout import Constraints
+from ..terminal import HeadlessScreen, MouseMode, Terminal, TerminalOptions
+from .showcase import SCENES, Showcase
 
-from .assets import THEMES
-from .model import Topic
-from .registry import BY_KEY, SECTIONS, topics_for
-from .script import HEADLESS_H, HEADLESS_W, script
-from .session import Session
+__all__ = ["SCENES", "main", "render_scene", "scene_output"]
 
-__all__ = ["main", "render_topic"]
+#: The fixed phase ``--pages`` and the semantic snapshots share.
+PAGE_PHASE = 8
 
+#: The live showcase's tick rate (the splash auto-advances after 60 ticks).
+TICK_HZ = 30
 
-def _dump(runtime: Runtime) -> str:
-    """The screen as plain text, trailing blank rows trimmed."""
-    lines = [row.text.rstrip() for row in runtime.rows]
-    while lines and not lines[-1].strip():
-        lines.pop()  # trailing blank rows below the content are not content
-    return "\n".join(lines)
-
-
-def render_topic(
-    topic: Topic | str,
-    *,
-    width: int = HEADLESS_W,
-    height: int = HEADLESS_H,
-) -> str:
-    """One topic as its plain-text frame: the header rule, the dump, LF.
-
-    The path ``--pages`` and the golden tool share: a fresh headless
-    session at the replay's geometry, ``show_topic``, one ``paint``.
-    """
-    value = topic if isinstance(topic, Topic) else BY_KEY[topic]
-    session = Session(
-        terminal=TerminalOptions(screen=HeadlessScreen(width, height))
-    )
-    session.show_topic(value.key, toast=False)
-    session.runtime.paint()
-    header = f"\u2500\u2500 /{value.section}/{value.key} "
-    return f"{header}{'\u2500' * max(0, width - len(header))}\n{_dump(session.runtime)}\n"
+_USAGE = (
+    "usage: python -m motui [--pages] [--headless] [--scene NAME] "
+    "[--frames N] [--width N] [--height N]"
+)
 
 
 def _utf8_stdout() -> None:
@@ -65,51 +46,163 @@ def _utf8_stdout() -> None:
     reconfigure = getattr(sys.stdout, "reconfigure", None)
     if reconfigure is None:
         return
-    try:
+    with contextlib.suppress(ValueError, OSError):
         reconfigure(encoding="utf-8")
-    except (ValueError, OSError):  # a stream that has no say in its encoding
-        pass
 
 
-def _headless() -> None:
-    """Replay the scripted session headless, then print the final screen."""
-    session = Session(
-        terminal=TerminalOptions(
-            screen=HeadlessScreen(HEADLESS_W, HEADLESS_H),
-            input=ScriptedEvents(script()),
-        )
+def _scene_text(showcase: Showcase, width: int, height: int) -> str:
+    """One showcase frame as plain text, trailing blank rows dropped."""
+    surface = showcase.render(Constraints(width=width, max_height=height))
+    lines = [row.text.rstrip() for row in surface]
+    while lines and not lines[-1]:
+        lines.pop()
+    return "\n".join(lines)
+
+
+def render_scene(
+    name: str,
+    *,
+    width: int = 100,
+    height: int = 30,
+    phase: int = PAGE_PHASE,
+) -> str:
+    """One scene as its plain-text frame at ``width`` x ``height``, phase fixed."""
+    showcase = Showcase(scene=name)
+    showcase.phase = phase
+    return _scene_text(showcase, width, height)
+
+
+def scene_output(
+    name: str,
+    *,
+    width: int = 100,
+    height: int = 30,
+    phase: int = PAGE_PHASE,
+) -> str:
+    """One scene's painted bytes, recorded from a fresh headless runtime.
+
+    The path the semantic golden feeds to the emulator: a headless screen,
+    a non-interactive runtime, ``fill(Showcase)`` and one ``paint`` -- no
+    event pump, no clock, no terminal.
+    """
+    screen = HeadlessScreen(width, height)
+    runtime = Runtime(
+        Terminal(TerminalOptions(screen=screen)),
+        interactive=False,
     )
-    asyncio.run(session.run_async())
-    if session.tooltip is not None:
-        session.tooltip.detach()
-        session.runtime.paint()
-    sys.stdout.write(_dump(session.runtime) + "\n")
+    showcase = Showcase(scene=name)
+    showcase.phase = phase
+    runtime.fill(showcase)
+    runtime.paint()
+    return screen.output
 
 
 def _pages() -> None:
-    """Print every section and every topic as plain text, no terminal needed."""
-    for section in SECTIONS:
-        rule = f"\u2500\u2500 /{section.key} "
-        print(f"\n{rule}{'\u2500' * max(0, HEADLESS_W - len(rule))}")
-        for topic in topics_for(section):
-            sys.stdout.write(render_topic(topic))
+    """Print every scene as plain text, one full-width rule per scene."""
+    for name in SCENES:
+        header = f"\u2500\u2500 /{name} "
+        print(f"\n{header}{'\u2500' * max(0, 100 - len(header))}")
+        print(render_scene(name, width=100, height=30, phase=PAGE_PHASE))
 
 
-def main() -> None:
-    _utf8_stdout()  # every path below prints frames: the codepage is not ours
-    if "--pages" in sys.argv[1:]:
-        _pages()  # every topic as text: a reviewable dump of the whole demo
-        return
-    if not sys.stdout.isatty():
-        _headless()  # piped: scripted replay + plain-text dump
-        return
-    # a real terminal: the alt screen, hover (1003) and focus events (1004) on
-    session = Session(
-        theme=THEMES[0][1],
-        terminal=TerminalOptions(mouse=MouseMode.MOVE, focus_events=True),
+def _tick(app: App, showcase: Showcase) -> None:
+    """One animation tick: advance the phase and repaint."""
+    showcase.tick()
+    app.invalidate()
+
+
+def _interactive(scene: str) -> None:
+    """Run the showcase on a real terminal until the scene asks to quit."""
+    app = App(terminal=TerminalOptions(mouse=MouseMode.MOVE), title="motui showcase")
+    showcase = Showcase(scene=scene)
+    showcase.on_quit = app.quit
+    app.fill(showcase)
+    app.focus(showcase)
+    app.every(1 / TICK_HZ, lambda: _tick(app, showcase))
+    app.run()
+
+
+@dataclass(frozen=True, slots=True)
+class _Options:
+    """The parsed command line: every value typed, no ``object`` soup."""
+
+    pages: bool = False
+    headless: bool = False
+    scene: str = "menu"
+    frames: int = 0
+    width: int = 100
+    height: int = 30
+
+
+def _parse(args: Sequence[str]) -> _Options | None:
+    """Parse the small flag set; ``None`` means the usage line was printed."""
+    pages = False
+    headless = False
+    scene = "menu"
+    frames = 0
+    width = 100
+    height = 30
+    index = 0
+    while index < len(args):
+        arg = args[index]
+        if arg == "--pages":
+            pages = True
+            index += 1
+        elif arg == "--headless":
+            headless = True
+            index += 1
+        elif arg in ("-h", "--help"):
+            print(_USAGE)
+            return None
+        elif arg in ("--scene", "--frames", "--width", "--height"):
+            if index + 1 >= len(args):
+                print(_USAGE)
+                return None
+            value = args[index + 1]
+            if arg == "--scene":
+                scene = value
+            elif not value.isdigit():
+                print(_USAGE)
+                return None
+            elif arg == "--frames":
+                frames = int(value)
+            elif arg == "--width":
+                width = int(value)
+            else:
+                height = int(value)
+            index += 2
+        else:
+            print(_USAGE)
+            return None
+    if scene not in SCENES:
+        print(_USAGE)
+        return None
+    return _Options(pages, headless, scene, frames, width, height)
+
+
+def main(argv: Sequence[str] | None = None) -> int:
+    """The demo's one entry point: pages, headless, or the live showcase."""
+    _utf8_stdout()
+    options = _parse(sys.argv[1:] if argv is None else list(argv))
+    if options is None:
+        return 2
+    if options.pages:
+        _pages()
+        return 0
+    headless = options.headless or not (
+        sys.stdin.isatty() and sys.stdout.isatty()
     )
-    asyncio.run(session.run_async())
+    if headless:
+        showcase = Showcase(scene=options.scene)
+        for _ in range(options.frames):
+            showcase.tick()
+        sys.stdout.write(
+            _scene_text(showcase, options.width, options.height) + "\n"
+        )
+        return 0
+    _interactive(options.scene)
+    return 0
 
 
 if __name__ == "__main__":
-    main()
+    raise SystemExit(main())
