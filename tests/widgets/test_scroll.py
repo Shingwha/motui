@@ -2,11 +2,10 @@
 
 import pytest
 
-from motui.kernel.cell import Surface
+from motui.kernel.cell import Line, Surface
 from motui.kernel.glyphs import GLYPHS
 from motui.kernel.layout import Constraints
 from motui.widgets import ScrollPanel
-
 from tests.testing import Rows, key, many, texts, wheel
 
 
@@ -162,9 +161,198 @@ def test_an_explicit_height_wins_over_the_height_budget():
     assert surface.height == 3
 
 
-def test_the_axis_is_vertical_only_in_this_wave():
+def test_the_axis_accepts_the_three_spellings_and_rejects_others():
     assert ScrollPanel(Rows("a"), axis="y").axis == "y"
+    assert ScrollPanel(Rows("a"), axis="x").axis == "x"
+    assert ScrollPanel(Rows("a"), axis="both").axis == "both"
     with pytest.raises(ValueError):
-        ScrollPanel(Rows("a"), axis="x")
-    with pytest.raises(ValueError):
-        ScrollPanel(Rows("a"), axis="both")
+        ScrollPanel(Rows("a"), axis="z")
+
+
+# -- the horizontal axis -----------------------------------------------------
+
+
+class Wide:
+    """A child that ignores its width constraint: ``columns`` wide, ``rows`` tall.
+
+    The horizontal-overflow producer this wave tests against: every row is
+    one ASCII pattern wide enough that a window can be located by slicing
+    the same pattern.
+    """
+
+    def __init__(self, columns: int = 200, rows: int = 3) -> None:
+        self.columns = columns
+        self.row_count = rows
+        self.widths: list[int] = []
+
+    def text(self, row: int) -> str:
+        return "".join(
+            chr(ord("a") + (row * 26 + col) % 26) for col in range(self.columns)
+        )
+
+    def slice(self, row: int, start: int, end: int) -> str:
+        return self.text(row)[start:end]
+
+    def render(self, c: Constraints) -> Surface:
+        self.widths.append(c.width)
+        return Surface.of(
+            [Line.from_text(self.text(row)) for row in range(self.row_count)],
+            self.columns,
+            pad=False,
+        )
+
+
+def test_an_x_view_shows_the_first_window_and_scrolls_to_the_far_right():
+    child = Wide()
+    scroll = ScrollPanel(child, height=3, axis="x")
+    surface = scroll.render(Constraints(width=20))
+    assert surface.width == 20 and surface.height == 3
+    assert [row.text for row in surface] == [child.slice(i, 0, 20) for i in range(3)]
+    assert scroll.viewport_width == 20 and scroll.total_columns == 200
+
+    assert scroll.scroll_x(180) is True
+    assert scroll.x_offset == 180
+    surface = scroll.render(Constraints(width=20))
+    assert [row.text for row in surface] == [child.slice(i, 180, 200) for i in range(3)]
+    assert scroll.scroll_x(1000) is False  # already on the clamp
+    assert scroll.x_offset == 180
+    assert scroll.scroll_x(-1000) is True
+    assert scroll.x_offset == 0
+
+
+def test_a_200_column_child_reaches_its_last_column_in_an_80_column_view():
+    child = Wide()
+    scroll = ScrollPanel(child, height=3, axis="x")
+    scroll.render(Constraints(width=80))
+    assert scroll.scroll_x_to_end() is True
+    assert scroll.x_offset == 120
+    surface = scroll.render(Constraints(width=80))
+    assert [row.text for row in surface] == [child.slice(i, 120, 200) for i in range(3)]
+
+
+def test_both_axes_clamp_independently():
+    child = Wide(rows=10)
+    scroll = ScrollPanel(child, height=3, axis="both")
+    scroll.render(Constraints(width=20))
+    assert scroll.scroll_to_x(50) is True
+    assert scroll.scroll_to(4) is True
+    surface = scroll.render(Constraints(width=20))
+    assert (scroll.x_offset, scroll.offset) == (50, 4)
+    assert [row.text for row in surface] == [child.slice(4 + i, 50, 70) for i in range(3)]
+
+    scroll.scroll_to_x(999)
+    scroll.scroll_to(999)
+    scroll.render(Constraints(width=20))
+    assert (scroll.x_offset, scroll.offset) == (180, 7)
+    scroll.scroll_to_x(0)
+    assert scroll.offset == 7 and scroll.x_offset == 0
+
+
+def test_an_x_view_keeps_every_child_row_at_its_natural_height():
+    child = Wide(rows=4)
+    surface = ScrollPanel(child, axis="x").render(Constraints(width=20))
+    assert surface.height == 4
+    assert [row.text for row in surface] == [child.slice(i, 0, 20) for i in range(4)]
+
+
+def test_x_scrolling_accepts_a_target_before_the_first_render_and_clamps_then():
+    child = Wide()
+    scroll = ScrollPanel(child, height=3, axis="x")
+    assert scroll.scroll_x_to_end() is False  # the extent is not known yet
+    assert scroll.scroll_to_x(50) is True
+    surface = scroll.render(Constraints(width=20))
+    assert scroll.x_offset == 50
+    assert [row.text for row in surface] == [child.slice(i, 50, 70) for i in range(3)]
+    assert scroll.scroll_x_to_end() is True
+    assert scroll.x_offset == 180
+
+
+def test_the_horizontal_wheel_moves_only_an_x_scrolling_view():
+    child = Wide()
+    horizontal = ScrollPanel(child, height=3, axis="x")
+    horizontal.render(Constraints(width=20))
+    assert horizontal.handle(wheel(0, 0, "right")) is True
+    assert horizontal.x_offset == 1
+    assert horizontal.handle(wheel(0, 0, "left")) is True
+    assert horizontal.x_offset == 0
+    assert horizontal.handle(wheel(0, 0, "up")) is False
+    assert horizontal.handle(wheel(0, 0, "down")) is False
+
+    vertical = view()
+    vertical.render(Constraints(width=10))
+    assert vertical.handle(wheel(0, 0, "left")) is False
+    assert vertical.handle(wheel(0, 0, "right")) is False
+
+    both = ScrollPanel(Wide(rows=10), height=3, axis="both")
+    both.render(Constraints(width=20))
+    assert both.handle(wheel(0, 0, "right")) is True and both.x_offset == 1
+    assert both.handle(wheel(0, 0, "down")) is True and both.offset == 1
+    assert both.x_offset == 1
+
+
+def test_a_y_only_view_declines_horizontal_scrolling():
+    scroll = view()
+    scroll.render(Constraints(width=10))
+    assert scroll.scroll_x(1) is False
+    assert scroll.scroll_to_x(5) is False
+    assert scroll.scroll_x_to_end() is False
+
+
+def test_the_bottom_bar_is_the_last_row_and_maps_the_x_thumb():
+    child = Wide()
+    scroll = ScrollPanel(child, height=3, axis="x", bar=True)
+    rows = scroll.render(Constraints(width=10))
+    assert len(rows) == 3
+    assert [row.width for row in rows] == [10, 10, 10]
+    assert [row.text for row in rows[:2]] == [child.slice(i, 0, 10) for i in range(2)]
+    assert rows[2].text == GLYPHS.bar_full + GLYPHS.bar_empty * 9
+    assert child.widths == [10]
+
+    assert scroll.scroll_x_to_end() is True
+    rows = scroll.render(Constraints(width=10))
+    assert rows[2].text == GLYPHS.bar_empty * 9 + GLYPHS.bar_full
+
+
+def test_both_bars_take_the_right_column_and_the_bottom_row():
+    child = Wide(rows=10)
+    scroll = ScrollPanel(child, height=4, axis="both", bar=True)
+    rows = scroll.render(Constraints(width=10))
+    assert len(rows) == 4
+    assert all(row.width == 10 for row in rows)
+    assert [row.text[:-1] for row in rows[:3]] == [child.slice(i, 0, 9) for i in range(3)]
+    assert [row.segments[-1].text for row in rows[:3]] == [
+        GLYPHS.bar_full,
+        GLYPHS.bar_empty,
+        GLYPHS.bar_empty,
+    ]
+    # The bottom row is the x track (first cell full at offset 0) plus the
+    # vertical bar's corner cell.
+    assert rows[3].text == GLYPHS.bar_full + GLYPHS.bar_empty * 9
+
+
+def test_the_vertical_only_path_keeps_the_ellipsis_rule():
+    scroll = ScrollPanel(Rows("abcdefghijkl"), height=2, bar=True)
+    rows = scroll.render(Constraints(width=10))
+    # The child renders at 9 columns; the old path clips with ``…``, never
+    # with the horizontal hard cut.
+    assert rows[0].text == "abcdefgh\u2026" + GLYPHS.bar_empty
+    assert rows[1].text == " " * 9 + GLYPHS.bar_empty
+
+
+def test_child_at_maps_both_offsets_and_owns_the_bars():
+    child = Wide(rows=10)
+    scroll = ScrollPanel(child, height=4, axis="both", bar=True)
+    scroll.render(Constraints(width=20))
+    scroll.scroll_to_x(50)
+    scroll.scroll_to(4)
+    scroll.render(Constraints(width=20))
+    assert scroll.child_at(0, 0) == (child, 4, 50)
+    assert scroll.child_at(1, 18) == (child, 5, 68)
+    assert scroll.child_at(0, 19) is None  # right bar column
+    assert scroll.child_at(3, 0) is None  # bottom bar row
+    assert scroll.child_at(3, 19) is None  # corner
+    assert scroll.child_at(0, 20) is None
+    assert scroll.child_at(-1, 0) is None
+
+    before = ScrollPanel(child, height=3, axis="x")
+    assert before.child_at(0, 0) is None
