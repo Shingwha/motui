@@ -6,7 +6,7 @@ from dataclasses import replace
 
 import pytest
 
-from motui.app import Scrollbar
+from motui.app import Scrollbar, ScrollbarStyles
 from motui.kernel import Axis, Style, Theme
 from motui.kernel.document import Placement
 from motui.kernel.events import MouseEvent, PasteEvent
@@ -142,11 +142,11 @@ def test_the_bar_budgets_its_column_and_the_pane_rewraps_beside_it():
 
 def test_custom_glyphs_paint_the_strip():
     tui = scrolled(100, 10, 45)
-    bar(tui, track=".", thumb="#")
+    bar(tui, glyphs=replace(GLYPHS, bar_empty=".", bar_full="#"))
     assert "".join(strip_texts(tui)) == "....#....."
 
     wide = scrolled(100, 10, 45)
-    bar(wide, size=2, track="=", thumb="X")
+    bar(wide, size=2, glyphs=replace(GLYPHS, bar_empty="=", bar_full="X"))
     assert [row.text[-2:] for row in wide.rows] == ["=="] * 4 + ["XX"] + ["=="] * 5
 
 
@@ -154,7 +154,7 @@ def test_an_empty_glyph_paints_the_reserved_column_empty():
     tui = headless_tui(10, 2)
     tui.add(Text("0123456789"))
     tui.paint()
-    bar(tui, track="", thumb="")
+    bar(tui, glyphs=replace(GLYPHS, bar_empty="", bar_full=""))
     assert [row.text for row in tui.rows] == ["012345678 ", "9         "]
 
 
@@ -285,7 +285,11 @@ def test_min_thumb_sets_the_shortest_thumb():
 def test_the_styles_resolve_explicit_then_theme():
     cases = (
         (
-            {"style": Style(fg="#111111"), "thumb_style": Style(fg="#222222")},
+            {
+                "styles": ScrollbarStyles(
+                    track=Style(fg="#111111"), thumb=Style(fg="#222222")
+                )
+            },
             "#111111",
             "#222222",
         ),

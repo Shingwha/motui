@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import pytest
+
 from motui.app import App, Command, CommandRegistry, FocusManager, CommandPalette
 from motui.kernel.events import MouseEvent, PasteEvent
 from motui.widgets.text import Text
@@ -236,3 +238,5 @@ def test_the_app_opens_a_palette_straight_from_a_registry():
 
     assert palette_ is app.palette and palette_.is_open
     assert labels(palette_) == ["save", "quit"]
+    with pytest.raises(TypeError):
+        app.open_palette([registry.options()[0]])  # type: ignore[arg-type]

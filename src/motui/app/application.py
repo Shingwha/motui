@@ -530,21 +530,25 @@ class App:
 
     def open_palette(
         self,
-        commands: "CommandRegistry | list[object]",
+        commands: CommandRegistry,
         **kwargs: Any,
     ) -> CommandPalette:
         """Open the lazily created command palette over ``commands``.
 
-        ``commands`` is a :class:`~motui.app.commands.CommandRegistry` --
-        its :meth:`~motui.app.commands.CommandRegistry.options` view is what
-        the palette renders -- or a ready list of options (the 1.x path,
-        kept for compatibility until W5).
+        ``commands`` is a :class:`~motui.app.commands.CommandRegistry`; its
+        :meth:`~motui.app.commands.CommandRegistry.options` view is what the
+        palette renders.  Any other type raises ``TypeError`` -- the palette
+        speaks one command model, not a bare list of options.
         """
-        options = commands.options() if isinstance(commands, CommandRegistry) else commands
+        if not isinstance(commands, CommandRegistry):
+            raise TypeError(
+                "App.open_palette() takes a CommandRegistry, got "
+                f"{type(commands).__name__}"
+            )
         if self._palette is None:
             kwargs.setdefault("theme", self._theme)
             kwargs.setdefault("focus", self._focus)
-            self._palette = CommandPalette(self.runtime, options, **kwargs)
+            self._palette = CommandPalette(self.runtime, commands.options(), **kwargs)
         self._palette.open()
         return self._palette
 

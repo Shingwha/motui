@@ -37,7 +37,7 @@ from .modal import Modal
 from .overlays import Stats, Toasts, Tooltip
 from .pointer import Pointer
 from .runtime import Runtime
-from .scrollbar import Scrollbar
+from .scrollbar import Scrollbar, ScrollbarStyles
 from .workspace import Workspace
 
 __all__ = [
@@ -51,6 +51,7 @@ __all__ = [
     "Pointer",
     "Runtime",
     "Scrollbar",
+    "ScrollbarStyles",
     "SelectionGesture",
     "Stats",
     "Toasts",
