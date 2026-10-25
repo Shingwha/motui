@@ -1,4 +1,4 @@
-"""Layout and scroll value tests, pinned against the 1.x ScrollState."""
+"""Layout and scroll value tests, pinned to the 1.x scroll arithmetic."""
 
 from __future__ import annotations
 
@@ -7,7 +7,7 @@ from dataclasses import FrozenInstanceError
 
 import pytest
 
-from motui.kernel.layout import Constraints, Scroll, ScrollAxis, ScrollState
+from motui.kernel.layout import Constraints, Scroll, ScrollAxis
 
 
 def test_constraints_defaults_and_validation() -> None:
@@ -38,18 +38,16 @@ def test_clamp_moves_into_range_and_returns_a_new_value() -> None:
     assert ScrollAxis(offset=99, content=5, viewport=10).clamp().offset == 0
 
 
-def test_clamp_matches_scroll_state_without_stickiness() -> None:
+def test_clamp_into_range_matches_the_1x_formula() -> None:
     rng = random.Random(99)
     for _ in range(500):
         offset = rng.randint(-20, 80)
         content = rng.randint(0, 60)
         viewport = rng.randint(0, 60)
-        state = ScrollState(
-            offset=offset, content_height=content, viewport_height=viewport
-        )
-        state.clamp()
+        limit = max(0, content - viewport)
+        expected = max(0, min(offset, limit))
         value = ScrollAxis(offset=offset, content=content, viewport=viewport).clamp()
-        assert value.offset == state.offset
+        assert value.offset == expected
 
 
 def test_sticky_without_a_previous_extent_pins_to_the_bottom() -> None:
@@ -117,25 +115,21 @@ def test_reveal_clamps_the_row_and_the_result() -> None:
     assert ScrollAxis(offset=99, content=20, viewport=5).reveal(3).offset == 3
 
 
-def test_reveal_offsets_match_scroll_state() -> None:
+def test_reveal_offsets_match_the_1x_table() -> None:
     cases = [
-        # offset, content, viewport, row
-        (10, 20, 5, 3),  # above
-        (2, 20, 5, 10),  # below
-        (2, 20, 5, 6),  # already the last visible row
-        (5, 20, 5, 7),  # visible
-        (2, 0, 5, 0),  # empty content
-        (2, 20, 0, 3),  # empty viewport
-        (10, 20, 5, -5),  # negative row
-        (10, 20, 5, 999),  # row past the content
+        # offset, content, viewport, row, expected offset
+        (10, 20, 5, 3, 3),  # above
+        (2, 20, 5, 10, 6),  # below
+        (2, 20, 5, 6, 2),  # already the last visible row
+        (5, 20, 5, 7, 5),  # visible
+        (2, 0, 5, 0, 2),  # empty content
+        (2, 20, 0, 3, 2),  # empty viewport
+        (10, 20, 5, -5, 0),  # negative row
+        (10, 20, 5, 999, 15),  # row past the content
     ]
-    for offset, content, viewport, row in cases:
-        state = ScrollState(
-            offset=offset, content_height=content, viewport_height=viewport
-        )
-        state.reveal(row)
+    for offset, content, viewport, row, expected in cases:
         value = ScrollAxis(offset=offset, content=content, viewport=viewport)
-        assert value.reveal(row).offset == state.offset
+        assert value.reveal(row).offset == expected
 
 
 def test_thumb_none_when_nothing_to_map() -> None:
@@ -154,7 +148,22 @@ def test_thumb_uses_half_even_rounding() -> None:
     assert ScrollAxis(offset=45, content=100, viewport=10).thumb(20) == (9, 2)
 
 
-def test_thumb_matches_scroll_state() -> None:
+def _legacy_thumb(
+    offset: int, content: int, viewport: int, track: int, min_length: int
+) -> tuple[int, int] | None:
+    """The 1.x thumb arithmetic, kept here as the independent reference."""
+    if track <= 0 or content <= viewport:
+        return None
+    length = min(track, max(min_length, round(viewport * track / content)))
+    if length <= 0:
+        return None
+    travel = max(1, track - length)
+    span = max(1, content - viewport)
+    start = min(travel, max(0, round(offset * travel / span)))
+    return start, length
+
+
+def test_thumb_matches_the_1x_arithmetic() -> None:
     rng = random.Random(1234)
     for _ in range(1000):
         content = rng.randint(0, 60)
@@ -162,10 +171,7 @@ def test_thumb_matches_scroll_state() -> None:
         offset = rng.randint(-10, 70)
         track = rng.randint(0, 40)
         min_length = rng.randint(0, 4)
-        state = ScrollState(
-            offset=offset, content_height=content, viewport_height=viewport
-        )
-        expected = state.thumb(track, min_length)
+        expected = _legacy_thumb(offset, content, viewport, track, min_length)
         value = ScrollAxis(offset=offset, content=content, viewport=viewport)
         assert value.thumb(track, min_length) == expected
 

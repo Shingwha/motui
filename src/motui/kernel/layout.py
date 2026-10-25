@@ -18,12 +18,12 @@ wheel route queries in a hit chain, so the app never imports the widget
 that implements it.
 
 ``ScrollAxis``/``Scroll`` are the 2.0 immutable two-axis values.  The thumb
-formula they carry is copied verbatim from ``ScrollState`` (including the
-builtin ``round`` half-to-even rule).  The value is stateless: the one piece
-of bookkeeping a tail-following window needs -- the extent the last clamp
-derived -- is passed back in by the surface that holds the value (see
-:meth:`ScrollAxis.clamp`), so ``sticky`` can pin to a bottom that moved
-without being stored on the axis.
+formula they carry is copied verbatim from the 1.x mutable geometry
+(including the builtin ``round`` half-to-even rule).  The value is
+stateless: the one piece of bookkeeping a tail-following window needs -- the
+extent the last clamp derived -- is passed back in by the surface that
+holds the value (see :meth:`ScrollAxis.clamp`), so ``sticky`` can pin to a
+bottom that moved without being stored on the axis.
 """
 
 from __future__ import annotations
@@ -42,7 +42,6 @@ __all__ = [
     "ScreenLayout",
     "Scroll",
     "ScrollAxis",
-    "ScrollState",
     "Scrollable",
     "ScrollableX",
     "Viewport",
@@ -877,119 +876,6 @@ class Viewport:
     def at_bottom(self) -> bool:
         """Whether the window sits at the bottom of the document."""
         return self._scroll.y.offset >= self._scroll.y.max_offset
-
-
-@dataclass
-class ScrollState:
-    """One scrolling window's geometry: offset, content and viewport rows.
-
-    The value is mutable -- a scrolling surface owns one and moves it in
-    place -- and every verb clamps into the window's own extent, so a caller
-    can never park the offset outside ``[0, max_offset()]`` through this
-    API.  ``stick_to_bottom`` switches the tail-follow rule on: a
-    :meth:`clamp` pins to the bottom while the offset stood at the previous
-    extent, which is what makes a fresh viewport show a streaming document's
-    tail and a detached one stay put.
-    """
-
-    offset: int = 0
-    content_height: int = 0
-    viewport_height: int = 0
-    stick_to_bottom: bool = False
-    #: The extent the last :meth:`clamp` derived, ``None`` before one: the
-    #: "old max" a stick-to-bottom clamp compares the offset against.  It is
-    #: bookkeeping, not part of the value's identity.
-    _extent: int | None = field(default=None, repr=False, compare=False)
-
-    def max_offset(self) -> int:
-        """The furthest legal window start: the content past the window."""
-        return max(0, self.content_height - self.viewport_height)
-
-    def clamp(self) -> bool:
-        """Re-derive the offset after a layout; ``True`` when it moved.
-
-        A stick-to-bottom state pins to the new bottom when the offset stood
-        at the previous layout's extent -- or when no layout has run yet --
-        so content that grew under a followed window carries it along and a
-        window the user detached stays where it was.  Every other state
-        clamps into ``[0, max_offset()]``.  Either way the current extent is
-        remembered for the next comparison.
-        """
-        previous = self.offset
-        limit = self.max_offset()
-        at_previous_bottom = self._extent is None or previous >= self._extent
-        if self.stick_to_bottom and at_previous_bottom:
-            self.offset = limit
-        else:
-            self.offset = max(0, min(previous, limit))
-        self._extent = limit
-        return self.offset != previous
-
-    def scroll_to(self, offset: int) -> bool:
-        """Move the window's top to ``offset`` (clamped); ``True`` on a move.
-
-        Landing on the bottom edge re-attaches a tail-following state; a
-        target above it detaches one, exactly the driver-visible rule that
-        scrolling to the tail resumes auto-follow.
-        """
-        target = max(0, min(int(offset), self.max_offset()))
-        moved = target != self.offset
-        self.offset = target
-        if target >= self.max_offset():
-            self.stick_to_bottom = True
-        elif self.stick_to_bottom:
-            self.stick_to_bottom = False
-        return moved
-
-    def scroll_by(self, delta: int) -> bool:
-        """Step the window ``delta`` rows (clamped); ``True`` on a move.
-
-        A downward step that lands on the bottom edge re-attaches the tail;
-        any upward step detaches it, even when the window was already at the
-        top -- the same rule the viewport's :meth:`scroll_up` follows.
-        """
-        if delta == 0:
-            return False
-        moved = self.scroll_to(self.offset + delta)
-        if delta < 0:
-            self.stick_to_bottom = False
-        return moved
-
-    def reveal(self, row: int) -> bool:
-        """Bring ``row`` into the window, moving as little as possible.
-
-        The row is clamped into the content; a target already visible (or a
-        window showing everything) moves nothing, and an empty content or an
-        empty window answers ``False``.  A target above the window parks it
-        at the target; one below parks it so the target is the last visible
-        row.
-        """
-        if self.content_height <= 0:
-            return False
-        target = max(0, min(int(row), self.content_height - 1))
-        if self.viewport_height <= 0:
-            return False
-        if target < self.offset:
-            return self.scroll_to(target)
-        if target >= self.offset + self.viewport_height:
-            return self.scroll_to(target - self.viewport_height + 1)
-        return False
-
-    def thumb(self, track_height: int, min_length: int = 1) -> tuple[int, int] | None:
-        """The thumb's ``(start, length)`` over ``track_height`` cells.
-
-        The mutable face of :meth:`ScrollAxis.thumb`: the immutable value
-        carries the one formula (including the builtin ``round`` half-to-even
-        rule), and this method only supplies the live extent, so the pane
-        scrollbar and the scroll view's bar can never drift apart.  ``None``
-        when there is nothing to map -- the content fits the window (an empty
-        document included) or ``min_length`` shaved the thumb away.
-        """
-        return ScrollAxis(
-            offset=self.offset,
-            content=self.content_height,
-            viewport=self.viewport_height,
-        ).thumb(track_height, min_length)
 
 
 @runtime_checkable

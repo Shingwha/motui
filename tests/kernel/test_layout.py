@@ -13,7 +13,7 @@ import pytest
 
 from motui.kernel.cell import Line, Surface
 from motui.kernel.document import Document, Placement, Sizing
-from motui.kernel.layout import Constraints, Scroll, ScrollAxis, ScrollState, Viewport
+from motui.kernel.layout import Constraints, Scroll, ScrollAxis, Viewport
 from motui.widgets.text import Text
 from tests.testing import Rows, document, many
 
@@ -97,14 +97,9 @@ _THUMB_TABLE = [
     ("offset", "content", "viewport", "track", "min_length", "expected"),
     _THUMB_TABLE,
 )
-def test_scroll_state_thumb_matches_the_1x_table(
+def test_thumb_matches_the_1x_table(
     offset: int, content: int, viewport: int, track: int, min_length: int, expected
 ):
-    state = ScrollState(
-        offset=offset, content_height=content, viewport_height=viewport
-    )
-    assert state.thumb(track, min_length) == expected
-    # The mutable state delegates to the one immutable formula.
     axis = ScrollAxis(offset=offset, content=content, viewport=viewport)
     assert axis.thumb(track, min_length) == expected
 
@@ -149,7 +144,7 @@ def test_layout_returns_exactly_height_rows():
             assert _texts(layout.rows[-1:]) == ["b1"]
 
 
-def test_layout_reports_its_rectangle_and_scroll_state():
+def test_layout_reports_its_rectangle_and_window():
     view = Viewport(document(*many(10)))
     layout = view.layout(37, 5)
     assert (layout.width, layout.height) == (37, 5)
