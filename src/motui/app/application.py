@@ -69,7 +69,7 @@ import builtins
 from collections.abc import Awaitable, Callable, Iterable
 from typing import TYPE_CHECKING, Any
 
-from ..kernel.document import Component
+from ..kernel.document import Component, Placement, Section, Sizing
 from ..kernel.events import Event, KeyEvent, MouseEvent
 from ..kernel.hit import Hit
 from ..kernel.layout import Scrollable
@@ -350,6 +350,8 @@ class App:
         *,
         id: str | None = None,
         pin: str | None = None,
+        placement: Placement | None = None,
+        sizing: Sizing = Sizing.NATURAL,
         pane: Any = None,
     ) -> str:
         """Mount ``component``; answer its block id.
@@ -359,8 +361,34 @@ class App:
         default controllers are mounted).  With no ``pane=`` the block lands
         in the main (primary) document, never the focused pane.  The id is
         :meth:`~motui.app.driver.TUI.add`'s -- unique across the frame.
+        ``placement``/``sizing`` are the 2.0 document spellings.
         """
-        block_id = self.tui.add(component, id=id, pin=pin, pane=pane)
+        block_id = self.tui.add(
+            component,
+            id=id,
+            pin=pin,
+            placement=placement,
+            sizing=sizing,
+            pane=pane,
+        )
+        self._mount(component)
+        return block_id
+
+    def fill(self, component: Component, *, pane: Any = None) -> Section:
+        """Fill a pane with ``component``; answer the ``FILL`` section.
+
+        The fill replaces the pane's document (a fill is the pane's whole
+        content), so this goes through :meth:`~motui.app.driver.TUI.fill`
+        rather than :meth:`add`.  The component still takes the App theme
+        and joins the focus ring exactly as an added one does: the two
+        mounting paths share :meth:`_mount`.
+        """
+        section = self.tui.fill(component, pane=pane)
+        self._mount(component)
+        return section
+
+    def _mount(self, component: Component) -> None:
+        """Take a freshly mounted component into the theme walk and focus ring."""
         self._components.append(component)
         walked = _walk(component)
         owned: set[int] = set()
@@ -378,7 +406,6 @@ class App:
                 and _looks_interactive(current)
             ):
                 self._focus.add(current)
-        return block_id
 
     def get(self, id: str) -> Component:
         """The component with ``id`` (the driver's frame-wide lookup)."""

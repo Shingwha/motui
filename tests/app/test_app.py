@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from motui.app import App
 from motui.kernel import Theme
+from motui.kernel.document import Sizing
 from motui.terminal import HeadlessScreen
 from motui.kernel.events import KeyEvent
 from motui.widgets import Button, Field, Form, Input, ScrollView
@@ -52,6 +53,29 @@ def test_add_focus_and_bind_reach_the_right_component():
     assert app.get("name").text == "a"
     assert app.dispatch(key("enter")) is True
     assert button.take_result() is True
+
+
+def test_fill_replaces_the_pane_and_mounts_theme_and_focus():
+    app = App(screen=HeadlessScreen(20, 5), keys=ScriptedEvents(()))
+    app.add(Rows("head"))
+    button = Button("Go")
+    section = app.fill(button)
+
+    assert section.sizing is Sizing.FILL
+    assert section.widget is button
+    assert button.theme is app.theme  # the fill path walks the theme too
+    assert app.focus_manager is not None
+    assert button in app.focus_manager.targets
+    app.tui.paint()
+    assert [row.text for row in app.tui.rows] == [" Go ", "", "", "", ""]
+
+
+def test_a_fill_section_added_through_the_app_takes_the_remainder():
+    app = App(screen=HeadlessScreen(20, 5), keys=ScriptedEvents(()))
+    app.add(Rows("head"))
+    app.add(Rows("game"), sizing=Sizing.FILL)
+    app.tui.paint()
+    assert [row.text for row in app.tui.rows] == ["head", "game", "", "", ""]
 
 
 def test_the_wheel_routes_to_the_nearest_scrollable():
