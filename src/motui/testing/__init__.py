@@ -9,17 +9,23 @@ assertions that do not care about escape bytes.
 
 The helpers sit above the kernel: they import the driver, the screens and the
 event model, which is exactly what a test needs to drive a real session.
+
+``Emulator`` lives beside them in :mod:`motui.testing.emulator`: it consumes
+the bytes a :class:`~motui.core.painter.Painter` writes and rebuilds the cell
+grid, so a test can assert on what a terminal would actually show rather than
+on escape-string spellings.
 """
 
 from __future__ import annotations
 
 from collections.abc import Iterable
 
-from .app import TUI
-from .core.events import Event, EventSource
-from .core.screen import HeadlessScreen
+from ..app import TUI
+from ..core.events import Event, EventSource
+from ..core.screen import HeadlessScreen
+from .emulator import Emulator
 
-__all__ = ["ScriptedEvents", "headless_tui", "snapshot"]
+__all__ = ["Emulator", "ScriptedEvents", "headless_tui", "snapshot"]
 
 
 class ScriptedEvents:

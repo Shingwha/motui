@@ -40,6 +40,15 @@ jobs:
       - name: install -- the lock is the dependency set, CI does not drift it
         run: uv sync --locked
 
+      - name: ruff
+        run: uv run ruff check .
+
+      - name: pyright
+        run: uv run pyright
+
+      - name: import-linter
+        run: uv run lint-imports
+
       - name: pytest
         run: uv run pytest -q
 
@@ -52,6 +61,12 @@ jobs:
 
       - name: golden frames -- every page byte for byte
         run: uv run python tools/golden.py --check
+
+      - name: api snapshot
+        run: uv run python tools/api.py --check
+
+      - name: growth
+        run: uv run python tools/growth.py
 
       - name: demo -- the piped replay, stdin on the null device
         # ``< /dev/null`` is bash's spelling and ``< NUL`` is cmd's;

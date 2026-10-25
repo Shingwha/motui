@@ -63,7 +63,7 @@ class ScrollAxis:
         """The furthest legal window start: the content past the window."""
         return max(0, self.content - self.viewport)
 
-    def clamp(self) -> "ScrollAxis":
+    def clamp(self) -> ScrollAxis:
         """Re-derive the offset for this extent.
 
         A sticky axis whose offset stood at the extent pins to the bottom;
@@ -76,7 +76,7 @@ class ScrollAxis:
             return replace(self, offset=limit)
         return replace(self, offset=max(0, min(self.offset, limit)))
 
-    def reveal(self, row: int) -> "ScrollAxis":
+    def reveal(self, row: int) -> ScrollAxis:
         """Bring ``row`` into the window, moving as little as possible.
 
         The row is clamped into the content; an already visible row (or an
@@ -130,10 +130,10 @@ class Scroll:
     x: ScrollAxis = ScrollAxis()
     y: ScrollAxis = field(default_factory=lambda: ScrollAxis(sticky=True))
 
-    def with_x(self, axis: ScrollAxis) -> "Scroll":
+    def with_x(self, axis: ScrollAxis) -> Scroll:
         """A copy of this scroll with its horizontal axis replaced."""
         return replace(self, x=axis)
 
-    def with_y(self, axis: ScrollAxis) -> "Scroll":
+    def with_y(self, axis: ScrollAxis) -> Scroll:
         """A copy of this scroll with its vertical axis replaced."""
         return replace(self, y=axis)
