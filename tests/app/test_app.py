@@ -10,6 +10,7 @@ from motui.kernel.layout import Constraints
 from motui.terminal import HeadlessScreen
 from motui.kernel.events import KeyEvent
 from motui.widgets import Button, Field, Form, Input, Panel, Row, ScrollPanel
+from motui.widgets.base import Widget
 from tests.testing import (
     Rows,
     ScriptedEvents,
@@ -18,8 +19,34 @@ from tests.testing import (
     motion,
     press,
     release,
+    resize,
     wheel,
 )
+
+
+class _ResizeRecorder(Widget):
+    """A widget that records every resize report it receives."""
+
+    __slots__ = ("sizes",)
+
+    def __init__(self) -> None:
+        super().__init__()
+        self.sizes: list[tuple[int, int]] = []
+
+    def on_resize(self, event) -> None:
+        self.sizes.append((event.width, event.height))
+
+
+class _HostApp(App):
+    """An App whose host hook records every event the tiers left alone."""
+
+    def __init__(self, **kwargs: object) -> None:
+        super().__init__(**kwargs)
+        self.seen: list = []
+
+    def on_event(self, event) -> bool:
+        self.seen.append(event)
+        return False
 
 
 class _Controller:
@@ -126,6 +153,18 @@ def test_removing_a_parent_drops_its_subtree_from_the_ring():
 def test_set_focus_targets_is_gone():
     app = App(screen=HeadlessScreen(20, 4), keys=ScriptedEvents(()))
     assert not hasattr(app, "set_focus_targets")
+
+
+def test_resize_reaches_every_widget_and_is_not_consumed():
+    app = _HostApp(screen=HeadlessScreen(40, 8), keys=ScriptedEvents(()))
+    left, right = _ResizeRecorder(), _ResizeRecorder()
+    app.add(Form([Field("row", Row([left, right]))]))
+    event = resize(100, 30)
+
+    assert app.dispatch(event) is False
+    assert left.sizes == [(100, 30)]
+    assert right.sizes == [(100, 30)]  # a focus scope's subtree is included
+    assert app.seen == [event]  # the host still sees the event
 
 
 def test_a_fill_section_added_through_the_app_takes_the_remainder():

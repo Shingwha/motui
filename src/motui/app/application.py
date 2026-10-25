@@ -71,7 +71,7 @@ from collections.abc import Awaitable, Callable, Iterator
 from typing import TYPE_CHECKING, Any
 
 from ..kernel.document import Component, Placement, Section, Sizing
-from ..kernel.events import Event, KeyEvent, MouseEvent
+from ..kernel.events import Event, KeyEvent, MouseEvent, ResizeEvent
 from ..kernel.hit import Hit
 from ..kernel.layout import Scrollable, ScrollableX
 from ..terminal.screen import Screen
@@ -82,7 +82,7 @@ from ..widgets.base import Widget
 from .command_palette import CommandPalette
 from .driver import TUI
 from .find import Find
-from .focus import FocusManager, focus_targets
+from .focus import FocusManager, focus_targets, iter_widgets
 from .gesture import SelectionGesture
 from .modal import Modal
 from .overlays import Toasts, Tooltip
@@ -502,8 +502,17 @@ class App:
     def dispatch(self, event: Event) -> bool:
         """Route one event through the default tiers; ``True`` when consumed.
 
-        The order is the class docstring's, first claim wins.
+        The order is the class docstring's, first claim wins.  A
+        :class:`~motui.kernel.events.ResizeEvent` first reaches every
+        mounted widget's ``on_resize`` (the whole tree, a focus scope's
+        subtree included) and then keeps travelling: the broadcast informs,
+        it never consumes.
         """
+        if type(event) is ResizeEvent:
+            for widget in iter_widgets(self.tui):
+                on_resize = getattr(widget, "on_resize", None)
+                if on_resize is not None:
+                    on_resize(event)
         if self._palette is not None and self._palette.is_open:
             if self._palette.handle(event):
                 return True
