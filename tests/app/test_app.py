@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from motui.app import App
+from motui.app import App, Runtime, Workspace
 from motui.kernel import Theme
 from motui.kernel.cell import Line, Surface
 from motui.kernel.document import Sizing
@@ -116,8 +116,8 @@ def test_fill_replaces_the_pane_and_mounts_theme_and_focus():
     assert button.theme is app.theme  # the fill path walks the theme too
     assert app.focus_manager is not None
     assert button in app.focus_manager.targets
-    app.tui.paint()
-    assert [row.text for row in app.tui.rows] == [" Go ", "", "", "", ""]
+    app.runtime.paint()
+    assert [row.text for row in app.runtime.rows] == [" Go ", "", "", "", ""]
 
 
 def test_add_themes_every_widget_of_a_nested_tree():
@@ -188,15 +188,15 @@ def test_a_fill_section_added_through_the_app_takes_the_remainder():
     app = App(screen=HeadlessScreen(20, 5), keys=ScriptedEvents(()))
     app.add(Rows("head"))
     app.add(Rows("game"), sizing=Sizing.FILL)
-    app.tui.paint()
-    assert [row.text for row in app.tui.rows] == ["head", "game", "", "", ""]
+    app.runtime.paint()
+    assert [row.text for row in app.runtime.rows] == ["head", "game", "", "", ""]
 
 
 def test_the_wheel_routes_to_the_nearest_scrollable():
     app = App(screen=HeadlessScreen(40, 8), keys=ScriptedEvents(()))
     view = ScrollPanel(Rows(*many(10)), height=3, bar=True)
     app.add(view)
-    app.tui.paint()
+    app.runtime.paint()
 
     assert app.dispatch(wheel(0, 0, "down")) is True
     assert view.offset == 3
@@ -214,7 +214,7 @@ def test_the_horizontal_wheel_moves_the_x_panel_under_the_pointer():
     app = App(screen=HeadlessScreen(40, 8), keys=ScriptedEvents(()))
     view = ScrollPanel(_Wide(), height=3, axis="x")
     app.add(view)
-    app.tui.paint()
+    app.runtime.paint()
 
     assert (view.x_offset, view.offset) == (0, 0)
     assert app.dispatch(wheel(5, 1, "right")) is True
@@ -228,7 +228,7 @@ def test_the_horizontal_wheel_declines_a_vertical_only_panel():
     app = App(screen=HeadlessScreen(40, 8), keys=ScriptedEvents(()))
     view = ScrollPanel(Rows(*many(10)), height=3, axis="y")
     app.add(view)
-    app.tui.paint()
+    app.runtime.paint()
 
     assert app.dispatch(wheel(5, 1, "right")) is False
     assert (view.x_offset, view.offset) == (0, 0)
@@ -238,7 +238,7 @@ def test_the_vertical_wheel_leaves_the_horizontal_offset_alone():
     app = App(screen=HeadlessScreen(40, 8), keys=ScriptedEvents(()))
     view = ScrollPanel(_Wide(rows=10), height=3, axis="x")
     app.add(view)
-    app.tui.paint()
+    app.runtime.paint()
 
     assert app.dispatch(wheel(5, 1, "right")) is True
     assert view.x_offset == 1
@@ -252,8 +252,8 @@ def test_the_vertical_wheel_leaves_the_horizontal_offset_alone():
 def test_the_vertical_wheel_still_scrolls_the_pane_outside_a_widget():
     app = App(screen=HeadlessScreen(40, 8), keys=ScriptedEvents(()))
     app.add(Rows(*many(30)))
-    app.tui.paint()
-    pane = app.tui.frame.focused_pane
+    app.runtime.paint()
+    pane = app.runtime.frame.focused_pane
     before = pane.viewport.offset
     assert before > 0  # the fresh viewport sticks to the tail
 
@@ -265,15 +265,15 @@ def test_a_bar_drag_moves_the_scroll_view_without_a_selection():
     app = App(screen=HeadlessScreen(40, 8), keys=ScriptedEvents(()))
     view = ScrollPanel(Rows(*many(10)), height=3, bar=True)
     app.add(view)
-    app.tui.paint()
+    app.runtime.paint()
 
     assert app.dispatch(press(39, 0)) is True
-    assert app.tui.selection is None  # the drag took the press, not the gesture
+    assert app.runtime.selection is None  # the drag took the press, not the gesture
     assert app.dispatch(motion(39, 2)) is True
     assert view.offset == 7
-    assert app.tui.selection is None
+    assert app.runtime.selection is None
     assert app.dispatch(release(39, 2)) is True
-    assert app.tui.selection is None
+    assert app.runtime.selection is None
     assert app.dispatch(motion(39, 1)) is True  # the pointer's hover cue now
     assert view.offset == 7
 
@@ -328,10 +328,10 @@ def test_a_form_owns_its_fields_and_a_click_moves_its_cursor():
     assert app.focus_manager is not None
     assert app.focus_manager.targets == (form,)  # fields are not separate targets
     assert app.focus(form) is True
-    app.tui.paint()
+    app.runtime.paint()
 
-    row = next(y for y, line in enumerate(app.tui.rows) if "Email" in line.text) + 1
-    hit = app.tui.hit(0, row)
+    row = next(y for y, line in enumerate(app.runtime.rows) if "Email" in line.text) + 1
+    hit = app.runtime.hit(0, row)
     assert hit is not None
     assert app.focus_manager.click(hit) is True
     assert form.index == 1
@@ -343,6 +343,18 @@ def test_a_form_owns_its_fields_and_a_click_moves_its_cursor():
 # -- terminal options --------------------------------------------------------
 
 
+def test_the_app_composes_a_runtime_workspace_and_terminal():
+    screen = HeadlessScreen(20, 4)
+    app = App(screen=screen, keys=ScriptedEvents(()), auto=False)
+
+    assert isinstance(app.runtime, Runtime)
+    assert isinstance(app.workspace, Workspace)
+    assert app.workspace is app.runtime.workspace
+    assert app.terminal is app.runtime.terminal
+    assert app.terminal.screen is screen
+    assert not hasattr(app, "tui")  # the 1.x composition name is gone
+
+
 def test_terminal_options_build_the_screen_and_input_the_driver_uses():
     screen = HeadlessScreen(20, 4)
     source = ScriptedEvents(())
@@ -350,8 +362,8 @@ def test_terminal_options_build_the_screen_and_input_the_driver_uses():
 
     assert isinstance(app.terminal, Terminal)
     assert app.terminal.screen is screen
-    assert app.tui.screen is screen
-    assert app.tui.keys is source
+    assert app.runtime.screen is screen
+    assert app.runtime.keys is source
 
 
 def test_terminal_options_win_over_the_legacy_arguments():
@@ -364,7 +376,7 @@ def test_terminal_options_win_over_the_legacy_arguments():
         auto=False,
     )
     assert app.terminal.screen is chosen
-    assert app.tui.screen is chosen
+    assert app.runtime.screen is chosen
 
 
 def test_legacy_arguments_fold_into_the_app_terminal():
@@ -375,8 +387,8 @@ def test_legacy_arguments_fold_into_the_app_terminal():
     assert isinstance(app.terminal, Terminal)
     assert app.terminal.screen is screen
     assert app.terminal.input is source
-    assert app.tui.screen is screen
-    assert app.tui.keys is source
+    assert app.runtime.screen is screen
+    assert app.runtime.keys is source
 
 
 def test_the_legacy_mouse_and_hover_switches_map_to_one_mode():
@@ -393,8 +405,8 @@ def test_an_app_with_terminal_options_paints_the_same_rows():
         auto=False,
     )
     app.add(Rows("one"))
-    app.tui.paint_now()
-    assert rows(app.tui) == ["one", "", "", ""]
+    app.runtime.paint_now()
+    assert rows(app.runtime) == ["one", "", "", ""]
 
 
 async def test_the_terminal_and_legacy_paths_paint_the_same_bytes():
@@ -405,8 +417,8 @@ async def test_the_terminal_and_legacy_paths_paint_the_same_bytes():
         async def body(tui) -> None:
             tui.paint_now()
 
-        await app.tui.run_session(body)
-        return app.tui.screen.output
+        await app.runtime.run_session(body)
+        return app.runtime.screen.output
 
     legacy = App(screen=HeadlessScreen(20, 4), keys=ScriptedEvents(()), auto=False)
     modern = App(

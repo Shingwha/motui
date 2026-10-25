@@ -89,7 +89,7 @@ from ..kernel.layout import Constraints
 from ..kernel.text import WrapMode
 
 if TYPE_CHECKING:
-    from .driver import TUI
+    from .runtime import Runtime
 
 __all__ = ["Modal"]
 
@@ -146,7 +146,7 @@ class Modal:
 
     def __init__(
         self,
-        tui: TUI,
+        tui: Runtime,
         dialog,
         *,
         anchor: tuple[int, int] | None = None,

@@ -25,7 +25,7 @@ layout alone -- it never reads live viewport attributes -- and it routes
 its own input, so a host dispatches through it.
 
 The split's divider is **not** here: :class:`motui.kernel.frame.Separator`
-is the kernel's own chrome renderer, registered by ``TUI.split`` without a
+is the kernel's own chrome renderer, registered by ``Runtime.split`` without a
 driver-to-tier import edge.
 
 **The dispatch order** is the one rule every module of this tier writes out:
@@ -61,7 +61,7 @@ from ..kernel.theme import DEFAULT_THEME, Theme
 from ..widgets.scroll import ScrollPanel
 
 if TYPE_CHECKING:
-    from .driver import TUI
+    from .runtime import Runtime
 
 __all__ = ["Scrollbar"]
 
@@ -206,7 +206,7 @@ class Scrollbar:
 
     def __init__(
         self,
-        tui: TUI,
+        tui: Runtime,
         *,
         pane: str | None = None,
         axis: Axis = Axis.Y,

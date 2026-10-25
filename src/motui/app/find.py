@@ -8,7 +8,7 @@ them, and an overlay that paints them over the composed frame.  Opening
 resets the query; typing re-addresses the matches; ``enter``/``down`` step to
 the next match and ``up`` to the previous one -- the ends wrap -- and
 ``escape`` closes.  Every change **reveals** the current match through the
-driver (:meth:`~motui.app.TUI.reveal`), so the tier owns no scrolling of
+driver (:meth:`~motui.app.Runtime.reveal`), so the tier owns no scrolling of
 its own; "bring this address on screen" is the kernel-side ability
 (``Viewport.scroll_to``), not a hole opened for search.
 
@@ -60,7 +60,7 @@ from ..widgets.textfield import Input
 from ..kernel.layout import Constraints
 
 if TYPE_CHECKING:
-    from .driver import TUI
+    from .runtime import Runtime
 
 __all__ = ["Find"]
 
@@ -77,7 +77,7 @@ class Find(Themed):
     ``tui`` is the driver whose focused pane's document is searched and whose
     frame the overlay registers on (at construction -- the ``Toasts``
     lifecycle, so ``detach()`` is the one unmount) and whose
-    :meth:`~motui.app.TUI.reveal` puts the current match on screen.
+    :meth:`~motui.app.Runtime.reveal` puts the current match on screen.
     ``theme`` (default :data:`~motui.kernel.theme.DEFAULT_THEME`) skins
     the query row and the highlight bands; ``set_theme`` rebuilds the row on
     a new one, carrying an open query's text over.
@@ -104,7 +104,7 @@ class Find(Themed):
 
     def __init__(
         self,
-        tui: TUI,
+        tui: Runtime,
         *,
         theme: Theme | None = None,
         glyphs: Glyphs = GLYPHS,

@@ -1,14 +1,14 @@
-"""App: the default orchestration over the low-level :class:`TUI` driver.
+"""App: the default orchestration over the low-level :class:`Runtime`.
 
-:class:`TUI` reads events and owns the document, the frame and the pump; it
-deliberately runs no interaction policy.  :class:`App` is that policy
+:class:`Runtime` reads events and owns the document, the frame and the pump;
+it deliberately runs no interaction policy.  :class:`App` is that policy
 assembled from the controllers this package ships -- :class:`FocusManager`,
 :class:`Pointer`, :class:`SelectionGesture`, :class:`Toasts`,
 :class:`Tooltip`, :class:`Find`, :class:`Modal` and
 :class:`CommandPalette` -- and dispatched in one documented order.  A host
 that wants a different order, or no default policy at all, passes
-``auto=False`` and drives the ``tui`` itself (the ``TUI`` API is unchanged
-and still public).
+``auto=False`` and drives the ``runtime`` itself (the ``Runtime`` API is
+unchanged and still public).
 
 **The dispatch order** (:meth:`App.dispatch`, first claim wins):
 
@@ -39,7 +39,7 @@ App only composes them and owns the order.  ``auto=False`` mounts none of
 them (``focus``/``toast``/``open_modal`` then report the missing layer).
 
 **Theme propagation.**  :attr:`App.theme` is the application theme:
-constructing the App gives it to the driver, and :meth:`App.add` assigns it
+constructing the App gives it to the runtime, and :meth:`App.add` assigns it
 to every :class:`~motui.widgets.base.Widget` in the mounted subtree whose
 ``theme`` is still ``None`` (an explicit ``theme=`` stays a local
 override).  The subtree is the widget's explicit :meth:`Widget.walk`, so
@@ -89,6 +89,7 @@ from .gesture import SelectionGesture
 from .modal import Modal
 from .overlays import Toasts, Tooltip
 from .pointer import Pointer
+from .workspace import Workspace
 
 if TYPE_CHECKING:
     from ..kernel.events import EventSource
@@ -136,26 +137,27 @@ def _nodes(component: Component) -> Iterator[Component]:
 
 
 class App:
-    """The high-level application: driver + the default interaction policy.
+    """The high-level application: runtime + the default interaction policy.
 
     ``theme`` is the application theme (``DEFAULT_THEME`` when omitted) --
-    handed to the driver's chrome and assigned to mounted widgets that did
+    handed to the runtime's chrome and assigned to mounted widgets that did
     not take an explicit one.  ``terminal=`` is the 2.0 configuration: a
     :class:`~motui.terminal.screen.TerminalOptions` from which the App
     builds one :class:`~motui.terminal.terminal.Terminal` and hands it to
-    the driver; the legacy ``mouse``/``hover``/``color_mode``/``screen``/
+    the runtime; the legacy ``mouse``/``hover``/``color_mode``/``screen``/
     ``keys``/``focus_events``/``sync`` arguments are then ignored.  Without
     ``terminal=`` those arguments are folded into an equivalent
     ``TerminalOptions`` (the old ``mouse``/``hover`` pair becomes one
     :class:`~motui.terminal.screen.MouseMode`), so :attr:`terminal` is
-    always the endpoint the driver uses.  ``title`` is set through the
-    driver's OSC 2 surface when non-empty.
+    always the endpoint the runtime uses.  ``title`` is set through the
+    runtime's OSC 2 surface when non-empty.
     ``auto=True`` mounts the default controllers; ``auto=False`` mounts
-    none, leaving ``app.tui`` and the caller's own loop (the ``TUI`` is
-    still fully usable).  ``keys=`` is the event source, ``throttle`` the
-    pump's flush interval.  ``interactive``/``focus_events``/``sync`` are
-    the driver's own switches, forwarded verbatim.  ``on_selection``
-    replaces the selection gesture's ``on_end`` (the default is
+    none, leaving :attr:`runtime`/``workspace`` and the caller's own loop
+    (the ``Runtime`` is still fully usable).  ``keys=`` is the event source,
+    ``throttle`` the pump's flush interval.
+    ``interactive``/``focus_events``/``sync`` are the runtime's own
+    switches, forwarded verbatim.  ``on_selection`` replaces the selection
+    gesture's ``on_end`` (the default is
     :func:`~motui.app.gesture.copy_on_select`).
     """
 
@@ -175,13 +177,13 @@ class App:
         interactive: bool | None = None,
         focus_events: bool = False,
         sync: bool = True,
-        on_selection: Callable[["TUI", Selection], object] | None = None,
+        on_selection: Callable[["Runtime", Selection], object] | None = None,
     ) -> None:
         self._theme = DEFAULT_THEME if theme is None else theme
         if terminal is not None:
-            self._terminal = Terminal(terminal)
+            endpoint = Terminal(terminal)
         else:
-            self._terminal = Terminal(
+            endpoint = Terminal(
                 TerminalOptions(
                     input=keys,
                     mouse=_mouse_mode(mouse, hover),
@@ -191,12 +193,14 @@ class App:
                 ),
                 screen=screen,
             )
-        self.tui = Runtime(
-            terminal=self._terminal,
+        self.runtime: Runtime = Runtime(
+            terminal=endpoint,
             throttle=throttle,
             theme=self._theme,
             interactive=interactive,
         )
+        self.workspace: Workspace = self.runtime.workspace
+        self.terminal: Terminal = endpoint
         self.auto = auto
         self._components: list[Component] = []
         self._bindings: dict[str, Callable[[], object]] = {}
@@ -216,25 +220,15 @@ class App:
         self._tooltip: Tooltip | None = None
         if auto:
             self._focus = FocusManager()
-            self._pointer = Pointer(self.tui, ring=self._focus)
+            self._pointer = Pointer(self.runtime, ring=self._focus)
             gesture_args = {} if on_selection is None else {"on_end": on_selection}
-            self._gesture = SelectionGesture(self.tui, **gesture_args)
-            self._toasts = Toasts(self.tui, theme=self._theme)
-            self._tooltip = Tooltip(self.tui, self._pointer, theme=self._theme)
+            self._gesture = SelectionGesture(self.runtime, **gesture_args)
+            self._toasts = Toasts(self.runtime, theme=self._theme)
+            self._tooltip = Tooltip(self.runtime, self._pointer, theme=self._theme)
         if title:
-            self.tui.set_title(title)
+            self.runtime.set_title(title)
 
     # -- theme ------------------------------------------------------------------
-
-    @property
-    def terminal(self) -> Terminal:
-        """The terminal endpoint the driver enters, leaves and reads through.
-
-        Built from ``terminal=`` when given, otherwise from the legacy
-        screen/input switches; either way it is the same object the TUI
-        holds, so its screen, clipboard and capability describe this app.
-        """
-        return self._terminal
 
     @property
     def theme(self) -> Theme:
@@ -244,7 +238,7 @@ class App:
     @theme.setter
     def theme(self, value: Theme) -> None:
         self._theme = value
-        self.tui.theme = value
+        self.runtime.theme = value
         for component in tuple(self._components):
             for current in _nodes(component):
                 if isinstance(current, Widget) and current.theme is None:
@@ -253,7 +247,7 @@ class App:
             self._set_theme(overlay, value)
         for controller, _dispatch in tuple(self._controllers):
             self._set_theme(controller, value)
-        self.tui.refresh()
+        self.runtime.refresh()
 
     @staticmethod
     def _set_theme(target: object | None, theme: Theme) -> None:
@@ -355,10 +349,10 @@ class App:
         is set, and its interactive widgets join the focus ring (when the
         default controllers are mounted).  With no ``pane=`` the block lands
         in the main (primary) document, never the focused pane.  The id is
-        :meth:`~motui.app.driver.TUI.add`'s -- unique across the frame.
+        :meth:`~motui.app.runtime.Runtime.add`'s -- unique across the frame.
         ``placement``/``sizing`` are the 2.0 document spellings.
         """
-        block_id = self.tui.add(
+        block_id = self.workspace.add(
             component,
             id=id,
             pin=pin,
@@ -373,12 +367,13 @@ class App:
         """Fill a pane with ``component``; answer the ``FILL`` section.
 
         The fill replaces the pane's document (a fill is the pane's whole
-        content), so this goes through :meth:`~motui.app.driver.TUI.fill`
-        rather than :meth:`add`.  The component still takes the App theme
+        content), so this goes through
+        :meth:`~motui.app.workspace.Workspace.fill` rather than :meth:`add`.
+        The component still takes the App theme
         and joins the focus ring exactly as an added one does: the two
         mounting paths share :meth:`_mount`.
         """
-        section = self.tui.fill(component, pane=pane)
+        section = self.workspace.fill(component, pane=pane)
         self._mount(component)
         return section
 
@@ -393,11 +388,11 @@ class App:
     def _sync_focus(self) -> None:
         """Re-derive the ring from the tree after a mount or an unmount."""
         if self._focus is not None:
-            self._focus.sync(focus_targets(self.tui))
+            self._focus.sync(focus_targets(self.runtime))
 
     def get(self, id: str) -> Component:
-        """The component with ``id`` (the driver's frame-wide lookup)."""
-        return self.tui.get(id)
+        """The component with ``id`` (the workspace's frame-wide lookup)."""
+        return self.workspace.get(id)
 
     def remove(self, id: str) -> Component:
         """Unmount the component with ``id``; answer it.
@@ -405,7 +400,7 @@ class App:
         The focus ring drops every widget in its subtree first, so a
         removed target can never keep holding the focus.
         """
-        component = self.tui.remove(id)
+        component = self.workspace.remove(id)
         self._forget(component)
         return component
 
@@ -425,56 +420,56 @@ class App:
     def focus(self, target: "str | Component") -> bool:
         """Focus a block id or a component that is in the tree-derived ring."""
         if isinstance(target, str):
-            target = self.tui.get(target)
+            target = self.workspace.get(target)
         if self._focus is None:
             return False
-        self._focus.sync(focus_targets(self.tui))
+        self._focus.sync(focus_targets(self.runtime))
         moved = self._focus.focus(target)
-        self.tui.refresh()
+        self.runtime.refresh()
         return moved
 
     def focus_next(self) -> bool:
         """Step the focus ring one target forward (wrapping)."""
         if self._focus is None:
             return False
-        self._focus.sync(focus_targets(self.tui))
+        self._focus.sync(focus_targets(self.runtime))
         moved = self._focus.focus_next()
         if moved:
-            self.tui.refresh()
+            self.runtime.refresh()
         return moved
 
     def focus_previous(self) -> bool:
         """Step the focus ring one target back (wrapping)."""
         if self._focus is None:
             return False
-        self._focus.sync(focus_targets(self.tui))
+        self._focus.sync(focus_targets(self.runtime))
         moved = self._focus.focus_next(-1)
         if moved:
-            self.tui.refresh()
+            self.runtime.refresh()
         return moved
 
     # -- frame surface ------------------------------------------------------------
 
     def split(self, orientation: str, **kwargs: Any) -> Any:
-        """Split a pane (the driver's own ``split``)."""
-        return self.tui.split(orientation, **kwargs)
+        """Split a pane (the workspace's own ``split``)."""
+        return self.workspace.split(orientation, **kwargs)
 
     def dock(self, component: Component, *, edge: str = "bottom", size: int | None = None) -> Any:
-        """Dock ``component`` (the driver's own ``dock``); theme it first."""
+        """Dock ``component`` (the workspace's own ``dock``); theme it first."""
         for current in _nodes(component):
             if isinstance(current, Widget) and current.theme is None:
                 current.theme = self._theme
         self._components.append(component)
-        return self.tui.dock(component, edge=edge, size=size)
+        return self.workspace.dock(component, edge=edge, size=size)
 
     def undock(self, edge: str = "bottom") -> Any:
         """Release the dock on ``edge`` and forget its component.
 
-        The driver's :meth:`~motui.app.driver.TUI.undock` plus the App-side
-        bookkeeping: the docked component's subtree leaves the focus ring
-        and the theme walk with it.
+        The workspace's :meth:`~motui.app.workspace.Workspace.undock` plus
+        the App-side bookkeeping: the docked component's subtree leaves the
+        focus ring and the theme walk with it.
         """
-        pane = self.tui.undock(edge)
+        pane = self.workspace.undock(edge)
         if pane is not None:
             for block in pane.document.blocks():
                 self._forget(block.component)
@@ -492,7 +487,7 @@ class App:
         """Open ``panel`` in a :class:`Modal`; newest on top of the stack."""
         kwargs.setdefault("theme", self._theme)
         kwargs.setdefault("focus", self._focus)
-        modal = Modal(self.tui, panel, **kwargs)
+        modal = Modal(self.runtime, panel, **kwargs)
         modal.open()
         self._modals.append(modal)
         return modal
@@ -502,20 +497,20 @@ class App:
         if self._palette is None:
             kwargs.setdefault("theme", self._theme)
             kwargs.setdefault("focus", self._focus)
-            self._palette = CommandPalette(self.tui, commands, **kwargs)
+            self._palette = CommandPalette(self.runtime, commands, **kwargs)
         self._palette.open()
         return self._palette
 
     def find(self) -> Find:
         """Open the lazily created :class:`Find` tier."""
         if self._find is None:
-            self._find = Find(self.tui, theme=self._theme)
+            self._find = Find(self.runtime, theme=self._theme)
         self._find.open()
         return self._find
 
     def quit(self) -> None:
-        """End the session (``tui.exit()``: a pending read returns ``None``)."""
-        self.tui.exit()
+        """End the session (``runtime.exit()``: a pending read returns ``None``)."""
+        self.runtime.exit()
 
     # -- hooks ------------------------------------------------------------------
 
@@ -549,7 +544,7 @@ class App:
         it never consumes.
         """
         if type(event) is ResizeEvent:
-            for widget in iter_widgets(self.tui):
+            for widget in iter_widgets(self.runtime):
                 on_resize = getattr(widget, "on_resize", None)
                 if on_resize is not None:
                     on_resize(event)
@@ -564,19 +559,19 @@ class App:
             if self._find.handle(event):
                 return True
         if self._toasts is not None and self._toasts.handle(event):
-            self.tui.refresh()
+            self.runtime.refresh()
             return True
 
         for controller, dispatch in tuple(self._controllers):
             if dispatch and controller.handle(event):
-                self.tui.refresh()
+                self.runtime.refresh()
                 return True
 
         if isinstance(event, MouseEvent) and event.kind == "wheel":
             # A wheel during a selection drag belongs to the gesture first
             # (it co-extends the head); otherwise the wheel tier routes it.
             if self._gesture is not None and self._gesture.handle(event):
-                self.tui.refresh()
+                self.runtime.refresh()
                 return True
             if self._wheel(event):
                 return True
@@ -594,11 +589,11 @@ class App:
             pointer = bool(self._pointer is not None and self._pointer.handle(event))
             focused = self._press_focuses_a_pane(event)
             if gesture or pointer or focused:
-                self.tui.refresh()
+                self.runtime.refresh()
                 return True
 
         if self._focus is not None and self._focus.handle(event):
-            self.tui.refresh()
+            self.runtime.refresh()
             return True
 
         if isinstance(event, KeyEvent):
@@ -606,7 +601,7 @@ class App:
                 return True
             if event.key in self._bindings:
                 self._bindings[event.key]()
-                self.tui.refresh()
+                self.runtime.refresh()
                 return True
             if event.key == "tab":
                 return self.focus_next()
@@ -635,7 +630,7 @@ class App:
         rows = SCROLL_KEYS.get(event.button)
         if not rows:
             return False
-        hit: Hit | None = self.tui.hit(event.x, event.y)
+        hit: Hit | None = self.runtime.hit(event.x, event.y)
         target: object | None = None
         if hit is not None:
             for component, _row, _col in reversed(hit.chain):
@@ -644,13 +639,13 @@ class App:
                     break
         if target is None:
             pane = None if hit is None else hit.pane
-            if pane is None or self.tui.frame.is_dock(pane):
-                pane = self.tui.frame.focused_pane
+            if pane is None or self.runtime.frame.is_dock(pane):
+                pane = self.runtime.frame.focused_pane
             target = pane
         if not isinstance(target, Scrollable):
             return False
         target.scroll_by(rows)
-        self.tui.refresh()
+        self.runtime.refresh()
         return True
 
     def _wheel_x(self, event: MouseEvent) -> bool:
@@ -663,13 +658,13 @@ class App:
         declines) lets the walk continue outward.  The frame is refreshed
         on the move.
         """
-        hit: Hit | None = self.tui.hit(event.x, event.y)
+        hit: Hit | None = self.runtime.hit(event.x, event.y)
         if hit is None:
             return False
         delta = -1 if event.button == "wheel_left" else 1
         for component, _row, _col in reversed(hit.chain):
             if isinstance(component, ScrollableX) and component.scroll_x_by(delta):
-                self.tui.refresh()
+                self.runtime.refresh()
                 return True
         return False
 
@@ -686,7 +681,7 @@ class App:
         """
         if event.button != "left":
             return False
-        hit: Hit | None = self.tui.hit(event.x, event.y)
+        hit: Hit | None = self.runtime.hit(event.x, event.y)
         if hit is None:
             return False
         for component, row, col in reversed(hit.chain):
@@ -698,7 +693,7 @@ class App:
                 self._drag_target = component
                 self._drag_row = row
                 self._drag_col = col
-                self.tui.refresh()
+                self.runtime.refresh()
                 return True
         return False
 
@@ -716,7 +711,7 @@ class App:
             return False
         row, col = self._drag_row, self._drag_col
         held = False
-        hit: Hit | None = self.tui.hit(event.x, event.y)
+        hit: Hit | None = self.runtime.hit(event.x, event.y)
         if hit is not None:
             for component, found_row, found_col in hit.chain:
                 if component is target:
@@ -727,7 +722,7 @@ class App:
         if event.kind == "release" or not held:
             self._drag_target = None
         if consumed or event.kind == "release":
-            self.tui.refresh()
+            self.runtime.refresh()
         return consumed or event.kind == "release"
 
     def _scroll_key(self, event: KeyEvent) -> bool:
@@ -740,53 +735,53 @@ class App:
         if isinstance(focused, Scrollable):
             target = focused
         if target is None:
-            pane = self.tui.frame.focused_pane
+            pane = self.runtime.frame.focused_pane
             target = pane if isinstance(pane, Scrollable) else None
         if not isinstance(target, Scrollable):
             return False
         target.scroll_by(rows)
-        self.tui.refresh()
+        self.runtime.refresh()
         return True
 
     def _press_focuses_a_pane(self, event: MouseEvent) -> bool:
         """A button press focuses the pane under it (never a dock)."""
         if event.kind != "press" or event.button not in _BUTTONS:
             return False
-        pane = self.tui.pane_at(event.x, event.y)
-        if pane is None or self.tui.frame.is_dock(pane):
+        pane = self.runtime.pane_at(event.x, event.y)
+        if pane is None or self.runtime.frame.is_dock(pane):
             return False
-        focused = self.tui.frame.focused_pane
+        focused = self.runtime.frame.focused_pane
         if focused is not None and focused.id == pane.id:
             return False
-        self.tui.frame.focus(pane)
-        self.tui.refresh()
+        self.runtime.frame.focus(pane)
+        self.runtime.refresh()
         return True
 
     # -- lifecycle ----------------------------------------------------------------
 
     async def run_session(self, body: Callable[["App"], Awaitable[None]]) -> None:
-        """Run ``body(app)`` inside the driver's session bracket."""
-        async def loop(_tui: TUI) -> None:
+        """Run ``body(app)`` inside the runtime's session bracket."""
+        async def loop(_runtime: Runtime) -> None:
             await body(self)
 
-        await self.tui.run_session(loop)
+        await self.runtime.run_session(loop)
 
     async def run_async(self) -> None:
         """Run the default loop until ``quit()`` (or EOF), inside a session."""
-        await self.tui.run_session(self._loop)
+        await self.runtime.run_session(self._loop)
 
-    async def _loop(self, tui: TUI) -> None:
+    async def _loop(self, runtime: Runtime) -> None:
         """Paint (non-live), read, dispatch -- until the read answers ``None``."""
         self.on_start()
         try:
             while True:
-                if not tui.interactive:
-                    tui.paint()
-                event = await tui.read_event()
+                if not runtime.interactive:
+                    runtime.paint()
+                event = await runtime.read_event()
                 if event is None:
                     break
                 self.dispatch(event)
-                self.tui.refresh()
+                self.runtime.refresh()
         finally:
             self.on_stop()
 
