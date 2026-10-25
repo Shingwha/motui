@@ -13,9 +13,10 @@ capabilities, hooks and the `take()` result. The normative rules are in
 
 ## Conventions
 
-- Every themed widget takes `theme: Theme | None = None` and
-  `styles: Styles | None = None`. A `styles` field replaces that whole role
-  group; `None` inherits the theme.
+- Every themed widget accepts `theme: Theme | None = None`. Components that
+  resolve role groups also accept `styles: Styles | None = None`. A `styles`
+  field replaces that whole role group; `None` inherits the theme. `Text`
+  is the exception: it takes one explicit `style=` instead of `styles`.
 - Glyph-carrying widgets take `glyphs: Glyphs = GLYPHS`; `Panel`, `Dialog`
   and `Table` also take a `Border`. Glyphs are content, not style; `""`
   turns a mark off and collapses its seat.
@@ -36,7 +37,7 @@ capabilities, hooks and the `take()` result. The normative rules are in
 | focus + click + hover (no activate) | `Tabs`, `NavList`, `Input`, `Editor` |
 | click + hover (no focus) | `Text`, `Markdown` |
 | focus + click (bar drag) | `ScrollPanel` |
-| focus + scope | `Form`, `Dialog`, `ComboBox` |
+| focus scope (internal routing) | `Form`, `Dialog`, `ComboBox` |
 | pure display | `Diff`, `Divider`, `Panel`, `Padding`, `Row`, `Column`, `Spacer`, `Notice`, `StatusLine`, `ShortcutBar`, `ProgressBar`, `Spinner` |
 
 ## Text and content
@@ -127,7 +128,7 @@ cells. The table binds no key for marks: route `space` (or any key) to
 | `Divider` | `Divider(*, char=None, label="", max_width=None, glyphs=GLYPHS)` | repeated rule with an optional label |
 | `Collapsible` | `Collapsible(title, body, *, open=True, disabled=False, glyphs=GLYPHS)` | folds the body under a title row; implements `child_at` |
 | `ScrollPanel` | `ScrollPanel(child, *, height=None, offset=0, bar=False, axis="y", glyphs=GLYPHS)` | a window over any component; see below |
-| `StatusLine` | `StatusLine(*, left=(), right=(), glyphs=GLYPHS)` | dim two-sided row |
+| `StatusLine` | `StatusLine(*, left=(), right=())` | dim two-sided row |
 | `ShortcutBar` | `ShortcutBar(items, *, glyphs=GLYPHS)` | key/label hints |
 
 Containers never restyle their children. `Row` and `Column` remember their
@@ -176,11 +177,11 @@ class Canvas(Widget):
     def __init__(self, width=0, height=0, *, marker="cell", glyphs=GLYPHS): ...
     def put(self, x, y, char, style=Style()) -> None: ...
     def text(self, x, y, text, style=Style()) -> None: ...
-    def hline(self, ...): ...
-    def vline(self, ...): ...
-    def box(self, ...): ...
+    def hline(self, x, y, length, char="─", style=Style()) -> None: ...
+    def vline(self, x, y, length, char="│", style=Style()) -> None: ...
+    def box(self, x, y, width, height, *, border=None, style=Style()) -> None: ...
     def blit(self, other, x, y) -> None: ...
-    def plot(self, points, *, style=Style()) -> None: ...
+    def plot(self, points, *, marker=None, style=Style()) -> None: ...
     def surface(self) -> Surface: ...
     def render(self, c: Constraints) -> Surface: ...
 ```
@@ -240,15 +241,17 @@ class Toggle(Widget):
     def __init__(self) -> None:
         super().__init__()
         self.on = False
+        self._pending: bool | None = None
 
     def on_action(self, name: str) -> bool:
         if name != "activate":
             return False
         self.on = not self.on      # the setter calls touch()
+        self._pending = self.on
         return True
 
     def take(self) -> bool | None:
-        pending, self._pending = getattr(self, "_pending", None), None
+        pending, self._pending = self._pending, None
         return pending
 
     def render(self, c: Constraints) -> Surface:

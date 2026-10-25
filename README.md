@@ -100,9 +100,10 @@ Wide content is the one horizontal-scroll case: `ScrollPanel(axis="x"` or
 `Cell`, `Segment`, `Line` and `Surface` are the row model. `Constraints`,
 `Scroll`, `ScrollAxis` and `ScreenLayout` are layout. `Section`, `Document`,
 `Placement` and `Sizing` are the document model. `Style`, `Theme`, `Styles`,
-`Glyphs` and `Border` are styling. All are frozen and live in
-`motui.kernel`; the package imports no `os`, `sys`, `io`, `ctypes`,
-`termios`, `tty`, `select` or `asyncio`.
+`Glyphs` and `Border` are styling. The data values are frozen; `Section`
+and `Document` manage identity and order. All live in `motui.kernel`; the
+package imports no `os`, `sys`, `io`, `ctypes`, `termios`, `tty`, `select`
+or `asyncio`.
 
 ```python
 from motui.kernel import Constraints, Line, Surface, WrapMode
@@ -169,8 +170,7 @@ a `Placement` (`FLOW`, `TOP`, `BOTTOM`) and a `Sizing` (`NATURAL`, `FILL`).
 
 ```python
 from motui import App, Text
-from motui.kernel import Placement
-from motui.kernel.document import Sizing
+from motui.kernel.document import Placement, Sizing
 
 app = App()
 header = app.add(Text("header"), placement=Placement.TOP)
@@ -247,7 +247,8 @@ forms (`Input`, `Editor`, `Checkbox`, `RadioGroup`, `CheckboxGroup`,
 (`Dialog`, `ButtonSpec`, `confirm_dialog`, `prompt_dialog`) and drawing
 (`Canvas`, `Sparkline`).
 
-Every themed widget takes `theme=` and one `styles: Styles` override.
+Every themed widget takes `theme=`; components that resolve role groups take
+one `styles: Styles` override, while `Text` takes one explicit `style=`.
 Widgets resolve their role groups when they render, so assigning
 `app.theme` repaints a mounted UI without rebuilding it. See
 [WIDGETS](docs/WIDGETS.md) for the per-component catalogue.

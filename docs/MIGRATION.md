@@ -221,8 +221,8 @@ These are gone from the public surface; no alias is provided.
 (as a public base), `Revisioned` (as a public protocol), `EveryHandle`,
 `ClampedCursor`, `mark_prefix` (facade export), `ScrollView`, `Block`, the
 `core/` package, public `ansi.*` exports, the free `fit` / `fill` / `fuse` /
-`overlay` / `rest` functions as an application API, `Table(wrap=bool)` and
-the string direction spellings as the recommended surface.
+`overlay` / `rest` functions as an application API, and
+`Table(wrap=bool)`.
 
 Implementation names that still exist at their module for internal use
 (`Revisioned` in `motui.kernel.document`, `Themed` in

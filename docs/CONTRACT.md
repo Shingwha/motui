@@ -139,7 +139,6 @@ class Component(Protocol):
 ## 6. Document and Section
 
 ```python
-@dataclass
 class Section:
     id: str
     widget: Component          # component is an alias
