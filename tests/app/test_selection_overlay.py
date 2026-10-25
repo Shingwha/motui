@@ -64,7 +64,7 @@ def test_the_overlay_paints_with_the_drivers_theme():
     tui.paint()
     tui.workspace.set_selection(Selection.between(("b0", 0, 1), ("b0", 0, 3)))
     tui.paint()
-    assert [(seg.text, seg.style) for seg in tui.rows[0].segments] == [
+    assert [(seg.text, seg.style) for seg in tui.workspace.rows[0].segments] == [
         ("a", Style()),
         ("lp", Style(underline=True)),
         ("ha", Style()),

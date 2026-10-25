@@ -126,7 +126,7 @@ def test_fill_replaces_the_pane_and_mounts_theme_and_focus():
     assert app.focus_manager is not None
     assert button in app.focus_manager.targets
     app.runtime.paint()
-    assert [row.text for row in app.runtime.rows] == [" Go ", "", "", "", ""]
+    assert [row.text for row in app.workspace.rows] == [" Go ", "", "", "", ""]
 
 
 def test_add_themes_every_widget_of_a_nested_tree():
@@ -262,7 +262,7 @@ def test_a_fill_section_added_through_the_app_takes_the_remainder():
     app.add(Rows("head"))
     app.add(Rows("game"), sizing=Sizing.FILL)
     app.runtime.paint()
-    assert [row.text for row in app.runtime.rows] == ["head", "game", "", "", ""]
+    assert [row.text for row in app.workspace.rows] == ["head", "game", "", "", ""]
 
 
 def test_the_wheel_routes_to_the_nearest_scrollable():
@@ -403,7 +403,7 @@ def test_a_form_owns_its_fields_and_a_click_moves_its_cursor():
     assert app.focus(form) is True
     app.runtime.paint()
 
-    row = next(y for y, line in enumerate(app.runtime.rows) if "Email" in line.text) + 1
+    row = next(y for y, line in enumerate(app.workspace.rows) if "Email" in line.text) + 1
     hit = app.workspace.hit(0, row)
     assert hit is not None
     assert app.focus_manager.click(hit) is True

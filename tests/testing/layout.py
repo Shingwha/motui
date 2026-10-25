@@ -14,7 +14,7 @@ def texts(component, width: int) -> list[str]:
 
 def rows(tui) -> list[str]:
     """The plain-text rows of the driver's current frame."""
-    return [row.text for row in tui.rows]
+    return [row.text for row in tui.workspace.rows]
 
 
 def marked(tui) -> list[str]:

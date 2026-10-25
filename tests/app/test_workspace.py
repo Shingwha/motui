@@ -55,6 +55,8 @@ def test_the_runtime_has_no_content_surface_left():
         "reveal",
         "visible_range",
         "pane_at",
+        "fill",
+        "rows",
     ):
         assert not hasattr(runtime, name), name
 
@@ -121,7 +123,7 @@ def test_dock_hit_and_reveal_are_workspace_operations():
     assert hit is not None and hit.block.id == block.id
     assert workspace.hit_leaf(0, 0) is not None
     assert workspace.reveal(block.id, 0) is True
-    assert runtime.workspace.rows == runtime.rows
+    assert len(workspace.rows) == runtime.screen.height
 
     assert workspace.undock() is dock
     assert workspace.frame.dock("bottom") is None

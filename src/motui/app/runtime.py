@@ -53,10 +53,7 @@ import sys
 import time
 from collections.abc import Awaitable, Callable
 
-from ..kernel.cell import Line
-from ..kernel.document import Component, Section
 from ..kernel.events import Event, EventSource
-from ..kernel.frame import Pane
 from ..kernel.theme import DEFAULT_THEME, Theme
 from ..terminal.ansi import cursor_shape, set_window_title
 from ..terminal.paint import Painter
@@ -217,26 +214,6 @@ class Runtime:
         screen by itself.
         """
         return self._terminal
-
-    @property
-    def rows(self) -> list[Line]:
-        """The current painted screen: exactly ``screen.height`` rows.
-
-        The painter's output -- what the last composition painted -- kept
-        here because the terminal dump reads it and examples print it.
-        ``workspace.rows`` is the same view for content owners.
-        """
-        return self.painter.rows
-
-    def fill(self, component: Component, *, pane: Pane | str | None = None) -> Section:
-        """Make ``component`` the pane's shell fill; answer the section.
-
-        The bootstrap seam the read-only demo and examples build a
-        headless frame with (``Runtime.fill(Showcase)`` before one paint);
-        the operation itself is the workspace's.  Content hosts use
-        :meth:`Workspace.fill` / :meth:`Workspace.add` directly.
-        """
-        return self.workspace.fill(component, pane=pane)
 
     # -- clipboard ---------------------------------------------------------------
 
