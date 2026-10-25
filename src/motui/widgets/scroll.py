@@ -271,6 +271,16 @@ class ScrollPanel(Widget):
         """Move the window to the last column (clamped); ``True`` when it moved."""
         return self.scroll_to_x(self._x.max_offset)
 
+    def scroll_x_by(self, delta: int) -> bool:
+        """The structural horizontal-wheel face: step ``delta`` columns.
+
+        The same move :meth:`scroll_x` makes; it exists as its own verb so
+        the app's wheel route can find a horizontal scroller through
+        :class:`~motui.kernel.layout.ScrollableX` without importing this
+        widget.
+        """
+        return self.scroll_x(delta)
+
     def reveal(self, row: int) -> bool:
         """Bring the child ``row`` into the window, moving as little as possible.
 

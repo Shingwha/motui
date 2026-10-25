@@ -4,7 +4,9 @@ from __future__ import annotations
 
 from motui.app import App
 from motui.kernel import Theme
+from motui.kernel.cell import Line, Surface
 from motui.kernel.document import Sizing
+from motui.kernel.layout import Constraints
 from motui.terminal import HeadlessScreen
 from motui.kernel.events import KeyEvent
 from motui.widgets import Button, Field, Form, Input, ScrollPanel
@@ -35,6 +37,21 @@ class _Controller:
 
     def set_theme(self, theme: Theme) -> None:
         self.themes.append(theme)
+
+
+class _Wide:
+    """A 200-column, three-row child: the horizontal-overflow producer."""
+
+    def __init__(self, columns: int = 200, rows: int = 3) -> None:
+        self.columns = columns
+        self.row_count = rows
+
+    def render(self, c: Constraints) -> Surface:
+        lines = [
+            Line.from_text("".join(chr(ord("a") + (row + col) % 26) for col in range(self.columns)))
+            for row in range(self.row_count)
+        ]
+        return Surface.of(lines, self.columns, pad=False)
 
 
 def test_add_focus_and_bind_reach_the_right_component():
@@ -94,6 +111,57 @@ def test_the_wheel_routes_to_the_nearest_scrollable():
     assert view.offset == 3  # the focused ScrollPanel pages one window
     assert app.dispatch(key("page_up")) is True
     assert view.offset == 0
+
+
+def test_the_horizontal_wheel_moves_the_x_panel_under_the_pointer():
+    app = App(screen=HeadlessScreen(40, 8), keys=ScriptedEvents(()))
+    view = ScrollPanel(_Wide(), height=3, axis="x")
+    app.add(view)
+    app.tui.paint()
+
+    assert (view.x_offset, view.offset) == (0, 0)
+    assert app.dispatch(wheel(5, 1, "right")) is True
+    assert view.x_offset == 1
+    assert view.offset == 0
+    assert app.dispatch(wheel(5, 1, "left")) is True
+    assert view.x_offset == 0
+
+
+def test_the_horizontal_wheel_declines_a_vertical_only_panel():
+    app = App(screen=HeadlessScreen(40, 8), keys=ScriptedEvents(()))
+    view = ScrollPanel(Rows(*many(10)), height=3, axis="y")
+    app.add(view)
+    app.tui.paint()
+
+    assert app.dispatch(wheel(5, 1, "right")) is False
+    assert (view.x_offset, view.offset) == (0, 0)
+
+
+def test_the_vertical_wheel_leaves_the_horizontal_offset_alone():
+    app = App(screen=HeadlessScreen(40, 8), keys=ScriptedEvents(()))
+    view = ScrollPanel(_Wide(rows=10), height=3, axis="x")
+    app.add(view)
+    app.tui.paint()
+
+    assert app.dispatch(wheel(5, 1, "right")) is True
+    assert view.x_offset == 1
+    # The 1.x route still finds the nearest Scrollable and steps its rows;
+    # only the horizontal notch touched x.
+    assert app.dispatch(wheel(5, 1, "down")) is True
+    assert view.x_offset == 1
+    assert view.offset == 3
+
+
+def test_the_vertical_wheel_still_scrolls_the_pane_outside_a_widget():
+    app = App(screen=HeadlessScreen(40, 8), keys=ScriptedEvents(()))
+    app.add(Rows(*many(30)))
+    app.tui.paint()
+    pane = app.tui.frame.focused_pane
+    before = pane.viewport.offset
+    assert before > 0  # the fresh viewport sticks to the tail
+
+    assert app.dispatch(wheel(5, 1, "up")) is True
+    assert pane.viewport.offset == before - 3
 
 
 def test_a_bar_drag_moves_the_scroll_view_without_a_selection():

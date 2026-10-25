@@ -12,7 +12,10 @@ and materializes only the rows the window covers.
 viewport, the scroll view, the pane): the furthest legal offset, the clamp
 after a layout, the minimal move that reveals a row and the scrollbar thumb
 are formulas that live here once.  :class:`Scrollable` is the narrow
-read/write face the scrollbar and the wheel route go through.
+read/write face the scrollbar and the wheel route go through;
+:class:`ScrollableX` is its horizontal sibling: the one-method face the
+wheel route queries in a hit chain, so the app never imports the widget
+that implements it.
 
 ``ScrollAxis``/``Scroll`` are the 2.0 immutable two-axis values.  The thumb
 formula they carry is copied verbatim from ``ScrollState`` (including the
@@ -41,6 +44,7 @@ __all__ = [
     "ScrollAxis",
     "ScrollState",
     "Scrollable",
+    "ScrollableX",
     "Viewport",
 ]
 
@@ -979,3 +983,16 @@ class Scrollable(Protocol):
     def scroll_to(self, offset: int) -> bool: ...
 
     def scroll_by(self, delta: int) -> bool: ...
+
+
+@runtime_checkable
+class ScrollableX(Protocol):
+    """Anything a horizontal wheel can move, in the one method it needs.
+
+    The wheel route walks a hit chain for this structural face -- the same
+    way it walks for :class:`Scrollable` -- so ``app`` never imports the
+    widget library.  ``ScrollPanel`` answers it on the ``"x"`` and
+    ``"both"`` axes; a boundary notch returns ``False`` and moves nothing.
+    """
+
+    def scroll_x_by(self, delta: int) -> bool: ...
