@@ -133,7 +133,8 @@ uv run python tools/growth.py
 | W2c2b | ✅ 2026-10-25 @ `2.0/w2c2-semantic`（57 语义快照；lead 修 ZWJ 与 growth） |
 | W2.5a | ✅ 2026-10-25 @ `2.0/w2.5a-wrap`（1337 passed / fit 清零 / golden 不变） |
 | W2.5b | ✅ 2026-10-25 @ `2.0/w2.5b-defaults`（1352 passed / Input 单行 / 新 hash e7ca544b…） |
-| W2.6 | ⏳ |
+| W2.6a | ✅ 2026-10-25 @ `2.0/w2.6a-scrollx`（1380 passed / x+y 面板 / hash 不变） |
+| W2.6b | ✅ 2026-10-25 @ `2.0/w2.6b-overflow`（1393 passed / 四类 OVERFLOW / 宽表可达） |
 | W3a | ⏳ |
 | W3b | ⏳ |
 | W4a | ⏳ |
