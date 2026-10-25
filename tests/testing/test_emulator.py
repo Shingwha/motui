@@ -140,3 +140,14 @@ def test_a_real_painter_frame_rebuilds_the_text_the_tui_lays_out():
         expected.pop()
     assert em.text() == "\n".join(expected)
     assert em.text().splitlines()[0] == "alpha"
+
+
+def test_a_zwj_emoji_cluster_owns_one_two_column_cell():
+    em = Emulator(6, 2)
+    em.feed("A\U0001f468\u200d\U0001f4bbB")
+    assert em.cell(0, 0).char == "A"
+    assert em.cell(1, 0).char == "\U0001f468\u200d\U0001f4bb"
+    assert em.cell(2, 0).char == ""
+    assert em.cell(3, 0).char == "B"
+    assert em.cursor == Pos(x=4, y=0)
+    assert em.text() == "A\U0001f468\u200d\U0001f4bbB"

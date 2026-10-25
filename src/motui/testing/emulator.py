@@ -148,6 +148,10 @@ class Emulator:
         self._style = _NONE
         self._link: str | None = None
         self._last: tuple[int, int] | None = None
+        #: A zero-width joiner just arrived: the next printable glyph joins
+        #: the cluster cell instead of starting a new one.  A ZWJ emoji
+        #: sequence is one two-column cell, the kernel's own grapheme rule.
+        self._join = False
 
     @property
     def width(self) -> int:
@@ -193,14 +197,18 @@ class Emulator:
     def _ground(self, ch: str) -> None:
         if ch == "\x1b":
             self._state = _ESC
+            self._join = False
         elif ch == "\r":
             self._set_cursor(0, self.cursor.y)
+            self._join = False
         elif ch == "\n":
             self._linefeed()
             self._last = None
+            self._join = False
         elif ch == "\b":
             self._set_cursor(max(0, self.cursor.x - 1), self.cursor.y)
             self._last = None
+            self._join = False
         elif ch == "\t":
             if self._width:
                 self._set_cursor(
@@ -208,6 +216,7 @@ class Emulator:
                     self.cursor.y,
                 )
                 self._last = None
+            self._join = False
         elif ch == "\x07" or ord(ch) < 0x20 or ch == "\x7f":
             return
         else:
@@ -216,10 +225,24 @@ class Emulator:
     def _print(self, ch: str) -> None:
         if self._width <= 0 or self._height <= 0:
             return
+        if ch == "\u200d":
+            # A zero-width joiner binds the next glyph to the cluster cell.
+            # The kernel's width rule measures the joined cluster as the base
+            # glyph's two columns, so the grid keeps one cell for it.
+            self._combine(ch)
+            self._join = self._last is not None
+            return
         width = wcwidth(ch)
         if width == 0:
             self._combine(ch)
             return
+        if self._join:
+            self._join = False
+            if self._last is not None:
+                y, x = self._last
+                cell = self.grid[y][x]
+                self.grid[y][x] = Cell(cell.char + ch, cell.style, cell.link)
+                return
         if width < 0 or width > self._width:
             return
         if self.cursor.x + width > self._width:
@@ -239,7 +262,7 @@ class Emulator:
             self._set_cursor(x, y)
 
     def _combine(self, ch: str) -> None:
-        """Append a zero-width mark to the glyph cell it follows."""
+        """Append a zero-width mark (or joiner) to the glyph cell it follows."""
         if self._last is None:
             return
         y, x = self._last
