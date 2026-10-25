@@ -34,7 +34,8 @@ from typing import Sequence
 from ..kernel.document import Component, Revisioned
 from ..kernel.events import Event, KeyEvent
 from ..kernel.glyphs import GLYPHS, Border, Glyphs
-from ..kernel.cell import Line, Segment
+from ..kernel.cell import Line, Segment, Surface
+from ..kernel.layout import Constraints, as_constraints
 from ..widgets.text import Text
 from ..kernel.style import Style
 from ..kernel.text import ellipsize_tail, visible_width
@@ -422,7 +423,7 @@ class Dialog(Widget):
 
     # -- rendering ---------------------------------------------------------------
 
-    def render(self, width: int) -> list[Line]:
+    def render(self, c: Constraints | int) -> Surface:
         """The box: the title edge, the body, the button row, the bottom edge.
 
         The box's width is ``width`` when the constructor pinned one, else
@@ -433,7 +434,16 @@ class Dialog(Widget):
         closed with :meth:`~motui.kernel.cell.Line.fit` so a squeezed box
         truncates instead of overflowing.  Borderless, the frame rows and
         the title are gone and the body is the box's first row.
+
+        A bare ``int`` is the 1.x width spelling and is normalized through
+        :func:`~motui.kernel.layout.as_constraints`; the body and buttons
+        still render at their int widths.  A ``max_height`` budget truncates
+        the assembled rows, the body/button geometry (:attr:`_body_rows`,
+        :attr:`_hit`) stays the untruncated table :meth:`child_at` maps
+        through, and the surface is clipped, not padded.
         """
+        c = as_constraints(c)
+        width = c.width
         box = self.width if self.width is not None else min(72, max(24, width * 3 // 5))
         box = max(0, min(box, width))
         self._hit = None
@@ -447,7 +457,10 @@ class Dialog(Widget):
         if box <= 0:
             self._body_rows = []
             self._body_start = self._body_lead = self._body_inner = 0
-            return [Line()]
+            rows = [Line()]
+            if c.max_height is not None:
+                rows = rows[: c.max_height]
+            return Surface.clipped(rows, c.width)
         lead = 2 if self.frame else 1  # the border and one pad column, or the pad alone
         inner = max(0, box - 2 * lead)  # the text's cells
         self._body_rows = list(self.body.render(inner))
@@ -464,7 +477,10 @@ class Dialog(Widget):
             out.append(self._button_row(box, inner, button_row, lead, border_style))
         if self.frame:
             out.append(self._bottom_row(box, border_style))
-        return [row.fit(width) for row in out]
+        rows = [row.fit(width) for row in out]
+        if c.max_height is not None:
+            rows = rows[: c.max_height]
+        return Surface.clipped(rows, c.width)
 
     def _top_row(self, box: int, border_style: Style, title_style: Style) -> Line:
         """``\u250c\u2500 title \u2500\u2500\u2510``: the title embedded in the rule."""

@@ -39,7 +39,8 @@ from __future__ import annotations
 
 from ..kernel.document import Component, Revisioned
 from ..kernel.glyphs import GLYPHS, Glyphs, seat
-from ..kernel.cell import Line, Segment
+from ..kernel.cell import Line, Segment, Surface
+from ..kernel.layout import Constraints, as_constraints
 from ..kernel.text import visible_width
 from ..kernel.theme import Styles, Theme
 from ..widgets.base import Widget
@@ -230,7 +231,21 @@ class Collapsible(Widget):
             body_snapshot,
         )
 
-    def render(self, width: int) -> list[Line]:
+    def render(self, c: Constraints | int) -> Surface:
+        """The title row and, while open, the body's inset rows.
+
+        A bare ``int`` is the 1.x width spelling and is normalized through
+        :func:`~motui.kernel.layout.as_constraints`.  The body still renders
+        at its int width (``width`` minus the marker's columns) and the memo
+        key stays the width alone -- a smaller ``max_height`` truncates the
+        assembled rows after the memo is consulted, never repaints the body.
+        ``_body_count`` keeps the untruncated body geometry :meth:`child_at`
+        maps through (the W2a container precedent).  The answer is
+        :meth:`~motui.kernel.cell.Surface.clipped`, not padded: short rows
+        keep their natural width, so the painted bytes are unchanged.
+        """
+        c = as_constraints(c)
+        width = c.width
         if self.disabled:
             style = self.group("text").faint
         else:
@@ -251,16 +266,18 @@ class Collapsible(Widget):
             memo = self._body_memo
             if memo is not None and memo[0] == key:
                 out.extend(memo[1])
-                return out
-            rows = [
-                Line((Segment(" " * indent), *row.segments)).fit(width)
-                for row in body_rows
-            ]
-            self._body_memo = (key, rows, body_rows)
-            out.extend(rows)
+            else:
+                rows = [
+                    Line((Segment(" " * indent), *row.segments)).fit(width)
+                    for row in body_rows
+                ]
+                self._body_memo = (key, rows, body_rows)
+                out.extend(rows)
         else:
             self._body_count = 0
-        return out
+        if c.max_height is not None:
+            out = out[: c.max_height]
+        return Surface.clipped(out, c.width)
 
     def __repr__(self) -> str:
         return f"Collapsible({self.title!r}, open={self.open}, focused={self.focused})"

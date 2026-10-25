@@ -1,5 +1,7 @@
 """Dialog, confirm_dialog and prompt_dialog: the box, its buttons and results."""
 
+from motui.kernel.cell import Surface
+from motui.kernel.layout import Constraints
 from motui.widgets import Button, ButtonSpec, Dialog, confirm_dialog, prompt_dialog
 
 from tests.testing import Rows, key, texts
@@ -108,3 +110,23 @@ def test_prompt_dialog_carries_an_input_body_and_takes_ok():
     assert dialog.handle(key("enter")) is True
     assert dialog.take_result() == "ok"
     assert dialog.body.placeholder == "type"
+
+
+# -- the 2.0 render contract -------------------------------------------------
+
+
+def test_a_dialog_takes_constraints_and_honours_the_height_budget():
+    dialog = confirm_dialog("Continue?")
+    assert isinstance(dialog.render(Constraints(width=40)), Surface)
+    assert dialog.render(40) == dialog.render(Constraints(width=40))
+    assert list(dialog.render(Constraints(width=40, max_height=0))) == []
+    surface = dialog.render(Constraints(width=40, max_height=2))
+    assert isinstance(surface, Surface)
+    assert surface.rows == tuple(dialog.render(40))[:2]
+
+
+def test_a_squeezed_dialog_never_exceeds_the_constraint_width():
+    dialog = confirm_dialog("Continue?")
+    surface = dialog.render(Constraints(width=7))
+    assert all(row.width <= 7 for row in surface)
+    assert surface.height == len(dialog.render(7))

@@ -260,6 +260,18 @@ def test_a_divider_takes_constraints_and_honours_the_height_budget():
     assert list(Divider(char="-").render(Constraints(width=5, max_height=0))) == []
 
 
+def test_a_collapsible_takes_constraints_and_honours_the_height_budget():
+    section = Collapsible("options", Text("body one\nbody two"))
+    assert isinstance(section.render(Constraints(width=20)), Surface)
+    assert section.render(20) == section.render(Constraints(width=20))
+    surface = section.render(Constraints(width=20, max_height=2))
+    assert [row.text for row in surface] == ["\u25be options", "  body one"]
+    assert list(section.render(Constraints(width=20, max_height=0))) == []
+    # The body geometry is the untruncated last render's, like the other
+    # W2a containers: the budget shapes the returned rows only.
+    assert section.child_at(2, 2) == (section.body, 1, 0)
+
+
 def test_a_panel_takes_constraints_and_honours_the_height_budget():
     panel = Panel(Rows("body"), title="T")
     surface = panel.render(Constraints(width=10, max_height=2))
