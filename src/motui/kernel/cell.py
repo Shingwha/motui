@@ -32,8 +32,9 @@ coalesce.
 from __future__ import annotations
 
 import re
-from collections.abc import Iterable, Sequence
+from collections.abc import Iterable, Iterator, Sequence
 from dataclasses import dataclass, field
+from typing import overload
 
 from .geom import Size
 from .style import NONE, Style
@@ -627,9 +628,15 @@ class Surface:
     """A block of rows at one content width.
 
     Direct construction is not the contract (fields are not a constructor
-    argument): :meth:`of` is the builder that guarantees every row is exactly
-    ``width`` cells wide, clipped or padded.  :attr:`rows` is still exposed
-    for readers, as a tuple.
+    argument): :meth:`of` and :meth:`clipped` are the builders that guarantee
+    every row is at most ``width`` cells wide; :meth:`of` pads short rows and
+    :meth:`clipped` leaves them short.  :attr:`rows` is still exposed for
+    readers, as a tuple.
+
+    The value is also a read-only sequence of rows (``len``, indexing,
+    iteration), so a caller written against the 1.x ``list[Line]`` return can
+    keep walking a render result without materializing it.  It is **not** a
+    mutable list: ``rows`` is a tuple and the value is frozen.
     """
 
     width: int = 0
@@ -645,6 +652,25 @@ class Surface:
         """Number of rows in the surface."""
         return len(self.rows)
 
+    # -- sequence protocol -------------------------------------------------
+
+    def __len__(self) -> int:
+        return len(self.rows)
+
+    def __iter__(self) -> Iterator[Line]:
+        return iter(self.rows)
+
+    @overload
+    def __getitem__(self, index: int) -> Line: ...
+
+    @overload
+    def __getitem__(self, index: slice) -> tuple[Line, ...]: ...
+
+    def __getitem__(self, index: int | slice) -> Line | tuple[Line, ...]:
+        return self.rows[index]
+
+    # -- construction ------------------------------------------------------
+
     @classmethod
     def blank(cls, size: Size) -> Surface:
         """An empty surface of ``size``: ``height`` empty rows."""
@@ -655,13 +681,30 @@ class Surface:
         return cls(width=size.width, rows=tuple(Line() for _ in range(size.height)))
 
     @classmethod
-    def of(cls, rows: Sequence[Line], width: int) -> Surface:
-        """A surface of ``rows`` normalized to exactly ``width`` columns.
+    def of(cls, rows: Sequence[Line], width: int, *, pad: bool = True) -> Surface:
+        """A surface of ``rows`` normalized to at most ``width`` columns.
 
-        A short row is padded with spaces and an overwide row is clipped at a
-        cell boundary, so the surface invariant ``line.width <= width``
-        holds for every row it hands back.
+        An overwide row is clipped at a cell boundary, so the surface invariant
+        ``line.width <= width`` holds for every row it hands back.  With
+        ``pad`` (the default, the component contract) a short row is also
+        grown to exactly ``width`` columns; with ``pad=False`` the row keeps
+        its natural width.  :meth:`clipped` is the named ``pad=False`` form.
         """
         if width < 0:
             raise ValueError(f"surface width must not be negative, got {width}")
-        return cls(width=width, rows=tuple(row.clip(width).pad(width) for row in rows))
+        if pad:
+            normalized = tuple(row.clip(width).pad(width) for row in rows)
+        else:
+            normalized = tuple(row.clip(width) for row in rows)
+        return cls(width=width, rows=normalized)
+
+    @classmethod
+    def clipped(cls, rows: Sequence[Line], width: int) -> Surface:
+        """A surface of ``rows`` clipped to ``width``; short rows stay short.
+
+        The builder migrating components return through this wave: clipping
+        enforces the row invariant without the padding that would change the
+        bytes the painter writes (the 1.x render output was unpadded too).
+        """
+        return cls.of(rows, width, pad=False)
+

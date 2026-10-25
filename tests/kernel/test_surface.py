@@ -8,6 +8,7 @@ import pytest
 
 from motui.kernel.cell import Cell, Line, Segment, Style, Surface
 from motui.kernel.geom import Size
+from motui.kernel.layout import Constraints, as_constraints
 
 # -- the content door -------------------------------------------------------
 
@@ -220,3 +221,55 @@ def test_surface_coerces_rows_and_is_frozen() -> None:
     assert surface.rows == (row,)
     with pytest.raises(FrozenInstanceError):
         surface.width = 2  # type: ignore[misc]
+
+
+def test_surface_is_a_read_only_row_sequence() -> None:
+    surface = Surface.of([Line.from_text("ab"), Line.from_text("cd")], width=3)
+    assert len(surface) == 2 == surface.height
+    assert [row.text for row in surface] == ["ab ", "cd "]
+    assert surface[0].text == "ab "
+    assert surface[-1].text == "cd "
+    assert surface[0:2] == surface.rows
+    assert surface[1:] == (Line.from_text("cd").pad(3),)
+
+
+def test_surface_of_without_padding_keeps_short_rows_short() -> None:
+    surface = Surface.of(
+        [Line.from_text("ab"), Line.from_text("abcdef"), Line()],
+        width=3,
+        pad=False,
+    )
+    assert surface.width == 3
+    assert [row.text for row in surface] == ["ab", "abc", ""]
+    assert all(row.width <= 3 for row in surface)
+
+
+def test_surface_clipped_only_truncates() -> None:
+    rows = [Line.from_text("ab"), Line.from_text("abcdef"), Line()]
+    surface = Surface.clipped(rows, 3)
+    assert surface == Surface.of(rows, 3, pad=False)
+    assert surface.width == 3
+    assert [row.text for row in surface.rows] == ["ab", "abc", ""]
+
+
+def test_surface_of_pads_by_contract_by_default() -> None:
+    padded = Surface.of([Line.from_text("ab")], 4)
+    assert [row.text for row in padded] == ["ab  "]
+    assert all(row.width == 4 for row in padded)
+
+
+# -- constraints ------------------------------------------------------------
+
+
+def test_as_constraints_normalizes_both_spellings() -> None:
+    constraints = Constraints(width=12, max_height=3)
+    assert as_constraints(constraints) is constraints
+    assert as_constraints(12) == Constraints(width=12)
+    assert as_constraints(0) == Constraints(width=0)
+
+
+def test_as_constraints_rejects_negative_width_and_other_types() -> None:
+    with pytest.raises(ValueError):
+        as_constraints(-1)
+    with pytest.raises(TypeError):
+        as_constraints("12")  # type: ignore[arg-type]
