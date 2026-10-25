@@ -11,9 +11,9 @@ from __future__ import annotations
 
 import pytest
 
-from motui.kernel.cell import Line
+from motui.kernel.cell import Line, Surface
 from motui.kernel.document import Document
-from motui.kernel.layout import Viewport
+from motui.kernel.layout import Constraints, Viewport
 from motui.widgets.text import Text
 from tests.testing import Rows, document, many
 
@@ -313,3 +313,32 @@ def test_an_unrevisioned_block_rerenders_every_frame():
     open_block.texts = ["moved"]
     assert _texts(view.layout(80, 3).body_rows) == ["moved", "", ""]
     assert open_block.renders == 4
+
+
+class _SurfaceRows:
+    """A ``Revisioned`` component already on the Constraints -> Surface shape."""
+
+    def __init__(self, *texts: str) -> None:
+        self.texts = list(texts)
+        self.constraints: list[Constraints] = []
+
+    def render(self, c: Constraints) -> Surface:
+        self.constraints.append(c)
+        return Surface.clipped(
+            [Line.from_text(text) for text in self.texts], c.width
+        )
+
+    def revision(self) -> object:
+        return tuple(self.texts)
+
+
+def test_a_surface_component_lays_out_through_the_bridge():
+    doc = Document()
+    component = _SurfaceRows("a", "b")
+    doc.add(component)
+    view = Viewport(doc)
+    layout = view.layout(20, 3)
+    assert _texts(layout.rows) == ["a", "b", ""]
+    assert layout.total_rows == 2
+    assert component.constraints == [Constraints(width=20)]
+    assert doc.get("b0").rows(Constraints(width=20)) == [Line.from_text("a"), Line.from_text("b")]

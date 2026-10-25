@@ -289,20 +289,20 @@ class _BodyIndex:
     order, and the ``block_order`` tuple (rebuilt only when the document
     mutates, handed to every layout as the same object).
 
-    Freshness is a two-level check.  The key ``(Document.mutation, width)``
-    catches structural change and width change -- either one rebuilds every
-    entry (``row_count`` renders a first layout's blocks exactly as the
-    per-frame walk always did).  Within a key, every ``ensure`` sweeps the
-    entries and probes each block's ``revision()``: an equal value means the
-    block's height stands (one cheap value comparison -- the snapshot is a
-    value, so equality is the block's own promise that its rows are
-    unchanged), a moved value re-measures the block through
-    :meth:`~motui.kernel.document.Section.row_count` (which re-renders and refills
-    the block's own cache) and re-runs the prefix sums **from that entry
-    on** -- the naive suffix recompute, because a moved block in an
-    append-mostly document is almost always at the tail.  A ``None``
-    snapshot (no protocol, or memory switched off) is always dirty: the
-    entry is re-measured every frame, which re-renders that block every
+    Freshness is a two-level check.  The key ``(Document.mutation, c)``
+    catches structural change and any change to the constraints (width or
+    height budget) -- either one rebuilds every entry (``row_count`` renders
+    a first layout's blocks exactly as the per-frame walk always did).  Within
+    a key, every ``ensure`` sweeps the entries and probes each block's
+    ``revision()``: an equal value means the block's height stands (one cheap
+    value comparison -- the snapshot is a value, so equality is the block's
+    own promise that its rows are unchanged), a moved value re-measures the
+    block through :meth:`~motui.kernel.document.Section.row_count` (which
+    re-renders and refills the block's own cache) and re-runs the prefix sums
+    **from that entry on** -- the naive suffix recompute, because a moved
+    block in an append-mostly document is almost always at the tail.  A
+    ``None`` snapshot (no protocol, or memory switched off) is always dirty:
+    the entry is re-measured every frame, which re-renders that block every
     frame -- exactly once, the same single render the per-frame rows walk
     paid, because the rows that render produced are carried to the window
     on ``_frame_rows`` (a frame-scoped hold, the exact lifetime the walk's
@@ -324,9 +324,9 @@ class _BodyIndex:
 
     def __init__(self, document: Document) -> None:
         self._document = document
-        # ``(mutation, width)`` the entries were built for; ``None`` until
-        # the first ``ensure``.
-        self._key: tuple[int, int] | None = None
+        # ``(mutation, constraints)`` the entries were built for; ``None``
+        # until the first ``ensure``.
+        self._key: tuple[int, Constraints] | None = None
         self._entries: list[_BodyEntry] = []
         self._cum: list[int] = [0]
         self._total = 0
@@ -339,21 +339,21 @@ class _BodyIndex:
         # emptied by every ``ensure`` -- nothing survives the frame.
         self._frame_rows: dict[Section, Sequence[Line]] = {}
 
-    def ensure(self, width: int) -> None:
-        """Bring the index up to date for ``width``; the one entry door.
+    def ensure(self, c: Constraints) -> None:
+        """Bring the index up to date for ``c``; the one entry door.
 
         After it answers, the geometry properties (pinned blocks, entries,
-        prefix sums, body total, block order) describe the document at this
-        width as of the blocks' current snapshots.  Cheap when nothing
+        prefix sums, body total, block order) describe the document at these
+        constraints as of the blocks' current snapshots.  Cheap when nothing
         changed: one key comparison plus one ``revision()`` probe per body
         block.
         """
         self._frame_rows = {}
         mutation = self._document.mutation
-        if self._key is not None and self._key == (mutation, width):
-            self._sweep(width)
+        if self._key is not None and self._key == (mutation, c):
+            self._sweep(c)
             return
-        self._rebuild(mutation, width)
+        self._rebuild(mutation, c)
 
     # -- geometry read by the layout -------------------------------------------------
 
@@ -407,7 +407,7 @@ class _BodyIndex:
             )
         return spans
 
-    def entry_rows(self, block: Section, width: int) -> Sequence[Line]:
+    def entry_rows(self, block: Section, c: Constraints) -> Sequence[Line]:
         """The rows a windowed body block lends this frame.
 
         The measurement pass already rendered every block without a usable
@@ -421,12 +421,12 @@ class _BodyIndex:
         """
         rows = self._frame_rows.get(block)
         if rows is None:
-            return block.rows_view(width)
+            return block.rows_view(c)
         return rows
 
     # -- maintenance ------------------------------------------------------------------
 
-    def _sweep(self, width: int) -> None:
+    def _sweep(self, c: Constraints) -> None:
         """Probe every entry's snapshot and re-measure the ones that moved."""
         entries = self._entries
         dirty_from = -1
@@ -435,7 +435,7 @@ class _BodyIndex:
             if revision is None:
                 # No snapshot, no memory: render per call, and keep the rows
                 # for the window so this frame renders the block only once.
-                rows = entry.block.rows_view(width)
+                rows = entry.block.rows_view(c)
                 self._frame_rows[entry.block] = rows
                 if len(rows) != entry.count:
                     entry.count = len(rows)
@@ -443,7 +443,7 @@ class _BodyIndex:
                         dirty_from = i
             elif revision != entry.revision:
                 entry.revision = revision
-                count = entry.block.row_count(width)
+                count = entry.block.row_count(c)
                 if count != entry.count:
                     entry.count = count
                     if dirty_from < 0:
@@ -466,15 +466,16 @@ class _BodyIndex:
             cum[i + 1] = running
         self._total = running
 
-    def _rebuild(self, mutation: int, width: int) -> None:
-        """Build every entry from the document (a key change: structure or width).
+    def _rebuild(self, mutation: int, c: Constraints) -> None:
+        """Build every entry from the document (a key change: structure or constraints).
 
         The walk is the one per-document pass: pinned blocks are filed by
         region, each body block is measured through ``row_count`` (which
         renders a first-seen block exactly once, as the per-frame rows walk
         always did), and the ids collected in the same pass become the
         ``block_order`` tuple -- rebuilt only when the document actually
-        mutated, so width-only changes reuse the ids of the same structure.
+        mutated, so a constraints-only change reuses the ids of the same
+        structure.
         """
         blocks = self._document.blocks()
         entries: list[_BodyEntry] = []
@@ -492,11 +493,11 @@ class _BodyIndex:
                 if revision is None:
                     # No snapshot, no memory: render per call, and keep the
                     # rows for the window (one render per frame, as always).
-                    rows = block.rows_view(width)
+                    rows = block.rows_view(c)
                     self._frame_rows[block] = rows
                     count = len(rows)
                 else:
-                    count = block.row_count(width)
+                    count = block.row_count(c)
                 entries.append(_BodyEntry(block, revision, count))
                 cum.append(total + count)
                 total += count
@@ -505,7 +506,7 @@ class _BodyIndex:
         self._total = total
         self._top = top
         self._bottom = bottom
-        self._key = (mutation, width)
+        self._key = (mutation, c)
         if mutation != self._order_mutation:
             self._order = tuple(block.id for block in blocks)
             self._order_mutation = mutation
@@ -569,7 +570,8 @@ class Viewport:
         viewport, and chrome renders from the layout alone.
         """
         index = self._index
-        index.ensure(width)
+        c = Constraints(width=width)
+        index.ensure(c)
 
         top_rows: list[Line] = []
         bottom_rows: list[Line] = []
@@ -581,11 +583,11 @@ class Viewport:
         # body contributes no rows here: the index holds its per-block
         # heights, and the window below pulls exactly the overlapping ones.
         for block in index.top_blocks:
-            rendered = block.rows_view(width)
+            rendered = block.rows_view(c)
             top_rows.extend(rendered)
             top_owners.extend((block.id, i) for i in range(len(rendered)))
         for block in index.bottom_blocks:
-            rendered = block.rows_view(width)
+            rendered = block.rows_view(c)
             bottom_rows.extend(rendered)
             bottom_owners.extend((block.id, i) for i in range(len(rendered)))
 
@@ -610,7 +612,7 @@ class Viewport:
         body_rows: list[Line] = []
         visible: list[tuple[str, int]] = []
         for block, start, stop in index.window_spans(window_start, window_end):
-            rendered = index.entry_rows(block, width)
+            rendered = index.entry_rows(block, c)
             body_rows.extend(rendered[start:stop])
             visible.extend((block.id, i) for i in range(start, stop))
         if len(body_rows) < vh:
@@ -649,9 +651,10 @@ class Viewport:
         blank fill, so it hugs the edge it is reserved against.
         """
         index = self._index
-        index.ensure(width)
+        c = Constraints(width=width)
+        index.ensure(c)
         pinned = (*index.top_blocks, *index.bottom_blocks)
-        return index.body_total + sum(block.row_count(width) for block in pinned)
+        return index.body_total + sum(block.row_count(c) for block in pinned)
 
     # -- scrolling -----------------------------------------------------------------
 
