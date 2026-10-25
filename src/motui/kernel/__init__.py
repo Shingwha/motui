@@ -9,5 +9,16 @@ from __future__ import annotations
 
 from .cell import Cell, Line, Segment, Surface
 from .geom import Axis, Pos, Rect, Size
+from .text import WrapMode
 
-__all__ = ["Axis", "Cell", "Line", "Pos", "Rect", "Segment", "Size", "Surface"]
+__all__ = [
+    "Axis",
+    "Cell",
+    "Line",
+    "Pos",
+    "Rect",
+    "Segment",
+    "Size",
+    "Surface",
+    "WrapMode",
+]
