@@ -6,7 +6,7 @@ from motui.kernel.cell import Surface
 from motui.kernel.layout import Constraints
 from motui.widgets import Autocomplete, Option
 
-from tests.testing import texts
+from tests.testing import key, texts
 
 
 def test_an_empty_query_matches_every_option_in_order():
@@ -111,3 +111,22 @@ def test_autocomplete_takes_constraints_and_honours_the_height_budget():
     surface = auto.render(Constraints(width=30, max_height=2))
     assert [row.text for row in surface] == ["\u2192 alpha", "  beta"]
     assert list(auto.render(Constraints(width=30, max_height=0))) == []
+
+
+# -- the 2.0 capabilities and hooks -------------------------------------------
+
+
+def test_autocomplete_inherits_the_menu_capabilities():
+    auto = Autocomplete([Option("alpha")])
+
+    assert auto.focusable is True
+    assert auto.clickable is True
+    assert auto.activatable is True
+
+
+def test_on_key_forwards_to_the_inherited_routing():
+    typed = Autocomplete([Option("alpha"), Option("beta")])
+    legacy = Autocomplete([Option("alpha"), Option("beta")])
+    event = key("down")
+
+    assert typed.on_key(event) == legacy.handle(event)

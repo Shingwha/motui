@@ -18,6 +18,7 @@ from __future__ import annotations
 
 from typing import Sequence
 
+from ..kernel.events import KeyEvent
 from ..kernel.glyphs import GLYPHS, Glyphs
 from ..kernel.cell import Surface
 from ..kernel.layout import Constraints
@@ -45,6 +46,13 @@ class Autocomplete(Select):
     """
 
     __slots__ = ("_matches", "query")
+
+    #: The menu family's capability set (the same flags :class:`Select`
+    #: publishes): the list takes the focus ring, pointer clicks and the
+    #: activation verb.
+    focusable = True
+    clickable = True
+    activatable = True
 
     def __init__(
         self,
@@ -99,6 +107,16 @@ class Autocomplete(Select):
     def _rows(self) -> Sequence[Option]:
         """The current matches -- the rows the inherited cursor walks."""
         return self._matches
+
+    def on_key(self, e: KeyEvent) -> bool:
+        """Forward one key to the inherited menu routing.
+
+        The filter layer adds no keys of its own: :class:`Select` owns the
+        cursor walk and activation, so this hook only keeps the typed door
+        available on the subclass (a Select that predates the hooks routes
+        through ``Widget.on_key`` -> ``handle`` unchanged).
+        """
+        return super().on_key(e)
 
     def render(self, c: Constraints) -> Surface:
         """The inherited ``Select`` row trunk, under the render constraints.
