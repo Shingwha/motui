@@ -85,6 +85,7 @@ from ..kernel.layout import ScreenLayout
 from ..widgets.base import Widget
 from .focus import FocusManager
 from ..kernel.layout import Constraints
+from ..kernel.text import WrapMode
 
 if TYPE_CHECKING:
     from .driver import TUI
@@ -422,7 +423,7 @@ class Modal:
         rect = self._tui.frame.rect
         if rect is None or rect.width <= 0 or rect.height <= 0:
             return None
-        rows = [row.fit(rect.width) for row in self._dialog.render(Constraints(width=rect.width))]
+        rows = [row.clip(WrapMode.ELLIPSIS, rect.width) for row in self._dialog.render(Constraints(width=rect.width))]
         height = min(len(rows), rect.height)
         width = min(max((row.width for row in rows), default=0), rect.width)
         if height <= 0 or width <= 0:

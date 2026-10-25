@@ -61,6 +61,7 @@ from ..kernel.cell import Line, Segment, Surface
 from ..kernel.layout import Constraints
 from ..kernel.style import NONE, Style
 from ..kernel.theme import Styles, Theme
+from ..kernel.text import WrapMode
 from ..widgets.base import Widget
 
 __all__ = ["LCS_LIMIT", "Diff"]
@@ -622,7 +623,7 @@ class Diff(Widget):
             }
             self._rendered_key = key
             self._rendered_rows = [
-                self._paint(text, styles[kind], gutter, muted).fit(c.width)
+                self._paint(text, styles[kind], gutter, muted).clip(WrapMode.ELLIPSIS, c.width)
                 for kind, text, gutter in self._rows
             ]
         rows = list(self._rendered_rows)

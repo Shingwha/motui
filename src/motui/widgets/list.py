@@ -68,7 +68,7 @@ the theme's row roles through :meth:`~motui.kernel.theme.RowStyles.band`:
 ``styles=`` may replace the ``rows`` group (and any other).  A row is its
 text-styled
 segments -- the marker seat, the mark prefix and the label, which no longer
-carry the band themselves -- then ``.fit(width).fill(fitted.width, band)``:
+carry the band themselves -- then ``.clip(WrapMode.ELLIPSIS, width).fill(fitted.width, band)``:
 the W1 primitive, the band underneath, the text styles on top.  The band merges
 under the row's own cells -- a pill behind the text, never a ribbon
 across the pane; a full-surface band is the host's container's job

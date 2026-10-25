@@ -54,7 +54,7 @@ from ..kernel.events import Event, PasteEvent
 from ..kernel.glyphs import GLYPHS, Glyphs, seat
 from ..kernel.cell import Line, Segment, Surface
 from ..kernel.layout import Constraints
-from ..kernel.text import visible_width
+from ..kernel.text import WrapMode, visible_width
 from ..kernel.theme import Styles, Theme
 from ..widgets.base import Widget
 from ..kernel.keymap import (
@@ -597,7 +597,7 @@ class _TextField(Widget):
                     seg.with_style(seg.style.merge(band))
                     for seg in line.segments
                 )
-            out.append(line.fit(width))
+            out.append(line.clip(WrapMode.ELLIPSIS, width))
         return out
 
     def __repr__(self) -> str:

@@ -45,6 +45,7 @@ from ..kernel.glyphs import GLYPHS, Glyphs
 from ..kernel.cell import Line, Segment, Surface
 from ..kernel.layout import (Constraints, ScrollState)
 from ..kernel.theme import Styles, Theme
+from ..kernel.text import WrapMode
 from ..widgets.base import Widget
 
 __all__ = ["ScrollPanel"]
@@ -373,7 +374,7 @@ class ScrollPanel(Widget):
         out: list[Line] = []
         for row in range(height):
             index = start + row
-            line = child_rows[index].fit(inner) if index < state.content_height else Line()
+            line = child_rows[index].clip(WrapMode.ELLIPSIS, inner) if index < state.content_height else Line()
             if bar_width:
                 line = line.fill(inner)
                 if thumb_start <= row < thumb_start + thumb_length:
@@ -381,7 +382,7 @@ class ScrollPanel(Widget):
                 else:
                     glyph, style = self.glyphs.bar_empty, chrome.scrollbar
                 line = Line((*line.segments, Segment(glyph, style)))
-            out.append(line.fit(width))
+            out.append(line.clip(WrapMode.ELLIPSIS, width))
         return Surface.clipped(out, c.width)
 
     def __repr__(self) -> str:

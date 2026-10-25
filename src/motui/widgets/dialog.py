@@ -38,7 +38,7 @@ from ..kernel.cell import Line, Segment, Surface
 from ..kernel.layout import Constraints
 from ..widgets.text import Text
 from ..kernel.style import Style
-from ..kernel.text import ellipsize_tail, visible_width
+from ..kernel.text import WrapMode, ellipsize_tail, visible_width
 from ..kernel.theme import DEFAULT_THEME, Styles, Theme
 from ..widgets.base import Widget
 from .action import Button
@@ -468,13 +468,13 @@ class Dialog(Widget):
         if self.frame:
             out.append(self._top_row(box, border_style, title_style))
         for row in self._body_rows:
-            out.append(self._interior_row(row.fit(inner), box, lead, border_style))
+            out.append(self._interior_row(row.clip(WrapMode.ELLIPSIS, inner), box, lead, border_style))
         button_row = len(out)
         if self._buttons:
             out.append(self._button_row(box, inner, button_row, lead, border_style))
         if self.frame:
             out.append(self._bottom_row(box, border_style))
-        rows = [row.fit(width) for row in out]
+        rows = [row.clip(WrapMode.ELLIPSIS, width) for row in out]
         if c.max_height is not None:
             rows = rows[: c.max_height]
         return Surface.clipped(rows, c.width)

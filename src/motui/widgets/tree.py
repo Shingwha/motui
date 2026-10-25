@@ -21,7 +21,7 @@ the resting surface, ``rows.active`` the band under the focused cursor row
 and ``rows.inactive`` the unfocused one, ``rows.hover`` the pointer token,
 and ``rows.disabled`` the band under a disabled row.  A row is its
 text-styled segments -- the guide and the label in their own styles, the cursor row's
-run in no style of its own -- then ``.fit(width).fill(fitted.width, band)``:
+run in no style of its own -- then ``.clip(WrapMode.ELLIPSIS, width).fill(fitted.width, band)``:
 the W1 primitive, the band underneath, the text styles on top.  The band
 merges under the row's own cells -- a pill behind the text, never a
 ribbon across the pane; a full-surface band is the host's container's job

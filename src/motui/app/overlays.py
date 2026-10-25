@@ -65,6 +65,7 @@ from ..kernel.style import Style
 from ..kernel.theme import DEFAULT_THEME, Theme, Themed
 from ..kernel.layout import ScreenLayout
 from ..kernel.layout import Constraints
+from ..kernel.text import WrapMode
 
 if TYPE_CHECKING:
     from .driver import TUI
@@ -129,7 +130,7 @@ def _stack(
         return []
     measured: list[tuple[_Toast, int, list[Line]]] = []
     for toast in toasts:
-        rendered = [row.fit(ceiling) for row in toast.component.render(Constraints(width=ceiling))]
+        rendered = [row.clip(WrapMode.ELLIPSIS, ceiling) for row in toast.component.render(Constraints(width=ceiling))]
         # An empty component renders no rows, which measures to zero width.
         width = min(max((row.width for row in rendered), default=0), ceiling)
         if width <= 0:
@@ -531,7 +532,7 @@ class Tooltip(_MountedOverlay):
         hint = getattr(hovered, "hint", None) if hovered is not None else None
         if rect is None or position is None or not isinstance(hint, str) or not hint:
             return layout  # no pointer, no hint: zero bytes
-        row = Line.from_text(hint).fit(rect.width)
+        row = Line.from_text(hint).clip(WrapMode.ELLIPSIS, rect.width)
         width = row.width
         if width <= 0:
             return layout  # a frame with no column to host the band
@@ -743,7 +744,7 @@ class Stats(_MountedOverlay):
         if rect is None or rect.width <= 0 or rect.height <= 0:
             return layout
         self._sample()  # the one write, and it only reads the clock and the counter
-        rows = [Line.from_text(text).fit(rect.width) for text in self._lines()]
+        rows = [Line.from_text(text).clip(WrapMode.ELLIPSIS, rect.width) for text in self._lines()]
         width = min(max((row.width for row in rows), default=0), rect.width)
         if width <= 0:
             return layout

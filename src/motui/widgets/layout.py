@@ -26,6 +26,7 @@ from ..kernel.cell import Line, Segment, Surface
 from ..kernel.layout import Constraints
 from ..kernel.style import NONE, Style
 from ..kernel.theme import Styles, Theme
+from ..kernel.text import WrapMode
 from ..widgets.base import Widget
 
 __all__ = ["Column", "Padding", "Row", "Spacer"]
@@ -156,7 +157,7 @@ class Row:
             return _answer(list(memo[1]), c)
 
         cells = [
-            [row.fit(inner).fill(inner) for row in raw]
+            [row.clip(WrapMode.ELLIPSIS, inner).fill(inner) for row in raw]
             for raw, (_, inner) in zip(raw_cells, geometry)
         ]
         height = max(len(rows) for rows in cells)
@@ -172,7 +173,7 @@ class Row:
                     line = line + rows[r]
                 else:
                     line = line + Line.from_text(" " * max(0, col_widths[i]))
-            out.append(line.fit(width))
+            out.append(line.clip(WrapMode.ELLIPSIS, width))
         self._memo = (key, out, raw_cells)
         return _answer(out, c)
 
@@ -259,7 +260,7 @@ class Column:
         for i, raw in enumerate(raw_cells):
             if i and self.gap > 0:
                 out.extend(Line() for _ in range(self.gap))
-            out.extend(row.fit(width) for row in raw)
+            out.extend(row.clip(WrapMode.ELLIPSIS, width) for row in raw)
         self._memo = (key, out, raw_cells)
         return _answer(out, c)
 
@@ -424,7 +425,7 @@ class Padding(Widget):
         for _ in range(top):
             out.append(Line.filled(width, fill) if fill != NONE else Line())
         for row in child_rows:
-            out.append((left_pad + self._content_row(row, inner, fill)).fit(width))
+            out.append((left_pad + self._content_row(row, inner, fill)).clip(WrapMode.ELLIPSIS, width))
         for _ in range(bottom):
             out.append(Line.filled(width, fill) if fill != NONE else Line())
         self._memo = (key, out, child_rows)

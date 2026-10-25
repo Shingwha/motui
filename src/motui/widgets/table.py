@@ -114,7 +114,7 @@ from ..kernel.cell import Line, Segment, Surface, fuse, overlay, rest, wrap_line
 from ..kernel.layout import Constraints
 from ..widgets.mark import MarkSet
 from ..kernel.style import NONE, Style
-from ..kernel.text import visible_width
+from ..kernel.text import WrapMode, visible_width
 from ..kernel.theme import Styles, Theme
 from ..widgets.base import Widget
 
@@ -1246,7 +1246,7 @@ class Table(Widget):
     ) -> list[Segment]:
         """The padded, truncated, space-wrapped interior of one cell."""
         line = Line(cell)
-        fitted = line if line.width <= inner else line.fit(inner)
+        fitted = line if line.width <= inner else line.clip(WrapMode.ELLIPSIS, inner)
         gap = max(inner - fitted.width, 0)
         align = aligns[column] if column < len(aligns) else "left"
         parts = list(fitted.segments)
