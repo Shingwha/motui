@@ -4,7 +4,9 @@ from dataclasses import replace
 
 import pytest
 
+from motui.kernel.cell import Surface
 from motui.kernel.glyphs import GLYPHS
+from motui.kernel.layout import Constraints
 from motui.kernel.style import Style
 from motui.kernel.theme import DEFAULT_THEME, Styles
 from motui.widgets import Button, Checkbox, Link, Option, Select, Table, Tabs, Tree, TreeNode
@@ -173,3 +175,30 @@ def test_the_action_hints_default_to_no_tooltip():
     assert Button("x").hint == ""
     assert Checkbox("x").hint == ""
     assert Link("x").hint == ""
+
+
+# -- the 2.0 render contract -------------------------------------------------
+
+
+def test_the_action_primitives_render_into_clipped_surfaces():
+    button = Button("Run")
+    assert isinstance(button.render(Constraints(width=20)), Surface)
+    assert button.render(20) == button.render(Constraints(width=20))
+    assert [row.text for row in button.render(Constraints(width=3))] == [" R\u2026"]
+
+    box = Checkbox("Bold")
+    assert isinstance(box.render(Constraints(width=20)), Surface)
+    assert box.render(Constraints(width=20)) == box.render(20)
+
+    link = Link("docs/COMPONENTS.md")
+    assert isinstance(link.render(Constraints(width=30)), Surface)
+    assert link.render(Constraints(width=30)) == link.render(30)
+
+
+def test_the_action_primitives_honour_the_height_budget():
+    for component in (Button("Run"), Checkbox("Bold"), Link("docs")):
+        assert list(component.render(Constraints(width=20, max_height=0))) == []
+        surface = component.render(Constraints(width=20, max_height=1))
+        assert isinstance(surface, Surface)
+        assert surface.height == 1
+        assert all(row.width <= 20 for row in surface)

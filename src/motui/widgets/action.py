@@ -36,7 +36,8 @@ interactive bands.
 from __future__ import annotations
 
 from ..kernel.glyphs import GLYPHS, Glyphs
-from ..kernel.cell import Line, Segment
+from ..kernel.cell import Line, Segment, Surface
+from ..kernel.layout import Constraints, as_constraints
 from ..kernel.style import NONE, Style
 from ..kernel.theme import Styles, Theme
 from ..widgets.base import Widget
@@ -157,7 +158,17 @@ class Button(Widget):
             self.styles,
         )
 
-    def render(self, width: int) -> list[Line]:
+    def render(self, c: Constraints | int) -> Surface:
+        """The one fitted row, under the render constraints.
+
+        A bare ``int`` is the 1.x width spelling and goes through
+        :func:`~motui.kernel.layout.as_constraints`; a ``max_height`` budget
+        truncates the single row (``0`` paints nothing).  The answer is
+        :meth:`~motui.kernel.cell.Surface.clipped`, not padded: the row keeps
+        the natural width of the fitted label, so the bytes match the old
+        list answer.
+        """
+        c = as_constraints(c)
         if self.disabled:
             style = self.group("text").faint
         else:
@@ -168,7 +179,10 @@ class Button(Widget):
                 focused=self.focused,
                 focus_band=self.group("controls").focus,
             )
-        return [Line.from_text(f" {self.label} ", style).fit(width)]
+        rows = [Line.from_text(f" {self.label} ", style).fit(c.width)]
+        if c.max_height is not None:
+            rows = rows[: c.max_height]
+        return Surface.clipped(rows, c.width)
 
     def __repr__(self) -> str:
         return (
@@ -274,7 +288,14 @@ class Checkbox(Widget):
             self.styles,
         )
 
-    def render(self, width: int) -> list[Line]:
+    def render(self, c: Constraints | int) -> Surface:
+        """The mark-plus-label row, under the render constraints.
+
+        See :meth:`Button.render`: the width normalizes through
+        :func:`~motui.kernel.layout.as_constraints`, ``max_height`` truncates
+        (``0`` paints nothing) and the surface is clipped, not padded.
+        """
+        c = as_constraints(c)
         if self.disabled:
             mark_style = label_style = self.group("text").faint
         else:
@@ -294,11 +315,14 @@ class Checkbox(Widget):
             )
         mark = self.glyphs.check_on if self.checked else self.glyphs.check_off
         mark_text = f"{mark} " if mark else ""
-        return [
+        rows = [
             Line((Segment(mark_text, mark_style), Segment(self.label, label_style))).fit(
-                width
+                c.width
             )
         ]
+        if c.max_height is not None:
+            rows = rows[: c.max_height]
+        return Surface.clipped(rows, c.width)
 
     def __repr__(self) -> str:
         return (
@@ -388,7 +412,14 @@ class Link(Widget):
             self.styles,
         )
 
-    def render(self, width: int) -> list[Line]:
+    def render(self, c: Constraints | int) -> Surface:
+        """The fitted row, under the render constraints.
+
+        See :meth:`Button.render`: the width normalizes through
+        :func:`~motui.kernel.layout.as_constraints`, ``max_height`` truncates
+        (``0`` paints nothing) and the surface is clipped, not padded.
+        """
+        c = as_constraints(c)
         if self.disabled:
             style = self.group("text").faint
         else:
@@ -399,7 +430,10 @@ class Link(Widget):
                 focused=self.focused,
                 focus_band=self.group("controls").focus,
             )
-        return [Line.from_text(self.text, style).fit(width)]
+        rows = [Line.from_text(self.text, style).fit(c.width)]
+        if c.max_height is not None:
+            rows = rows[: c.max_height]
+        return Surface.clipped(rows, c.width)
 
     def __repr__(self) -> str:
         return (
