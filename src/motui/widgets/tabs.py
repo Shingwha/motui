@@ -63,12 +63,13 @@ from __future__ import annotations
 from typing import Iterable
 
 from ..widgets.cursor import Cursor
+from ..kernel.events import KeyEvent
 from ..kernel.glyphs import GLYPHS, Glyphs
 from ..kernel.cell import Line, Segment
 from ..kernel.style import Style
 from ..kernel.theme import Styles, Theme
 from ..kernel.text import WrapMode
-from .strip import LabelStrip
+from .strip import Keymap, LabelStrip
 
 __all__ = ["Tabs"]
 
@@ -107,6 +108,16 @@ class Tabs(LabelStrip):
     """
 
     __slots__ = ("tabs",)
+
+    #: The default key table (a per-instance copy backs ``self.keymap``).
+    keymap = Keymap(
+        {
+            "up": "prev",
+            "down": "next",
+            "left": "prev",
+            "right": "next",
+        }
+    )
 
     def __init__(
         self,
@@ -154,6 +165,38 @@ class Tabs(LabelStrip):
     def _entries(self) -> list[str]:
         """The tab labels every cursor verb and the span walk measure."""
         return self.tabs
+
+    # -- the keyboard -----------------------------------------------------------
+
+    def on_action(self, name: str) -> bool:
+        """Run one named strip action; ``False`` for an unknown name.
+
+        ``prev`` / ``next`` step the selection one tab through
+        :meth:`move` and answer its result -- a clamped edge reports
+        ``False``, the old focus router's rule.  A tab strip selects, it
+        never activates, so no other action is bound.
+        """
+        if name == "prev":
+            return self.move(-1)
+        if name == "next":
+            return self.move(1)
+        return False
+
+    def on_key(self, event: KeyEvent) -> bool:
+        """Route a key through :attr:`keymap` to :meth:`on_action`.
+
+        The default table binds the four arrows; a key no entry names is
+        declined so the host keeps it.  A disabled strip answers ``False``.
+        """
+        if self.disabled or not isinstance(event, KeyEvent):
+            return False
+        action = self.keymap.get(event.key)
+        if action is None:
+            return False
+        return self.on_action(action)
+
+    #: The 1.x routing door stays until W3b3 removes it.
+    handle = on_key
 
     def revision(self) -> object:
         """The row cache's snapshot: every input the strip's row reads.

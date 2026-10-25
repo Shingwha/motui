@@ -1,17 +1,14 @@
-"""Strip internals: the keymap seam, the clamped cursor and the label strip.
+"""Strip internals: the keymap seam and the one-row label strip.
 
 The module is private to the widget package.  :class:`Keymap` is the
 class-level key table every migrated view declares: reading it on the class
 answers the family's default table, reading it on an instance answers that
 instance's own copy, so ``lst.keymap["j"] = "next"`` rebinds one widget and
-never writes through to the class.  :class:`ClampedCursor` is the selection
-half of a label strip -- ``index`` / ``select`` / ``move`` over a label
-sequence and a disabled-index set -- and :class:`LabelStrip` adds the one-row
-rendering skeleton: the span table of the last render, the hit walk and the
-hover marking.  The public components are
-:class:`~motui.widgets.tabs.Tabs` and
-:class:`~motui.widgets.menubar.MenuBar`; nothing here is re-exported from
-:mod:`motui.widgets`.
+never writes through to the class.  :class:`LabelStrip` is the one-row
+rendering skeleton behind :class:`~motui.widgets.tabs.Tabs` and
+:class:`~motui.widgets.menubar.MenuBar` -- the clamped selection over a
+label sequence, the span table of the last render, the hit walk and the
+hover marking.  Nothing here is re-exported from :mod:`motui.widgets`.
 """
 
 from __future__ import annotations
@@ -25,7 +22,7 @@ from ..kernel.layout import Constraints
 from ..kernel.text import visible_width
 from ..widgets.base import Widget
 
-__all__ = ["ClampedCursor", "Keymap", "LabelStrip"]
+__all__ = ["Keymap", "LabelStrip"]
 
 
 class Keymap:
@@ -63,22 +60,54 @@ class Keymap:
         instance._keymap = dict(value)  # type: ignore[attr-defined]
 
 
-class ClampedCursor:
-    """A clamped, non-wrapping cursor over a disabled-aware label sequence.
+class LabelStrip(Widget):
+    """The one-row label strip shared by ``Tabs`` and ``MenuBar``.
 
-    The mixin owns no storage: subclasses keep the ``_index``,
-    ``_disabled_items`` and ``disabled`` slots and implement
-    :attr:`_entries`.  :meth:`select` clamps into ``0..len-1`` and refuses a
-    disabled index (or a disabled control); :meth:`move` steps over disabled
-    indices, clamps at the ends and never wraps.  ``revision()`` stays with
-    each component: the value it snapshots is the component's own.
+    The class is a skeleton, not a component: subclasses provide
+    :attr:`_entries` (their label sequence) and :meth:`_layout` (the fitted
+    row plus its span table), keep their ``revision()``, and set the storage
+    documented below.  Styles are read through :meth:`Widget.group` at
+    layout time and stored nowhere; the base supplies ``theme``, ``styles``,
+    ``focused`` and ``hover``.  The shared half is the cursor, the
+    hit geometry of the last render -- the span table
+    ``(start, stop, index)`` per label, so ``click``/``hover_at`` never
+    re-render -- and the one-row :meth:`render`.
+
+    ``_last_width`` is the width the last :meth:`render` painted at -- the
+    geometry :meth:`click` maps a column against; until the first paint it
+    is 80, the same convention as ``TextBuffer.last_width``.  ``_spans`` is
+    the last render's span table (``None`` until the first paint, when a hit
+    builds it once without calling ``render``).  The marking starts
+    ``None``, so an un-hovered strip renders exactly the bytes it always
+    did.  A hit resolves only on row 0: the leading and trailing padding,
+    every divider gap, a cell past the last label and a truncating ``fit``
+    all answer no label.
     """
 
-    __slots__ = ()
+    __slots__ = (
+        "_disabled_items",
+        "_hover_index",
+        "_index",
+        "_keymap",
+        "_last_width",
+        "_spans",
+        "disabled",
+        "glyphs",
+    )
 
-    _index: int
-    _disabled_items: frozenset[int]
-    disabled: bool
+    #: A strip takes the keyboard through its subclass keymap, clicks on its
+    #: labels and the pointer's marking; it has no activation verb (selecting
+    #: is not activating).
+    focusable = True
+    clickable = True
+    hoverable = True
+    activatable = False
+
+    def __init__(self, theme=None, styles=None) -> None:
+        super().__init__(theme, styles)
+        # The instance's own key table: rebinding one entry never reaches
+        # the class default (see :class:`Keymap`).
+        self._keymap = dict(type(self).keymap)
 
     @property
     def _entries(self) -> Sequence[str]:
@@ -133,41 +162,6 @@ class ClampedCursor:
         cursor.index = cursor.clamp(cursor.index)
         self._index = cursor.index
         return cursor.index != before
-
-
-class LabelStrip(ClampedCursor, Widget):
-    """The one-row label strip shared by ``Tabs`` and ``MenuBar``.
-
-    The class is a skeleton, not a component: subclasses provide
-    :attr:`_entries` (their label sequence) and :meth:`_layout` (the fitted
-    row plus its span table), keep their ``revision()``, and set the storage
-    documented below.  Styles are read through :meth:`Widget.group` at
-    layout time and stored nowhere; the base supplies ``theme``, ``styles``,
-    ``focused`` and ``hover``.  The shared half is the cursor, the
-    hit geometry of the last render -- the span table
-    ``(start, stop, index)`` per label, so ``click``/``hover_at`` never
-    re-render -- and the one-row :meth:`render`.
-
-    ``_last_width`` is the width the last :meth:`render` painted at -- the
-    geometry :meth:`click` maps a column against; until the first paint it
-    is 80, the same convention as ``TextBuffer.last_width``.  ``_spans`` is
-    the last render's span table (``None`` until the first paint, when a hit
-    builds it once without calling ``render``).  The marking starts
-    ``None``, so an un-hovered strip renders exactly the bytes it always
-    did.  A hit resolves only on row 0: the leading and trailing padding,
-    every divider gap, a cell past the last label and a truncating ``fit``
-    all answer no label.
-    """
-
-    __slots__ = (
-        "_disabled_items",
-        "_hover_index",
-        "_index",
-        "_last_width",
-        "_spans",
-        "disabled",
-        "glyphs",
-    )
 
     def click(self, row: int, col: int) -> bool:
         """Select the label cell ``(row, col)`` covers; True on a hit.

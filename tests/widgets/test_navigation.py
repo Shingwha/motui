@@ -281,3 +281,56 @@ def test_the_navlist_declares_its_capabilities():
         True,
         False,
     )
+
+
+# -- the tab strip's 2.0 keymap and action surface ----------------------------
+
+
+def test_the_tabs_keymap_steps_through_named_actions():
+    tabs = Tabs(["a", "b", "c"])
+    assert tabs.on_key(key("right")) is True and tabs.index == 1
+    assert tabs.on_key(key("down")) is True and tabs.index == 2
+    assert tabs.on_key(key("left")) is True and tabs.index == 1
+    assert tabs.on_key(key("up")) is True and tabs.index == 0
+    assert tabs.on_action("prev") is False  # clamped at the first tab
+    assert tabs.on_action("next") is True and tabs.index == 1
+    assert tabs.on_action("activate") is False
+    assert tabs.on_action("nope") is False
+    assert Tabs.handle is Tabs.on_key
+    assert tabs.take() is None
+
+
+def test_an_instance_tabs_keymap_rebind_is_private_to_the_instance():
+    tabs = Tabs(["a", "b", "c"])
+    other = Tabs(["a", "b", "c"])
+    tabs.keymap["j"] = "next"
+    assert "j" not in Tabs.keymap
+    assert "j" not in other.keymap
+    assert tabs.handle(key("j", "j")) is True and tabs.index == 1
+    assert other.handle(key("j", "j")) is False and other.index == 0
+
+
+def test_the_tabs_typed_hooks_forward_to_click_and_hover():
+    tabs = Tabs(["a", "b", "c"])
+    tabs.render(Constraints(width=20))
+    assert tabs.on_click(Pos(y=0, x=5)) is True and tabs.index == 1
+    assert tabs.on_hover(Pos(y=0, x=5)) is True
+    assert tabs.on_hover(Pos(y=0, x=5)) is False
+    assert tabs.on_hover(None) is True
+
+
+def test_the_tabs_declares_its_capabilities():
+    tabs = Tabs(["a"])
+    assert (tabs.focusable, tabs.clickable, tabs.hoverable, tabs.activatable) == (
+        True,
+        True,
+        True,
+        False,
+    )
+
+
+def test_the_strip_has_no_second_cursor_implementation():
+    from motui.widgets import strip as strip_module
+
+    assert "ClampedCursor" not in dir(strip_module)
+    assert strip_module.__all__ == ["Keymap", "LabelStrip"]

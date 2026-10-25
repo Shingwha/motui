@@ -48,13 +48,14 @@ from collections.abc import Iterable
 from typing import Any, Sequence
 
 from ..widgets.cursor import Cursor
+from ..kernel.events import KeyEvent
 from ..kernel.glyphs import GLYPHS, Glyphs
 from ..kernel.cell import Line, Segment
 from ..kernel.style import Style
 from ..kernel.theme import Styles, Theme
 from ..kernel.text import WrapMode
 from .choice import Option, Select
-from .strip import LabelStrip
+from .strip import Keymap, LabelStrip
 
 __all__ = ["ContextMenu", "MenuBar"]
 
@@ -86,6 +87,20 @@ class MenuBar(LabelStrip):
     """
 
     __slots__ = ("_pending", "items")
+
+    #: A bar activates its active label (unlike a tab strip, which only selects).
+    activatable = True
+
+    #: The default key table (a per-instance copy backs ``self.keymap``).
+    keymap = Keymap(
+        {
+            "up": "prev",
+            "down": "next",
+            "left": "prev",
+            "right": "next",
+            "enter": "activate",
+        }
+    )
 
     def __init__(
         self,
@@ -138,7 +153,7 @@ class MenuBar(LabelStrip):
     def move(self, delta: int) -> bool:
         """Move the active label ``delta`` labels, clamped and never wrapping.
 
-        The cursor rule is :meth:`~motui.widgets.strip.ClampedCursor.move`:
+        The cursor rule is :meth:`~motui.widgets.strip.LabelStrip.move`:
         disabled indices are stepped over, the ends clamp and never wrap.  A
         moved step clears a stale pending result -- an activation never
         survives the next keystroke.  A disabled or empty bar moves nowhere.
@@ -162,11 +177,50 @@ class MenuBar(LabelStrip):
         self._pending = self.items[self._index]
         return True
 
-    def take_result(self) -> str | None:
-        """Read the pending label once and clear it (the ``Resultful`` door)."""
+    def take(self) -> str | None:
+        """Read the pending label once and clear it (the ``take`` door)."""
         value = self._pending
         self._pending = None
         return value
+
+    #: The 1.x spelling stays until W3b3 removes it.
+    take_result = take
+
+    # -- the keyboard -----------------------------------------------------------
+
+    def on_action(self, name: str) -> bool:
+        """Run one named bar action; ``False`` for an unknown name.
+
+        ``prev`` / ``next`` step the active label through :meth:`move` and
+        answer its result (a clamped edge reports ``False``, the old focus
+        router's rule); ``activate`` leaves the active label pending through
+        :meth:`activate` and answers whether there was one.  An unknown name
+        answers ``False`` without touching the bar.
+        """
+        if name == "prev":
+            return self.move(-1)
+        if name == "next":
+            return self.move(1)
+        if name == "activate":
+            return self.activate()
+        return False
+
+    def on_key(self, event: KeyEvent) -> bool:
+        """Route a key through :attr:`keymap` to :meth:`on_action`.
+
+        The default table binds the four arrows and ``enter``; a key no
+        entry names is declined so the host keeps it.  A disabled bar
+        answers ``False``.
+        """
+        if self.disabled or not isinstance(event, KeyEvent):
+            return False
+        action = self.keymap.get(event.key)
+        if action is None:
+            return False
+        return self.on_action(action)
+
+    #: The 1.x routing door stays until W3b3 removes it.
+    handle = on_key
 
     def _style_of(self, index: int) -> Style:
         """The style one label renders with (the stricter state wins)."""

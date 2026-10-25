@@ -64,8 +64,9 @@ and :meth:`move` steps over them (clamped, never wrapping) exactly as
 :meth:`Tabs.move` does.  A pointer over a disabled row still marks it --
 hover is the pointer's echo, not a selection.
 
-There is deliberately **no** ``handle``: the rail's key routing belongs to
-the host, the same division of labour the tab strip keeps.  An empty
+The rail binds its own arrow keys through :attr:`keymap` (a host may
+rebind them on the instance); ``handle`` is the 1.x alias of :meth:`on_key`
+and stays until W3b3.  An empty
 ``glyphs.rail`` turns the indicator off and collapses its seat: the bar
 column is the glyph's own width (``visible_width``, so a wide bar takes its
 columns) and ``bar_space`` -- the separator after that column -- defaults to
@@ -98,12 +99,12 @@ from ..kernel.style import Style
 from ..kernel.text import visible_width
 from ..kernel.theme import Styles, Theme
 from ..widgets.base import Widget
-from .strip import ClampedCursor, Keymap
+from .strip import Keymap
 
 __all__ = ["NavList"]
 
 
-class NavList(ClampedCursor, Widget):
+class NavList(Widget):
     """A vertical navigation list: a bar indicator, a clamped selection.
 
     ``items`` is a list of labels, one row each; ``index`` is the selected
@@ -279,10 +280,57 @@ class NavList(ClampedCursor, Widget):
     #: The 1.x routing door stays until W3b3 removes it.
     handle = on_key
 
+    # -- the cursor -------------------------------------------------------------
+
     @property
-    def _entries(self) -> list[str]:
-        """The item labels every cursor verb measures (group rows are chrome)."""
-        return self.items
+    def index(self) -> int:
+        """The selected item, always inside the item range.
+
+        Read-only: :meth:`select` and :meth:`move` are the moving doors.
+        Group rows are chrome and never enter this index.
+        """
+        return self._index
+
+    def _cursor(self) -> Cursor:
+        """The cursor value over the items and the disabled set."""
+        return Cursor(
+            len(self.items),
+            index=self._index,
+            disabled=self._disabled_items,
+        )
+
+    def select(self, index: int) -> bool:
+        """Select ``index``, clamped into range; True when it changed.
+
+        A ``disabled`` index is refused outright -- ``False``, nothing
+        moved -- a disabled rail refuses every selection, and an empty rail
+        answers ``False`` always.
+        """
+        if self.disabled or not self.items:
+            return False
+        cursor = self._cursor()
+        changed = cursor.select(index)
+        self._index = cursor.index
+        return changed
+
+    def move(self, delta: int) -> bool:
+        """Move the selection ``delta`` items, clamped and never wrapping.
+
+        Disabled items are **stepped over**: a positive step from index 1
+        with 2 disabled lands on 3, and a step whose direction holds no
+        enabled item left stays where it was (``False``).  A disabled rail
+        moves nowhere.  The answer is whether the selection changed.
+        """
+        if self.disabled or not self.items or delta == 0:
+            return False
+        before = self._index
+        cursor = self._cursor()
+        cursor.move(delta)
+        # A stale cursor (a host replaced the items in place) is clamped
+        # like any other request, and the clamping itself is a move.
+        cursor.index = cursor.clamp(cursor.index)
+        self._index = cursor.index
+        return cursor.index != before
 
     @property
     def bar_space(self) -> str:
