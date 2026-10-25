@@ -18,7 +18,7 @@ and still public).
 4. :class:`~motui.app.overlays.Toasts`;
 5. the controllers added with :meth:`App.mount`, in mount order, when the
    mount is dispatching (the demo's pane ``Scrollbar``);
-6. the wheel: the nearest :class:`~motui.core.scroll.Scrollable` in
+6. the wheel: the nearest :class:`~motui.kernel.layout.Scrollable` in
    ``hit.chain``, otherwise the hit pane, otherwise the focused pane's
    viewport (a :class:`~motui.app.gesture.SelectionGesture` mid-drag claims
    its own wheel first, so its head co-extends);
@@ -26,7 +26,7 @@ and still public).
    selection gesture, the pointer tier, then a press focuses the pane
    under it;
 8. the focused control through :class:`FocusManager`;
-9. the page keys: the focused :class:`~motui.core.scroll.Scrollable`, else
+9. the page keys: the focused :class:`~motui.kernel.layout.Scrollable`, else
    the focused pane's viewport;
 10. the keys bound with :meth:`App.bind`, then ``tab``/``s-tab`` cycling;
 11. the host hooks ``on_key``/``on_mouse``/``on_event``.
@@ -37,7 +37,7 @@ them (``focus``/``toast``/``open_modal`` then report the missing layer).
 
 **Theme propagation.**  :attr:`App.theme` is the application theme:
 constructing the App gives it to the driver, and :meth:`App.add` assigns it
-to every :class:`~motui.core.widget.Widget` in the mounted subtree whose
+to every :class:`~motui.widgets.base.Widget` in the mounted subtree whose
 ``theme`` is still ``None`` (an explicit ``theme=`` stays a local
 override).  Re-assigning :attr:`App.theme` walks the mounted components
 again and also calls ``set_theme(value)`` on the app-owned overlays
@@ -56,7 +56,7 @@ controller's lifecycle stays the host's.
 
 **Focus.**  A widget that overrides one of the interaction verbs
 (``handle``/``activate``/``select``/``move``/``toggle``) over the
-:class:`~motui.core.widget.Widget` defaults is registered in the ring when
+:class:`~motui.widgets.base.Widget` defaults is registered in the ring when
 it is added; nested widgets are found through the same recursive walk.
 :meth:`App.set_focus_targets` replaces the ring (the demo's per-topic
 pattern), :meth:`App.focus` addresses one by block id or component.
@@ -69,15 +69,15 @@ import builtins
 from collections.abc import Awaitable, Callable, Iterable
 from typing import TYPE_CHECKING, Any
 
-from ..core.block import Component
-from ..core.events import Event, KeyEvent, MouseEvent
-from ..core.hit import Hit
-from ..core.scroll import Scrollable
-from ..core.screen import Screen
-from ..core.selection import Selection
-from ..core.style import ColorMode, Style
-from ..core.theme import DEFAULT_THEME, Theme
-from ..core.widget import Widget
+from ..kernel.document import Component
+from ..kernel.events import Event, KeyEvent, MouseEvent
+from ..kernel.hit import Hit
+from ..kernel.layout import Scrollable
+from ..terminal.screen import Screen
+from ..kernel.selection import Selection
+from ..kernel.style import ColorMode, Style
+from ..kernel.theme import DEFAULT_THEME, Theme
+from ..widgets.base import Widget
 from .command_palette import CommandPalette
 from .driver import TUI
 from .find import Find
@@ -88,7 +88,7 @@ from .overlays import Toasts, Tooltip
 from .pointer import Pointer
 
 if TYPE_CHECKING:
-    from ..core.events import EventSource
+    from ..kernel.events import EventSource
 
 __all__ = ["App"]
 
@@ -638,7 +638,7 @@ class App:
 
         Walks ``hit.chain`` backwards -- the deepest widget first -- and
         hands the press to the first one whose ``drag`` is not the
-        :class:`~motui.core.widget.Widget` no-op.  That widget answers
+        :class:`~motui.widgets.base.Widget` no-op.  That widget answers
         ``True`` only when the press landed on something it owns (the
         ScrollView's bar column); otherwise the walk goes on and the press
         falls through to the gesture and pointer tiers.  Only the left

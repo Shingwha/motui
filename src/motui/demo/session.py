@@ -10,7 +10,8 @@ from __future__ import annotations
 from motui import KeyEvent, Text, Theme
 from motui.app import App, Scrollbar, Stats
 from motui.app.commands import Command, CommandRegistry
-from motui.core import FocusEvent, ScreenClipboard, Selection, extract
+from motui.kernel import FocusEvent, Selection, extract
+from motui.terminal import ScreenClipboard
 
 from .assets import THEMES
 from .model import Report, Section, Topic, TopicBody

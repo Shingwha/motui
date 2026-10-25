@@ -9,9 +9,9 @@ from dataclasses import replace
 
 import pytest
 
-from motui.core.keymap import DEFAULT_EDITOR_KEYMAP
-from motui.core.style import Style
-from motui.core.theme import DEFAULT_THEME, Styles
+from motui.kernel.keymap import DEFAULT_EDITOR_KEYMAP
+from motui.kernel.style import Style
+from motui.kernel.theme import DEFAULT_THEME, Styles
 from motui.widgets import Editor, Input
 from motui.widgets.textbuf import TextBuffer
 

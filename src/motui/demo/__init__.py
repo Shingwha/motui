@@ -19,7 +19,7 @@ import asyncio
 import sys
 
 from motui import TUI
-from motui.core import HeadlessScreen
+from motui.terminal import HeadlessScreen
 from motui.testing import ScriptedEvents
 
 from .assets import THEMES

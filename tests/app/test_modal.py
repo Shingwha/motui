@@ -3,9 +3,10 @@
 from __future__ import annotations
 
 from motui.app import FocusManager, Modal
-from motui.core.events import KeyEvent, MouseEvent, PasteEvent
-from motui.core.lines import Line, Text
-from motui.core.style import Style
+from motui.kernel.events import KeyEvent, MouseEvent, PasteEvent
+from motui.kernel.cell import Line
+from motui.widgets.text import Text
+from motui.kernel.style import Style
 from motui.widgets import Button, ButtonSpec, Dialog
 from tests.testing import headless_tui, key, many, press
 

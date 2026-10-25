@@ -21,9 +21,9 @@ from __future__ import annotations
 import re
 from typing import TYPE_CHECKING, Protocol
 
-from ...core.lines import Line, slice_line, wrap_line
-from ...core.text import _normalize_tabs, wrap_spans
-from ...core.theme import Theme
+from ...kernel.cell import Line, slice_line, wrap_line
+from ...kernel.text import _normalize_tabs, wrap_spans
+from ...kernel.theme import Theme
 from ..decor import Divider
 from .inline import inline_segments
 from ..syntax import Highlighter, RegexHighlighter, default_highlighter
@@ -236,9 +236,9 @@ def _wrap_paragraph(
     render both run -- the rule answers the rows, the component's memory also
     keeps the spans and the parsed line, so a later append can reuse the rows
     before the last break and rebuild only the tail (render-cost W4).  The
-    wrap works on the **rendered** text (:attr:`~motui.core.lines.Line.text`
+    wrap works on the **rendered** text (:attr:`~motui.kernel.cell.Line.text`
     -- the markup is gone: a link contributes its label, not its brackets) at
-    the tab-normalized offsets :func:`~motui.core.lines.slice_line` cuts
+    the tab-normalized offsets :func:`~motui.kernel.cell.slice_line` cuts
     by, and every row is ``fit`` to ``width`` exactly as the rule fits it.
     """
     line = Line(inline_segments(text, ctx))

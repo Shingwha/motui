@@ -26,7 +26,7 @@ class Clock:
     def advance(self, seconds: float) -> None:
         self.now += seconds
 
-    def install(self, tui) -> "Clock":
+    def install(self, tui) -> Clock:
         tui.clock = self
         return self
 

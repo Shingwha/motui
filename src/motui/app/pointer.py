@@ -3,9 +3,9 @@
 This module is the assembly tier (D3) -- the peer of
 :mod:`motui.app.gesture`, :mod:`motui.app.focus` and the driver:
 it imports kernel and app, and it is where every pointer *behavior* lands.  The
-kernel stays pure (the :class:`~motui.core.block.Hoverable` protocol, the
-:class:`~motui.core.block.Container` coordinate route, the
-:func:`~motui.core.block.descend` walk and the DECSET 1003 bytes), the
+kernel stays pure (the :class:`~motui.kernel.document.Hoverable` protocol, the
+:class:`~motui.kernel.document.Container` coordinate route, the
+:func:`~motui.kernel.document.descend` walk and the DECSET 1003 bytes), the
 focus tier keeps its click policy (:class:`~motui.app.focus.FocusManager`), and
 the driver exposes the minimal imperative surface the pointer reads:
 :meth:`~motui.app.TUI.hit`, which resolves a report's 0-based cell
@@ -33,9 +33,9 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
-from ..core.block import Clickable, Component, Hoverable, descend
-from ..core.events import Event, MouseEvent
-from ..core.hit import Hit
+from ..kernel.document import Clickable, Component, Hoverable, descend
+from ..kernel.events import Event, MouseEvent
+from ..kernel.hit import Hit
 from .focus import FocusManager
 
 if TYPE_CHECKING:
@@ -57,7 +57,7 @@ class Pointer:
     click is handed to :meth:`FocusManager.click <motui.app.focus.FocusManager.click>`,
     which descends to the leaf, dispatches, focuses and activates; without a
     ring the pointer descends the hit itself and dispatches the deepest
-    :class:`~motui.core.block.Clickable` leaf directly (a mouse-only
+    :class:`~motui.kernel.document.Clickable` leaf directly (a mouse-only
     page needs no ring).  ``hover=False`` builds a click-only pointer: it
     never touches a ``hover`` flag, for a host that keeps its screen in the
     smaller 1002 mode.
@@ -135,7 +135,7 @@ class Pointer:
     def handle(self, event: Event) -> bool:
         """Watch ``event``; answer whether what the pointer tracks changed.
 
-        Only a :class:`~motui.core.events.MouseEvent` is ever watched:
+        Only a :class:`~motui.kernel.events.MouseEvent` is ever watched:
         every other event answers ``False`` (the ring's
         :meth:`~motui.app.focus.FocusManager.handle` is the keyboard door).
         The report rules, in the class docstring's order:
@@ -225,7 +225,7 @@ class Pointer:
         and its answer is the change; one without it is told nothing and
         nothing changed.  A different component: the old one -- if any --
         takes ``hover = False`` and ``hover_at(-1, -1)``, the new one
-        ``hover = True`` (when it is :class:`~motui.core.block.Hoverable`)
+        ``hover = True`` (when it is :class:`~motui.kernel.document.Hoverable`)
         and ``hover_at(row, col)`` (when it implements it), and the answer
         says whether any of that changes what a component paints.
         """

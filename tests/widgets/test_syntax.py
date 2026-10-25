@@ -4,8 +4,8 @@ from dataclasses import replace
 
 import pytest
 
-from motui.core.style import Style
-from motui.core.theme import DEFAULT_THEME
+from motui.kernel.style import Style
+from motui.kernel.theme import DEFAULT_THEME
 from motui.widgets import Markdown
 from motui.widgets.syntax import (
     Highlighter,

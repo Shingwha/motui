@@ -9,18 +9,18 @@ same panel without the box (see :class:`Panel`).  The row-shaped furniture --
 the one-row ``Notice`` with it -- lives beside this module, in
 :mod:`motui.widgets.rows`.  Only the kernel is imported: layout is computed
 here, never drawn.  The divider / panel border color comes from the
-:class:`~motui.core.theme.Theme` the component was built with.
+:class:`~motui.kernel.theme.Theme` the component was built with.
 """
 
 from __future__ import annotations
 
-from ..core.block import Component, Revisioned
-from ..core.glyphs import GLYPHS, Border, Glyphs
-from ..core.lines import Line, Segment
-from ..core.style import Style
-from ..core.text import ellipsize_tail, visible_width
-from ..core.theme import Styles, Theme
-from ..core.widget import Widget
+from ..kernel.document import Component, Revisioned
+from ..kernel.glyphs import GLYPHS, Border, Glyphs
+from ..kernel.cell import Line, Segment
+from ..kernel.style import Style
+from ..kernel.text import ellipsize_tail, visible_width
+from ..kernel.theme import Styles, Theme
+from ..widgets.base import Widget
 
 __all__ = ["Divider", "Panel"]
 
@@ -87,7 +87,7 @@ class Divider(Widget):
     ``borders.base`` (both from the widget's :class:`Styles` override or its
     theme, resolved at render time).  A label that
     does not fit the capped width minus 4 is truncated with
-    :func:`~motui.core.text.ellipsize_tail`; when nothing survives
+    :func:`~motui.kernel.text.ellipsize_tail`; when nothing survives
     the truncation the row degrades to the pure rule, exactly like an empty
     ``label``.  ``label`` / ``max_width`` are plain
     mutable attributes, so a host can re-label one divider in place (the
@@ -118,7 +118,7 @@ class Divider(Widget):
         self.max_width = max_width
 
     def revision(self) -> object:
-        """The :class:`~motui.core.block.Revisioned` snapshot.
+        """The :class:`~motui.kernel.document.Revisioned` snapshot.
 
         Every mutable input :meth:`render` reads, as values: the rule glyph,
         the label, the cap, and the theme/styles pair the bands resolve
@@ -237,11 +237,11 @@ class Panel(Widget):
         self._memo: tuple[tuple, list[Line], list[Line]] | None = None
 
     def revision(self) -> object:
-        """The :class:`~motui.core.block.Revisioned` snapshot.
+        """The :class:`~motui.kernel.document.Revisioned` snapshot.
 
         The wrap parameters, the theme/styles pair the band resolves from,
         and the child's own key: its identity and -- when it is
-        :class:`~motui.core.block.Revisioned` -- its snapshot, so an
+        :class:`~motui.kernel.document.Revisioned` -- its snapshot, so an
         in-place child change re-wraps a sealed panel.
         """
         return (

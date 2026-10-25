@@ -1,6 +1,6 @@
 """A tiny VT emulator for asserting on the frames a painter writes.
 
-The emulator consumes the byte stream a :class:`~motui.core.painter.Painter`
+The emulator consumes the byte stream a :class:`~motui.terminal.paint.Painter`
 produces and maintains the cell grid a terminal would show.  It is a test
 instrument, not a terminal: it implements the escapes this toolkit emits and
 the few modes a full-screen session turns on, and it deliberately has no
@@ -46,8 +46,8 @@ from dataclasses import dataclass, replace
 
 from wcwidth import wcwidth
 
-from ..core.style import FG_CODES, Style
 from ..kernel import Pos
+from ..kernel.style import FG_CODES, Style
 
 __all__ = ["Emulator"]
 

@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import motui
 from motui import TUI
-from motui.core import HeadlessScreen
+from motui.terminal import HeadlessScreen
 from tests.testing import headless_tui
 
 

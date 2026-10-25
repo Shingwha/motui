@@ -6,8 +6,8 @@ drawing: a ``Row`` places children side by side in columns of fixed or
 shared width, a ``Column`` stacks them vertically with optional blank
 rows between.  They nest one level deep (a ``Row`` child may be a
 ``Column``); beyond that, prefer building blocks and padding by hand.
-Only the kernel is imported: :class:`~motui.core.block.Component` for the
-protocol, :class:`~motui.core.lines.Line` for assembly.  Import the
+Only the kernel is imported: :class:`~motui.kernel.document.Component` for the
+protocol, :class:`~motui.kernel.cell.Line` for assembly.  Import the
 containers from :mod:`motui.widgets.layout` or from
 :mod:`motui.widgets` / the package root.
 
@@ -17,11 +17,11 @@ whitespace around a child (optionally filled into a solid band).
 
 from __future__ import annotations
 
-from ..core.block import Component, Revisioned
-from ..core.lines import Line, Segment
-from ..core.style import NONE, Style
-from ..core.theme import Styles, Theme
-from ..core.widget import Widget
+from ..kernel.document import Component, Revisioned
+from ..kernel.cell import Line, Segment
+from ..kernel.style import NONE, Style
+from ..kernel.theme import Styles, Theme
+from ..widgets.base import Widget
 
 __all__ = ["Column", "Padding", "Row", "Spacer"]
 
@@ -79,7 +79,7 @@ class Row:
         self._memo: tuple[tuple, list[Line], list[list[Line]]] | None = None
 
     def revision(self) -> object:
-        """The :class:`~motui.core.block.Revisioned` snapshot.
+        """The :class:`~motui.kernel.document.Revisioned` snapshot.
 
         The children (by key: identity plus each child's own revision), the
         pinned widths and the gap -- the width is the block cache's other
@@ -197,7 +197,7 @@ class Column:
         self._memo: tuple[tuple, list[Line], list[list[Line]]] | None = None
 
     def revision(self) -> object:
-        """The :class:`~motui.core.block.Revisioned` snapshot.
+        """The :class:`~motui.kernel.document.Revisioned` snapshot.
 
         The children (by key: identity plus each child's own revision) and
         the gap; the width is the block cache's other key.
@@ -267,7 +267,7 @@ class Spacer:
         self.rows = rows
 
     def revision(self) -> object:
-        """The :class:`~motui.core.block.Revisioned` snapshot: the row count."""
+        """The :class:`~motui.kernel.document.Revisioned` snapshot: the row count."""
         return (self.rows,)
 
     def render(self, width: int) -> list[Line]:
@@ -344,7 +344,7 @@ class Padding(Widget):
         self._memo: tuple[tuple, list[Line], list[Line]] | None = None
 
     def revision(self) -> object:
-        """The :class:`~motui.core.block.Revisioned` snapshot.
+        """The :class:`~motui.kernel.document.Revisioned` snapshot.
 
         The clipped insets are *not* applied here (render clips them): the
         raw four values are row inputs, the theme/styles pair the fill

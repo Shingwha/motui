@@ -5,11 +5,11 @@ from __future__ import annotations
 import pytest
 
 from motui.app import FocusManager
-from motui.core import Block, Document, Pane, Rect, Viewport
-from motui.core.block import Activable, Focusable, descend_chain
-from motui.core.events import KeyEvent
-from motui.core.hit import Hit
-from motui.core.lines import Line
+from motui.kernel import Section, Document, Pane, Rect, Viewport
+from motui.kernel.document import Activable, Focusable, descend_chain
+from motui.kernel.events import KeyEvent
+from motui.kernel.hit import Hit
+from motui.kernel.cell import Line
 from motui.widgets import Padding
 
 
@@ -124,8 +124,8 @@ class RouteOnly:
 
 
 def hit(component, row: int = 1, col: int = 2) -> Hit:
-    pane = Pane("p0", Rect(0, 0, 0, 0), Viewport(Document()))
-    block = Block("b0", component)
+    pane = Pane("p0", Rect(x=0, y=0, width=0, height=0), Viewport(Document()))
+    block = Section("b0", component)
     return Hit(pane, block, row, col, descend_chain(component, row, col))
 
 

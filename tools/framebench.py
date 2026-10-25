@@ -257,7 +257,7 @@ sys.path.insert(0, str(ROOT / "src"))
 
 from motui import Markdown, TUI, Table, Text
 from motui.app import Scrollbar
-from motui.core import HeadlessScreen
+from motui.terminal import HeadlessScreen
 
 FIXTURE = (ROOT / "src" / "motui" / "demo" / "fixture.md").read_text(
     encoding="utf-8"
