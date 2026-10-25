@@ -633,8 +633,18 @@ class App:
             self.on_stop()
 
     def run(self) -> None:
-        """The synchronous entry: own an event loop around :meth:`run_async`."""
-        asyncio.run(self.run_async())
+        """The synchronous entry: own an event loop around :meth:`run_async`.
+
+        A Ctrl+C interrupt is a quit, not a crash.  The signal cancels the
+        session task, so ``run_async`` unwinds through its normal teardown
+        (``on_stop``, source close, screen leave); ``asyncio.run`` then
+        raises ``KeyboardInterrupt``, which this entry swallows so a host
+        sees a clean exit instead of a traceback.
+        """
+        try:
+            asyncio.run(self.run_async())
+        except KeyboardInterrupt:
+            pass
 
     def __repr__(self) -> str:
         return (

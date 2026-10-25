@@ -715,6 +715,21 @@ async def test_a_timer_registered_before_the_run_survives_enter():
     assert calls == [1]
 
 
+def test_ctrl_c_is_a_quiet_quit(monkeypatch):
+    """The Runtime's sync entry also treats the interrupt as a quit."""
+    runtime = Runtime(
+        Terminal(TerminalOptions(screen=HeadlessScreen(10, 3))),
+        interactive=False,
+    )
+
+    def interrupted(coro):
+        coro.close()
+        raise KeyboardInterrupt
+
+    monkeypatch.setattr("motui.app.runtime.asyncio.run", interrupted)
+    runtime.run()  # no raise
+
+
 def test_a_direct_frame_split_is_painted_by_the_pump():
     tui = headless_tui(40, 6)
     clock = Clock(1000.0).install(tui)

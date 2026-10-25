@@ -639,8 +639,17 @@ class Runtime:
         await self._run(lambda: self._exit_event.wait())
 
     def run(self) -> None:
-        """The synchronous entry: own an event loop around :meth:`run_async`."""
-        asyncio.run(self.run_async())
+        """The synchronous entry: own an event loop around :meth:`run_async`.
+
+        A Ctrl+C interrupt is a quit, not a crash: the cancelled session has
+        already unwound through ``_teardown`` (source close, screen leave,
+        final frame), and the ``KeyboardInterrupt`` ``asyncio.run`` raises
+        afterwards is swallowed here.
+        """
+        try:
+            asyncio.run(self.run_async())
+        except KeyboardInterrupt:
+            pass
 
     async def _teardown(self, pump_task: asyncio.Task[None] | None) -> BaseException | None:
         """Stop the pump and the keyboard, bracket the screen, dump if piped.

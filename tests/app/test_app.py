@@ -586,3 +586,15 @@ def test_a_handler_sees_the_workspace_surface():
     app.add(Rows("one"))
     assert app.dispatch(key("a", "a")) is False
     assert seen == ["b0"]
+
+
+def test_ctrl_c_is_a_quiet_quit(monkeypatch):
+    """Ctrl+C cancels the session; the sync entry swallows the interrupt."""
+    app = _app(screen=HeadlessScreen(10, 3))
+
+    def interrupted(coro):
+        coro.close()
+        raise KeyboardInterrupt
+
+    monkeypatch.setattr("motui.app.application.asyncio.run", interrupted)
+    app.run()  # no raise
