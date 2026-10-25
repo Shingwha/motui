@@ -14,7 +14,8 @@ from collections.abc import Sequence
 from dataclasses import replace
 
 from ...kernel.glyphs import GLYPHS, Glyphs
-from ...kernel.cell import Line, Segment, slice_line
+from ...kernel.cell import Line, Segment, Surface, slice_line
+from ...kernel.layout import Constraints, as_constraints
 from ...kernel.text import _normalize_tabs, wrap_spans
 from ...kernel.theme import Styles, Theme
 from ...widgets.base import Widget
@@ -818,28 +819,33 @@ class Markdown(Widget):
         self._cache = _StreamCache()
         self._stamp_key = None
 
-    def render(self, width: int) -> list[Line]:
-        """The document's rows at ``width``: a pure function of inputs and width.
+    def render(self, c: Constraints | int) -> Surface:
+        """The document's rows at the constrained width: a pure function of inputs.
 
-        The answer comes from the component's one-entry stream cache
-        (:class:`_StreamCache`): an unchanged ``(text, width)`` is served
-        as a copy, a text that only grew past a sealed block boundary
-        re-renders just its tail (for a paragraph, only the suffix that
-        changed) and splices it on, anything else renders from scratch.  The
-        returned list is always fresh, the caller's to keep or trash.
+        A bare ``int`` is the 1.x width spelling and is normalized through
+        :func:`~motui.kernel.layout.as_constraints`.  The answer comes from
+        the component's one-entry stream cache (:class:`_StreamCache`): an
+        unchanged ``(text, width)`` is served as a copy, a text that only
+        grew past a sealed block boundary re-renders just its tail (for a
+        paragraph, only the suffix that changed) and splices it on, anything
+        else renders from scratch.  The returned sequence is always fresh,
+        the caller's to keep or trash.
 
         A changed ``theme``/``styles`` effective theme is synced first
         (:meth:`_sync_theme`): the context theme moves, the stream cache is
         dropped, and every rule paints the new bands.
 
-        The wrap width is ``width`` clamped to :attr:`max_width` when the cap
-        is set -- ``max(0, min(width, max_width))``, so a degenerate cap
-        (``<= 0``) paints the zero-width answer instead of a negative one --
-        and the clamp happens **before** the cache: the key, the streaming
-        splice and the three remembered walks all read the clamped width, so
-        a pane wider than the cap still hits the cache.  The cap never pads:
-        the rows come out narrower than the painting width and a painter
-        clears the tail past them.
+        The wrap width is the constrained width clamped to :attr:`max_width`
+        when the cap is set -- ``max(0, min(width, max_width))``, so a
+        degenerate cap (``<= 0``) paints the zero-width answer instead of a
+        negative one -- and the clamp happens **before** the cache: the key,
+        the streaming splice and the three remembered walks all read the
+        clamped width, so a pane wider than the cap still hits the cache.
+        The cap never pads: the rows come out narrower than the painting
+        width and a painter clears the tail past them.  A ``max_height``
+        budget truncates the assembled rows after the hover transform (the
+        cache key stays the width, never the budget) and the answer is
+        :meth:`~motui.kernel.cell.Surface.clipped`, not padded.
 
         Three passes sit **around** the cache, never inside it, and the first
         two are remembered with the ``(text, width)`` render they describe
@@ -852,8 +858,11 @@ class Markdown(Widget):
         hover-free and unstamped by the hover, so the cache's key and the
         streaming splice are exactly what they were.
         """
+        c = as_constraints(c)
         self._sync_theme()
-        paint = width if self.max_width is None else max(0, min(width, self.max_width))
+        paint = (
+            c.width if self.max_width is None else max(0, min(c.width, self.max_width))
+        )
         key = (self.text, paint)
         if self._stamp_key != key:
             rows = self._cache.render(self.text, paint, self._ctx, self._gap)
@@ -869,7 +878,9 @@ class Markdown(Widget):
                 rows[index] = rows[index].merge_span(
                     start, end, self._ctx.theme.surfaces.hover
                 )
-        return rows
+        if c.max_height is not None:
+            rows = rows[: c.max_height]
+        return Surface.clipped(rows, c.width)
 
     def revision(self) -> object:
         """The :class:`~motui.kernel.document.Revisioned` snapshot for the rows.
