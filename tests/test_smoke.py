@@ -14,7 +14,7 @@ from motui.demo import SCENES, main, render_scene, scene_output
 
 
 def test_every_scene_renders_a_bounded_frame():
-    assert SCENES == ("splash", "menu", "breakout", "dashboard", "gallery")
+    assert SCENES == ("splash", "menu", "snake", "dashboard", "gallery")
     for name in SCENES:
         for width, height in ((80, 24), (100, 30)):
             text = render_scene(name, width=width, height=height, phase=8)
@@ -32,9 +32,9 @@ def test_pages_entry_prints_every_scene(monkeypatch, capsys):
     out = capsys.readouterr().out
     for name in SCENES:
         assert f"\u2500\u2500 /{name} \u2500" in out, name
-    assert "Breakout" in out
+    assert "Snake" in out
     assert "2.0 in one page" in out
-    assert "score" in out and "paddle" in out
+    assert "score" in out and "snake" in out
     assert "motui dashboard" in out and "requests" in out
 
 
@@ -42,20 +42,20 @@ def test_the_piped_entry_prints_the_menu(monkeypatch, capsys):
     monkeypatch.setattr(sys, "argv", ["motui"])
     assert main() == 0
     out = capsys.readouterr().out
-    assert "Breakout" in out and "Gallery" in out and "showcase" in out
+    assert "Snake" in out and "Gallery" in out and "showcase" in out
 
 
 def test_scene_flag_renders_that_scene(capsys):
     assert main(["--scene", "splash", "--headless"]) == 0
     out = capsys.readouterr().out
     assert "press any key" in out
-    assert "Breakout" not in out
+    assert "Snake" not in out
 
 
 def test_frames_advance_the_scene_machine(capsys):
     assert main(["--scene", "splash", "--frames", "60", "--headless"]) == 0
     out = capsys.readouterr().out
-    assert "Breakout" in out  # the splash handed over to the menu
+    assert "Snake" in out  # the splash handed over to the menu
 
 
 def test_gallery_scene_is_reachable_headless(capsys):
@@ -64,12 +64,12 @@ def test_gallery_scene_is_reachable_headless(capsys):
     assert "2.0 in one page" in out and "tab focus" in out
 
 
-def test_breakout_replays_headless(capsys):
-    assert main(["--scene", "breakout", "--frames", "30", "--headless"]) == 0
+def test_snake_replays_headless(capsys):
+    assert main(["--scene", "snake", "--frames", "30", "--headless"]) == 0
     out = capsys.readouterr().out
-    assert "breakout" in out and "score" in out
-    assert "\u2584" in out  # the brick wall is painted
-    assert "paddle" in out
+    assert "snake" in out and "score" in out
+    assert "\u2588" in out and "\u25cf" in out  # body and head
+    assert "arrows/wasd" in out
 
 
 def test_dashboard_replays_headless(capsys):

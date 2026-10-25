@@ -43,24 +43,24 @@ from ..widgets import (
 from ..widgets.base import Widget
 from ..widgets.choice import Option, Select
 from .art import big_text, center, gradient_styles
-from .breakout import BreakoutScene
+from .snake import SnakeScene
 
 __all__ = [
     "SCENES",
-    "BreakoutScene",
     "DashboardScene",
     "GalleryScene",
     "MenuScene",
     "Scene",
     "Showcase",
+    "SnakeScene",
     "SplashScene",
 ]
 
 #: Single-row clip for the composed menu rows (no ellipsis on chrome).
 _CLIP = WrapMode.CLIP
 
-#: The scenes in tour order: splash, menu, breakout, dashboard, gallery.
-SCENES: tuple[str, ...] = ("splash", "menu", "breakout", "dashboard", "gallery")
+#: The scenes in tour order: splash, menu, snake, dashboard, gallery.
+SCENES: tuple[str, ...] = ("splash", "menu", "snake", "dashboard", "gallery")
 
 #: The dashboard's rolling window, log depth and simulated frame rate.
 _DASHBOARD_POINTS = 48
@@ -179,7 +179,7 @@ class SplashScene:
 class MenuScene:
     """The hub: a centred panel of four destinations.
 
-    ``Breakout`` and ``Dashboard`` are playable/live in this build alongside
+    ``Snake`` and ``Dashboard`` are playable/live in this build alongside
     ``Gallery``; ``Quit`` leaves.  Up/down (or j/k) move the cursor, enter
     opens the choice, a click selects a row, ``esc`` returns to the splash
     and ``q`` quits.
@@ -193,7 +193,7 @@ class MenuScene:
         self._top = 0
         self._left = 0
         self.options = [
-            Option("Breakout", "breakout", "a paddle, a wall, a spark"),
+            Option("Snake", "snake", "a snake, a bite, a tail"),
             Option("Dashboard", "dashboard", "live sparklines"),
             Option("Gallery", "gallery", "real components, one page"),
             Option("Quit", "quit", "leave the showcase"),
@@ -652,6 +652,12 @@ class GalleryScene:
         for index, target in enumerate(self._targets):
             if current is target:
                 self._set_focus(index)
+                # Route the click into the focused component, not just the
+                # gallery's own focus.  A branch row in the Tree is clicked
+                # to fold/unfold it (desktop-tree semantics); every other
+                # widget gets its own on_click at the local cell.
+                if target.on_click(Pos(x=c, y=r)) and target is self.tree:
+                    target.on_action("activate")
                 break
         return None
 
@@ -661,7 +667,7 @@ def _scenes(theme: Theme) -> dict[str, Scene]:
     return {
         "splash": SplashScene(theme),
         "menu": MenuScene(theme),
-        "breakout": BreakoutScene(theme),
+        "snake": SnakeScene(theme),
         "dashboard": DashboardScene(theme),
         "gallery": GalleryScene(theme),
     }

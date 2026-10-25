@@ -1,7 +1,7 @@
 """The showcase: ``python -m motui`` is one interactive page, not a tour.
 
 Five scenes share one widget: a splash animates in, the menu offers the
-demos, breakout is playable, the dashboard streams samples, and the gallery
+demos, snake is playable, the dashboard streams samples, and the gallery
 shows the 2.0 components side by side.  The package owns the three entry
 modes:
 
@@ -32,7 +32,7 @@ __all__ = ["SCENES", "main", "render_scene", "scene_output"]
 
 #: The fixed phase ``--pages`` and the semantic snapshots share.  Twenty
 #: ticks show motion in every scene: the splash's sweep is mid-word, the
-#: breakout ball is in play, and the dashboard window has streamed.
+#: snake has taken its first steps, and the dashboard window has streamed.
 PAGE_PHASE = 20
 
 #: The live showcase's tick rate (the splash auto-advances after 60 ticks).

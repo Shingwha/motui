@@ -68,7 +68,7 @@ What each piece did:
 
 | Goal | What ships | Where it runs |
 |---|---|---|
-| Playable game | `Canvas` cell grid, `Sizing.FILL`, `app.every`, `app.bind` | `python -m motui --scene breakout` |
+| Playable game | `Canvas` cell grid, `Sizing.FILL`, `app.every`, `app.bind` | `python -m motui --scene snake` |
 | Live dashboard | `Sparkline`, `ProgressBar`, `Table`, `App.every`/`invalidate` | `python -m motui --scene dashboard` |
 | Wide table | `Table(cell_wrap=WrapMode.OVERFLOW)` inside `ScrollPanel(axis="x")` | `examples/wide_table.py` |
 | Two-axis code view | `WrapMode.OVERFLOW` inside `ScrollPanel(axis="both")` | `examples/code.py` |
@@ -77,7 +77,7 @@ What each piece did:
 | Forms and dialogs | `Form`/`Field`, `Input`/`Editor`, `Dialog` through `App.open_modal` | [WIDGETS](docs/WIDGETS.md) |
 
 The three shipped examples are `quickstart`, `code` and `wide_table`. The
-interactive demo is one page with five scenes: splash, menu, Breakout,
+interactive demo is one page with five scenes: splash, menu, Snake,
 Dashboard and a component Gallery.
 
 Wide content is the one horizontal-scroll case: `ScrollPanel(axis="x"` or
@@ -446,7 +446,7 @@ deadlines rather than accumulating drift.
 ## The demo
 
 `python -m motui` starts the five-scene showcase that ships in the wheel:
-splash, menu, Breakout, Dashboard and Component Gallery. No network, no
+splash, menu, Snake, Dashboard and Component Gallery. No network, no
 model, no assets beyond the package.
 
 ```bash
@@ -457,9 +457,8 @@ python -m motui < /dev/null              # piped: print the menu frame, exit 0
 python -m motui --pages                  # all five scenes as plain text
 ```
 
-In the live menu, arrows and `enter` (or a click) pick Breakout, Dashboard,
-Gallery or Quit; `esc` returns to the splash. Breakout plays with the left
-and right arrows, `space` launches/pauses, `q` or `esc` returns to the menu.
+In the live menu, arrows and `enter` (or a click) pick Snake, Dashboard,
+Gallery or Quit; `esc` returns to the splash. Snake plays with the arrow keys or WASD, `space` pauses, and `q` or `esc` returns to the menu.
 The Gallery keeps a real `Tree`, `Table`, `ProgressBar`, `Slider` and
 `Input` side by side; `tab` cycles their focus.
 

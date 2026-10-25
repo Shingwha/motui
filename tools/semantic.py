@@ -8,7 +8,7 @@ Run it from the repository root::
     uv run python tools/semantic.py --check --snapshot DIR   # another set
 
 The tool pins what a terminal would *show* for each of the five showcase
-scenes (``splash``, ``menu``, ``breakout``, ``dashboard``, ``gallery``):
+scenes (``splash``, ``menu``, ``snake``, ``dashboard``, ``gallery``):
 the bytes ``scene_output`` paints go through
 :class:`~motui.testing.emulator.Emulator`, which rebuilds
 the cell grid, and each row is written as its text plus the styled runs
