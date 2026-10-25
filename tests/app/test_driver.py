@@ -38,17 +38,18 @@ from tests.testing import (
 def test_add_get_remove_and_system_address_blocks():
     tui = headless_tui()
     first = tui.add(Text("one"))
-    pinned_id = tui.add(Text("footer"), placement=Placement.BOTTOM)
-    assert first == "b0" and tui.document.get(pinned_id).placement is Placement.BOTTOM
-    assert tui.get("b0").text == "one"
+    pinned = tui.add(Text("footer"), placement=Placement.BOTTOM)
+    assert first.id == "b0"
+    assert tui.document.get(pinned.id).placement is Placement.BOTTOM
+    assert tui.get("b0").widget.text == "one"
 
-    system_id = tui.system("hello")
-    component = tui.get(system_id)
+    system = tui.system("hello")
+    component = tui.get(system.id).widget
     assert isinstance(component, Text)
     assert component.text == "hello"
     assert component.style == DEFAULT_THEME.text.muted
 
-    assert tui.remove("b0").text == "one"
+    assert tui.remove("b0").widget.text == "one"
     assert len(tui.document) == 2
     with pytest.raises(KeyError):
         tui.get("b0")
@@ -88,12 +89,12 @@ def test_add_and_system_target_the_main_document_not_focus():
     left, right = tui.split(Axis.X)
     tui.frame.focus(right)
 
-    assert tui.add(Rows("body")) == "b0"
-    assert tui.system("note") == "b1"
+    assert tui.add(Rows("body")).id == "b0"
+    assert tui.system("note").id == "b1"
     assert [block.id for block in left.document.blocks()] == ["b0", "b1"]
     assert right.document.blocks() == ()
 
-    assert tui.add(Rows("preview"), pane=right.id) == "b2"
+    assert tui.add(Rows("preview"), pane=right.id).id == "b2"
     assert [block.id for block in right.document.blocks()] == ["b2"]
 
 
@@ -106,7 +107,7 @@ def test_reveal_follows_the_block_owner_not_the_focused_pane():
     tui.paint()
     before = tui.viewport.offset
 
-    assert tui.reveal(block, 19) is True
+    assert tui.reveal(block.id, 19) is True
     assert right.viewport.offset > 0
     assert tui.viewport.offset == before
 
@@ -136,11 +137,11 @@ def test_block_ids_are_allocated_across_the_whole_frame():
     right.document.add(Rows("preview"))
     assert right.document.blocks()[0].id == "b0"
     block = tui.add(Rows("child body"), pane=right.id)
-    assert block == "b1"
+    assert block.id == "b1"
     assert tui.pane(right.id) is right
-    component = tui.get(block)
-    assert component is right.document.get(block).widget
-    assert tui.remove(block) is component
+    component = tui.get(block.id).widget
+    assert component is right.document.get(block.id).widget
+    assert tui.remove(block.id) is not None
     assert [held.id for held in right.document.blocks()] == ["b0"]
 
 
@@ -321,7 +322,7 @@ async def test_a_button_press_comes_back_for_the_host_to_hit_test():
     event = await tui.read_event()
     assert event == press(0, 0)
     hit = tui.hit(event.x, event.y)
-    assert hit is not None and hit.block.id == body and hit.row == 4 and hit.col == 0
+    assert hit is not None and hit.block.id == body.id and hit.row == 4 and hit.col == 0
 
 
 def test_read_event_answers_none_without_a_source_or_on_a_non_live_screen():
@@ -397,7 +398,7 @@ async def test_a_terminal_run_brackets_the_session_through_the_terminal():
     )
 
     async def body(app: Runtime) -> None:
-        app.add(Text("hi"))
+        app.workspace.add(Text("hi"))
 
     await tui.run_session(body)
     output = screen.output
@@ -413,7 +414,7 @@ async def test_a_non_live_terminal_run_stays_silent_and_dumps_plain_text():
     seen: list[str] = []
 
     async def body(app: Runtime) -> None:
-        app.add(Text("hello"))
+        app.workspace.add(Text("hello"))
         seen.append(stream.getvalue())
 
     await tui.run_session(body)
@@ -456,7 +457,7 @@ async def test_exit_ends_run_async_and_a_second_session_starts_clean():
     await tui.run_async()
 
     async def body(app: Runtime) -> None:
-        app.add(Text("second run"))
+        app.workspace.add(Text("second run"))
         app.exit()
 
     await tui.run_session(body)
@@ -470,7 +471,7 @@ def test_run_is_a_synchronous_entry_that_returns_when_the_session_exits():
         Terminal(TerminalOptions(screen=screen, input=ScriptedEvents(()))),
         interactive=False,
     )
-    tui.add(Text("hi"))
+    tui.workspace.add(Text("hi"))
     # A host may end the session from inside the screen bracket; the sync
     # entry must still return once the session is over.
     screen.enter = lambda: (screen.__class__.enter(screen), tui.exit())
@@ -480,18 +481,18 @@ def test_run_is_a_synchronous_entry_that_returns_when_the_session_exits():
 
 def test_run_brackets_enter_and_leave_on_every_exit_path():
     async def returns(app: Runtime) -> None:
-        app.add(Text("hi"))
+        app.workspace.add(Text("hi"))
 
     async def stops(app: Runtime) -> None:
-        app.add(Text("hi"))
+        app.workspace.add(Text("hi"))
         app.exit()
 
     async def raises(app: Runtime) -> None:
-        app.add(Text("hi"))
+        app.workspace.add(Text("hi"))
         raise ValueError("boom")
 
     async def interrupts(app: Runtime) -> None:
-        app.add(Text("hi"))
+        app.workspace.add(Text("hi"))
         raise KeyboardInterrupt
 
     async def run_one(body) -> Runtime:
@@ -532,8 +533,8 @@ async def test_a_non_live_run_stays_silent_and_dumps_plain_text():
     seen: list[str] = []
 
     async def body(app: Runtime) -> None:
-        app.add(Text("hello"))
-        app.add(Text("world"))
+        app.workspace.add(Text("hello"))
+        app.workspace.add(Text("world"))
         seen.append(stream.getvalue())
 
     await tui.run_session(body)
@@ -545,7 +546,7 @@ async def test_a_non_live_run_stays_silent_and_dumps_plain_text():
 async def test_a_non_live_dump_degrades_on_a_stream_that_cannot_carry_the_frame():
     stream = io.TextIOWrapper(io.BytesIO(), encoding="cp1252")
     tui = Runtime(Terminal(TerminalOptions(screen=TerminalScreen(stream))))
-    tui.add(Rows("\u2588 block"))
+    tui.workspace.add(Rows("\u2588 block"))
 
     async def body(app: Runtime) -> None:
         app.paint()
@@ -657,7 +658,7 @@ def test_the_pump_paints_on_the_throttle_and_runs_scheduled_callbacks():
     assert tui.tick(clock()) is None
     assert len(tui.screen.output) > painted
 
-    block = tui.document.get(tui.add(Text("")))
+    block = tui.document.get(tui.add(Text("")).id)
     calls: list[int] = []
 
     def grow() -> None:

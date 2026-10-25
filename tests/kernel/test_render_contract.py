@@ -41,8 +41,8 @@ def test_a_section_clips_an_oversized_component_to_the_constraints():
 
 def test_a_twenty_column_screen_never_wraps_an_oversized_row():
     tui = headless_tui(width=20, height=6)
-    tui.add(_Oversized("A"))
-    tui.add(_Oversized("B"))
+    tui.workspace.add(_Oversized("A"))
+    tui.workspace.add(_Oversized("B"))
     tui.paint()
 
     assert all(row.width <= 20 for row in tui.rows)

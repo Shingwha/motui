@@ -276,11 +276,11 @@ def _headless_runtime(width: int, height: int) -> Runtime:
 
 def _tui(split: bool) -> tuple[Runtime, Markdown | None]:
     tui = _headless_runtime(180, 45)
-    Scrollbar(tui, pane="primary")
-    tui.add(Markdown(FIXTURE))
+    Scrollbar(tui.workspace, pane="primary")
+    tui.workspace.add(Markdown(FIXTURE))
     stream = None
     if split:
-        _, right = tui.split(Axis.X, weights=(2, 1))
+        _, right = tui.workspace.split(Axis.X, weights=(2, 1))
         stream = Markdown("")
         right.document.add(stream)
     tui.paint()
@@ -289,7 +289,7 @@ def _tui(split: bool) -> tuple[Runtime, Markdown | None]:
 
 def stream_workload(split: bool, frames: int) -> float:
     tui, stream = _tui(split)
-    source = tui.document.get("b0").widget
+    source = tui.workspace.document.get("b0").widget
     t0 = time.perf_counter()
     for i in range(frames):
         if stream is not None:
@@ -307,11 +307,11 @@ def scroll_workload(notches: int, rows: int = 350) -> float:
         from motui import Text
 
         for i in range(rows - 350):
-            tui.add(Text(f"line {i} of {rows}"))
+            tui.workspace.add(Text(f"line {i} of {rows}"))
         tui.paint()
     t0 = time.perf_counter()
     for i in range(notches):
-        tui.scroll_up(3 if i % 2 == 0 else -3)  # wheel down, wheel up
+        tui.workspace.scroll_up(3 if i % 2 == 0 else -3)  # wheel down, wheel up
         tui.refresh()
         tui.paint()
     return (time.perf_counter() - t0) / notches * 1000.0
@@ -333,7 +333,7 @@ def text_open_workload(frames: int) -> float:
             for i in range(3000)
         )
     )
-    tui.add(text)
+    tui.workspace.add(text)
     tui.paint()  # the cold paint: it wraps once and fills the cache
     t0 = time.perf_counter()
     for _ in range(frames):
@@ -360,7 +360,7 @@ def idle_long_workload(frames: int) -> float:
     tui, _ = _tui(split=False)
     tui.paint()
     for i in range(3000 - 350):  # the same growth scroll_workload(rows=3000) does
-        tui.add(Text(f"line {i} of 3000"))
+        tui.workspace.add(Text(f"line {i} of 3000"))
     tui.paint()  # the warm paint: the index is built, every block's cache filled
     t0 = time.perf_counter()
     for _ in range(frames):
@@ -385,7 +385,7 @@ def table_open_workload(frames: int) -> float:
         [f"col {c}" for c in range(6)],
         [[f"cell {r}.{c}" for c in range(6)] for r in range(240)],
     )
-    tui.add(table)
+    tui.workspace.add(table)
     tui.paint()  # the cold paint: it builds the grid and fills the memory
     t0 = time.perf_counter()
     for _ in range(frames):
@@ -418,7 +418,7 @@ def stream_paragraph_workload(frames: int) -> float:
     """
     tui = _headless_runtime(180, 45)
     stream = Markdown("")
-    tui.add(stream)
+    tui.workspace.add(stream)
     tui.paint()
     lines = [PARAGRAPH_LINE % i for i in range(1000)]
     stream.text = "\n".join(lines)
@@ -465,22 +465,22 @@ def hash_workload() -> str:
     import hashlib
 
     tui = _headless_runtime(100, 30)
-    Scrollbar(tui, pane="primary")
-    tui.add(Markdown(FIXTURE))
+    Scrollbar(tui.workspace, pane="primary")
+    tui.workspace.add(Markdown(FIXTURE))
     tui.paint()
-    _, right = tui.split(Axis.X, weights=(2, 1))
+    _, right = tui.workspace.split(Axis.X, weights=(2, 1))
     right.document.add(Markdown(FIXTURE))
     tui.paint()
     for step in range(12):
         if step % 2:
-            tui.scroll_down(3)
+            tui.workspace.scroll_down(3)
         else:
-            tui.scroll_up(3)
+            tui.workspace.scroll_up(3)
         tui.paint()
     tui.screen.width = 120  # a reflow: the split re-divides, rows re-wrap
     tui.paint()
     for _ in range(3):
-        tui.scroll_to_bottom()
+        tui.workspace.scroll_to_bottom()
         tui.paint()
     return hashlib.sha256(tui.screen.output.encode("utf-8")).hexdigest()
 

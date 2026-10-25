@@ -196,7 +196,7 @@ def test_remove_takes_the_section_add_answered():
     section = app.add(Rows("one"))
 
     assert app.remove(section) is section
-    assert app.runtime.document.blocks() == ()
+    assert app.workspace.document.blocks() == ()
     with pytest.raises(TypeError):
         app.remove(section.id)  # type: ignore[arg-type]
 
@@ -326,7 +326,7 @@ def test_the_vertical_wheel_still_scrolls_the_pane_outside_a_widget():
     app = _app(screen=HeadlessScreen(40, 8), keys=ScriptedEvents(()))
     app.add(Rows(*many(30)))
     app.runtime.paint()
-    pane = app.runtime.frame.focused_pane
+    pane = app.workspace.frame.focused_pane
     before = pane.viewport.offset
     assert before > 0  # the fresh viewport sticks to the tail
 
@@ -341,12 +341,12 @@ def test_a_bar_drag_moves_the_scroll_view_without_a_selection():
     app.runtime.paint()
 
     assert app.dispatch(press(39, 0)) is True
-    assert app.runtime.selection is None  # the drag took the press, not the gesture
+    assert app.workspace.selection is None  # the drag took the press, not the gesture
     assert app.dispatch(motion(39, 2)) is True
     assert view.offset == 7
-    assert app.runtime.selection is None
+    assert app.workspace.selection is None
     assert app.dispatch(release(39, 2)) is True
-    assert app.runtime.selection is None
+    assert app.workspace.selection is None
     assert app.dispatch(motion(39, 1)) is True  # the pointer's hover cue now
     assert view.offset == 7
 
@@ -404,7 +404,7 @@ def test_a_form_owns_its_fields_and_a_click_moves_its_cursor():
     app.runtime.paint()
 
     row = next(y for y, line in enumerate(app.runtime.rows) if "Email" in line.text) + 1
-    hit = app.runtime.hit(0, row)
+    hit = app.workspace.hit(0, row)
     assert hit is not None
     assert app.focus_manager.click(hit) is True
     assert form.index == 1
@@ -505,3 +505,84 @@ async def test_two_apps_with_equal_terminal_options_paint_the_same_bytes():
     )
     assert await rendered(legacy) == await rendered(modern)
 
+
+
+# -- the handler chain -------------------------------------------------------
+
+
+def test_the_default_chain_is_the_router_handlers():
+    from motui.app import DEFAULT_HANDLERS
+
+    app = _app(screen=HeadlessScreen(20, 4), keys=ScriptedEvents(()))
+    assert app.handlers is DEFAULT_HANDLERS
+
+
+def test_auto_false_builds_an_empty_chain():
+    app = _app(screen=HeadlessScreen(20, 4), keys=ScriptedEvents(()), auto=False)
+    assert app.handlers == ()
+    assert app.dispatch(key("a", "a")) is False
+
+
+def test_a_custom_chain_replaces_the_default_tiers_and_first_claim_wins():
+    calls: list[str] = []
+
+    def first(app: App, event) -> bool:
+        calls.append("first")
+        return False
+
+    def second(app: App, event) -> bool:
+        calls.append("second")
+        return True
+
+    def third(app: App, event) -> bool:
+        calls.append("third")
+        return True
+
+    app = _app(
+        screen=HeadlessScreen(20, 4),
+        keys=ScriptedEvents(()),
+        handlers=(first, second, third),
+    )
+    app.bind("b", lambda: calls.append("binding"))
+
+    assert app.dispatch(key("a", "a")) is True
+    assert calls == ["first", "second"]
+    # The default tiers are really replaced: the second handler claims the
+    # bound key before the App's own binding tier could run.
+    calls.clear()
+    assert app.dispatch(key("b", "b")) is True
+    assert calls == ["first", "second"]
+
+
+def test_an_explicit_chain_is_used_even_with_auto_false():
+    calls: list[str] = []
+
+    def only(app: App, event) -> bool:
+        calls.append("only")
+        return True
+
+    app = _app(
+        screen=HeadlessScreen(20, 4),
+        keys=ScriptedEvents(()),
+        auto=False,
+        handlers=(only,),
+    )
+    assert app.dispatch(key("a", "a")) is True
+    assert calls == ["only"]
+
+
+def test_a_handler_sees_the_workspace_surface():
+    seen: list[str] = []
+
+    def inspect(app: App, event) -> bool:
+        seen.append(app.workspace.document.blocks()[0].id)
+        return False
+
+    app = _app(
+        screen=HeadlessScreen(20, 4),
+        keys=ScriptedEvents(()),
+        handlers=(inspect,),
+    )
+    app.add(Rows("one"))
+    assert app.dispatch(key("a", "a")) is False
+    assert seen == ["b0"]

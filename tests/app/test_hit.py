@@ -18,9 +18,9 @@ def test_hit_resolves_a_cell_to_its_block_row_and_column():
     foot = tui.add(Rows("foot"), placement=Placement.BOTTOM)
     tui.paint()
     hit = tui.hit(2, 0)
-    assert hit is not None and hit.block.id == body and hit.row == 5 and hit.col == 2
+    assert hit is not None and hit.block.id == body.id and hit.row == 5 and hit.col == 2
     hit = tui.hit(0, 5)
-    assert hit is not None and hit.block.id == foot and hit.row == 0 and hit.col == 0
+    assert hit is not None and hit.block.id == foot.id and hit.row == 0 and hit.col == 0
 
 
 def test_hit_answers_none_for_blank_fill_out_of_range_removed_and_unpainted():
@@ -49,7 +49,7 @@ def test_hit_columns_are_relative_to_the_inner_rect():
     )
     tui.paint()
     hit = tui.hit(2, 0)
-    assert hit is not None and hit.block.id == body and hit.row == 0 and hit.col == 0
+    assert hit is not None and hit.block.id == body.id and hit.row == 0 and hit.col == 0
     assert tui.hit(0, 0) is None
     assert tui.hit(18, 0) is None
     assert tui.hit(17, 0).col == 15
@@ -67,7 +67,7 @@ def test_hit_leaf_descends_through_a_container_to_the_child():
     assert tui.hit_leaf(0, 0) == (menu, 0, 0)
     assert tui.hit_leaf(0, 1) == (menu, 1, 0)
     assert tui.hit_leaf(0, 2) == (tree, 0, 0)
-    assert tui.hit(0, 0).block.id == block
+    assert tui.hit(0, 0).block.id == block.id
     assert tui.hit_leaf(0, 5) is None
 
 
@@ -131,4 +131,4 @@ def test_hit_resolves_the_last_window_row():
     tui.scroll_up(1)
     tui.paint()
     hit = tui.hit(0, 3)
-    assert hit is not None and hit.block.id == body and hit.row == 8
+    assert hit is not None and hit.block.id == body.id and hit.row == 8
