@@ -127,7 +127,7 @@ uv run python tools/growth.py
 | W0b | ✅ 2026-10-25 @ `2.0/w0b-harness`（1017 passed / 工具与护栏全绿） |
 | W1 | ✅ 2026-10-25 @ `2.0/w1-kernel`（1019 passed / core 删除 / hash 不变） |
 | W2a | ✅ 2026-10-25 @ `2.0/w2a-surface`（1045 passed / golden 不变） |
-| W2b1/W2b2 | ⏳ |
+| W2b1/W2b2 | ✅ 2026-10-25 @ `2.0/w2b1-views` + `2.0/w2b2-content`（1078 passed / golden 不变） |
 | W2c | ⏳ |
 | W2.5 | ⏳ |
 | W2.6 | ⏳ |
