@@ -332,11 +332,13 @@ def test_cell_wrap_overflow_honours_set_widths_pins():
     assert not any("\u2026" in row.text for row in surface)
 
 
-def test_cell_wrap_is_part_of_the_revision():
-    headers, rows = ["A"], [["x"]]
-    assert Table(headers, rows).revision() != Table(
-        headers, rows, cell_wrap=WrapMode.ELLIPSIS
-    ).revision()
+def test_cell_wrap_is_part_of_the_render_answer():
+    headers, rows = ["A"], [["the quick brown fox"]]
+    plain = Table(headers, rows, cell_wrap=WrapMode.WORD)
+    clipped = Table(headers, rows, cell_wrap=WrapMode.ELLIPSIS)
+    assert [row.text for row in plain.render(Constraints(width=12))] != [
+        row.text for row in clipped.render(Constraints(width=12))
+    ]
 
 
 def test_a_long_cell_wraps_instead_of_ellipsizing():

@@ -58,7 +58,7 @@ EXPECTED = {
     "RESET",
     "Rect",
     "ResizeEvent",
-    "RowRange",
+    "RowSpan",
     "ScreenLayout",
     "Scroll",
     "ScrollAxis",

@@ -61,7 +61,7 @@ from ..kernel.frame import Frame, Rect, splice_row
 from ..kernel.cell import Line, overlay
 from ..widgets.text import Text
 from ..kernel.style import Style
-from ..kernel.theme import DEFAULT_THEME, Theme, Themed
+from ..kernel.theme import DEFAULT_THEME, Theme
 from ..kernel.layout import ScreenLayout
 from ..kernel.layout import Constraints
 from ..kernel.text import WrapMode
@@ -427,7 +427,7 @@ class Toasts:
         return theme.overlays.toast
 
 
-class _MountedOverlay(Themed):
+class _MountedOverlay:
     """An overlay mounted for the frame's life: register once, detach once.
 
     ``layer`` is the frame layer the subclass owns (``tooltip`` for the
@@ -436,10 +436,10 @@ class _MountedOverlay(Themed):
     idempotent -- a second call never touches the registry.
     """
 
-    __slots__ = ("_detached", "_tui")
+    __slots__ = ("_detached", "_theme", "_tui")
 
     def __init__(self, tui: Runtime, *, layer: str, theme: Theme | None = None) -> None:
-        super().__init__(theme)
+        self._theme = theme if theme is not None else DEFAULT_THEME
         self._tui = tui
         self._detached = False
         # The driver's frame seam: the overlay registers here for the frame's

@@ -108,8 +108,8 @@ class Tree(Widget):
     cursor row carries the ``rows.active`` band underneath (the row's own
     run carries no style of its own, the band rests underneath it).  A
     disabled node's row paints ``text.faint``.  Styles resolve at render
-    time from the theme or a ``styles=`` group override; ``theme`` and
-    ``styles`` are part of :meth:`revision`.
+    time from the theme or a ``styles=`` group override; assigning
+    ``theme``/``styles`` touches the widget.
 
     ``expanded`` and ``collapsed`` (default the vocabulary's ``\u25be`` and
     ``\u25b8``) are the fold glyphs: each row's indicator column is the
@@ -288,6 +288,8 @@ class Tree(Widget):
         cursor.index = cursor.clamp(self._cursor)
         moved = cursor.move(delta) or cursor.index != self._cursor
         self._cursor = cursor.index
+        if moved:
+            self.touch()
         return moved
 
     def on_click(self, pos: Pos) -> bool:
@@ -309,6 +311,7 @@ class Tree(Widget):
         if visible[pos.y][0].disabled:
             return False
         self._cursor = pos.y
+        self.touch()
         return True
 
     def _fold(self, expanded: bool) -> bool:
@@ -329,6 +332,7 @@ class Tree(Widget):
             return False
         node.expanded = expanded
         self._cursor = Cursor(len(self._visible())).clamp(self._cursor)
+        self.touch()
         return True
 
     def filter(self, query: str | None) -> bool:
@@ -364,6 +368,7 @@ class Tree(Widget):
         # Autocomplete rule); a stale mark could otherwise band the wrong row.
         self._hover_index = None
         self._cursor = 0
+        self.touch()
         return self._visible() != before
 
     def jump(self, char: str) -> bool:
@@ -398,8 +403,11 @@ class Tree(Widget):
             row = (current + step) % count
             node = visible[row][0]
             if not node.disabled and node.label.lower().startswith(needle):
+                moved = row != current
                 self._cursor = row
-                return row != current
+                if moved:
+                    self.touch()
+                return moved
         return False  # no enabled visible label starts with the character
 
     def on_hover(self, pos: Pos | None) -> bool:
@@ -420,57 +428,10 @@ class Tree(Widget):
             visible = self._visible()
             target = pos.y if 0 <= pos.y < len(visible) else None
         changed = target != self._hover_index
-        self._hover_index = target
+        if changed:
+            self._hover_index = target
+            self.touch()
         return changed
-
-    def revision(self) -> object:
-        """The tree's value snapshot: the node shape, cursor, marks, bands.
-
-        The one non-trivial part is :meth:`_node_shape`: every node's
-        ``(label, expanded, disabled)`` in document order, because a node's
-        flag can be flipped in place (that is what :meth:`on_action` does)
-        and the labels decide both the rows the unfiltered walk draws and
-        the matches the filtered one keeps -- a *reference* to the root list
-        would compare equal to itself after such a flip, which is exactly
-        the freeze the snapshot exists to prevent.  The walk is the price:
-        it costs one node visit per snapshot, far below the render it
-        guards (which visits every node *and* builds a row for each visible
-        one).  Beside it go the filter query, the cursor, the pointer's
-        mark, the focus and disabled flags, the indent, the two fold glyphs,
-        the theme and the ``styles`` overrides (the guide, label, disabled
-        and band roles resolve from them at render time).
-        """
-        return (
-            self._node_shape(),
-            self._filter,
-            self._cursor,
-            self._hover_index,
-            self.focused,
-            self.disabled,
-            self.indent,
-            self.glyphs,
-            self.theme,
-            self.styles,
-        )
-
-    def _node_shape(self) -> tuple[tuple[str, bool, bool], ...]:
-        """The whole tree as ``(label, expanded, disabled)`` triples, depth-first.
-
-        A value view of the mutable :class:`TreeNode` graph: whatever a host
-        or an :meth:`on_action` does to the roots -- a flip, a re-label, a
-        disabled toggle, a child added or removed, a subtree reordered --
-        moves this tuple, and two equal tuples describe two trees whose
-        walks can only agree.
-        """
-        out: list[tuple[str, bool, bool]] = []
-
-        def walk(nodes) -> None:
-            for node in nodes:
-                out.append((node.label, node.expanded, node.disabled))
-                walk(node.children)
-
-        walk(self.root_nodes)
-        return tuple(out)
 
     def render(self, c: Constraints) -> Surface:
         """One row per visible node, each through the row-band contract.

@@ -9,7 +9,7 @@ import pytest
 
 from motui.app import Runtime
 from motui.app.runtime import Timer
-from motui.kernel import DEFAULT_THEME, Rect, RowRange
+from motui.kernel import DEFAULT_THEME, Rect, RowSpan
 from motui.kernel.document import Placement, Sizing
 from motui.kernel.geom import Axis
 from motui.widgets.text import Text
@@ -582,7 +582,7 @@ def test_the_bottom_dock_reserves_rows_beneath_the_pane_area():
 
     hit = tui.hit(4, 5)
     assert hit is not None and hit.block is dock.document.blocks()[0]
-    assert tui.visible_range() == RowRange(0, 4)
+    assert tui.visible_range() == RowSpan(0, 4)
     assert tui.dock_region() == Rect(x=0, y=5, width=40, height=1)
     with pytest.raises(ValueError):
         tui.frame.focus(dock.id)
@@ -614,8 +614,8 @@ def test_top_and_bottom_docks_compose_and_an_empty_dock_keeps_no_rows():
     ]
     assert tui.frame.panes[0].rect == Rect(x=0, y=2, width=20, height=5)
     assert top.rect == Rect(x=0, y=0, width=20, height=2) and bottom.rect == Rect(x=0, y=7, width=20, height=1)
-    assert tui.visible_range() == RowRange(2, 6)
-    assert tui.visible_range("primary") == RowRange(2, 6)
+    assert tui.visible_range() == RowSpan(2, 6)
+    assert tui.visible_range("primary") == RowSpan(2, 6)
 
     empty_tui = headless_tui(20, 6)
     empty_tui.add(Rows("body"))

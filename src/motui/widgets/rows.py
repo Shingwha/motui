@@ -118,15 +118,6 @@ class StatusLine(Widget):
         self.left = tuple(left)
         self.right = tuple(right)
 
-    def revision(self) -> object:
-        """The :class:`~motui.kernel.document.Revisioned` snapshot.
-
-        The two sides as tuples (taken at construction, so the host cannot
-        mutate one behind the snapshot's back) and the theme/styles pair the
-        bands resolve from -- everything :meth:`render` reads.
-        """
-        return (self.left, self.right, self.theme, self.styles)
-
     def render(self, c: Constraints) -> Surface:
         """The one status row, fitted to the constraint width.
 
@@ -183,19 +174,6 @@ class ShortcutBar(Widget):
         # A tuple copy of the sequence (same rationale as StatusLine).
         self.items = tuple((key, label) for key, label in items)
         self.glyphs = glyphs
-
-    def revision(self) -> object:
-        """The :class:`~motui.kernel.document.Revisioned` snapshot.
-
-        The item pairs (a tuple copy), the glyph vocabulary and the
-        theme/styles pair the two bands resolve from.
-        """
-        return (
-            self.items,
-            self.glyphs,
-            self.theme,
-            self.styles,
-        )
 
     def render(self, c: Constraints) -> Surface:
         """The one hint row, fitted to the constraint width.
@@ -257,14 +235,6 @@ class Notice(Widget):
         self.glyphs = glyphs
         # The level is a plain (mutable) attribute, so the pick is
         # state-dependent: the level is looked up per render.
-
-    def revision(self) -> object:
-        """The :class:`~motui.kernel.document.Revisioned` snapshot.
-
-        The text, the level (resolved per render), the glyph vocabulary and
-        the theme/styles pair the level band resolves from.
-        """
-        return (self.text, self.level, self.glyphs, self.theme, self.styles)
 
     def _level_style(self) -> tuple[str, Style]:
         """The ``(glyph, style)`` pair this level renders with."""

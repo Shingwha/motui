@@ -54,7 +54,7 @@ from ..kernel.frame import splice_row
 from ..kernel.glyphs import GLYPHS, Glyphs
 from ..kernel.cell import Line, cut_line, overlay
 from ..kernel.text import WrapMode, visible_width
-from ..kernel.theme import Theme, Themed
+from ..kernel.theme import DEFAULT_THEME, Theme
 from ..kernel.layout import ScreenLayout
 from ..widgets.textfield import Input
 from ..kernel.layout import Constraints
@@ -71,7 +71,7 @@ PROMPT = "find \u276f "
 COUNT_EMPTY = "(0/0)"
 
 
-class Find(Themed):
+class Find:
     """A self-contained search: one query row, its matches, and the overlay.
 
     ``tui`` is the driver whose focused pane's document is searched and whose
@@ -95,6 +95,7 @@ class Find(Themed):
         "_index",
         "_open",
         "_pane_id",
+        "_theme",
         "_width",
         "glyphs",
         "input",
@@ -109,7 +110,7 @@ class Find(Themed):
         theme: Theme | None = None,
         glyphs: Glyphs = GLYPHS,
     ) -> None:
-        super().__init__(theme)
+        self._theme = theme if theme is not None else DEFAULT_THEME
         self.runtime = tui
         self.glyphs = glyphs
         self.input = Input(
@@ -275,7 +276,7 @@ class Find(Themed):
         long document reads what the blocks already hold -- the cached lists
         themselves, this walk never mutating them -- instead of
         re-wrapping every block, and a block whose content moved carries a
-        moved revision, so a hit is never stale.  The cursor restarts at
+        moved generation, so a hit is never stale.  The cursor restarts at
         the first match: a new query addresses a new set (D10).
         """
         pane = self.runtime.frame.focused_pane

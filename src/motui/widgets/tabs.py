@@ -195,34 +195,6 @@ class Tabs(LabelStrip):
             return False
         return self.on_action(action)
 
-    def revision(self) -> object:
-        """The row cache's snapshot: every input the strip's row reads.
-
-        In order: the labels (a tuple copy, so an in-place edit of the
-        host's list moves it), the index, the disabled item set, the
-        whole-control disabled flag, the index under the pointer,
-        ``focused``, the glyph vocabulary, the theme and the ``styles``
-        overrides (the bands resolve from them at render time).
-        The block-level ``hover`` flag paints nothing -- the row emphasis
-        lives in ``_hover_index`` -- so it is deliberately out, and
-        ``_last_width``/``_spans`` are outputs of ``render``, not inputs.
-
-        The snapshot is plain immutable values and costs far less than a
-        render; it is what lets a **sealed** strip's hover, focus flip or
-        selection reach the screen (D4).
-        """
-        return (
-            tuple(self.tabs),
-            self._index,
-            self._disabled_items,
-            self.disabled,
-            self._hover_index,
-            self.focused,
-            self.glyphs,
-            self.theme,
-            self.styles,
-        )
-
     def _layout(self, width: int) -> tuple[Line, tuple[tuple[int, int, int], ...]]:
         """The strip's fitted row and the label span table, in one build."""
         if not self.tabs:

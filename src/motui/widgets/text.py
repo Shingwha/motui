@@ -36,8 +36,8 @@ class Text(Widget):
     **Caching.**  Wrapping a long text is the most expensive render the
     toolkit has, and a host re-renders the same component frame after frame
     (every mouse move repaints).  The cache lives in **one** place:
-    :meth:`motui.kernel.document.Section.rows`, which remembers a sealed (or
-    revisioned) section's rows by width and :meth:`revision`.  ``render``
+    :meth:`motui.kernel.document.Section.rows`, which remembers a widget
+    section's rows by width and ``generation``.  ``render``
     itself is pure -- every standalone call re-wraps -- so a component
     handed straight to a caller never serves a stale row; behind a section,
     the section's cache answers the repeats.  The hit table :attr:`_rows`
@@ -115,33 +115,6 @@ class Text(Widget):
             out.extend(Line.from_text(row, self.style).reflow(WrapMode.WORD, width))
         return out
 
-    def _revision(self) -> object:
-        """The value snapshot of everything the rows are made of.
-
-        The default answers ``(text, style, hover span, hover style)`` --
-        all four are row inputs: the text wraps, the style lands on every
-        segment, and the span (with the band it merges) is what a hovered
-        render answers.  This is the **overridable seam** for subclasses
-        (the same tier as :meth:`_rows_for`): a subclass whose rows depend
-        on more state adds that state to the tuple, and one whose state
-        cannot be snapshotted cheaply returns ``None``, which switches block
-        caching off rather than risking a stale hit.  The snapshot must be a
-        value (no live mutable fields) and must cost far less than the
-        wrap it guards.
-        """
-        return (self.text, self.style, self._hover_span, self._hover_style)
-
-    def revision(self) -> object:
-        """The :class:`~motui.kernel.document.Revisioned` snapshot.
-
-        The protocol's door to :meth:`_revision`: a section holding this
-        component keys its own row cache on the same value, so a streamed
-        ``text =`` assignment or a moved hover span invalidates the
-        section's copy in one move.  The component keeps no row cache of its
-        own.
-        """
-        return self._revision()
-
     def render(self, c: Constraints) -> Surface:
         """Wrap ``text`` to the constraints and return a clipped surface.
 
@@ -153,7 +126,7 @@ class Text(Widget):
 
         The render is pure: every call runs :meth:`_rows_for`, and the one
         row cache in the stack is :meth:`motui.kernel.document.Section.rows`
-        (which keys on this component's :meth:`revision`).  The hover
+        (which keys on this widget's ``generation``).  The hover
         transform follows on a copy, so the last-render table never carries
         the band.
 
@@ -195,7 +168,9 @@ class Text(Widget):
             if hit is not None:
                 span = (pos.y, hit[1], hit[2])
         changed = span != self._hover_span
-        self._hover_span = span
+        if changed:
+            self._hover_span = span
+            self.touch()
         return changed
 
     def on_click(self, pos: Pos) -> bool:

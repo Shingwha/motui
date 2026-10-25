@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from motui.kernel import Axis, RowRange
+from motui.kernel import Axis, RowSpan
 
 from motui.widgets.text import Text
 from motui.kernel.frame import Chrome
@@ -98,7 +98,7 @@ def test_visible_range_reports_screen_rows_including_a_top_pin():
     tui.dock(Rows("head"), placement=Placement.TOP, size=2)
     tui.add(Rows("body"))
     tui.paint()
-    assert tui.visible_range() == RowRange(2, 7)
+    assert tui.visible_range() == RowSpan(2, 7)
     assert tui.visible_range("nowhere") is None
 
 def test_hit_is_strict_at_every_edge():

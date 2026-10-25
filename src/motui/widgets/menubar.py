@@ -28,7 +28,7 @@ and clears it.  An empty bar and a disabled bar (or a disabled active label)
 answer ``False`` and leave nothing pending.  ``focused`` is the focus flag
 the focus tier sets; the bar renders the same whether it is
 focused or not -- its active label is the selection, not a focus band -- and
-the flag is part of :meth:`MenuBar.revision` all the same.
+the flag touches the widget all the same.
 
 :class:`ContextMenu` is :class:`~motui.widgets.choice.Select`'s desktop-menu
 preset: a vertical option list with the menu cursor, ``commit=False`` (only
@@ -233,30 +233,6 @@ class MenuBar(LabelStrip):
         segments.append(Segment(" "))
         line = Line(segments).clip(WrapMode.ELLIPSIS, width)
         return line, self._spans_of(line)
-
-    def revision(self) -> object:
-        """The row cache's snapshot: every input the bar's row reads.
-
-        In order: the labels (a tuple copy, so an in-place edit of the
-        host's list moves it), the active index, the disabled item set, the
-        whole-bar disabled flag, the index under the pointer, ``focused``,
-        the glyph vocabulary, the theme and the ``styles`` overrides (the
-        bands resolve from them at render time).  The
-        block-level ``hover`` flag paints nothing -- the label emphasis
-        lives in ``_hover_index`` -- so it is deliberately out, and
-        ``_last_width``/``_spans`` are outputs of ``render``, not inputs.
-        """
-        return (
-            tuple(self.items),
-            self._index,
-            self._disabled_items,
-            self.disabled,
-            self._hover_index,
-            self.focused,
-            self.glyphs,
-            self.theme,
-            self.styles,
-        )
 
     def __repr__(self) -> str:
         return f"MenuBar({self.items!r}, index={self._index})"

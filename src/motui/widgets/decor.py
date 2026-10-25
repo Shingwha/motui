@@ -14,7 +14,7 @@ here, never drawn.  The divider / panel border color comes from the
 
 from __future__ import annotations
 
-from ..kernel.document import Component, Revisioned
+from ..kernel.document import Component
 from ..kernel.glyphs import GLYPHS, Border, Glyphs
 from ..kernel.cell import Line, Segment, Surface
 from ..kernel.layout import Constraints
@@ -37,17 +37,6 @@ def _answer(rows: list[Line], c: Constraints) -> Surface:
         rows = rows[: c.max_height]
     return Surface.clipped(rows, c.width)
 
-
-def _child_key(child: object) -> object:
-    """The cache key of a child: its identity plus its revision when it has one.
-
-    A swapped child must move the parent's snapshot even when the new child
-    renders equal rows; a mutable child's own ``revision`` is what carries
-    its in-place changes through a parent that is otherwise unchanged.
-    """
-    if isinstance(child, Revisioned):
-        return (id(child), child.revision())
-    return id(child)
 
 
 def _labelled_rule(
@@ -129,21 +118,6 @@ class Divider(Widget):
         self.char = glyphs.horizontal_rule if char is None else char
         self.label = label
         self.max_width = max_width
-
-    def revision(self) -> object:
-        """The :class:`~motui.kernel.document.Revisioned` snapshot.
-
-        Every mutable input :meth:`render` reads, as values: the rule glyph,
-        the label, the cap, and the theme/styles pair the bands resolve
-        from.
-        """
-        return (
-            self.char,
-            self.label,
-            self.max_width,
-            self.theme,
-            self.styles,
-        )
 
     def render(self, c: Constraints) -> Surface:
         """The rule at the constraints' width, as a clipped surface.
@@ -260,23 +234,6 @@ class Panel(Widget):
         #: pinned, and a hit hands back copies.  ``None`` until the first
         #: render.
         self._memo: tuple[tuple, list[Line], list[Line]] | None = None
-
-    def revision(self) -> object:
-        """The :class:`~motui.kernel.document.Revisioned` snapshot.
-
-        The wrap parameters, the theme/styles pair the band resolves from,
-        and the child's own key: its identity and -- when it is
-        :class:`~motui.kernel.document.Revisioned` -- its snapshot, so an
-        in-place child change re-wraps a sealed panel.
-        """
-        return (
-            self.title,
-            self.frame,
-            self._border,
-            self.theme,
-            self.styles,
-            _child_key(self.child),
-        )
 
     def render(self, c: Constraints) -> Surface:
         """Wrap the child in the panel and answer a clipped surface.

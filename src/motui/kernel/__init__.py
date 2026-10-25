@@ -33,14 +33,14 @@ from .events import (
 from .frame import Chrome, Frame, Pane, Separator, Split
 from .geom import Axis, Pos, Rect, Size
 from .glyphs import GLYPHS, Border, Glyphs
-from .hit import Hit, RowRange
+from .hit import Hit
 from .keymap import (
     DEFAULT_EDITOR_KEYMAP,
     DEFAULT_INPUT_KEYMAP,
     EDITOR_SUBMIT_KEYMAP,
     Keymap,
 )
-from .layout import Constraints, ScreenLayout, Scroll, ScrollAxis, Viewport
+from .layout import Constraints, RowSpan, ScreenLayout, Scroll, ScrollAxis, Viewport
 from .overlay import Overlay
 from .selection import Selection, extract, highlight
 from .style import FG_CODES, NONE, RESET, Color, ColorMode, Style, sgr_prefix
@@ -83,7 +83,7 @@ __all__ = [
     "Pos",
     "Rect",
     "ResizeEvent",
-    "RowRange",
+    "RowSpan",
     "ScreenLayout",
     "Scroll",
     "ScrollAxis",

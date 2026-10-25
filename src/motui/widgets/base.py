@@ -3,10 +3,10 @@
 A widget owns the four mutable inputs the runtime writes -- its theme, its
 :class:`~motui.kernel.theme.Styles` overrides, and the ``focused`` / ``hover``
 flags -- and answers the interaction verbs with their no-op defaults.  It
-deliberately is **not** :class:`~motui.kernel.theme.Themed`: the older base
-resolves every style at construction, while a widget keeps the theme value
-and reads the role group it paints when it renders, so assigning a new
-``theme`` repaints a mounted widget without rebuilding it.
+deliberately does **not** bake its theme in at construction: a widget keeps
+the theme value and reads the role group it paints when it renders (through
+:meth:`~motui.kernel.theme.Theme.group`), so assigning a new ``theme``
+repaints a mounted widget without rebuilding it.
 
 Subclasses implement :meth:`render` and override only the verbs they take.
 A pure renderer need not inherit this class at all: :class:`Component` --
@@ -58,9 +58,9 @@ class Widget:
 
     ``theme is None`` means "inherit the App theme"; ``styles`` overrides
     whole role groups and leaves every ``None`` field to the theme.  Both
-    stay readable and writable so the runtime can retheme a mounted widget,
-    and :meth:`revision` implementations must include them in their value
-    snapshot so a block's row cache sees the change.
+    stay readable and writable so the runtime can retheme a mounted widget;
+    assigning either is a public attribute write, so it touches the
+    generation a block's row cache keys on.
 
     **The tree.**  ``parent`` points at the widget that owns this one and
     ``children`` lists the widgets this one owns.  The pointers are a plain
@@ -219,11 +219,7 @@ class Widget:
 
     def group(self, name: str) -> object:
         """The role group ``name``: the ``styles`` override, else the theme's."""
-        if self.styles is not None:
-            override = getattr(self.styles, name, None)
-            if override is not None:
-                return override
-        return getattr(self._theme, name)
+        return self._theme.group(name, self.styles)
 
     def render(self, c: Constraints) -> Surface:
         """Paint the widget's rows; every concrete widget implements this."""
@@ -280,10 +276,6 @@ class Widget:
 
     def take(self) -> object | None:
         """Read the one-shot result; a widget without one answers ``None``."""
-        return None
-
-    def revision(self) -> object | None:
-        """The row cache's change token; ``None`` disables caching."""
         return None
 
 

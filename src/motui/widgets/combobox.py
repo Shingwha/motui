@@ -12,8 +12,8 @@ docstring's recipe mounts a :class:`~motui.app.modal.Modal` over
 
 The combo is a wrapper, so it speaks the whole container vocabulary: a
 pointer cell maps to the field through :meth:`ComboBox.child_at`, the focus
-flag and the click delegate to the field, and :meth:`ComboBox.revision`
-covers every input its rows and its result read.
+flag and the click delegate to the field, and every state change touches
+the widget.
 
 Only the kernel and this layer are imported: no ``app``, no ``interaction``,
 no ``Modal``.  A widget lays out rows; the modal owns the screen.
@@ -315,25 +315,6 @@ class ComboBox(Widget):
             self.list.styles = self.styles
             self._skin_theme = self.theme
             self._skin_styles = self.styles
-
-    def revision(self) -> object:
-        """The ``Revisioned`` snapshot of every row and result input.
-
-        The field's own snapshot (text, cursor, theme/styles, read-only
-        state and policy), the open flag, the pending result, the option
-        universe and the two window budgets.  The dropdown's rows are
-        painted by the host's modal, but the combo's own render is the
-        field, so this is the value a block cache keys on.
-        """
-        self._skin()
-        return (
-            self.input.revision(),
-            self.is_open,
-            self._pending,
-            tuple(self.list.options),
-            self.max_rows,
-            self.max_drop_rows,
-        )
 
     # -- the render ---------------------------------------------------------------
 

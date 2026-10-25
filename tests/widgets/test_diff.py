@@ -125,9 +125,15 @@ def test_wrap_selects_how_a_long_diff_line_fits():
     assert list(budgeted)[0].text.startswith("@@")
 
 
-def test_wrap_is_part_of_the_revision_and_render_key():
+def test_wrap_is_part_of_the_render_key_and_touches():
     plain = Diff("a" * 30, "b" * 30)
     clipped = Diff("a" * 30, "b" * 30, wrap=WrapMode.CLIP)
-    assert plain.revision() != clipped.revision()
-    assert plain.render(Constraints(width=20)) != clipped.render(Constraints(width=20))
-    assert plain.render(Constraints(width=20)) == plain.render(Constraints(width=20))
+    assert list(plain.render(Constraints(width=20))) != list(
+        clipped.render(Constraints(width=20))
+    )
+    assert list(plain.render(Constraints(width=20))) == list(
+        plain.render(Constraints(width=20))
+    )
+    before = plain.generation
+    plain.wrap = WrapMode.CLIP
+    assert plain.generation > before

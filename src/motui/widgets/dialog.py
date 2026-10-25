@@ -31,7 +31,7 @@ from __future__ import annotations
 from dataclasses import dataclass, replace
 from typing import Sequence
 
-from ..kernel.document import Component, Revisioned
+from ..kernel.document import Component
 from ..kernel.events import Event, KeyEvent
 from ..kernel.geom import Pos
 from ..kernel.glyphs import GLYPHS, Border, Glyphs
@@ -123,8 +123,8 @@ class Dialog(Widget):
     :meth:`~motui.widgets.action.Button.take`, so the button and the
     dialog share one activation rule.  :meth:`render`
     remembered nothing itself: its rows are a pure function of the body's
-    rows and the frame's parameters, and :meth:`revision` is the value
-    snapshot the block's row cache keys on.
+    rows and the frame's parameters, and the block's row cache keys on this widget's
+    ``generation``.
     """
 
     __slots__ = (
@@ -180,10 +180,9 @@ class Dialog(Widget):
         self._border = glyphs.box if border is None else border
         self._specs = [self._spec(button) for button in buttons]
         self._buttons = [self._new_button(spec) for spec in self._specs]
-        # The body rows of the last render: kept so ``revision`` can name
-        # their identity (the Panel precedent -- a body whose rows are
-        # remembered answers the same objects) and ``child_at`` can map a
-        # body cell back to the body component.
+        # The body rows of the last render: kept for ``child_at`` (a body
+        # cell maps back to the body component) and as the hover/paint
+        # geometry of the most recent render.
         self._body_rows: list[Line] = []
         # The body's geometry in the last render: its first row, the pad
         # columns before it, and the width it was rendered at.  ``child_at``
@@ -270,6 +269,7 @@ class Dialog(Widget):
     def index(self, value: int) -> None:
         self._index = min(max(value, 0), len(self._specs) - 1) if self._specs else 0
         self._sync_focus()
+        self.touch()
 
     @property
     def focused_button(self) -> Button | None:
@@ -362,6 +362,7 @@ class Dialog(Widget):
         button.on_action("activate")
         button.take()
         self._pending = self._specs[index].value
+        self.touch()
 
     def take(self) -> object | None:
         """Read the pending result once and clear it.
@@ -572,60 +573,6 @@ class Dialog(Widget):
             [(lead + left + offset, line.width) for offset, line in zip(offsets, lines)],
         )
         return self._interior_row(content, box, lead, border_style)
-
-    def revision(self) -> object:
-        """The row cache's snapshot: every input the box's rows read.
-
-        In order, the values are:
-
-        * ``title`` -- embedded in the top rule (or gone with the frame);
-        * ``width`` -- pins the box (`None`: the width-derived default);
-        * ``frame`` -- whether the edge, the title and the bottom rule exist;
-        * ``shade`` -- whether an interior row is filled solid to the edge;
-        * ``align`` -- where the button row sits in the interior;
-        * ``danger`` plus the ``theme``/``styles`` pair -- together they
-          resolve the border and title bands at render time;
-        * the border tuple -- it paints every frame cell;
-        * every button's own :meth:`~motui.widgets.action.Button.revision`
-          (label, ``focused`` -- which mirrors the cursor -- and its three
-          bands): the button row is those rows joined and placed;
-        * the body's snapshot: when the body is
-          :class:`~motui.kernel.document.Revisioned` and answers one, its
-          ``revision()`` **is** the body's contribution -- a value that
-          moves with a streamed ``text =`` assignment on the first frame,
-          not after a render.  Only a body outside the protocol (or one
-          that switched its snapshot off with ``None``) falls back to the
-          identity of the rows the last render answered (the ``Panel``
-          precedent); such a body either answers the same row objects and
-          compares stable, or rebuilds them every call and simply misses.
-
-        The button cursor itself is covered by the buttons' ``focused``
-        flags (``_sync_focus`` keeps them in step), and the pending result /
-        ``_hit`` are not row inputs.  The snapshot is plain values (no live
-        lists), so it costs far less than one render.
-        """
-        body = self.body
-        if isinstance(body, Revisioned):
-            body_revision = body.revision()
-        else:
-            body_revision = None
-        if body_revision is None:
-            body_snapshot = ("rows", tuple(map(id, self._body_rows)))
-        else:
-            body_snapshot = ("revision", body_revision)
-        return (
-            self.title,
-            self.width,
-            self.frame,
-            self.shade,
-            self.align,
-            self.danger,
-            self._border,
-            self.theme,
-            self.styles,
-            tuple(button.revision() for button in self._buttons),
-            body_snapshot,
-        )
 
     def __repr__(self) -> str:
         return f"Dialog({self.title!r}, index={self._index}, danger={self.danger})"

@@ -39,6 +39,7 @@ from .document import Document, Placement, Section, Sizing
 
 __all__ = [
     "Constraints",
+    "RowSpan",
     "ScreenLayout",
     "Scroll",
     "ScrollAxis",
@@ -47,6 +48,14 @@ __all__ = [
     "ScrollableX",
     "Viewport",
 ]
+
+
+@dataclass(frozen=True, slots=True)
+class RowSpan:
+    """A pane's visible body rows as screen rows: ``first`` .. ``last`` inclusive."""
+
+    first: int
+    last: int
 
 
 @dataclass(frozen=True, slots=True, kw_only=True)
@@ -254,23 +263,23 @@ class ScreenLayout:
 
 
 class _BodyEntry:
-    """One body block's indexed shape: the block, its snapshot, its height.
+    """One body block's indexed shape: the block, its generation, its height.
 
     The index deliberately stores **no rows** -- a block's cached list is a
     borrow (:meth:`~motui.kernel.document.Section.rows_view`), never owned here --
     so the entry is only a height token the geometry recomputes from: the
     rows themselves are taken from the block's own cache at the moment the
-    window materializes them.  ``revision`` is the snapshot the block
-    answered when ``count`` was measured; ``None`` marks a block without a
-    usable snapshot, which is re-measured on every :meth:`_BodyIndex.ensure`
-    (a block whose memory is off cannot prove itself unchanged).
+    window materializes them.  ``generation`` is the counter the block
+    answered when ``count`` was measured; ``None`` marks a pure component
+    without a counter, which is re-measured on every
+    :meth:`_BodyIndex.ensure` (no counter cannot prove itself unchanged).
     """
 
-    __slots__ = ("block", "count", "revision")
+    __slots__ = ("block", "count", "generation")
 
-    def __init__(self, block: Section, revision: object, count: int) -> None:
+    def __init__(self, block: Section, generation: int | None, count: int) -> None:
         self.block = block
-        self.revision = revision
+        self.generation = generation
         self.count = count
 
 
@@ -279,7 +288,7 @@ class _BodyIndex:
 
     The per-frame geometry facts of one document, kept between layouts so a
     frame pays for what changed instead of for the document: body entries in
-    document order (``block, revision, count``), the cumulative heights
+    document order (``block, generation, count``), the cumulative heights
     (``_cum[i]`` is the body row the *i*-th entry starts at, so the window
     is located by bisect), the body total, the pinned blocks in document
     order, and the ``block_order`` tuple (rebuilt only when the document
@@ -290,14 +299,14 @@ class _BodyIndex:
     height budget) -- either one rebuilds every entry (``row_count`` renders
     a first layout's blocks exactly as the per-frame walk always did).  Within
     a key, every ``ensure`` sweeps the entries and probes each block's
-    ``revision()``: an equal value means the block's height stands (one cheap
-    value comparison -- the snapshot is a value, so equality is the block's
-    own promise that its rows are unchanged), a moved value re-measures the
+    ``generation``: an equal value means the block's height stands (one
+    integer comparison -- the counter is the widget's own promise that its
+    rows are unchanged), a moved value re-measures the
     block through :meth:`~motui.kernel.document.Section.row_count` (which
     re-renders and refills the block's own cache) and re-runs the prefix sums
     **from that entry on** -- the naive suffix recompute, because a moved
     block in an append-mostly document is almost always at the tail.  A
-    ``None`` snapshot (no protocol, or memory switched off) is always dirty:
+    ``None`` generation (a pure component without a counter) is always dirty:
     the entry is re-measured every frame, which re-renders that block every
     frame -- exactly once, the same single render the per-frame rows walk
     paid, because the rows that render produced are carried to the window
@@ -341,7 +350,7 @@ class _BodyIndex:
         After it answers, the geometry properties (pinned blocks, entries,
         prefix sums, body total, block order) describe the document at these
         constraints as of the blocks' current snapshots.  Cheap when nothing
-        changed: one key comparison plus one ``revision()`` probe per body
+        changed: one key comparison plus one ``generation`` probe per body
         block.
         """
         self._frame_rows = {}
@@ -423,13 +432,13 @@ class _BodyIndex:
     # -- maintenance ------------------------------------------------------------------
 
     def _sweep(self, c: Constraints) -> None:
-        """Probe every entry's snapshot and re-measure the ones that moved."""
+        """Probe every entry's generation and re-measure the ones that moved."""
         entries = self._entries
         dirty_from = -1
         for i, entry in enumerate(entries):
-            revision = entry.block.revision()
-            if revision is None:
-                # No snapshot, no memory: render per call, and keep the rows
+            generation = entry.block.generation
+            if generation is None:
+                # No counter, no memory: render per call, and keep the rows
                 # for the window so this frame renders the block only once.
                 rows = entry.block.rows_view(c)
                 self._frame_rows[entry.block] = rows
@@ -437,8 +446,8 @@ class _BodyIndex:
                     entry.count = len(rows)
                     if dirty_from < 0:
                         dirty_from = i
-            elif revision != entry.revision:
-                entry.revision = revision
+            elif generation != entry.generation:
+                entry.generation = generation
                 count = entry.block.row_count(c)
                 if count != entry.count:
                     entry.count = count
@@ -485,16 +494,16 @@ class _BodyIndex:
             elif block.placement is Placement.BOTTOM:
                 bottom.append(block)
             else:
-                revision = block.revision()
-                if revision is None:
-                    # No snapshot, no memory: render per call, and keep the
+                generation = block.generation
+                if generation is None:
+                    # No counter, no memory: render per call, and keep the
                     # rows for the window (one render per frame, as always).
                     rows = block.rows_view(c)
                     self._frame_rows[block] = rows
                     count = len(rows)
                 else:
                     count = block.row_count(c)
-                entries.append(_BodyEntry(block, revision, count))
+                entries.append(_BodyEntry(block, generation, count))
                 cum.append(total + count)
                 total += count
         self._entries = entries

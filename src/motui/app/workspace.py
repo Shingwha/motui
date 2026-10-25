@@ -33,8 +33,8 @@ from ..kernel.document import (
 )
 from ..kernel.frame import Frame, Pane, Rect
 from ..kernel.geom import Axis
-from ..kernel.hit import Hit, RowRange
-from ..kernel.layout import Viewport
+from ..kernel.hit import Hit
+from ..kernel.layout import RowSpan, Viewport
 from ..kernel.selection import Selection
 
 if TYPE_CHECKING:
@@ -197,7 +197,7 @@ class Workspace:
         """The pane a 0-based screen cell falls in, or ``None``."""
         return self._runtime.pane_at(x, y)
 
-    def visible_range(self, pane: Pane | str | None = None) -> RowRange | None:
+    def visible_range(self, pane: Pane | str | None = None) -> RowSpan | None:
         """A pane's visible body rows as screen rows."""
         return self._runtime.visible_range(pane)
 

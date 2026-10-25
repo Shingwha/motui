@@ -37,7 +37,7 @@ flip doors and renders its title in ``text.faint``.
 
 from __future__ import annotations
 
-from ..kernel.document import Component, Revisioned
+from ..kernel.document import Component
 from ..kernel.geom import Pos
 from ..kernel.glyphs import GLYPHS, Glyphs, seat
 from ..kernel.cell import Line, Segment, Surface
@@ -193,56 +193,12 @@ class Collapsible(Widget):
         """
         target = pos is not None and pos.y == 0
         changed = target != self._marked
-        self._marked = target
+        if changed:
+            self._marked = target
+            self.touch()
         return changed
 
     # -- rendering ---------------------------------------------------------------
-
-    def revision(self) -> object:
-        """The row cache's snapshot: every input ``render`` reads.
-
-        The ``open`` state (which rows exist), the row mark (``_marked``),
-        ``focused``, ``title``, the theme/styles pair the three bands
-        resolve from and the body's own snapshot are the title
-        row's whole input set.  The body's rows are the other row input:
-
-        * when ``body`` is :class:`~motui.kernel.document.Revisioned` and
-          answers a snapshot, that ``revision()`` is used directly -- the
-          same value the body would hand its own block, so a streamed
-          assignment inside the body moves the key before any render;
-        * otherwise (a body outside the protocol, or one whose snapshot is
-          ``None``) the fallback is the identity tuple of the body rows the
-          last *open* render remembered -- the memo the component already
-          keeps.  Such a body either answers the same row objects (stable
-          identity, safe hit) or rebuilds them every call (a miss per
-          frame, never a stale row).
-
-        While closed the body contributes its last memo unchanged; the
-        ``open`` flag already moves the snapshot, so the title-only row is
-        what renders.  The pending result is a one-shot value, not a row
-        input, and the block-level ``hover`` flag paints nothing
-        (``_marked`` does); ``disabled`` and its band are row inputs.
-        """
-        body = self.body
-        body_snapshot: object = None
-        if isinstance(body, Revisioned):
-            snapshot = body.revision()
-            if snapshot is not None:
-                body_snapshot = ("revision", snapshot)
-        if body_snapshot is None:
-            rows = self._body_memo[2] if self._body_memo is not None else []
-            body_snapshot = ("rows", tuple(map(id, rows)))
-        return (
-            self.open,
-            self._marked,
-            self.focused,
-            self.disabled,
-            self.title,
-            self.glyphs,
-            self.theme,
-            self.styles,
-            body_snapshot,
-        )
 
     def render(self, c: Constraints) -> Surface:
         """The title row and, while open, the body's inset rows.

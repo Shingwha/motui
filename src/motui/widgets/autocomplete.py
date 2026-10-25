@@ -131,16 +131,6 @@ class Autocomplete(Select):
             rows = rows[: c.max_height]
         return Surface.clipped(rows, c.width)
 
-    def _revision(self) -> object:
-        """The menu's snapshot plus the query the matches were filtered by.
-
-        ``_rows()`` already snapshots the current matches and the base adds
-        the whole option universe (the description column is measured over
-        it); the query goes in beside them so the snapshot names the state
-        the filter derives from, not just its answer.
-        """
-        return (self.query, *super()._revision())
-
     @property
     def is_empty(self) -> bool:
         """True when the current query matches no option."""

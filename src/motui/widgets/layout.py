@@ -21,7 +21,7 @@ whitespace around a child (optionally filled into a solid band).
 
 from __future__ import annotations
 
-from ..kernel.document import Component, Revisioned
+from ..kernel.document import Component
 from ..kernel.cell import Line, Segment, Surface
 from ..kernel.layout import Constraints
 from ..kernel.style import NONE, Style
@@ -31,12 +31,6 @@ from ..widgets.base import Container, Widget
 
 __all__ = ["Column", "Padding", "Row", "Spacer"]
 
-
-def _child_key(child: object) -> object:
-    """The cache key of one child: identity plus its revision when it has one."""
-    if isinstance(child, Revisioned):
-        return (id(child), child.revision())
-    return id(child)
 
 
 def _answer(rows: list[Line], c: Constraints) -> Surface:
@@ -100,20 +94,6 @@ class Row(Container):
         #: width)`` -> ``(composed rows, the child rows that key it)``.  The
         #: child rows are kept so their identities stay pinned.
         self._memo: tuple[tuple, list[Line], list[list[Line]]] | None = None
-
-    def revision(self) -> object:
-        """The :class:`~motui.kernel.document.Revisioned` snapshot.
-
-        The children (by key: identity plus each child's own revision), the
-        pinned widths and the gap -- the width is the block cache's other
-        key.  A sealed row of mutable children therefore re-splices when a
-        child changes in place.
-        """
-        return (
-            tuple(_child_key(child) for child in self.children),
-            None if self.widths is None else tuple(self.widths),
-            self.gap,
-        )
 
     def render(self, c: Constraints) -> Surface:
         """Lay the children out side by side and answer a clipped surface.
@@ -229,17 +209,6 @@ class Column(Container):
         #: ``(composed rows, the child rows that key it)``.
         self._memo: tuple[tuple, list[Line], list[list[Line]]] | None = None
 
-    def revision(self) -> object:
-        """The :class:`~motui.kernel.document.Revisioned` snapshot.
-
-        The children (by key: identity plus each child's own revision) and
-        the gap; the width is the block cache's other key.
-        """
-        return (
-            tuple(_child_key(child) for child in self.children),
-            self.gap,
-        )
-
     def render(self, c: Constraints) -> Surface:
         """Stack the children and answer a clipped surface.
 
@@ -307,10 +276,6 @@ class Spacer(Widget):
     def __init__(self, rows: int = 1) -> None:
         super().__init__()
         self.rows = rows
-
-    def revision(self) -> object:
-        """The :class:`~motui.kernel.document.Revisioned` snapshot: the row count."""
-        return (self.rows,)
 
     def render(self, c: Constraints) -> Surface:
         """``rows`` blank rows as a clipped surface (the budget may shorten it)."""
@@ -391,24 +356,6 @@ class Padding(Widget):
         #: The padding memo: ``(child-row identity tuple, clipped insets,
         #: fill, width)`` -> ``(padded rows, the child rows that key it)``.
         self._memo: tuple[tuple, list[Line], list[Line]] | None = None
-
-    def revision(self) -> object:
-        """The :class:`~motui.kernel.document.Revisioned` snapshot.
-
-        The clipped insets are *not* applied here (render clips them): the
-        raw four values are row inputs, the theme/styles pair the fill
-        resolves from is one and the child
-        key carries the child's identity and revision.
-        """
-        return (
-            _child_key(self.child),
-            self.left,
-            self.right,
-            self.top,
-            self.bottom,
-            self.theme,
-            self.styles,
-        )
 
     def render(self, c: Constraints) -> Surface:
         """Pad the child and answer a clipped surface.

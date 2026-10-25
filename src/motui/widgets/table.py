@@ -88,8 +88,7 @@ padded through :func:`~motui.kernel.glyphs.pair_seat` -- so a custom pair
 of unequal widths still lines up, and two empty strings collapse the column
 to zero.  The grid's frame, its rules and its row count are untouched,
 column 0's natural width grows by the pair, and an **empty** mark set
-renders exactly the bytes the table always did.  The marks are row inputs
-(they are part of :meth:`Table.revision`), and a ``sort_by`` re-order
+renders exactly the bytes the table always did.  The marks are row inputs, and a ``sort_by`` re-order
 re-points them at the record they were on exactly as it re-points the
 cursor, the pending result and the pointer's mark.
 
@@ -104,8 +103,8 @@ for a host that pins it as a sticky row (the recipe is in the method's
 docstring -- the widget knows nothing of viewports).
 
 Only the kernel is imported; ``render`` is a pure function of the table and
-``width``.  That is what makes the memory safe: while :meth:`Table.revision`
--- the value snapshot of every row input -- and the width hold still, the
+``width``.  That is what makes the memory safe: while the widget's ``generation``
+-- moved by every touch -- and the width hold still, the
 remembered rows are exactly what a fresh render would answer, so
 :meth:`Table.render` hands them back as a list copy instead of rebuilding
 the grid.
@@ -267,8 +266,8 @@ class Table(Widget):
     rule separates every two data rows.
     Styles resolve at render time from the theme (or a ``styles=`` group
     override): ``text``, ``borders`` and ``rows`` are read through
-    :meth:`~motui.widgets.base.Widget.group`, and ``theme``/``styles`` are
-    part of :meth:`revision`, so a theme switch repaints a mounted table.
+    :meth:`~motui.widgets.base.Widget.group`, and assigning ``theme``/``styles``
+    touches the widget, so a theme switch repaints a mounted table.
 
     The optional row cursor is the table's interactive face: ``index`` is
     the data row under it (``None`` -- the default, and the empty table's
@@ -323,24 +322,17 @@ class Table(Widget):
     **The memory.**  A grid render normalizes, bands, measures, pads and
     fuses every cell of every row -- 24 ms for a 240-row table -- and a host
     repaints the same table frame after frame (every mouse move repaints),
-    so :meth:`render` remembers its last answer: while :meth:`revision` and
-    the width are unchanged, the remembered rows come back as a list copy
-    and the natural-width measurement they were built from rides in the
-    same slot instead of being re-measured.  The snapshot copies the row
-    and header **lists** (``tuple(map(tuple, self.rows))``): :attr:`rows`
-    is the host's own list, and an in-place edit -- ``rows[i][j] = ...``,
-    ``rows.append(...)``, ``headers[:] = ...`` -- must move the snapshot,
-    where a snapshot holding the live list would compare equal to itself
-    forever and the memory would freeze a table the host is editing.  A
-    cell's own ``Segment`` list is the one level the copy does not reach
-    (the block protocol names this shape as the canonical snapshot): a cell
-    is a value in every documented use, and a host that mutates a segment
-    list under a rendered table must assign the cell, which the snapshot
-    sees.
-
-    :meth:`revision` is the :class:`~motui.kernel.document.Revisioned` door:
-    the block keys its own row cache on the same value, so a sealed
-    table's hover finally reaches the screen (D4).
+    so :meth:`render` remembers its last answer: while the widget's
+    ``generation`` and the width are unchanged, the remembered rows come
+    back as a list copy and the natural-width measurement they were built
+    from rides in the same slot instead of being re-measured.  :attr:`rows`
+    is the host's own list, so an in-place edit -- ``rows[i][j] = ...``,
+    ``rows.append(...)``, ``headers[:] = ...`` -- is invisible to the
+    counter: the host must call :meth:`~motui.widgets.base.Widget.touch`
+    after editing in place.  Assigning ``rows`` (or any public attribute)
+    touches automatically.  A cell's own ``Segment`` list is deliberately
+    not walked: a cell is a value in every documented use, and a host that
+    mutates a segment list under a rendered table must touch as well.
     """
 
     __slots__ = (
@@ -352,8 +344,8 @@ class Table(Widget):
         "_last_layout",
         "_memo_layout",
         "_memo_natural",
-        "_memo_natural_revision",
-        "_memo_revision",
+        "_memo_natural_generation",
+        "_memo_generation",
         "_memo_rows",
         "_memo_width",
         "_pending",
@@ -449,18 +441,17 @@ class Table(Widget):
         # Explicit column budgets (``set_widths``), or ``None`` for the
         # measured widths; read by ``_budgets`` on every render.
         self._widths: list[int] | None = None
-        # The memory: the rows of the last grid while ``_memo_revision`` and
+        # The memory: the rows of the last grid while ``_memo_generation`` and
         # ``_memo_width`` still describe the table, and the natural widths
         # that grid was built from (their own slot, because ``header_line``
         # asks for the widths without rendering the grid).  ``None`` rows
-        # mean "nothing remembered"; the revision never answers ``None``
-        # (this component always has a snapshot), so the initial ``None``
-        # keys are crossed by the row check, not by a snapshot value.
+        # mean "nothing remembered"; the generation is always an int here,
+        # so the initial ``None`` keys are crossed by the row check.
         self._memo_rows: list[Line] | None = None
         self._memo_width: int | None = None
-        self._memo_revision: object = None
+        self._memo_generation: object = None
         self._memo_natural: list[int] | None = None
-        self._memo_natural_revision: object = None
+        self._memo_natural_generation: object = None
         # The visual-row structure of the remembered grid (the memo's
         # companion) and the structure of the most recent render -- what
         # ``click``/``on_hover`` map a block row through.  ``None`` until a
@@ -486,6 +477,7 @@ class Table(Widget):
             self._index = None
         else:
             self._index = Cursor(len(self.rows)).clamp(value)
+        self.touch()
 
     @property
     def selected(self) -> list | None:
@@ -535,6 +527,7 @@ class Table(Widget):
             if not landed:
                 return False  # every row is disabled
             self._index = cursor.index
+            self.touch()
             return True
         cursor = Cursor(
             count,
@@ -542,7 +535,9 @@ class Table(Widget):
             disabled=self.disabled_items,
         )
         moved = cursor.move(delta)
-        self._index = cursor.index
+        if moved:
+            self._index = cursor.index
+            self.touch()
         return moved
 
     def _is_disabled(self, index: int) -> bool:
@@ -580,6 +575,7 @@ class Table(Widget):
             return False
         self._index = entry.data_row
         self._pending = None
+        self.touch()
         return True
 
     def take(self) -> int | None:
@@ -604,6 +600,7 @@ class Table(Widget):
         if self._is_disabled(self._index):
             return False
         self.marked.toggle(self._index)
+        self.touch()
         return True
 
     def on_hover(self, pos: Pos | None) -> bool:
@@ -629,7 +626,9 @@ class Table(Widget):
             if 0 <= pos.y < len(layout):
                 target = layout[pos.y].data_row
         changed = target != self._hover_row
-        self._hover_row = target
+        if changed:
+            self._hover_row = target
+            self.touch()
         return changed
 
     # -- the keyboard -----------------------------------------------------------
@@ -732,6 +731,7 @@ class Table(Widget):
             self.marked.clear()
             for index in remapped:  # the same MarkSet object, re-pointed in place
                 self.marked.toggle(index)
+        self.touch()
         return True
 
     def set_widths(self, widths: Sequence[int] | None) -> None:
@@ -752,6 +752,7 @@ class Table(Widget):
         constructor state).
         """
         self._widths = None if widths is None else [int(w) for w in widths]
+        self.touch()
 
     def header_lines(self, width: int) -> list[Line]:
         """Every header visual line, byte-identical to the grid's own header.
@@ -812,65 +813,6 @@ class Table(Widget):
 
     # -- the render ---------------------------------------------------------------
 
-    def _revision(self) -> object:
-        """The value snapshot of everything the grid's rows are made of.
-
-        :attr:`rows` and :attr:`headers` go in as **copies** -- a tuple over
-        a tuple of each row -- because they are the host's own mutable
-        lists: the copy is what makes an in-place edit (a rewritten cell, an
-        appended record, a swapped header list) move the snapshot, where
-        comparing the live lists would compare the table to itself.  The
-        pinned budgets, the alignments, the cursor, the pointer's mark, the
-        focus and disabled flags, the disabled item set, the theme and the
-        ``styles`` overrides (the roles resolve from them at render time)
-        are row inputs and go in unchanged; they are values
-        (or construction-time constants), so holding them is holding a
-        copy.  The marks go in as
-        ``tuple(self.marked)`` -- the set's ascending snapshot -- because
-        the first cell's prefix is a row input like any other.  The glyph
-        vocabulary the prefix is drawn from is a row input too, and so are
-        the rest.  The pending result
-        is deliberately **not** here: it never reaches a row, and the
-        protocol's promise is about rows -- a snapshot moves when what the
-        grid paints moves.
-
-        The one level the copy does not reach is a cell that is itself a
-        mutable ``Segment`` list: every documented cell shape is a value
-        (``str``, ``(str, Style)``, a lone ``Segment``) and the copy the
-        block protocol prescribes stops at the same depth.
-        """
-        widths = self._widths
-        aligns = self.aligns
-        return (
-            tuple(map(tuple, self.rows)),
-            tuple(self.headers),
-            None if widths is None else tuple(widths),
-            None if aligns is None else tuple(aligns),
-            self._index,
-            self._hover_row,
-            tuple(self.marked),
-            (self._glyphs.check_on, self._glyphs.check_off),
-            self._border,
-            self.focused,
-            self.disabled,
-            tuple(sorted(self.disabled_items)),
-            self.cell_wrap,
-            self.max_col_width,
-            self.min_col_width,
-            self.theme,
-            self.styles,
-        )
-
-    def revision(self) -> object:
-        """The :class:`~motui.kernel.document.Revisioned` snapshot.
-
-        The protocol's door to :meth:`_revision`: a block holding this
-        component keys its own row cache on the same value, so a sealed
-        table's hover -- or an in-place row edit -- invalidates the block's
-        copy and this component's memory in one move.
-        """
-        return self._revision()
-
     def render(self, c: Constraints) -> Surface:
         """The grid at the constraint width, remembered while the snapshot holds.
 
@@ -887,7 +829,7 @@ class Table(Widget):
         every budget slices the same rows, so alternating budgets cannot
         thrash the build.
 
-        While the width and :meth:`_revision` are unchanged, the remembered
+        While the width and the widget's ``generation`` are unchanged, the remembered
         rows of the last grid come back as a list copy -- no cell
         normalization, banding, measuring, wrapping, padding or fusing (the
         component's memory, see the class docstring).  A miss builds the
@@ -903,15 +845,15 @@ class Table(Widget):
         if self.cell_wrap is WrapMode.OVERFLOW:
             build_width = self._grid_width(width)
             surface_width = max(width, build_width)
-        revision = self._revision()
+        generation = self.generation
         rows = self._memo_rows
         if (
             rows is None
             or self._memo_width != build_width
-            or self._memo_revision != revision
+            or self._memo_generation != generation
         ):
             rows, layout = self._grid(build_width)
-            self._memo_revision = revision
+            self._memo_generation = generation
             self._memo_width = build_width
             self._memo_rows = rows
             self._memo_layout = layout
@@ -1196,7 +1138,7 @@ class Table(Widget):
         zero.  :meth:`render` and :meth:`header_line` read it, which is what
         keeps their budgets -- and their header bytes -- in step.
 
-        The answer is **remembered** while the table's :meth:`_revision`
+        The answer is **remembered** while the table's ``generation``
         holds: the walk normalizes every cell of every row, and both
         callers ask for the very same widths frame after frame (a pinned
         header asks without rendering the grid at all), so a hit answers
@@ -1207,11 +1149,11 @@ class Table(Widget):
         the returned list is the memory's own, and every caller only reads
         it (``_budgets`` copies what it changes).
         """
-        revision = self._revision()
+        generation = self.generation
         widths = self._memo_natural
-        if widths is None or self._memo_natural_revision != revision:
+        if widths is None or self._memo_natural_generation != generation:
             widths = self._measure_widths()
-            self._memo_natural_revision = revision
+            self._memo_natural_generation = generation
             self._memo_natural = widths
         return widths
 
