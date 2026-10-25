@@ -1,7 +1,7 @@
 ── /components/button ────────────────────────────────────────────────────────────────────────────────────────
  Overview │ Components │ Interactions │ Styling │ Patterns │ Reference                          theme: default
   Text                Button                                                                                 ░
-  Text                The one-row action: click or activate, with hover and focus bands.                     ░
+  Text                The one-row action: click or press enter, with hover and focus bands.                  ░
   Markdown            ───────────────────────────────────────────────────────────────────────────────────────░
   Diff                ┌─ preview ───────────────────────────────────────────────────────────────────────────┐░
   Notice              │  Ship                                                                               │░

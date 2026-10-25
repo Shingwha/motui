@@ -10,8 +10,8 @@
   Editor              │                                                                                     │░
   Checkbox            │  Error toast                                                                        │░
   RadioGroup          └─────────────────────────────────────────────────────────────────────────────────────┘░
-  Checkbox group      Try: activate a button; each raises a toast; the stack auto-dismisses                  ░
-  Select              API: Toasts(tui, *, ttl, max_shown, corner, style, theme) · show(text, style=...)      ░
+  Checkbox group      Try: press a button; each raises a toast; the stack auto-dismisses                     ░
+  Select              API: Toasts(runtime, *, ttl, max_shown, corner, style, theme) · show(text, style=...)  ░
   ComboBox                                                                                                   ░
   Autocomplete                                                                                               ░
   Slider                                                                                                     ░

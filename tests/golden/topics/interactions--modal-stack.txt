@@ -7,7 +7,7 @@
   Search & chrome     │  Open first panel                                                                   │░
   Find                └─────────────────────────────────────────────────────────────────────────────────────┘░
   Scrollbar           Try: open the first panel, choose Next, then Done; escape cancels each layer           ░
-  Panels              API: Modal(tui, dialog) · FocusManager.push_trap/pop_trap nests per modal              ░
+  Panels              API: Modal(runtime, dialog) · FocusManager.push_trap/pop_trap nests per modal          ░
 ▌ Modal stack                                                                                                ░
   Dispatch                                                                                                   ░
                                                                                                              ░

@@ -10,9 +10,9 @@
   Panels              │                                                                                     │░
   Modal stack         │ Third                                                                               │░
   Dispatch            └─────────────────────────────────────────────────────────────────────────────────────┘░
-                      Try: tab cycles the targets; arrows drive; enter activates; esc to catalog             ░
+                      Try: tab cycles the targets; arrows drive; enter runs the focused action; esc to       ░
+                      catalog                                                                                ░
                       API: FocusManager([...]) · focus_next/focus_previous · handle(event) · click(hit)      ░
-                                                                                                             ░
                                                                                                              ░
                                                                                                              ░
                                                                                                              ░

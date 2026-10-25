@@ -13,7 +13,7 @@
   Checkbox group      │ [━━━━━━━━━━━━━━━━━━━━━━━━●━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━] 3 │░
   Select              └─────────────────────────────────────────────────────────────────────────────────────┘░
   ComboBox            Try: left/right step the value; enter lands it; the disabled variant refuses           ░
-  Autocomplete        API: Slider(value, *, minimum, maximum, step, disabled, theme) · move() · take_result()░
+  Autocomplete        API: Slider(value, *, minimum, maximum, step, disabled, theme) · move() · take()       ░
 ▌ Slider                                                                                                     ░
   Form                                                                                                       ░
   Data                                                                                                       ░

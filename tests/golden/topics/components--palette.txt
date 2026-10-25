@@ -7,8 +7,8 @@
   Notice              │  Open palette                                                                       │░
   Forms               └─────────────────────────────────────────────────────────────────────────────────────┘░
   Input               Try: click Open palette; type to filter; up/down move; enter picks; esc cancels        ░
-  Editor              API: CommandPalette(tui, commands, *, max_rows, theme) · open() · handle() ·           ░
-  Checkbox            take_result()                                                                          ░
+  Editor              API: CommandPalette(runtime, commands, *, max_rows, theme) · open() · handle() · take()░
+  Checkbox                                                                                                   ░
   RadioGroup                                                                                                 ░
   Checkbox group                                                                                             ░
   Select                                                                                                     ░

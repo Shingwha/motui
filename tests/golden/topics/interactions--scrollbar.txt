@@ -14,7 +14,7 @@
                       │ line 08: the scrollbar maps this document                                         ░ │░
                       └─────────────────────────────────────────────────────────────────────────────────────┘░
                       Try: up/down scroll the view; page keys move a window; drag the thumb                  ░
-                      API: Scrollbar(tui, *, pane=stage.id, size, glyphs, track, thumb, theme) ·             ░
+                      API: Scrollbar(runtime, *, pane=stage.id, size, glyphs, track, thumb, theme) ·         ░
                       handle(event)                                                                          ░
                                                                                                              ░
                                                                                                              ░
@@ -68,4 +68,4 @@
                                                                                                              ░
                                                                                                              ░
 c-1..6 section · c-n/c-p topic · tab focus · / palette · c-f find · c-t theme · c-g stats · q quit
-theme default · focus scrollview · last -                                              interactions/scrollbar
+theme default · focus scrollpanel · last -                                             interactions/scrollbar

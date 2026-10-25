@@ -15,7 +15,7 @@
                       │ • escape closes the row and keeps the document                                      │░
                       └─────────────────────────────────────────────────────────────────────────────────────┘░
                       Try: c-f opens the row; type to match; enter/up step; escape closes                    ░
-                      API: Find(tui, *, theme) · open() · handle(event) · matches/index · close()            ░
+                      API: Find(runtime, *, theme) · open() · handle(event) · matches/index · close()        ░
                                                                                                              ░
                                                                                                              ░
                                                                                                              ░

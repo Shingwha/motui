@@ -6,15 +6,15 @@
   Diff                ┌─ preview ───────────────────────────────────────────────────────────────────────────┐░
   Notice              │ Release notes                                                                       │░
   Forms               │                                                                                     │░
-  Input               │ motui 1.2 is a contract, not a skin: events, results and focus gained one           │░
+  Input               │ motui 2.0 is a contract, not a skin: events, results and focus gained one           │░
   Editor              │ vocabulary each. A link still opens wherever the host says.                         │░
   Checkbox            │                                                                                     │░
   RadioGroup          │ [ ] click a task box                                                                │░
   Checkbox group      │ [x] the first task is done                                                          │░
   Select              │                                                                                     │░
   ComboBox            │ ```python                                                                           │░
-  Autocomplete        │ from motui import TUI                                                               │░
-  Slider              │ TUI().run()                                                                         │░
+  Autocomplete        │ from motui import App                                                               │░
+  Slider              │ App().run()                                                                         │░
   Form                │ ```                                                                                 │░
   Data                └─────────────────────────────────────────────────────────────────────────────────────┘░
   List                ┌─ variants ──────────────────────────────────────────────────────────────────────────┐░

@@ -19,8 +19,8 @@
                       │ │ interact │ motui.interac │ focus, pointer, gesture, find,   │ kernel + Host   │   │░
                       │ │ ion      │ tion          │ modal, overlays                  │                 │   │░
                       │ ├──────────┼───────────────┼──────────────────────────────────┼─────────────────┤   │░
-                      │ │ app      │ motui.app     │ TUI driver and composition root  │ everything      │   │░
-                      │ │          │               │                                  │ above           │   │░
+                      │ │ app      │ motui.app     │ App/Runtime driver and           │ everything      │   │░
+                      │ │          │               │ composition root                 │ above           │   │░
                       │ └──────────┴───────────────┴──────────────────────────────────┴─────────────────┘   │░
                       └─────────────────────────────────────────────────────────────────────────────────────┘░
                       Try: none -- a static table; scroll if the stage is short                              ░

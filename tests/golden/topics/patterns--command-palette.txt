@@ -25,8 +25,8 @@
                       │  Open the / palette                                                                 │░
                       └─────────────────────────────────────────────────────────────────────────────────────┘░
                       Try: click Open the / palette, type a section or topic, enter jumps there              ░
-                      API: CommandRegistry([Command(name, description, handler)]) · options() · match(query) ░
-                                                                                                             ░
+                      API: CommandRegistry([Command(name=..., description=..., group=..., handler=...)]) ·   ░
+                      options() · match(query)                                                               ░
                                                                                                              ░
                                                                                                              ░
                                                                                                              ░

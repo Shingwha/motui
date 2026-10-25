@@ -21,7 +21,7 @@
                       │ line 15: drag across these rows and release to copy                                 │░
                       └─────────────────────────────────────────────────────────────────────────────────────┘░
                       Try: drag across the rows; release copies them and raises a toast                      ░
-                      API: SelectionGesture(tui, on_end=...) · ScreenClipboard(screen)/MemoryClipboard()     ░
+                      API: SelectionGesture(runtime, on_end=...) · ScreenClipboard(screen)/MemoryClipboard() ░
                                                                                                              ░
                                                                                                              ░
                                                                                                              ░

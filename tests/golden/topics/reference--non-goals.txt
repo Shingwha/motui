@@ -1,7 +1,7 @@
 ── /reference/non-goals ──────────────────────────────────────────────────────────────────────────────────────
  Overview │ Components │ Interactions │ Styling │ Patterns │ Reference                          theme: default
   Facts               Non-goals                                                                              ░
-  API layers          What motui 1.2 deliberately does not build, and the ruling behind each.                ░
+  API layers          What motui 2.0 deliberately does not build, and the ruling behind each.                ░
   Keymap              ───────────────────────────────────────────────────────────────────────────────────────░
   Component matrix    ┌─ preview ───────────────────────────────────────────────────────────────────────────┐░
 ▌ Non-goals           │ ┌────────────────────────────────────────┬────────────────────────────────────────┐ │░

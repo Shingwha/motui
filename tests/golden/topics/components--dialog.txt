@@ -22,7 +22,7 @@
   Tree                │ └──────────────────────────────────┘                                                │░
   Tabs                └─────────────────────────────────────────────────────────────────────────────────────┘░
   NavList             Try: left/right choose a button; enter takes it; escape cancels with none              ░
-  Progress            API: Dialog(title, body, buttons, *, danger, width) · handle() · take_result()         ░
+  Progress            API: Dialog(title, body, buttons, *, danger, width) · handle() · take()                ░
   Spinner                                                                                                    ░
   Layout                                                                                                     ░
   Row / Column                                                                                               ░

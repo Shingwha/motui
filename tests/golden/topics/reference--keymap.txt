@@ -18,7 +18,7 @@
                       │ ├────────────┼──────────────────────────────────────────┼─────────────────────┤     │░
                       │ │ arrows     │ move the focused cursor or scroll a view │ FocusManager        │     │░
                       │ ├────────────┼──────────────────────────────────────────┼─────────────────────┤     │░
-                      │ │ enter      │ activate the focused component           │ FocusManager        │     │░
+                      │ │ enter      │ run the focused component's action       │ FocusManager        │     │░
                       │ ├────────────┼──────────────────────────────────────────┼─────────────────────┤     │░
                       │ │ space      │ toggle the focused row's mark            │ demo                │     │░
                       │ ├────────────┼──────────────────────────────────────────┼─────────────────────┤     │░
