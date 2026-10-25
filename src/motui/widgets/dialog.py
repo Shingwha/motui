@@ -119,7 +119,7 @@ class Dialog(Widget):
     the taken button's :attr:`ButtonSpec.value` pending -- the one-shot
     result the host reads once through :meth:`take`; ``escape`` leaves a
     pending ``None``, the cancel.  A press goes through the button's own
-    :meth:`~motui.widgets.action.Button.activate` /
+    :meth:`~motui.widgets.action.Button.on_action` /
     :meth:`~motui.widgets.action.Button.take`, so the button and the
     dialog share one activation rule.  :meth:`render`
     remembered nothing itself: its rows are a pure function of the body's
@@ -278,8 +278,7 @@ class Dialog(Widget):
         The cursor's own view: ``index`` names it and this hands the
         :class:`Button` itself out, so a host can read the label of the
         button a stray return would take without re-building the row.  The
-        name keeps the dialog outside :class:`~motui.kernel.document.Focusable`
-        -- a focus ring must not register a modal box as a target.
+        name keeps the dialog outside focus ring must not register a modal box as a target.
         """
         return self._buttons[self._index] if self._buttons else None
 
@@ -318,16 +317,13 @@ class Dialog(Widget):
             return True
         return False
 
-    #: The 1.x spelling; W3b3 removes it.
-    handle = on_key
-
     def focus_at(self, row: int, col: int) -> bool:
         """Move the button cursor onto the button under a cell; ``True`` on a hit.
 
         The focus half of a click: the leaf button still takes its own
         action, while the dialog updates :attr:`index` and the button flags.
         This is what the focus tier calls when a click bubbles through the
-        dialog; :meth:`click` remains the direct one-gesture door for a
+        dialog; :meth:`on_click` remains the direct one-gesture door for a
         modal that routes its own pointer.
         """
         hit = self._button_at(row, col)
@@ -353,21 +349,17 @@ class Dialog(Widget):
         self._take_button(hit)
         return True
 
-    def click(self, row: int, col: int) -> bool:
-        """The 1.x cell spelling of :meth:`on_click`."""
-        return self.on_click(Pos(y=row, x=col))
-
     def _take_button(self, index: int) -> None:
         """Activate one button and carry its spec's value into the result.
 
         The dialog's one activation rule, shared by ``enter`` and a click:
-        the button's own :meth:`~motui.widgets.action.Button.activate` lands
-        its pending flag, :meth:`~motui.widgets.action.Button.take`
-        clears it, and the dialog stores the :class:`ButtonSpec.value` the
-        button stands for -- so the component and its button never drift.
+        the button's own ``on_action("activate")`` lands its pending flag,
+        :meth:`~motui.widgets.action.Button.take` clears it, and the dialog
+        stores the :class:`ButtonSpec.value` the button stands for -- so the
+        component and its button never drift.
         """
         button = self._buttons[index]
-        button.activate()
+        button.on_action("activate")
         button.take()
         self._pending = self._specs[index].value
 
@@ -381,10 +373,6 @@ class Dialog(Widget):
         value = self._pending
         self._pending = _NO_RESULT
         return None if value is _NO_RESULT else value
-
-    def take_result(self) -> object | None:
-        """The 1.x alias of :meth:`take`."""
-        return self.take()
 
     def _arm_result(self) -> None:
         """Discard any pending result (the modal's arm step, before routing)."""
@@ -564,7 +552,7 @@ class Dialog(Widget):
         Each button renders at its own natural width (``label`` plus its two
         padding cells), the row is placed ``center`` or ``right`` in the
         interior, and the columns it lands on -- ``lead`` cells in from the
-        box's left edge -- are remembered for :meth:`click`.
+        box's left edge -- are remembered for :meth:`on_click`.
         """
         lines = [
             button.render(Constraints(width=visible_width(button.label) + 2))[0] for button in self._buttons

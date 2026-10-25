@@ -5,7 +5,7 @@ while the section is open, ``\u25b8 `` while it is folded -- and the
 :attr:`Collapsible.body` component's rows follow, inset by the marker's
 width, only while :attr:`Collapsible.open` is ``True``.  The whole title
 row is the control: :meth:`Collapsible.on_click` and
-:meth:`Collapsible.activate` are the same flip, and each leaves the new
+:meth:`Collapsible.on_action` are the same flip, and each leaves the new
 state pending for :meth:`Collapsible.take` (D15 -- a state plus
 controller methods, no callbacks)::
 
@@ -23,9 +23,9 @@ nested ``Panel``, a field or a layout works unchanged.  The component is a
 folded content.  A click on a body row is **not** the section's control: it
 answers ``False`` like any cell outside the title.
 
-``hover_at`` is the pointer tier's row marking -- the title row merges
+``on_hover`` is the pointer tier's row marking -- the title row merges
 ``surfaces.hover`` while the pointer is on it; ``focused`` is the focus flag
-the focus tier sets (:class:`~motui.kernel.document.Focusable`), and a
+the focus tier sets, and a
 focused title row additionally merges ``controls.focus``.
 Both markings start off, so a plain collapsible renders
 byte-for-byte what it always did.  The title band is ``content.accent``;
@@ -53,7 +53,7 @@ class Collapsible(Widget):
     """A titled section whose body folds away under its title row.
 
     ``open`` is a read-write attribute: :meth:`on_click` and
-    :meth:`activate` flip it and leave the new value pending -- the host
+    :meth:`on_action` flip it and leave the new value pending -- the host
     reads it once through :meth:`take` -- and a host may also set it
     directly (nothing renders stale: the body is re-rendered per call).
     ``body`` is a read-write attribute too, the component whose rows follow
@@ -61,7 +61,7 @@ class Collapsible(Widget):
 
     The title row renders ``"\u25be title"`` / ``"\u25b8 title"`` in
     ``content.accent``; the pointer's row marking
-    (:meth:`hover_at`) merges ``surfaces.hover`` over it and
+    (:meth:`on_hover`) merges ``surfaces.hover`` over it and
     ``focused`` merges ``controls.focus``, so hover
     and focus are each plainly visible against the title.  ``render``
     answers the title row alone while closed, and the title plus the
@@ -118,7 +118,7 @@ class Collapsible(Widget):
         #: Refuse both flip doors and paint the disabled title band.
         self.disabled = disabled
         # The title row is marked while the pointer is on it; written by
-        # ``hover_at``, read by ``render``.  Unmarked renders byte-for-byte
+        # ``on_hover``, read by ``render``.  Unmarked renders byte-for-byte
         # the same rows.
         self._marked = False
         #: The pending toggle: written by ``on_click`` / ``activate`` (the
@@ -146,35 +146,23 @@ class Collapsible(Widget):
         """
         if pos.y != 0:
             return False
-        return self.activate()
+        return self.on_action("activate")
 
-    def click(self, row: int, col: int) -> bool:
-        """The 1.x cell spelling of :meth:`on_click`."""
-        return self.on_click(Pos(y=row, x=col))
-
-    def activate(self) -> bool:
-        """Flip :attr:`open` and leave the new state pending; ``False`` when disabled."""
+    def on_action(self, name: str) -> bool:
+        """Run the section's action: ``"toggle"`` (or ``"activate"``) folds it."""
+        if name not in ("activate", "toggle"):
+            return False
         if self.disabled:
             return False
         self.open = not self.open
         self._pending = self.open
         return True
 
-    def on_action(self, name: str) -> bool:
-        """Run the section's action: ``"toggle"`` (or ``"activate"``) folds it."""
-        if name in ("activate", "toggle"):
-            return self.activate()
-        return False
-
     def take(self) -> bool | None:
         """Read the pending flip (the new ``open`` state) once and clear it."""
         value = self._pending
         self._pending = None
         return value
-
-    def take_result(self) -> bool | None:
-        """The 1.x alias of :meth:`take`."""
-        return self.take()
 
     def child_at(self, row: int, col: int) -> tuple[Component, int, int] | None:
         """Map a cell to the body while open; the title belongs to the wrapper.
@@ -193,17 +181,17 @@ class Collapsible(Widget):
         indent = visible_width(seat(self.glyphs.fold_open))
         return self.body, local, max(0, col - indent)
 
-    def hover_at(self, row: int, col: int) -> bool:
-        """Mark the title row under a cell; ``True`` when the marking changed.
+    def on_hover(self, pos: Pos | None) -> bool:
+        """Mark the title row under the pointer; ``True`` when the marking changed.
 
-        The pointer tier's row-level half: ``row 0`` is the title row, and
-        every other row -- a body row, a negative one (the pointer left) --
-        clears the marking.  ``col`` is ignored.  The answer is whether the
-        marking changed, so a motion inside the row answers ``False``
+        The pointer tier's row-level half: row 0 is the title row, and
+        every other row -- a body row, or ``None`` (the pointer left) --
+        clears the marking.  The column is ignored.  The answer is whether
+        the marking changed, so a motion inside the row answers ``False``
         (nothing to repaint); :meth:`render` merges ``surfaces.hover``
         over the marked title row.
         """
-        target = row == 0
+        target = pos is not None and pos.y == 0
         changed = target != self._marked
         self._marked = target
         return changed

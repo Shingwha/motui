@@ -2,12 +2,13 @@
 
 import pytest
 
+from motui.kernel.geom import Pos
 from motui.kernel.cell import Line, Surface
 from motui.kernel.document import descend_chain
 from motui.kernel.events import KeyEvent
 from motui.kernel.glyphs import GLYPHS
 from motui.kernel.layout import Constraints
-from motui.widgets import ScrollPanel
+from motui.widgets import Input, ScrollPanel
 from tests.testing import Rows, key, many, texts, wheel
 
 
@@ -17,6 +18,16 @@ def view(rows=10, height=3, **kwargs) -> ScrollPanel:
 
 def test_a_fixed_height_clips_the_child_to_one_window():
     assert texts(view(), 10) == ["r0", "r1", "r2"]
+
+
+def test_the_scroll_panel_mounts_its_child_in_the_tree():
+    child = Input("hello")
+    scroll = ScrollPanel(child, height=2)
+
+    assert scroll.children == [child]
+    assert child.parent is scroll
+    assert list(scroll.walk()) == [scroll, child]
+    assert "hello" in texts(scroll, 10)[0]
 
 
 def test_a_predicted_offset_paints_the_matching_slice_and_clamps():
@@ -52,22 +63,22 @@ def test_scroll_to_reports_only_real_moves_and_clamps():
 def test_the_page_keys_move_one_window_and_the_edges_jump():
     scroll = view()
     scroll.render(Constraints(width=10))
-    assert scroll.handle(key("down")) is True and scroll.offset == 1
-    assert scroll.handle(key("up")) is True and scroll.offset == 0
-    assert scroll.handle(key("up")) is False
-    assert scroll.handle(key("page_down")) is True and scroll.offset == 3
-    assert scroll.handle(key("page_up")) is True and scroll.offset == 0
-    assert scroll.handle(key("end")) is True and scroll.offset == 7
-    assert scroll.handle(key("home")) is True and scroll.offset == 0
+    assert scroll.on_key(key("down")) is True and scroll.offset == 1
+    assert scroll.on_key(key("up")) is True and scroll.offset == 0
+    assert scroll.on_key(key("up")) is False
+    assert scroll.on_key(key("page_down")) is True and scroll.offset == 3
+    assert scroll.on_key(key("page_up")) is True and scroll.offset == 0
+    assert scroll.on_key(key("end")) is True and scroll.offset == 7
+    assert scroll.on_key(key("home")) is True and scroll.offset == 0
 
 
 def test_the_vertical_wheel_scrolls_and_other_events_decline():
     scroll = view()
     scroll.render(Constraints(width=10))
-    assert scroll.handle(wheel(0, 0, "down")) is True and scroll.offset == 1
-    assert scroll.handle(wheel(0, 0, "up")) is True and scroll.offset == 0
-    assert scroll.handle(wheel(0, 0, "left")) is False
-    assert scroll.handle(key("enter")) is False
+    assert scroll.on_mouse(wheel(0, 0, "down")) is True and scroll.offset == 1
+    assert scroll.on_mouse(wheel(0, 0, "up")) is True and scroll.offset == 0
+    assert scroll.on_mouse(wheel(0, 0, "left")) is False
+    assert scroll.on_key(key("enter")) is False
 
 
 def test_reveal_moves_the_minimum_and_declines_when_visible():
@@ -106,30 +117,30 @@ def test_the_bar_thumb_drags_and_the_track_pages():
     scroll = view(10, 4, bar=True)
     scroll.render(Constraints(width=10))
     # 10 rows in a 4-row window: thumb (0, 2), travel 2, span 6.
-    assert scroll.drag(0, 9, "press") is True
-    assert scroll.drag(1, 9, "motion") is True and scroll.offset == 3
-    assert scroll.drag(2, 9, "motion") is True and scroll.offset == 6
-    assert scroll.drag(2, 9, "release") is True
-    assert scroll.drag(1, 9, "motion") is False
+    assert scroll.on_drag(Pos(x=9, y=0), "press") is True
+    assert scroll.on_drag(Pos(x=9, y=1), "motion") is True and scroll.offset == 3
+    assert scroll.on_drag(Pos(x=9, y=2), "motion") is True and scroll.offset == 6
+    assert scroll.on_drag(Pos(x=9, y=2), "release") is True
+    assert scroll.on_drag(Pos(x=9, y=1), "motion") is False
 
     scroll.scroll_to(0)
-    assert scroll.drag(3, 9, "press") is True and scroll.offset == 4  # below: a page down
-    assert scroll.drag(0, 9, "press") is True and scroll.offset == 0  # above: a page up
-    assert scroll.drag(0, 8, "press") is False  # content column, not the bar
-    assert scroll.click(0, 8) is False
-    assert scroll.click(0, 9) is True
+    assert scroll.on_drag(Pos(x=9, y=3), "press") is True and scroll.offset == 4  # below: a page down
+    assert scroll.on_drag(Pos(x=9, y=0), "press") is True and scroll.offset == 0  # above: a page up
+    assert scroll.on_drag(Pos(x=8, y=0), "press") is False  # content column, not the bar
+    assert scroll.on_click(Pos(x=8, y=0)) is False
+    assert scroll.on_click(Pos(x=9, y=0)) is True
 
 
 def test_a_view_without_a_bar_or_a_thumb_declines_drags():
     plain = view(10, 4)
     plain.render(Constraints(width=10))
-    assert plain.drag(0, 9, "press") is False
-    assert plain.click(0, 9) is False
+    assert plain.on_drag(Pos(x=9, y=0), "press") is False
+    assert plain.on_click(Pos(x=9, y=0)) is False
 
     short = view(2, 4, bar=True)
     short.render(Constraints(width=10))
-    assert short.drag(0, 9, "press") is False  # content fits: no thumb
-    assert short.click(0, 9) is True  # the bar column is still the view's
+    assert short.on_drag(Pos(x=9, y=0), "press") is False  # content fits: no thumb
+    assert short.on_click(Pos(x=9, y=0)) is True  # the bar column is still the view's
 
 
 def test_a_child_that_shrinks_pulls_the_offset_back_in_range():
@@ -273,22 +284,22 @@ def test_the_horizontal_wheel_moves_only_an_x_scrolling_view():
     child = Wide()
     horizontal = ScrollPanel(child, height=3, axis="x")
     horizontal.render(Constraints(width=20))
-    assert horizontal.handle(wheel(0, 0, "right")) is True
+    assert horizontal.on_mouse(wheel(0, 0, "right")) is True
     assert horizontal.x_offset == 1
-    assert horizontal.handle(wheel(0, 0, "left")) is True
+    assert horizontal.on_mouse(wheel(0, 0, "left")) is True
     assert horizontal.x_offset == 0
-    assert horizontal.handle(wheel(0, 0, "up")) is False
-    assert horizontal.handle(wheel(0, 0, "down")) is False
+    assert horizontal.on_mouse(wheel(0, 0, "up")) is False
+    assert horizontal.on_mouse(wheel(0, 0, "down")) is False
 
     vertical = view()
     vertical.render(Constraints(width=10))
-    assert vertical.handle(wheel(0, 0, "left")) is False
-    assert vertical.handle(wheel(0, 0, "right")) is False
+    assert vertical.on_mouse(wheel(0, 0, "left")) is False
+    assert vertical.on_mouse(wheel(0, 0, "right")) is False
 
     both = ScrollPanel(Wide(rows=10), height=3, axis="both")
     both.render(Constraints(width=20))
-    assert both.handle(wheel(0, 0, "right")) is True and both.x_offset == 1
-    assert both.handle(wheel(0, 0, "down")) is True and both.offset == 1
+    assert both.on_mouse(wheel(0, 0, "right")) is True and both.x_offset == 1
+    assert both.on_mouse(wheel(0, 0, "down")) is True and both.offset == 1
     assert both.x_offset == 1
 
 
@@ -414,7 +425,7 @@ def test_the_bars_never_route_a_hit_into_the_child():
     assert descend_chain(scroll, 3, 0) == ((scroll, 3, 0),)  # bottom bar row
     assert descend_chain(scroll, 3, 19) == ((scroll, 3, 19),)  # corner
     assert child.hits == [(2, 30)]
-    assert scroll.click(3, 0) is True  # the bottom bar still takes a click
+    assert scroll.on_click(Pos(x=0, y=3)) is True  # the bottom bar still takes a click
     assert child.hits == [(2, 30)]
 
 
@@ -435,26 +446,19 @@ def test_scroll_actions_drive_the_window_by_name():
     assert scroll.on_action("activate") is False
     assert scroll.on_action("nope") is False
     assert ScrollPanel.keymap["page_down"] == "page_next"
-    assert ScrollPanel.handle is ScrollPanel._dispatch
+    assert not hasattr(ScrollPanel, "handle")
 
 
-def test_the_typed_key_hook_matches_the_old_handle_for_every_key():
-    for name in (
-        "up",
-        "down",
-        "page_up",
-        "page_down",
-        "home",
-        "end",
-        "enter",
-        "left",
-        "right",
-    ):
-        legacy, typed = view(), view()
-        legacy.render(Constraints(width=10))
-        typed.render(Constraints(width=10))
-        assert legacy.handle(key(name)) == typed.on_key(key(name))
-        assert legacy.offset == typed.offset
+def test_the_key_hook_routes_through_the_named_actions():
+    for name in ("up", "down", "page_up", "page_down", "home", "end"):
+        action = ScrollPanel.keymap[name]
+        keyed, named = view(), view()
+        keyed.render(Constraints(width=10))
+        named.render(Constraints(width=10))
+        assert keyed.on_key(key(name)) is named.on_action(action)
+        assert keyed.offset == named.offset
+    assert view().on_key(key("enter")) is False
+    assert view().on_key(key("left")) is False
 
 
 def test_the_key_hook_declines_a_release_and_the_wheel_hook_the_other_axis():

@@ -12,7 +12,7 @@ modal's; the rows and the query are the palette's -- there is no second
 implementation of "open, scrim, route, click outside" hiding here.
 
 The palette is **self-contained**: it owns the keyboard while it is open,
-so a host needs no pinned editor to feed it a query, and :meth:`take_result`
+so a host needs no pinned editor to feed it a query, and :meth:`take`
 is the whole of the host's side.  Opening resets
 everything: the query row empties, the list shows every command again and a
 stale pick cannot leak in.  While open, ``up``/``down`` move the list cursor
@@ -25,7 +25,7 @@ row's text.  A closed palette consumes nothing and renders zero rows, so a
 host can pin it in a constant-height slot and hand it the keyboard only
 while open.
 
-The host reads :meth:`take_result` once after a consuming ``handle``; a
+The host reads :meth:`take` once after a consuming ``handle``; a
 routed event that decides nothing clears the pending value itself, so a
 stale selection never survives a later keystroke.  Filtering is
 the kernel's: case-sensitive, prefix matches first, then substrings (the
@@ -36,7 +36,8 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
-from ..kernel.events import Event, KeyEvent
+from ..kernel.events import Event, KeyEvent, PasteEvent
+from ..kernel.geom import Pos
 from ..kernel.glyphs import GLYPHS, Glyphs
 from ..kernel.cell import Surface
 from ..kernel.layout import Constraints
@@ -70,7 +71,7 @@ class _CommandPalettePanel:
     composition lives here instead of the widget layer.  It is the modal's
     structural duck: :meth:`render` is the query row followed by the list's
     rows, :meth:`handle` is the palette's whole keyboard, and the one-shot
-    result (:meth:`take_result`; ``None`` for a cancel included) is what the
+    result (:meth:`take`; ``None`` for a cancel included) is what the
     modal watches -- a decision closes the modal with it.  There is no
     click gesture: the palette is driven from the keyboard, and a press
     inside the panel is the modal's to consume and nothing else.
@@ -114,48 +115,54 @@ class _CommandPalettePanel:
             rows = rows[: c.max_height]
         return Surface.clipped(rows, c.width)
 
-    def click(self, row: int, col: int) -> bool:
+    def on_click(self, pos: Pos) -> bool:
         """No click gesture: the modal's duck, declining every cell.
 
         The palette is driven from the keyboard (the widget it grew out of
-        had no ``click`` either); a press inside the panel is still the
-        modal's to consume, this just decides nothing.
+        had no click either); a press inside the panel is still the modal's
+        to consume, this just decides nothing.
         """
         return False
 
-    def handle(self, event: Event) -> bool:
-        """The palette's keyboard: the list's keys first, then the query row's.
+    def on_key(self, event: KeyEvent) -> bool:
+        """The palette's keys: the list's, then the query row's.
 
         ``up``/``down`` move the list cursor (wrapping around the list's
         ends, like every menu) and are consumed; they decide nothing.
-        ``enter`` takes the highlighted option through the kernel's
-        activation and leaves its ``value`` pending (``None`` when
-        the query matches nothing).  ``escape`` leaves a pending ``None`` --
+        ``enter`` takes the highlighted option through the list's
+        activation and leaves its ``value`` pending (``None`` when the
+        query matches nothing).  ``escape`` leaves a pending ``None`` --
         the cancel, which the modal reads exactly like a picked value.
-        Everything else is the query row's: an event it consumes re-filters
+        Everything else is the query row's: a key it consumes re-filters
         the list on its text, and the panel answers ``True``.
         """
-        if isinstance(event, KeyEvent):
-            if event.key == "up":
-                self.list.move(-1)
-                return True
-            if event.key == "down":
-                self.list.move(1)
-                return True
-            if event.key == "enter":
-                self.list.activate()
-                option = self.list.take_result()
-                self._pending = None if option is None else option.value
-                return True
-            if event.key == "escape":
-                self._pending = None
-                return True
-        if self.input.handle(event):
+        if event.key == "up":
+            self.list.move(-1)
+            return True
+        if event.key == "down":
+            self.list.move(1)
+            return True
+        if event.key == "enter":
+            self.list.on_action("activate")
+            option = self.list.take()
+            self._pending = None if option is None else option.value
+            return True
+        if event.key == "escape":
+            self._pending = None
+            return True
+        if self.input.on_key(event):
             self.list.set_query(self.input.text)
             return True
         return False
 
-    def take_result(self) -> object | None:
+    def on_paste(self, event: PasteEvent) -> bool:
+        """Feed one paste to the query row; a consumed paste re-filters."""
+        if self.input.on_paste(event):
+            self.list.set_query(self.input.text)
+            return True
+        return False
+
+    def take(self) -> object | None:
         """Read the pending decision once and clear it."""
         value = self._pending
         self._pending = _NO_RESULT
@@ -186,7 +193,7 @@ class CommandPalette:
     the scrim, :meth:`close` hides it.  Its modal overlay is mounted at
     construction (the ``Toasts`` lifecycle); :meth:`detach` is the one
     unmount -- final and idempotent, unlike :meth:`close`, which only hides.
-    :meth:`take_result` reads the pending selection once and clears it --
+    :meth:`take` reads the pending selection once and clears it --
     the value the last ``enter`` took (``None`` when nothing matched) or
     ``None`` for ``escape`` and a click outside.  :meth:`is_open` is the
     modal's state, forwarded; :meth:`handle` and :meth:`render` are the same
@@ -213,9 +220,9 @@ class CommandPalette:
         self.list = self._panel.list
         self._modal = Modal(tui, self._panel, anchor=_BOTTOM, focus=focus)
 
-    def take_result(self) -> object | None:
+    def take(self) -> object | None:
         """Read the pending pick once and clear it (the modal's result)."""
-        return self._modal.take_result()
+        return self._modal.take()
 
     @property
     def is_open(self) -> bool:

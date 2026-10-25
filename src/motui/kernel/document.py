@@ -17,22 +17,14 @@ from typing import TYPE_CHECKING, Protocol, cast, runtime_checkable
 
 from .cell import Line, Surface
 
-if TYPE_CHECKING:  # the protocol names the event model; no runtime import needed
-    from .events import Event
+if TYPE_CHECKING:  # the protocol names the layout model; no runtime import needed
     from .layout import Constraints
 
 __all__ = [
-    "Activable",
-    "Clickable",
     "Component",
-    "Container",
-    "Controller",
     "Document",
     "Fill",
-    "Focusable",
-    "Hoverable",
     "Placement",
-    "Resultful",
     "Revisioned",
     "Section",
     "Sizing",
@@ -96,133 +88,6 @@ class Component(Protocol):
 
 
 @runtime_checkable
-class Clickable(Protocol):
-    """A component that can consume a click on one of its own cells.
-
-    ``row``/``col`` are a 0-based cell of the component's own ``render``
-    output -- exactly what :meth:`~motui.app.TUI.hit` reports as
-    ``Hit.row``/``Hit.col`` -- so the component absorbs its own layout
-    arithmetic (a title row above the options, a scrolled window, the
-    segment widths of a tab strip).  ``col`` deliberately has **no default
-    value**: a host always holds both coordinates, and a default would let
-    an implementation ignore the column without ever deciding to.  A
-    row-shaped component -- a vertical list, a tree -- ignores ``col`` and
-    **must say so in its own docstring**; the column is never dropped
-    silently.  The answer says whether the click landed on something the
-    component consumes (``True``) or fell outside (``False``); a hit moves
-    the component's cursor.  Optional: a component without ``click`` simply
-    is not clickable, and a host checks ``isinstance(component, Clickable)``
-    before dispatching.
-    """
-
-    def click(self, row: int, col: int) -> bool:
-        ...
-
-
-@runtime_checkable
-class Activable(Protocol):
-    """A component that can execute the thing under its cursor.
-
-    ``activate()`` is the one verb for "the cursor is on something and the
-    return key takes it": the menu family (``Select``, ``Confirm``,
-    ``Autocomplete``) takes the option under its cursor into ``chosen``,
-    and a ``Tree`` expands or collapses the node under its cursor.  The
-    answer says whether there was something to take (``False`` for an
-    empty menu, a leaf, ...).  The protocol is deliberately narrow: a
-    component with no cursor item -- a text field, a tab strip, a table
-    container -- does not implement it, and *setting* a value is not
-    activation (the tab strip selects, it does not activate).  Optional:
-    a host checks ``isinstance(component, Activable)`` before dispatching
-    the return key, and reads a menu's ``chosen`` once afterwards.
-    """
-
-    def activate(self) -> bool:
-        ...
-
-
-@runtime_checkable
-class Focusable(Protocol):
-    """The minimum a component declares to be focusable: ``focused: bool``.
-
-    One read-write flag, nothing else.  The focus tier
-    (:class:`~motui.app.focus.FocusManager`) owns *who* is focused and flips
-    the flag; the component decides what being focused *looks like* -- a
-    block cursor (the text fields), an undimmed cursor row (the list
-    family) -- and never learns that a manager exists.  The attribute is
-    writable by contract: the manager sets it on every target as the focus
-    moves.
-    """
-
-    focused: bool
-
-
-@runtime_checkable
-class Hoverable(Protocol):
-    """A component that can be highlighted while the pointer is over it.
-
-    ``hover`` is the one read-write flag the pointer tier flips, the exact
-    peer of ``Focusable.focused``.  A component decides what being hovered
-    *looks like* and never learns that a pointer manager exists.  A
-    component with finer granularity may also implement ``hover_at(row,
-    col) -> bool`` (an optional method, not part of this protocol): it
-    records which of its own cells the pointer is on and answers whether
-    what it renders changed.  ``row < 0`` means the pointer left.
-    """
-
-    hover: bool
-
-
-@runtime_checkable
-class Container(Protocol):
-    """A component made of children, translating its own cells to a child's.
-
-    ``child_at(row, col)`` takes a 0-based cell of this component's own
-    ``render`` output (exactly ``Hit.row`` / ``Hit.col``) and answers
-    ``(component, row, col)`` for the child that owns it, or ``None`` for a
-    cell the container itself owns (its border, padding or gap).  The
-    geometry comes from this component's **last render** -- the same
-    precedent ``TextBuffer.move_up`` follows -- so a container that has not
-    rendered yet answers ``None``.  A container never proxies ``handle`` /
-    ``move`` / ``activate`` / ``focused``; it only routes coordinates.
-    """
-
-    def child_at(self, row: int, col: int) -> tuple[Component, int, int] | None:
-        ...
-
-
-@runtime_checkable
-class Controller(Protocol):
-    """A component that consumes events: ``handle(event) -> bool``.
-
-    The one routing contract of the interactive tier: ``True`` means the
-    component **consumed** the event, ``False`` means the host's own
-    dispatch still gets its turn.  The answer never means "changed" -- a
-    component that only needs a repaint asks its host to refresh itself --
-    so every controller answers the same question and a host can route a
-    chain of candidates without translating each one's private convention.
-    Optional: a pure renderer has no ``handle``.
-    """
-
-    def handle(self, event: Event) -> bool:
-        ...
-
-
-@runtime_checkable
-class Resultful(Protocol):
-    """A component with a one-shot result: ``take_result() -> object | None``.
-
-    Reading the result **clears** it, so a host reads a pick exactly once
-    and never needs a second write to reset it.  ``None`` means "nothing
-    pending"; a component whose legal result is ``None`` uses the take
-    itself as the signal (a cancel).  There is no public ``chosen``
-    attribute on components: this method is the only result door.
-    """
-
-    def take_result(self) -> object | None:
-        ...
-
-
-@runtime_checkable
 class Revisioned(Protocol):
     """A component whose rows are a pure function of a value snapshot.
 
@@ -279,7 +144,7 @@ def descend_chain(
 ) -> tuple[tuple[Component, int, int], ...]:
     """Every component owning a cell, outermost first, with its own coords.
 
-    Walks ``Container.child_at`` from ``component`` down, recording each
+    Walks ``child_at`` from ``component`` down, recording each
     component it lands on beside the cell in that component's own
     coordinate space.  The first entry is always ``(component, row, col)``;
     the last is the deepest component the cell descends to, which is what
@@ -292,9 +157,10 @@ def descend_chain(
     """
     chain: list[tuple[Component, int, int]] = [(component, row, col)]
     for _ in range(_DESCEND_LIMIT):
-        if not isinstance(component, Container):
+        child_at = getattr(component, "child_at", None)
+        if child_at is None:
             break
-        cell = component.child_at(row, col)
+        cell = child_at(row, col)
         if cell is None:
             break
         component, row, col = cell
@@ -305,8 +171,8 @@ def descend_chain(
 def descend(component: Component, row: int, col: int) -> tuple[Component, int, int]:
     """The deepest component owning a cell, with that component's own coords.
 
-    Walks ``Container.child_at`` until a component is not a container or
-    declines the cell; then returns it unchanged.  Pure, allocation-light
+    Walks ``child_at`` until a component has no coordinate door or declines
+    the cell; then returns it unchanged.  Pure, allocation-light
     and depth-guarded (a malformed container that returns itself cannot
     loop forever).  The kernel's one coordinate-descend primitive, shared by
     the pointer tier and the focus ring's click policy; it is the tail of

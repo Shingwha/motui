@@ -43,8 +43,7 @@ class Text(Widget):
     the section's cache answers the repeats.  The hit table :attr:`_rows`
     keeps its "last render" meaning and is geometry, not a cache.
 
-    **Inline actions.**  ``Text`` is :class:`Hoverable` and
-    :class:`Clickable` (and, in 2.0 terms, ``clickable`` / ``hoverable``):
+    **Inline actions.**  ``Text`` is ``hoverable`` and ``clickable``:
     the row table of its last render lives in ``self._rows``, and a click or
     a hover resolves the cell against it through
     :func:`motui.kernel.cell.action_at`.  ``on_click(pos)`` leaves the
@@ -54,12 +53,12 @@ class Text(Widget):
     turn.  ``on_hover(pos)`` remembers the span under the pointer and answers
     whether the render changed; the span merges the theme's ``hover`` band
     over that segment **on a copy**, so the row's own text and payloads are
-    never rewritten.  The 1.x ``click(row, col)`` / ``hover_at(row, col)``
+    never rewritten.  The typed ``on_click(pos)`` / ``on_hover(pos)``
     verbs are thin aliases until W3b3 deletes them.
     The component-level :attr:`hover` flag is the protocol's peer of
     ``focused`` and changes nothing by itself: this component's visual is
     the span, so a whole-row band would be wrong (``Pointer`` sets the flag
-    and calls ``hover_at`` on the same move).
+    and calls ``on_hover`` on the same move).
 
     The default rows carry no payloads -- a plain row is verbatim text --
     so a subclass that wants spans renders its own ``Line`` values through
@@ -199,10 +198,6 @@ class Text(Widget):
         self._hover_span = span
         return changed
 
-    def hover_at(self, row: int, col: int) -> bool:
-        """The 1.x cell spelling of :meth:`on_hover` (``row < 0`` leaves)."""
-        return self.on_hover(Pos(y=row, x=col) if row >= 0 else None)
-
     def on_click(self, pos: Pos) -> bool:
         """Take the action under ``pos`` as the pending result; hit?
 
@@ -221,19 +216,11 @@ class Text(Widget):
                 return True
         return False
 
-    def click(self, row: int, col: int) -> bool:
-        """The 1.x cell spelling of :meth:`on_click`."""
-        return self.on_click(Pos(y=row, x=col))
-
     def take(self) -> str | None:
         """Read the pending action payload once and clear it."""
         value = self._pending
         self._pending = None
         return value
-
-    def take_result(self) -> str | None:
-        """The 1.x alias of :meth:`take`."""
-        return self.take()
 
     def __repr__(self) -> str:
         return f"Text({self.text!r})"

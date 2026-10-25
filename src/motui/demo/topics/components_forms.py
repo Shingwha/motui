@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from motui import Button, Checkbox, Input, Modal, Option, Select
+from motui import Button, Checkbox, Input, KeyEvent, Modal, Option, Select
 from motui.widgets import (
     Autocomplete,
     CheckboxGroup,
@@ -53,10 +53,14 @@ class _ComboHost:
     def handle(self, event) -> bool:
         if not self.modal.is_open:
             return False
-        consumed = self.combo.handle(event)
+        consumed = (
+            self.combo.on_key(event)
+            if isinstance(event, KeyEvent)
+            else self.combo.on_paste(event)
+        )
         if not consumed:
             consumed = self.modal.handle(event)
-        value = self.combo.take_result()
+        value = self.combo.take()
         if value is not None:
             self._result = value
         if self.combo.is_open and not self.modal.is_open:
@@ -65,7 +69,7 @@ class _ComboHost:
             self.modal.close()
         return True
 
-    def take_result(self) -> object | None:
+    def take(self) -> object | None:
         value, self._result = self._result, None
         return value
 
@@ -123,9 +127,9 @@ def _radio_group(b) -> None:
 
 def _checkbox_group(b) -> None:
     group = CheckboxGroup(["Bold", "Italic", "Underline"], marked=[0], theme=b.theme)
-    group.take_result()  # a fresh mount reports nothing until the user acts
+    group.take()  # a fresh mount reports nothing until the user acts
     all_marked = CheckboxGroup(["One", "Two", "Three"], marked=[0, 1, 2], theme=b.theme)
-    all_marked.take_result()
+    all_marked.take()
     b.preview(group)
     b.variants(
         ("all marked", all_marked),
@@ -146,7 +150,7 @@ def _select(b) -> None:
     main = Select(options, title="pick one", max_rows=4, theme=b.theme)
     windowed = Select(options, max_rows=3, window=True, theme=b.theme)
     multi = MultiSelect(options, marked=[1, 3], max_rows=5, theme=b.theme)
-    multi.take_result()  # the initial marks are state, not a pick
+    multi.take()  # the initial marks are state, not a pick
     b.preview(main)
     b.variants(("windowed max_rows=3", windowed), ("multi + marks", multi))
     b.focus(main, windowed, multi)

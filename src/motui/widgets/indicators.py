@@ -12,7 +12,7 @@ Three components that show a value, one family file:
   track whose length follows the painting width, the value printed after the
   closing bracket.  The value lives on the ``step`` grid the constructor
   defines; :meth:`Slider.move`, :meth:`Slider.on_click` (mapped against the
-  track of the last render) and :meth:`Slider.activate` are its controller
+  track of the last render) and :meth:`Slider.on_action` are its controller
   doors, and activation leaves the current value pending for
   :meth:`Slider.take`.
 * :class:`Spinner` -- the activity indicator: a frame index cycling around a
@@ -158,19 +158,19 @@ class Slider(Widget):
     re-snaps the current value, so the invariant survives a range change.
     :meth:`move` steps ``delta`` whole ``step``s (clamped at the ends; a
     step that moved clears a stale pending value), :meth:`on_click` maps a
-    column of the track onto the grid, and :meth:`activate` leaves the
+    column of the track onto the grid, and :meth:`on_action` leaves the
     current value pending for :meth:`take`.  A disabled slider
     refuses all three doors and merges ``text.faint`` over every segment.
 
     The track's length follows the painting width: ``[`` and ``]`` plus one
     space and the value's digits are the fixed part, the rest is track
     (a width too narrow for even the brackets truncates through ``fit``).
-    ``hover_at`` marks the row (any other row answers "no row" and clears
+    ``on_hover`` marks the row (any other row answers "no row" and clears
     the marking; a negative row clears it too), and ``render`` merges the
     ``surfaces.hover`` band over the marked row.  The marking starts ``None``
     -- or, equivalently, unmarked -- so an un-hovered slider renders
     byte-for-byte what it always did.  ``focused`` is the focus flag the
-    focus tier sets (:class:`~motui.kernel.document.Focusable`): while it is
+    focus tier sets: while it is
     ``True`` every segment additionally merges ``controls.focus``, so a
     focused slider is told apart from an unfocused one.  The bands are read
     at render time from ``styles`` (when given) or the theme: filled
@@ -217,7 +217,7 @@ class Slider(Widget):
         #: Refuse every cursor gesture and paint the disabled band.
         self.disabled = disabled
         # The row is marked while the pointer is on it; written by
-        # ``hover_at``, read by ``render``.  Unmarked renders byte-for-byte
+        # ``on_hover``, read by ``render``.  Unmarked renders byte-for-byte
         # the same row.
         self._marked = False
         # The width ``click`` maps a column against before the first paint;
@@ -312,7 +312,7 @@ class Slider(Widget):
         if e.key in ("right", "down"):
             return self.move(1)
         if e.key == "enter":
-            return self.activate()
+            return self.on_action("activate")
         return False
 
     def on_action(self, name: str) -> bool:
@@ -323,7 +323,10 @@ class Slider(Widget):
         decline.
         """
         if name == "activate":
-            return self.activate()
+            if self.disabled:
+                return False
+            self._pending = self._value
+            return True
         if name in ("prev", "left", "up", "move_left", "move_up"):
             return self.move(-1)
         if name in ("next", "right", "down", "move_right", "move_down"):
@@ -357,44 +360,23 @@ class Slider(Widget):
         self._pending = None
         return True
 
-    def click(self, row: int, col: int) -> bool:
-        """The 1.x cell spelling of :meth:`on_click`."""
-        return self.on_click(Pos(y=row, x=col))
-
-    def activate(self) -> bool:
-        """Confirm the current value into the pending result; ``False`` when disabled.
-
-        The slider's :class:`~motui.kernel.document.Activable` verb: a host
-        routes the return key here, then reads the value once through
-        :meth:`take` -- a non-disabled slider always has a value to
-        confirm.
-        """
-        if self.disabled:
-            return False
-        self._pending = self._value
-        return True
-
     def take(self) -> int | None:
         """Read the pending confirmation once and clear it."""
         value = self._pending
         self._pending = None
         return value
 
-    def take_result(self) -> int | None:
-        """The 1.x alias of :meth:`take`."""
-        return self.take()
+    def on_hover(self, pos: Pos | None) -> bool:
+        """Mark the row under the pointer; ``True`` when the marking changed.
 
-    def hover_at(self, row: int, col: int) -> bool:
-        """Mark the row under a cell; ``True`` when the marking changed.
-
-        The pointer tier's row-level half: ``row 0`` is the slider's single
-        row and every other row -- a negative one included (the pointer
-        left) -- clears the marking.  ``col`` is ignored.  The answer is
-        whether the marking changed, so a motion inside the row answers
-        ``False`` (nothing to repaint); :meth:`render` merges the theme's
-        ``hover`` over the marked row.
+        The pointer tier's row-level half: row 0 is the slider's single row
+        and every other row -- ``None`` (the pointer left) included --
+        clears the marking.  The column is ignored.  The answer is whether
+        the marking changed, so a motion inside the row answers ``False``
+        (nothing to repaint); :meth:`render` merges the theme's ``hover``
+        over the marked row.
         """
-        target = row == 0
+        target = pos is not None and pos.y == 0
         changed = target != self._marked
         self._marked = target
         return changed
@@ -445,7 +427,7 @@ class Slider(Widget):
     def render(self, c: Constraints) -> Surface:
         """The track row, under the render constraints.
 
-        ``_last_width`` is the constrained width :meth:`click` maps a column
+        ``_last_width`` is the constrained width :meth:`on_click` maps a column
         against (seeded even by a zero height budget).  ``max_height``
         truncates the single row and the surface is clipped, not padded.
         """

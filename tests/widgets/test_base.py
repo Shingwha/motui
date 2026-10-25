@@ -41,7 +41,7 @@ def test_a_fresh_widget_starts_with_no_parent_no_children_and_zero_generation():
     assert widget.generation == 0
 
 
-def test_walk_is_preorder_and_starts_with_self():
+def test_the_tree_is_preorder_and_starts_with_self():
     root = Node()
     left, right = Node(), Node()
     left_a, left_b = Node(), Node()
@@ -53,7 +53,7 @@ def test_walk_is_preorder_and_starts_with_self():
     assert walked(root) == [root, left, left_a, left_b, right, right_a]
 
 
-def test_walk_visits_a_shared_child_once_at_its_first_position():
+def test_the_tree_visits_a_shared_child_once_at_its_first_position():
     root = Node()
     left, right = Node(), Node()
     shared = Node()
@@ -64,7 +64,7 @@ def test_walk_visits_a_shared_child_once_at_its_first_position():
     assert walked(root) == [root, left, shared, right]
 
 
-def test_walk_visits_children_that_are_not_widgets():
+def test_the_tree_visits_children_that_are_not_widgets():
     root = Node()
     plain = Plain()
     child = Node()
@@ -75,7 +75,7 @@ def test_walk_visits_children_that_are_not_widgets():
     assert not hasattr(plain, "parent")
 
 
-def test_walk_terminates_on_a_parent_child_cycle():
+def test_the_tree_terminates_on_a_parent_child_cycle():
     root = Node()
     child = Node()
     root.children = [child]
@@ -193,7 +193,7 @@ def test_touch_survives_a_parent_cycle():
     assert (first.generation, second.generation) == (1, 1)
 
 
-def test_a_widget_that_skips_init_can_still_assign_walk_and_touch():
+def test_a_widget_that_skips_init_can_still_assign_a_tree_and_touch():
     # A third-party subclass may not call ``super().__init__``; the setters
     # and the tree readers must stay safe on the unset slots.
     raw = object.__new__(State)
@@ -206,8 +206,8 @@ def test_a_widget_that_skips_init_can_still_assign_walk_and_touch():
     assert raw.generation == 1
 
 
-class Legacy(Widget):
-    """A 1.x-shaped widget: it overrides only the old interaction verbs."""
+class Typed(Widget):
+    """A 2.0-shaped widget: it overrides only the typed interaction hooks."""
 
     __slots__ = ("_log", "result")
 
@@ -216,27 +216,35 @@ class Legacy(Widget):
         self._log: list[tuple] = []
         self.result = result
 
-    def handle(self, event):
-        self._log.append(("handle", event))
-        return event is not None
-
-    def click(self, row: int, col: int) -> bool:
-        self._log.append(("click", row, col))
+    def on_key(self, event):
+        self._log.append(("key", event))
         return True
 
-    def hover_at(self, row: int, col: int) -> bool:
-        self._log.append(("hover", row, col))
+    def on_mouse(self, event):
+        self._log.append(("mouse", event))
         return True
 
-    def drag(self, row: int, col: int, kind: str) -> bool:
-        self._log.append(("drag", row, col, kind))
+    def on_paste(self, event):
+        self._log.append(("paste", event))
         return True
 
-    def activate(self) -> bool:
-        self._log.append(("activate",))
+    def on_click(self, pos: Pos) -> bool:
+        self._log.append(("click", pos.y, pos.x))
         return True
 
-    def take_result(self) -> object | None:
+    def on_hover(self, pos: Pos | None) -> bool:
+        self._log.append(("hover", None if pos is None else (pos.y, pos.x)))
+        return True
+
+    def on_drag(self, pos: Pos, phase: str) -> bool:
+        self._log.append(("drag", pos.y, pos.x, phase))
+        return True
+
+    def on_action(self, name: str) -> bool:
+        self._log.append(("action", name))
+        return name == "activate"
+
+    def take(self) -> object | None:
         return self.result
 
 
@@ -247,11 +255,11 @@ class Taker:
         return 5
 
 
-# -- typed hooks delegate to the 1.x verbs -----------------------------------
+# -- the typed hooks are the only interaction doors --------------------------
 
 
-def test_the_key_mouse_and_paste_hooks_default_to_handle():
-    widget = Legacy()
+def test_the_key_mouse_and_paste_hooks_dispatch_directly():
+    widget = Typed()
     key = KeyEvent("a", "a")
     mouse = MouseEvent(x=2, y=1)
     paste = PasteEvent("hi")
@@ -259,45 +267,52 @@ def test_the_key_mouse_and_paste_hooks_default_to_handle():
     assert widget.on_key(key) is True
     assert widget.on_mouse(mouse) is True
     assert widget.on_paste(paste) is True
-
-    assert widget._log == [
-        ("handle", key),
-        ("handle", mouse),
-        ("handle", paste),
-    ]
+    assert widget._log == [("key", key), ("mouse", mouse), ("paste", paste)]
 
 
-def test_the_resize_hook_is_a_no_op_on_the_base():
-    widget = Legacy()
-
-    assert widget.on_resize(ResizeEvent(80, 24)) is None
-    assert widget._log == []
-
-
-def test_the_click_hook_forwards_the_pos_as_row_and_col():
-    widget = Legacy()
+def test_the_click_hook_takes_a_pos():
+    widget = Typed()
 
     assert widget.on_click(Pos(x=3, y=1)) is True
     assert widget._log == [("click", 1, 3)]
 
 
-def test_the_hover_hook_forwards_a_pos_and_the_negative_departure():
-    widget = Legacy()
+def test_the_hover_and_drag_hooks_take_a_pos():
+    widget = Typed()
 
     assert widget.on_hover(Pos(x=3, y=1)) is True
     assert widget.on_hover(None) is True
-    assert widget._log == [("hover", 1, 3), ("hover", -1, -1)]
-
-
-def test_the_drag_hook_forwards_the_pos_and_the_phase():
-    widget = Legacy()
-
     assert widget.on_drag(Pos(x=3, y=1), "motion") is True
-    assert widget._log == [("drag", 1, 3, "motion")]
+    assert widget._log == [
+        ("hover", (1, 3)),
+        ("hover", None),
+        ("drag", 1, 3, "motion"),
+    ]
+
+
+def test_the_action_hook_is_the_named_action_door():
+    widget = Typed()
+
+    assert widget.on_action("activate") is True
+    assert widget.on_action("next") is False
+    assert widget._log == [("action", "activate"), ("action", "next")]
+
+
+def test_the_untyped_verbs_are_gone_from_the_base():
+    widget = Widget()
+    for name in ("handle", "click", "hover_at", "drag", "activate", "take_result"):
+        assert not hasattr(widget, name), name
+
+
+def test_the_resize_hook_is_a_no_op_on_the_base():
+    widget = Typed()
+
+    assert widget.on_resize(ResizeEvent(80, 24)) is None
+    assert widget._log == []
 
 
 def test_the_focus_hook_flips_the_focused_flag():
-    widget = Legacy()
+    widget = Typed()
 
     widget.on_focus(True)
     assert widget.focused is True
@@ -305,20 +320,12 @@ def test_the_focus_hook_flips_the_focused_flag():
     assert widget.focused is False
 
 
-def test_the_action_hook_binds_activate_and_declines_any_other_name():
-    widget = Legacy()
-
-    assert widget.on_action("activate") is True
-    assert widget.on_action("next") is False
-    assert widget._log == [("activate",)]
-
-
-def test_take_delegates_to_take_result_and_keeps_false_distinct_from_none():
-    assert Legacy().take() is None
-    assert Legacy(False).take() is False
-    assert Legacy(0).take() == 0
+def test_take_keeps_false_distinct_from_none():
+    assert Typed().take() is None
+    assert Typed(False).take() is False
+    assert Typed(0).take() == 0
     picked = object()
-    assert Legacy(picked).take() is picked
+    assert Typed(picked).take() is picked
 
 
 def test_a_plain_widget_declines_every_default_hook():
@@ -346,13 +353,13 @@ def test_capability_flags_and_keymap_default_to_off_and_empty():
         assert widget.hoverable is False
         assert widget.activatable is False
         assert widget.focus_scope is False
-        assert widget.owns_focus is False
+        assert not hasattr(widget, "owns_focus")
     assert Widget.keymap == {}
     assert Container.keymap == {}
 
 
 def test_has_result_is_a_runtime_checkable_protocol():
-    assert isinstance(Legacy(), HasResult)
+    assert isinstance(Typed(), HasResult)
     assert isinstance(Taker(), HasResult)
     assert not isinstance(object(), HasResult)
 

@@ -39,11 +39,11 @@ def test_button_hover_and_focus_merge_their_bands():
 
 def test_button_click_and_activate_land_in_the_one_shot_result():
     button = Button("Run")
-    assert button.take_result() is None
-    assert button.click(0, 0) is True and button.take_result() is True
-    assert button.take_result() is None
-    assert button.activate() is True and button.take_result() is True
-    assert button.click(9, 40) is True and button.take_result() is True
+    assert button.take() is None
+    assert button.on_click(Pos(x=0, y=0)) is True and button.take() is True
+    assert button.take() is None
+    assert button.on_action("activate") is True and button.take() is True
+    assert button.on_click(Pos(x=40, y=9)) is True and button.take() is True
 
 
 def test_a_disabled_button_refuses_its_doors_and_paints_the_disabled_band():
@@ -52,8 +52,8 @@ def test_a_disabled_button_refuses_its_doors_and_paints_the_disabled_band():
         disabled=True,
         styles=Styles(text=replace(DEFAULT_THEME.text, faint=Style(italic=True))),
     )
-    assert button.click(0, 0) is False and button.activate() is False
-    assert button.take_result() is None
+    assert button.on_click(Pos(x=0, y=0)) is False and button.on_action("activate") is False
+    assert button.take() is None
     assert button.render(Constraints(width=20))[0].segments[0].style == Style(italic=True)
 
 
@@ -81,11 +81,11 @@ def test_explicit_styles_beat_the_theme_fields():
 def test_checkbox_flips_its_mark_and_leaves_the_new_state_pending():
     box = Checkbox("Bold")
     assert box.render(Constraints(width=20))[0].text == "[ ] Bold"
-    assert box.activate() is True
-    assert (box.checked, box.take_result()) == (True, True)
+    assert box.on_action("activate") is True
+    assert (box.checked, box.take()) == (True, True)
     assert box.render(Constraints(width=20))[0].text == "[x] Bold"
-    assert box.click(0, 0) is True
-    assert (box.checked, box.take_result()) == (False, False)
+    assert box.on_click(Pos(x=0, y=0)) is True
+    assert (box.checked, box.take()) == (False, False)
 
 
 def test_checkbox_takes_a_custom_glyph_pair_and_its_style_surface():
@@ -106,17 +106,17 @@ def test_checkbox_takes_a_custom_glyph_pair_and_its_style_surface():
 
 def test_a_disabled_checkbox_refuses_both_doors():
     box = Checkbox("Bold", disabled=True)
-    assert box.activate() is False and box.click(0, 0) is False
-    assert box.checked is False and box.take_result() is None
+    assert box.on_action("activate") is False and box.on_click(Pos(x=0, y=0)) is False
+    assert box.checked is False and box.take() is None
 
 
 def test_link_follows_a_click_and_wears_the_link_band():
     link = Link("docs/COMPONENTS.md")
     assert link.render(Constraints(width=30))[0].text == "docs/COMPONENTS.md"
     assert link.render(Constraints(width=30))[0].segments[0].style == DEFAULT_THEME.content.link
-    assert link.take_result() is None
-    assert link.click(0, 3) is True and link.take_result() is True
-    assert link.take_result() is None
+    assert link.take() is None
+    assert link.on_click(Pos(x=3, y=0)) is True and link.take() is True
+    assert link.take() is None
 
 
 def test_link_focus_and_disabled_flags_shape_the_row():
@@ -130,7 +130,7 @@ def test_link_focus_and_disabled_flags_shape_the_row():
     link.focused = True
     assert link.render(Constraints(width=20))[0].segments[0].style == DEFAULT_THEME.content.link.merge(Style(bold=True))
     link.disabled = True
-    assert link.activate() is False
+    assert link.on_action("activate") is False
     assert link.render(Constraints(width=20))[0].segments[0].style == Style(italic=True)
 
 
@@ -152,12 +152,12 @@ def test_hover_at_marks_and_clears_one_row_across_components(build, row, col):
     )
     component = build(theme)
     plain = texts(component, 30)
-    assert component.hover_at(row, col) is True
+    assert component.on_hover(Pos(x=col, y=row)) is True
     assert any(
         seg.style.underline for line in component.render(Constraints(width=30)) for seg in line.segments
     )
-    assert component.hover_at(row, col) is False
-    assert component.hover_at(-1, -1) is True
+    assert component.on_hover(Pos(x=col, y=row)) is False
+    assert component.on_hover(None) is True
     assert texts(component, 30) == plain
 
 
@@ -232,9 +232,9 @@ def test_on_click_is_the_positional_door_and_take_clears():
     assert button.take() is None
 
     # The 1.x cell spelling still lands the same operation.
-    assert button.click(0, 0) is True
-    assert button.take_result() is True
-    assert button.take_result() is None
+    assert button.on_click(Pos(x=0, y=0)) is True
+    assert button.take() is True
+    assert button.take() is None
 
 
 def test_disabled_controls_refuse_the_typed_hooks():

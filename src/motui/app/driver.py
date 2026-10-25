@@ -70,6 +70,7 @@ from dataclasses import dataclass
 
 from ..terminal.ansi import cursor_shape, set_window_title
 from ..kernel.document import Section, Component, Document, Sizing, descend_chain
+from ..kernel.geom import Pos
 from ..kernel.frame import Separator
 from ..kernel.events import Event, EventSource
 from ..kernel.frame import DOCK_EDGES, Frame, Pane, Rect
@@ -1021,7 +1022,7 @@ class TUI:
             if isinstance(event, MouseEvent):
                 hit = tui.hit(event.x, event.y)
                 if hit is not None and hit.leaf is not None:
-                    hit.leaf.click(hit.leaf_row, hit.leaf_col)
+                    hit.leaf.on_click(Pos(y=hit.leaf_row, x=hit.leaf_col))
 
         :meth:`hit_leaf` is the convenience entry when the pane and the
         block address are not needed.

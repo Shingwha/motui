@@ -56,9 +56,9 @@ def test_on_click_lands_the_payload_and_take_clears_it():
     assert text.take() is None
 
     # The 1.x spellings keep the same answer until W3b3 removes them.
-    assert text.click(0, 5) is True
-    assert text.take_result() == "open"
-    assert text.take_result() is None
+    assert text.on_click(Pos(x=5, y=0)) is True
+    assert text.take() == "open"
+    assert text.take() is None
 
 
 def test_on_hover_marks_the_span_and_none_clears_it():
@@ -78,7 +78,7 @@ def test_on_hover_marks_the_span_and_none_clears_it():
     assert hovered.segments[1].text == "docs"
 
     assert text.on_hover(None) is True
-    assert text.hover_at(-1, -1) is False
+    assert text.on_hover(None) is False
     assert text.render(Constraints(width=40))[0].segments[1].style == Style()
 
 

@@ -28,48 +28,48 @@ def test_confirm_dialog_renders_a_framed_message_and_two_buttons():
 
 def test_enter_takes_the_focused_button_and_escape_cancels():
     dialog = confirm_dialog("Continue?")
-    assert dialog.handle(key("enter")) is True
-    assert dialog.take_result() is True
-    assert dialog.take_result() is None
-    assert dialog.handle(key("escape")) is True
-    assert dialog.take_result() is None
+    assert dialog.on_key(key("enter")) is True
+    assert dialog.take() is True
+    assert dialog.take() is None
+    assert dialog.on_key(key("escape")) is True
+    assert dialog.take() is None
 
 
-def test_tab_and_the_arrows_walk_the_button_row_without_wrapping():
+def test_tab_and_the_arrows_step_the_button_row_without_wrapping():
     dialog = confirm_dialog("Continue?")
     assert dialog.index == 0
-    assert dialog.handle(key("tab")) is True and dialog.index == 1
-    assert dialog.handle(key("tab")) is True and dialog.index == 1
-    assert dialog.handle(key("left")) is True and dialog.index == 0
-    assert dialog.handle(key("left")) is True and dialog.index == 0
-    assert dialog.handle(key("x", "x")) is False
+    assert dialog.on_key(key("tab")) is True and dialog.index == 1
+    assert dialog.on_key(key("tab")) is True and dialog.index == 1
+    assert dialog.on_key(key("left")) is True and dialog.index == 0
+    assert dialog.on_key(key("left")) is True and dialog.index == 0
+    assert dialog.on_key(key("x", "x")) is False
 
 
 def test_a_dangerous_dialog_opens_on_its_cancel_button():
     dialog = confirm_dialog("Delete?", danger=True)
     assert dialog.index == 1
     assert dialog.focused_button.label == "No"
-    assert dialog.handle(key("enter")) is True and dialog.take_result() is False
+    assert dialog.on_key(key("enter")) is True and dialog.take() is False
 
 
 def test_click_presses_the_button_under_the_cell():
     dialog = confirm_dialog("Continue?")
     row = button_row(dialog)
     col = dialog.render(Constraints(width=40))[row].text.index("Yes")
-    assert dialog.click(row, col) is True
+    assert dialog.on_click(Pos(x=col, y=row)) is True
     assert dialog.index == 0
-    assert dialog.take_result() is True
+    assert dialog.take() is True
     row = button_row(dialog)
     col = dialog.render(Constraints(width=40))[row].text.index("No")
-    assert dialog.click(row, col) is True
-    assert dialog.take_result() is False
+    assert dialog.on_click(Pos(x=col, y=row)) is True
+    assert dialog.take() is False
 
 
 def test_a_click_outside_the_buttons_changes_nothing():
     dialog = confirm_dialog("Continue?")
-    assert dialog.click(0, 0) is False
-    assert dialog.click(1, 2) is False
-    assert dialog.take_result() is None
+    assert dialog.on_click(Pos(x=0, y=0)) is False
+    assert dialog.on_click(Pos(x=2, y=1)) is False
+    assert dialog.take() is None
 
 
 def test_a_borderless_dialog_keeps_the_body_and_the_buttons():
@@ -100,16 +100,16 @@ def test_child_at_maps_the_body_and_the_buttons():
 def test_button_specs_supply_labels_values_and_the_focused_action():
     dialog = Dialog("T", Rows("body"), [ButtonSpec("Go", 7), ("Stop", 0)])
     assert dialog.focused_button.label == "Go"
-    assert dialog.handle(key("enter")) is True
-    assert dialog.take_result() == 7
+    assert dialog.on_key(key("enter")) is True
+    assert dialog.take() == 7
 
 
 def test_prompt_dialog_carries_an_input_body_and_takes_ok():
     dialog = prompt_dialog("Name", placeholder="type")
     assert dialog.title == "Name"
     assert dialog.body.text == ""
-    assert dialog.handle(key("enter")) is True
-    assert dialog.take_result() == "ok"
+    assert dialog.on_key(key("enter")) is True
+    assert dialog.take() == "ok"
     assert dialog.body.placeholder == "type"
 
 
@@ -148,11 +148,11 @@ def test_a_dialog_is_a_focus_scope_with_body_and_buttons_as_children():
     assert list(dialog.walk()) == [dialog, body, *buttons]
 
 
-def test_on_key_is_the_typed_spelling_of_handle():
+def test_on_key_steps_the_button_row():
     dialog = confirm_dialog("Continue?")
 
     assert dialog.on_key(key("tab")) is True and dialog.index == 1
-    assert dialog.handle(key("s-tab")) is True and dialog.index == 0
+    assert dialog.on_key(key("s-tab")) is True and dialog.index == 0
     assert dialog.on_key(key("x", "x")) is False
 
 
@@ -167,10 +167,10 @@ def test_on_click_is_the_positional_door():
     assert dialog.take() is None
 
 
-def test_take_is_the_result_door_and_the_alias_agrees():
+def test_take_reads_the_result_once():
     dialog = confirm_dialog("Continue?")
 
     assert dialog.on_key(key("escape")) is True
     assert dialog.take() is None
     assert dialog.on_key(key("enter")) is True
-    assert dialog.take_result() is True
+    assert dialog.take() is True

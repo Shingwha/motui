@@ -6,6 +6,7 @@ from motui.app import TUI
 from motui.app import FocusManager, Pointer, SelectionGesture
 from motui.terminal import HeadlessScreen
 from motui.kernel.events import MouseEvent
+from motui.kernel.geom import Pos
 from motui.kernel.cell import Line, Surface
 from motui.kernel.layout import Constraints
 from motui.widgets import Padding
@@ -14,6 +15,9 @@ from tests.testing import ScriptedEvents, motion, press, release
 
 class Leaf:
     """A hoverable, clickable leaf: the pointer's minimum target."""
+
+    hoverable = True
+    clickable = True
 
     def __init__(self, rows: int = 1) -> None:
         self.hover = False
@@ -25,20 +29,20 @@ class Leaf:
             [Line.from_text(f"leaf{i}") for i in range(self.rows)], c.width
         )
 
-    def click(self, row: int, col: int) -> bool:
-        self.clicks.append((row, col))
+    def on_click(self, pos: Pos) -> bool:
+        self.clicks.append((pos.y, pos.x))
         return True
 
 
 class RowLeaf(Leaf):
-    """A row-level leaf: ``hover_at`` records which of its rows is hovered."""
+    """A row-level leaf: ``on_hover`` records which of its rows is hovered."""
 
     def __init__(self, rows: int = 3) -> None:
         super().__init__(rows)
         self.hover_row: int | None = None
 
-    def hover_at(self, row: int, col: int) -> bool:
-        target = None if row < 0 else row
+    def on_hover(self, pos: Pos | None) -> bool:
+        target = None if pos is None else pos.y
         changed = target != self.hover_row
         self.hover_row = target
         return changed
@@ -138,7 +142,7 @@ def test_a_mounted_ring_runs_its_click_policy_on_the_leaf():
     assert ring.focused is menu
     pointer.handle(press(3, 1))
     assert pointer.handle(release(3, 1)) is True
-    assert menu.take_result() == Option("one")
+    assert menu.take() == Option("one")
 
 
 def test_clear_drops_the_hover_the_position_and_the_pending_click():

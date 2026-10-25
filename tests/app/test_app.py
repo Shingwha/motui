@@ -89,14 +89,14 @@ def test_add_focus_and_bind_reach_the_right_component():
     name = app.add(Input(), id="name")
     button = Button("Ship")
     app.add(button)
-    app.bind("enter", button.activate)
+    app.bind("enter", lambda: button.on_action("activate"))
 
     assert name == "name"
     assert app.focus("name") is True
     assert app.dispatch(key("a", "a")) is True
     assert app.get("name").text == "a"
     assert app.dispatch(key("enter")) is True
-    assert button.take_result() is True
+    assert button.take() is True
 
 
 def test_fill_replaces_the_pane_and_mounts_theme_and_focus():
@@ -124,6 +124,17 @@ def test_add_themes_every_widget_of_a_nested_tree():
     assert panel.theme is app.theme
     assert name.theme is app.theme
     assert button.theme is app.theme
+
+
+def test_add_themes_a_scroll_panels_child_through_its_subtree():
+    app = App(screen=HeadlessScreen(30, 6), keys=ScriptedEvents(()))
+    child = Input()
+    view = ScrollPanel(child, height=2)
+
+    app.add(view)
+
+    assert view.theme is app.theme
+    assert child.theme is app.theme
 
 
 def test_add_themes_a_forms_fields_through_its_scope():
@@ -318,7 +329,7 @@ def test_a_form_owns_its_fields_and_a_click_moves_its_cursor():
     assert hit is not None
     assert app.focus_manager.click(hit) is True
     assert form.index == 1
-    assert form.handle(KeyEvent("b", "b")) is True
+    assert form.on_key(KeyEvent("b", "b")) is True
     assert email.text == "b"
     assert name.text == ""
 

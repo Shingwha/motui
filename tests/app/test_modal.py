@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from motui.app import FocusManager, Modal
 from motui.kernel.events import KeyEvent, MouseEvent, PasteEvent
+from motui.kernel.geom import Pos
 from motui.kernel.cell import Line, Surface
 from motui.kernel.layout import Constraints
 from motui.widgets.text import Text
@@ -36,23 +37,21 @@ class Panel:
         # Raw rows: the modal fits the panel to its rectangle.
         return Surface(width=c.width, rows=tuple(Line.from_text(t) for t in self.texts))
 
-    def click(self, row: int, col: int) -> bool:
-        self.clicks.append((row, col))
-        if self.click_cell != (row, col):
+    def on_click(self, pos: Pos) -> bool:
+        self.clicks.append((pos.y, pos.x))
+        if self.click_cell != (pos.y, pos.x):
             return False
         self.pending = self.click_value
         return True
 
-    def handle(self, event) -> bool:
+    def on_key(self, event: KeyEvent) -> bool:
         self.seen.append(name_of(event))
-        if not isinstance(event, KeyEvent):
-            return False
         if event.key in self.decisions:
             self.pending = self.decisions[event.key]
             return True
         return event.key in self.declined
 
-    def take_result(self) -> object | None:
+    def take(self) -> object | None:
         value, self.pending = self.pending, None
         return value
 
@@ -64,9 +63,12 @@ class Body:
         self.takes = set(takes)
         self.seen: list[str] = []
 
-    def handle(self, event) -> bool:
+    def on_key(self, event) -> bool:
         self.seen.append(name_of(event))
         return name_of(event) in self.takes
+
+    def on_paste(self, event) -> bool:
+        return self.on_key(event)
 
 
 def name_of(event) -> str:
@@ -88,7 +90,7 @@ def test_a_closed_modal_paints_nothing_and_consumes_nothing():
     tui = framed("hello")
     before = [row.text for row in tui.rows]
     modal = Modal(tui, Panel("panel"))
-    assert modal.is_open is False and modal.take_result() is None
+    assert modal.is_open is False and modal.take() is None
     assert modal.paint(tui.frame) is tui.frame.layout
     tui.paint()
     assert [row.text for row in tui.rows] == before
@@ -170,12 +172,12 @@ def test_a_press_inside_clicks_at_the_panels_own_coordinates():
     tui.paint()
     assert modal.handle(press(7, 1)) is True
     assert panel.clicks == [(0, 0)]
-    assert modal.is_open is True and modal.take_result() is None
+    assert modal.is_open is True and modal.take() is None
 
     assert modal.handle(press(8, 2)) is True
     assert panel.clicks == [(0, 0), (1, 1)]
-    assert modal.is_open is False and modal.take_result() == "taken"
-    assert modal.take_result() is None
+    assert modal.is_open is False and modal.take() == "taken"
+    assert modal.take() is None
 
 
 def test_other_pointer_reports_are_swallowed_without_a_decision():
@@ -194,12 +196,12 @@ def test_a_press_outside_dismisses_and_can_be_configured_not_to():
     modal = Modal(tui, Panel("panel"))
     modal.open()
     assert modal.handle(press(0, 0)) is True
-    assert modal.is_open is False and modal.take_result() is None
+    assert modal.is_open is False and modal.take() is None
 
     held = Modal(tui, Panel("panel"), dismiss_on_click_outside=False)
     held.open()
     assert held.handle(press(0, 0)) is True
-    assert held.is_open is True and held.take_result() is None
+    assert held.is_open is True and held.take() is None
 
 
 def test_the_keyboard_is_body_first_and_the_panel_takes_what_the_body_leaves():
@@ -212,15 +214,15 @@ def test_the_keyboard_is_body_first_and_the_panel_takes_what_the_body_leaves():
 
     assert modal.handle(key("x", "x")) is True
     assert body.seen == ["x"] and panel.seen == []
-    assert modal.is_open is True and modal.take_result() is None
+    assert modal.is_open is True and modal.take() is None
 
     assert modal.handle(key("down")) is True
     assert body.seen == ["x", "down"] and panel.seen == ["down"]
-    assert modal.is_open is True and modal.take_result() is None
+    assert modal.is_open is True and modal.take() is None
 
     assert modal.handle(key("enter")) is True
     assert panel.seen == ["down", "enter"]
-    assert modal.is_open is False and modal.take_result() == "ok"
+    assert modal.is_open is False and modal.take() == "ok"
 
     modal.open()
     assert modal.handle(PasteEvent("text")) is True
@@ -234,10 +236,10 @@ def test_escape_nobody_takes_cancels_and_other_keys_are_consumed():
     modal.open()
     for name in ("tab", "c-c", "q", "c-n"):
         assert modal.handle(key(name)) is True
-    assert modal.is_open is True and modal.take_result() is None
+    assert modal.is_open is True and modal.take() is None
     assert modal.handle(PasteEvent("dropped")) is True
     assert modal.handle(key("escape")) is True
-    assert modal.is_open is False and modal.take_result() is None
+    assert modal.is_open is False and modal.take() is None
 
 
 def test_a_none_valued_decision_still_closes_the_modal():
@@ -247,8 +249,8 @@ def test_a_none_valued_decision_still_closes_the_modal():
     modal.open()
     assert modal.handle(key("escape")) is True
     assert modal.is_open is False
-    assert modal.take_result() is None
-    assert modal.take_result() is None
+    assert modal.take() is None
+    assert modal.take() is None
 
 
 # -- the one-shot result and the focus trap ----------------------------------
@@ -287,16 +289,16 @@ def test_two_stacked_modals_restore_focus_layer_by_layer():
     assert focus.targets == (outside,)
 
 
-def test_take_result_reads_once_and_open_clears_a_stale_value():
+def test_take_reads_once_and_open_clears_a_stale_value():
     tui = framed("hello")
     modal = Modal(tui, Panel("panel"))
     modal.open()
     modal.close("taken")
-    assert modal.take_result() == "taken"
-    assert modal.take_result() is None
+    assert modal.take() == "taken"
+    assert modal.take() is None
     modal.close("stale")
     modal.open()
-    assert modal.take_result() is None
+    assert modal.take() is None
 
 
 def test_detach_closes_clears_and_stops_swallowing_events():
@@ -307,6 +309,6 @@ def test_detach_closes_clears_and_stops_swallowing_events():
     modal.open()
     modal.detach()
     assert modal.is_open is False
-    assert modal.take_result() is None
+    assert modal.take() is None
     assert modal.handle(key("x", "x")) is False
     assert modal.handle(press(7, 2)) is False

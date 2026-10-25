@@ -72,6 +72,7 @@ from typing import TYPE_CHECKING, Any
 
 from ..kernel.document import Component, Placement, Section, Sizing
 from ..kernel.events import Event, KeyEvent, MouseEvent, ResizeEvent
+from ..kernel.geom import Pos
 from ..kernel.hit import Hit
 from ..kernel.layout import Scrollable, ScrollableX
 from ..terminal.screen import Screen
@@ -634,10 +635,10 @@ class App:
         return False
 
     def _drag_press(self, event: MouseEvent) -> bool:
-        """Start a drag on the nearest widget overriding ``Widget.drag``.
+        """Start a drag on the nearest widget overriding ``Widget.on_drag``.
 
         Walks ``hit.chain`` backwards -- the deepest widget first -- and
-        hands the press to the first one whose ``drag`` is not the
+        hands the press to the first one whose ``on_drag`` is not the
         :class:`~motui.widgets.base.Widget` no-op.  That widget answers
         ``True`` only when the press landed on something it owns (the
         ScrollPanel's bar column); otherwise the walk goes on and the press
@@ -652,9 +653,9 @@ class App:
         for component, row, col in reversed(hit.chain):
             if not isinstance(component, Widget):
                 continue
-            if type(component).drag is Widget.drag:
+            if type(component).on_drag is Widget.on_drag:
                 continue
-            if component.drag(row, col, "press"):
+            if component.on_drag(Pos(x=col, y=row), "press"):
                 self._drag_target = component
                 self._drag_row = row
                 self._drag_col = col
@@ -683,7 +684,7 @@ class App:
                     row, col, held = found_row, found_col, True
                     self._drag_row, self._drag_col = row, col
                     break
-        consumed = bool(target.drag(row, col, event.kind))
+        consumed = bool(target.on_drag(Pos(x=col, y=row), event.kind))
         if event.kind == "release" or not held:
             self._drag_target = None
         if consumed or event.kind == "release":

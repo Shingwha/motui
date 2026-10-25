@@ -58,9 +58,9 @@ def test_slider_clamps_and_snaps_onto_the_step_grid():
 
 def test_slider_move_steps_and_clamps_and_clears_a_pending_value():
     slider = Slider(5, maximum=10)
-    assert slider.activate() is True
+    assert slider.on_action("activate") is True
     assert slider.move(1) is True and slider.value == 6
-    assert slider.take_result() is None
+    assert slider.take() is None
     assert slider.move(99) is True and slider.value == 10
     assert slider.move(1) is False
     assert slider.move(-99) is True and slider.value == 0
@@ -69,22 +69,22 @@ def test_slider_move_steps_and_clamps_and_clears_a_pending_value():
 def test_slider_click_maps_the_track_to_the_value():
     slider = Slider(0, maximum=10)
     slider.render(Constraints(width=14))
-    assert slider.click(0, 1) is True and slider.value == 0
-    assert slider.click(0, 11) is True and slider.value == 10
-    assert slider.click(1, 1) is False
+    assert slider.on_click(Pos(x=1, y=0)) is True and slider.value == 0
+    assert slider.on_click(Pos(x=11, y=0)) is True and slider.value == 10
+    assert slider.on_click(Pos(x=1, y=1)) is False
 
 
 def test_slider_activate_takes_the_value_once_and_disabled_refuses():
     slider = Slider(4)
-    assert slider.activate() is True and slider.take_result() == 4
-    assert slider.take_result() is None
+    assert slider.on_action("activate") is True and slider.take() == 4
+    assert slider.take() is None
     dead = Slider(
         4,
         disabled=True,
         styles=Styles(text=replace(DEFAULT_THEME.text, faint=Style(italic=True))),
     )
-    assert dead.move(1) is False and dead.click(0, 1) is False
-    assert dead.activate() is False and dead.take_result() is None
+    assert dead.move(1) is False and dead.on_click(Pos(x=1, y=0)) is False
+    assert dead.on_action("activate") is False and dead.take() is None
     assert dead.render(Constraints(width=14))[0].segments[0].style.italic is True
 
 
@@ -96,9 +96,9 @@ def test_slider_hover_and_focus_merge_their_bands():
     )
     slider = Slider(2, theme=theme)
     plain = slider.render(Constraints(width=14))
-    assert slider.hover_at(0, 0) is True
+    assert slider.on_hover(Pos(x=0, y=0)) is True
     assert all(seg.style.underline for seg in slider.render(Constraints(width=14))[0].segments)
-    assert slider.hover_at(1, 0) is True
+    assert slider.on_hover(Pos(x=0, y=1)) is True
     assert slider.render(Constraints(width=14)) == plain
     slider.focused = True
     assert all(seg.style.bold for seg in slider.render(Constraints(width=14))[0].segments)
@@ -130,7 +130,7 @@ def test_the_indicators_take_constraints_and_honour_the_height_budget():
 def test_a_zero_height_slider_render_still_seeds_the_click_geometry():
     slider = Slider(0, maximum=10)
     slider.render(Constraints(width=14, max_height=0))
-    assert slider.click(0, 11) is True and slider.value == 10
+    assert slider.on_click(Pos(x=11, y=0)) is True and slider.value == 10
 
 
 def test_an_unbounded_progress_bar_still_follows_the_constrained_width():
@@ -191,4 +191,4 @@ def test_slider_on_action_activates_and_moves():
     assert slider.on_action("next") is True and slider.value == 6
     assert slider.on_action("unknown") is False
     # The move cleared the pending value instead of leaving a stale one.
-    assert slider.take_result() is None
+    assert slider.take() is None

@@ -2,6 +2,7 @@
 
 from dataclasses import replace
 
+from motui.kernel.geom import Pos
 from motui.kernel.cell import Line, Segment, Surface
 from motui.kernel.layout import Constraints
 from motui.kernel.style import Style
@@ -104,20 +105,20 @@ def test_inline_code_bold_italic_strike_and_links_render_their_text():
 def test_a_link_click_leaves_its_url_pending_once():
     md = Markdown("see [docs](https://example.test)")
     md.render(Constraints(width=40))
-    assert md.click(0, 5) is True
-    assert md.take_result() == "https://example.test"
-    assert md.take_result() is None
-    assert md.click(0, 0) is False
+    assert md.on_click(Pos(x=5, y=0)) is True
+    assert md.take() == "https://example.test"
+    assert md.take() is None
+    assert md.on_click(Pos(x=0, y=0)) is False
 
 
 def test_a_link_hover_marks_the_span_and_clears_back():
     theme = replace(DEFAULT_THEME, surfaces=replace(DEFAULT_THEME.surfaces, hover=Style(reverse=True)))
     md = Markdown("[docs](u)", theme=theme)
     plain = md.render(Constraints(width=20))
-    assert md.hover_at(0, 0) is True
+    assert md.on_hover(Pos(x=0, y=0)) is True
     assert md.render(Constraints(width=20))[0].segments[0].style.reverse is True
-    assert md.hover_at(0, 0) is False
-    assert md.hover_at(-1, -1) is True
+    assert md.on_hover(Pos(x=0, y=0)) is False
+    assert md.on_hover(None) is True
     assert md.render(Constraints(width=20)) == plain
 
 
@@ -139,8 +140,8 @@ def test_task_items_render_a_box_and_click_with_their_flat_ordinal():
     md = Markdown("- [ ] first\n- [x] second")
     assert texts(md, 40) == ["[ ] first", "[x] second"]
     md.render(Constraints(width=40))
-    assert md.click(1, 0) is True and md.take_result() == "todo:1"
-    assert md.click(1, 5) is False
+    assert md.on_click(Pos(x=0, y=1)) is True and md.take() == "todo:1"
+    assert md.on_click(Pos(x=5, y=1)) is False
 
 
 def test_fences_reports_the_top_level_code_blocks():
@@ -254,7 +255,7 @@ def test_a_truncated_markdown_keeps_links_clickable_and_the_width_cap():
     md = Markdown("[docs](u)", max_width=9)
     surface = md.render(Constraints(width=80, max_height=1))
     assert [row.text for row in surface] == ["docs"]
-    assert md.click(0, 0) is True and md.take_result() == "u"
+    assert md.on_click(Pos(x=0, y=0)) is True and md.take() == "u"
     assert all(row.width <= 9 for row in md.render(Constraints(width=80)))
 
 

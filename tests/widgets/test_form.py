@@ -42,12 +42,12 @@ def test_move_clamps_at_the_field_ends():
 def test_the_focused_field_routes_first_then_the_form_navigates():
     field = Input()
     form = Form([Field("a", field), Field("b", Checkbox("y"))])
-    assert form.handle(key("x", "x")) is True
+    assert form.on_key(key("x", "x")) is True
     assert field.text == "x"
-    assert form.handle(key("tab")) is True and form.index == 1
-    assert form.handle(key("down")) is False  # clamped at the last field
-    assert form.handle(key("s-tab")) is True and form.index == 0
-    assert form.handle(key("up")) is True and form.index == 0  # the focused input took it
+    assert form.on_key(key("tab")) is True and form.index == 1
+    assert form.on_key(key("down")) is False  # clamped at the last field
+    assert form.on_key(key("s-tab")) is True and form.index == 0
+    assert form.on_key(key("up")) is True and form.index == 0  # the focused input took it
 
 
 def test_enter_validates_every_field_and_submits_the_mapping():
@@ -59,14 +59,14 @@ def test_enter_validates_every_field_and_submits_the_mapping():
         ],
         on_submit=submitted.append,
     )
-    assert form.handle(key("enter")) is True
+    assert form.on_key(key("enter")) is True
     assert form.fields[0].error == "required"
-    assert form.take_result() is None and submitted == []
+    assert form.take() is None and submitted == []
 
     form.fields[0].component.insert("Ada")
-    assert form.handle(key("enter")) is True
-    assert form.take_result() == {"name": "Ada", "agree": False}
-    assert form.take_result() is None
+    assert form.on_key(key("enter")) is True
+    assert form.take() == {"name": "Ada", "agree": False}
+    assert form.take() is None
     assert submitted == [{"name": "Ada", "agree": False}]
 
 
@@ -81,8 +81,8 @@ def test_values_come_from_the_component_state_or_a_custom_extractor():
             Field("custom", group, value=lambda: list(group.marked)),
         ]
     )
-    assert form.activate() is True
-    assert form.take_result() == {
+    assert form.on_action("activate") is True
+    assert form.take() == {
         "check": True,
         "group": Option("a", "a"),
         "custom": [1],
@@ -92,14 +92,14 @@ def test_values_come_from_the_component_state_or_a_custom_extractor():
 def test_reading_a_field_never_consumes_its_one_shot_result():
     menu = CheckboxGroup(["a"], marked=(0,))
     form = Form([Field("pick", menu)])
-    form.activate()
-    assert menu.take_result() == ["a"]
+    form.on_action("activate")
+    assert menu.take() == ["a"]
 
 
 def test_an_empty_form_submits_an_empty_mapping():
     form = Form([])
-    assert form.activate() is True and form.take_result() == {}
-    assert form.handle(key("tab")) is False
+    assert form.on_action("activate") is True and form.take() == {}
+    assert form.on_key(key("tab")) is False
     assert list(form.render(Constraints(width=20))) == []
 
 
@@ -112,7 +112,7 @@ def test_child_at_maps_component_rows_and_owns_labels_gaps_and_errors():
     form.render(Constraints(width=20))
     assert form.child_at(1, 0) == (field, 0, 0)
     assert form.child_at(0, 0) is None
-    form.activate()
+    form.on_action("activate")
     rows = texts(form, 20)
     assert rows[2] == "bad"
     assert form.child_at(2, 0) is None
@@ -150,19 +150,19 @@ def test_a_form_is_a_focus_scope_with_its_fields_as_children():
     form = Form([Field("name", name), Field("email", email)])
 
     assert form.focus_scope is True
-    assert form.owns_focus is True  # the 1.x spelling until W3b3
+    assert not hasattr(form, "owns_focus")
     assert form.children == [name, email]
     assert name.parent is form and email.parent is form
     assert list(form.walk()) == [form, name, email]
 
 
-def test_on_key_is_the_typed_spelling_of_handle():
+def test_on_key_routes_editing_then_navigation():
     field = Input()
     form = Form([Field("a", field), Field("b", Checkbox("y"))])
 
     assert form.on_key(key("x", "x")) is True
     assert field.text == "x"
-    assert form.handle(key("tab")) is True and form.index == 1
+    assert form.on_key(key("tab")) is True and form.index == 1
     assert form.on_key(key("s-tab")) is True and form.index == 0
 
 
@@ -183,12 +183,12 @@ def test_on_focus_mirrors_the_flag_onto_the_fields():
     assert first.focused is False and second.focused is False
 
 
-def test_take_is_the_result_door_and_the_alias_agrees():
+def test_take_reads_the_result_once():
     form = Form([])
-    assert form.activate() is True
+    assert form.on_action("activate") is True
     assert form.take() == {}
-    assert form.activate() is True
-    assert form.take_result() == {}
+    assert form.on_action("activate") is True
+    assert form.take() == {}
 
 
 def test_on_click_is_the_positional_door():

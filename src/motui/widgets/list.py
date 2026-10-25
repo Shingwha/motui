@@ -25,7 +25,7 @@ share one column width.
 
 The controller vocabulary is the peer of a table's: ``move(delta)`` steps
 and **clamps** at the ends (a data view, not a menu cycle -- D10), ``home``
-and ``end`` jump to the edges, ``click(row, col)`` maps one of the
+and ``end`` jump to the edges, ``on_click(pos)`` maps one of the
 component's own rendered rows back onto an item (the counter rows carry
 none) and leaves it pending, and ``activate()`` does the same for the
 cursor row.  ``take()`` is the one-shot read (it clears the pick);
@@ -43,10 +43,10 @@ the host.
 
 Only the kernel is imported: ``render`` is a pure function of the list and
 ``width``.  ``focused`` is the focus flag the focus tier sets
-(:class:`~motui.kernel.document.Focusable`): while it is ``False`` the
+the focus tier sets: while it is ``False`` the
 cursor row's band is ``rows.inactive`` and every other row renders
 unchanged.  ``hover``
-is the pointer tier's flag and :meth:`hover_at` its row-level half: the item
+is the pointer tier's flag and :meth:`on_hover` its row-level half: the item
 row under the pointer wears ``rows.hover`` (the pointer's own token, D3),
 whatever row it is on.  The marking starts
 ``None``, so an un-hovered list renders byte-for-byte what it always did.
@@ -112,14 +112,14 @@ class List(Widget):
 
     ``index`` is the cursor -- a 0-based item index, clamped on assignment
     (``0`` for an empty list) -- and the item under it is taken by
-    :meth:`activate` and read once through :meth:`take_result`.  The window follows the cursor:
+    :meth:`on_action` and read once through :meth:`take`.  The window follows the cursor:
     :meth:`render` shows at most ``window`` item rows centred on it (half a
     window where the ends allow), an ``\u2191 N more`` row above when items
     fall before the window and a ``\u2193 N more`` row below when they fall
     after it; the counter rows carry no item and leave the cursor alone.
     An empty list renders no rows.  A cursor the current ``items`` no longer
     answer reads as no cursor: the rows still render, the marker is simply
-    absent and :meth:`activate` answers ``False``.
+    absent and :meth:`on_action` answers ``False``.
 
     ``window`` is the number of item rows rendered and must be at least 1
     (``ValueError`` otherwise).  ``prefix_jump`` arms :meth:`handle`'s
@@ -193,7 +193,7 @@ class List(Widget):
         self.focused = False
         self.glyphs = glyphs
         #: The pointer tier's flag; the row-level emphasis lives in
-        #: ``_hover_row`` (:meth:`hover_at`).
+        #: ``_hover_row`` (:meth:`on_hover`).
         self.hover = False
         #: The marked items (:class:`~motui.widgets.mark.MarkSet`, raw item
         #: indices): :meth:`toggle` flips the cursor row's mark, and while
@@ -203,7 +203,7 @@ class List(Widget):
         self.marked = MarkSet()
         self._index = 0
         # The item row the pointer is on, or ``None``; written by
-        # ``hover_at``, read by ``render``.  ``None`` renders byte-for-byte
+        # ``on_hover``, read by ``render``.  ``None`` renders byte-for-byte
         # what the list always did.
         self._hover_row: int | None = None
         #: The whole control refuses every cursor gesture when disabled.
@@ -212,7 +212,7 @@ class List(Widget):
         #: new iterable to replace it).
         self.disabled_items = frozenset(disabled_items)
         # The pending one-shot pick: written by ``activate`` / a landing
-        # ``click``, read once by ``take_result`` and cleared by every
+        # ``on_click``, read once by ``take`` and cleared by every
         # consumed key.
         self._pending: str | None = None
 
@@ -294,26 +294,11 @@ class List(Widget):
             return self.items[self._index]
         return None
 
-    def activate(self) -> bool:
-        """Leave the cursor's item pending; ``True`` when there was one to take.
-
-        The list's :class:`~motui.kernel.document.Activable` verb: a host
-        routes the return key here and reads the result once through
-        :meth:`take_result`.  ``False`` -- and nothing pending -- for an
-        empty list, a disabled control, or a disabled cursor row.
-        """
-        current = self._current()
-        self._pending = current
-        return current is not None
-
     def take(self) -> str | None:
         """Read the pending pick once and clear it (the ``take`` door)."""
         value = self._pending
         self._pending = None
         return value
-
-    #: The 1.x spelling stays until W3b3 removes it.
-    take_result = take
 
     def toggle(self) -> bool:
         """Flip the cursor item's mark; ``True`` when there was one to flip.
@@ -331,26 +316,26 @@ class List(Widget):
         self.marked.toggle(self._index)
         return True
 
-    def click(self, row: int, col: int) -> bool:
-        """Land the item rendered at block row ``row``; ``True`` on a hit.
+    def on_click(self, pos: Pos) -> bool:
+        """Land the item rendered at block row ``pos.y``; ``True`` on a hit.
 
-        ``row`` is a 0-based row of this component's own ``render`` output
+        ``pos.y`` is a 0-based row of this component's own ``render`` output
         -- exactly what :meth:`~motui.app.TUI.hit` reports --
         resolved through the same window arithmetic ``render`` emits
         (:meth:`_layout`): a counter row and every row past the rendered
         ones carry no item, so they answer ``False`` and change nothing.
-        ``col`` is ignored, and deliberately so: an item row owns the whole
-        width.  A hit moves the cursor there and leaves that item pending
-        (the radio family's contract: a landing click is a pick, read once
-        through :meth:`take_result`).  A disabled control or item refuses
-        the hit and changes nothing.
+        ``pos.x`` is ignored, and deliberately so: an item row owns the
+        whole width.  A hit moves the cursor there and leaves that item
+        pending (the radio family's contract: a landing click is a pick,
+        read once through :meth:`take`).  A disabled control or item
+        refuses the hit and changes nothing.
         """
         if self.disabled:
             return False
         layout = self._layout()
-        if not 0 <= row < len(layout):
+        if not 0 <= pos.y < len(layout):
             return False
-        entry = layout[row]
+        entry = layout[pos.y]
         if not isinstance(entry, int):  # a counter row: no item to land on
             return False
         if self._is_disabled(entry):
@@ -359,20 +344,21 @@ class List(Widget):
         self._pending = self.items[entry]
         return True
 
-    def hover_at(self, row: int, col: int) -> bool:
-        """Mark the item row under a rendered row; ``True`` when the marking changed.
+    def on_hover(self, pos: Pos | None) -> bool:
+        """Mark the item row under the pointer; ``True`` when the marking changed.
 
-        The pointer tier's row-level half: ``row`` is a 0-based row of this
-        component's own ``render`` output, resolved through the same layout
-        :meth:`click` reads -- a counter row carries no item and clears the
-        marking, exactly as a row past the rendered ones does.  ``col`` is
-        ignored like ``click``'s, and a negative ``row`` clears the marking
-        (the pointer left).  The answer is whether the marked row changed,
-        so a motion inside one row answers ``False``; :meth:`render` rests
-        that row on ``rows.hover``, whatever row it is on (D3).
+        The pointer tier's row-level half: ``pos.y`` is a 0-based row of
+        this component's own ``render`` output, resolved through the same
+        layout :meth:`on_click` reads -- a counter row carries no item and
+        clears the marking, exactly as a row past the rendered ones does.
+        The column is ignored, and ``None`` clears the marking (the pointer
+        left).  The answer is whether the marked row changed, so a motion
+        inside one row answers ``False``; :meth:`render` rests that row on
+        ``rows.hover``, whatever row it is on (D3).
         """
         target: int | None = None
-        if row >= 0:
+        if pos is not None:
+            row = pos.y
             layout = self._layout()
             if 0 <= row < len(layout):
                 entry = layout[row]
@@ -409,7 +395,9 @@ class List(Widget):
             self.end()
             return True
         if name == "activate":
-            return self.activate()
+            current = self._current()
+            self._pending = current
+            return current is not None
         if name == "toggle":
             return self.toggle()
         return False
@@ -440,9 +428,6 @@ class List(Widget):
             self._jump(name)
             return True
         return False
-
-    #: The 1.x routing door stays until W3b3 removes it.
-    handle = on_key
 
     def _jump(self, char: str) -> bool:
         """Move the cursor to the first item starting with ``char``; ``True`` on a landing.
@@ -478,7 +463,7 @@ class List(Widget):
         """What each rendered row carries: an item index, or a counter token.
 
         :meth:`render` emits one line per entry and the hit mapping
-        (:meth:`click` / :meth:`hover_at`) reads the same list back, so the
+        (:meth:`on_click` / :meth:`on_hover`) reads the same list back, so the
         list's row arithmetic lives in exactly one place.  An ``int`` entry
         is the item's index; the private ``_ABOVE`` / ``_BELOW`` tokens
         name the counter rows that carry no item -- above the window and

@@ -31,7 +31,7 @@ def _list(b) -> None:
     marked = List(_ITEMS[:8], window=5, theme=b.theme)
     marked.index = 2
     marked.toggle()
-    marked.take_result()  # the variant mounts without a stale pick
+    marked.take()  # the variant mounts without a stale pick
     disabled = List(_ITEMS[:8], window=5, disabled_items=[2], theme=b.theme)
     b.preview(main)
     b.variants(("marks", marked), ("disabled row", disabled))
@@ -58,7 +58,7 @@ def _table(b) -> None:
     marked = Table(headers, rows, theme=b.theme)
     marked.index = 1
     marked.toggle()
-    marked.take_result()
+    marked.take()
     aligned = Table(headers, rows, aligns=["right", "left", "right"], theme=b.theme)
     b.preview(table)
     b.variants(("marked row", marked), ("aligned columns", aligned))

@@ -70,11 +70,11 @@ class LabelStrip(Widget):
     layout time and stored nowhere; the base supplies ``theme``, ``styles``,
     ``focused`` and ``hover``.  The shared half is the cursor, the
     hit geometry of the last render -- the span table
-    ``(start, stop, index)`` per label, so ``click``/``hover_at`` never
+    ``(start, stop, index)`` per label, so ``on_click``/``on_hover`` never
     re-render -- and the one-row :meth:`render`.
 
     ``_last_width`` is the width the last :meth:`render` painted at -- the
-    geometry :meth:`click` maps a column against; until the first paint it
+    geometry :meth:`on_click` maps a column against; until the first paint it
     is 80, the same convention as ``TextBuffer.last_width``.  ``_spans`` is
     the last render's span table (``None`` until the first paint, when a hit
     builds it once without calling ``render``).  The marking starts
@@ -163,8 +163,8 @@ class LabelStrip(Widget):
         self._index = cursor.index
         return cursor.index != before
 
-    def click(self, row: int, col: int) -> bool:
-        """Select the label cell ``(row, col)`` covers; True on a hit.
+    def on_click(self, pos: Pos) -> bool:
+        """Select the label cell ``(pos.y, pos.x)`` covers; True on a hit.
 
         The cell resolves through :meth:`_hit`, the walk over this
         component's own last render: the column of the strip's one row, or
@@ -177,23 +177,23 @@ class LabelStrip(Widget):
         """
         if self.disabled:
             return False
-        index = self._hit(row, col)
+        index = self._hit(pos.y, pos.x)
         if index is None or index in self._disabled_items:
             return False
         self.select(index)
         return True
 
-    def hover_at(self, row: int, col: int) -> bool:
-        """Mark the label under a cell; ``True`` when the marking changed.
+    def on_hover(self, pos: Pos | None) -> bool:
+        """Mark the label under the pointer; ``True`` when the marking changed.
 
-        The cell resolves through :meth:`_hit`, the same walk :meth:`click`
-        consumes, so the two can never disagree about which label a cell
-        covers -- a cell no label covers, and a negative ``row`` (the
+        The cell resolves through :meth:`_hit`, the same walk
+        :meth:`on_click` consumes, so the two can never disagree about which
+        label a cell covers -- a cell no label covers, and ``None`` (the
         pointer left), answer "no label" and clear the marking.  Disabled
         labels are marked like any other (the band is the pointer's echo,
         not a selection).  The answer is whether the marked label changed.
         """
-        target = None if row < 0 else self._hit(row, col)
+        target = None if pos is None else self._hit(pos.y, pos.x)
         changed = target != self._hover_index
         self._hover_index = target
         return changed

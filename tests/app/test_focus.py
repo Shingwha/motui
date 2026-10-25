@@ -7,7 +7,7 @@ import pytest
 from motui.app import FocusManager
 from motui.app.focus import focus_targets
 from motui.kernel import Constraints, Document, Pane, Rect, Section, Surface, Viewport
-from motui.kernel.document import Activable, Focusable, descend_chain
+from motui.kernel.document import descend_chain
 from motui.kernel.events import KeyEvent
 from motui.kernel.geom import Pos
 from motui.kernel.hit import Hit
@@ -41,14 +41,14 @@ class Cursor(Plain):
 
 
 class Field(Plain):
-    """A field-shaped target: its ``handle`` consumes everything first."""
+    """A field-shaped target: its ``on_key`` consumes everything first."""
 
     def __init__(self) -> None:
         super().__init__()
         self.handled: list = []
         self.steps: list[int] = []
 
-    def handle(self, event) -> bool:
+    def on_key(self, event) -> bool:
         self.handled.append(event)
         return True
 
@@ -64,7 +64,7 @@ class SoftField(Plain):
         super().__init__()
         self.handled: list = []
 
-    def handle(self, event) -> bool:
+    def on_key(self, event) -> bool:
         self.handled.append(event)
         return getattr(event, "key", "") == "backspace"
 
@@ -98,7 +98,9 @@ class Pick(Plain):
         self.answer = answer
         self.activations = 0
 
-    def activate(self) -> bool:
+    def on_action(self, name: str) -> bool:
+        if name != "activate":
+            return False
         self.activations += 1
         return self.answer
 
@@ -116,11 +118,13 @@ class Strip(Plain):
         self.cells: list[tuple[int, int]] = []
         self.activations = 0
 
-    def click(self, row: int, col: int) -> bool:
-        self.cells.append((row, col))
+    def on_click(self, pos: Pos) -> bool:
+        self.cells.append((pos.y, pos.x))
         return self.answer
 
-    def activate(self) -> bool:
+    def on_action(self, name: str) -> bool:
+        if name != "activate":
+            return False
         self.activations += 1
         return self.activation
 
@@ -141,12 +145,12 @@ class Recorder(Plain):
 
 
 class RouteOnly:
-    """A non-Focusable route target (a Dialog's shape)."""
+    """A non-focusable route target (a Dialog s shape)."""
 
     def __init__(self) -> None:
         self.seen: list = []
 
-    def handle(self, event) -> bool:
+    def on_key(self, event) -> bool:
         self.seen.append(event)
         return True
 
@@ -186,7 +190,7 @@ def test_an_empty_manager_declines_every_verb():
 def test_a_non_focusable_target_is_a_route_target():
     route = RouteOnly()
     manager = FocusManager([route])
-    assert not isinstance(route, Focusable)
+    assert not getattr(route, "focusable", False)
     assert manager.focus_next() is True and manager.focused is route
     assert manager.handle(KeyEvent("down")) is True
     assert len(route.seen) == 1
@@ -244,7 +248,7 @@ def test_sync_without_a_focus_leaves_the_widgets_own_flags_alone():
     assert (a.focused, b.focused) == (True, True)
 
 
-def test_focus_next_walks_and_wraps_both_ways():
+def test_focus_next_steps_and_wraps_both_ways():
     a, b, c = Cursor(), Cursor(), Cursor()
     manager = FocusManager([a, b, c])
     assert manager.focus_next() is True and manager.focused is a
@@ -448,7 +452,7 @@ def test_enter_activates_an_activable_target():
     pick = Pick()
     manager = FocusManager([pick])
     manager.focus_next()
-    assert isinstance(pick, Activable)
+    assert pick.activatable is True
     assert manager.handle(KeyEvent("enter")) is True
     assert pick.activations == 1
 
@@ -498,7 +502,7 @@ def test_a_click_through_a_container_lands_on_the_leaf_target():
     assert manager.click(hit(padded, row=1, col=2)) is True
     assert manager.focused is menu
     assert manager.click(hit(padded, row=1, col=2)) is True
-    assert menu.take_result() == Option("one")
+    assert menu.take() == Option("one")
 
 
 def test_the_arrows_call_move_with_the_signed_delta():

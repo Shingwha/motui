@@ -12,12 +12,12 @@ query-over-list panel, a ComboBox dropdown, a context menu.
 
 The panel is a structural duck, not a class: anything with
 ``render(c) -> Surface``, a ``click(row, col) -> bool`` over its own
-rendered cells, a ``handle(event) -> bool`` for the keyboard and the
-library's one-shot result (``take_result()`` -- a decision is a take, so a
+rendered cells, ``on_key`` / ``on_paste`` for the keyboard and the
+library's one-shot result (``take()`` -- a decision is a take, so a
 ``None``-valued button is a decision too; a panel that can decide ``None``
 also implements the private ``_take_decision()`` the routing reads) fits
 the socket.  A panel that
-carries a ``body`` with its own ``handle`` gets the keyboard **first** --
+carries a ``body`` with its own typed hooks gets the keyboard **first** --
 the Textual reading: an input field owns its editing keys and its own
 ``enter`` where it binds one, and an unclaimed ``enter`` falls through to
 the dialog's buttons.  That is exactly why a prompted field works:
@@ -56,7 +56,7 @@ swallowed so the background never sees a click; a key the panel takes is
 the panel's, an ``escape`` nobody takes cancels, and every other key is
 consumed and dropped -- a modal owns the keyboard, so the host's own
 shortcuts (``c-c``'s quit) are the host's to handle *before* the modal in
-its dispatch order.  :meth:`take_result` reads the panel's result once and
+its dispatch order.  :meth:`take` reads the panel's result once and
 clears it: the value of the button taken (``None`` is a legal value), or
 ``None`` for ``escape``, a click outside or a programmatic
 :meth:`close`.
@@ -76,8 +76,9 @@ from __future__ import annotations
 from dataclasses import replace
 from typing import TYPE_CHECKING
 
-from ..kernel.events import Event, KeyEvent, MouseEvent
+from ..kernel.events import Event, KeyEvent, MouseEvent, PasteEvent
 from ..kernel.frame import Rect, splice_row
+from ..kernel.geom import Pos
 from ..kernel.cell import Line, overlay
 from ..kernel.style import Style
 from ..kernel.theme import DEFAULT_THEME, Theme
@@ -104,13 +105,13 @@ class Modal:
 
     ``tui`` is the driver whose frame the overlay registers on (at
     construction, the ``Toasts`` lifecycle); ``dialog`` the pure component
-    painted in the box (``Dialog``, ``Prompt``, any ``Component`` with a
-    ``handle`` for the keyboard); ``anchor=(y, x)`` pins the panel's
+    painted in the box (``Dialog``, ``Prompt``, any ``Component`` with
+    typed hooks for the keyboard); ``anchor=(y, x)`` pins the panel's
     top-left cell (clamped into the frame) instead of centering it -- the
     ComboBox / context-menu door.  ``dismiss_on_click_outside`` (default
     ``True``) consumes a press outside the panel and closes with ``None``.
 
-    :meth:`take_result` reads the panel's result once and clears it: the
+    :meth:`take` reads the panel's result once and clears it: the
     value of the button the user took, or ``None`` for ``escape`` / a click
     outside / ``close()``.  A closed modal paints nothing and consumes
     nothing (:attr:`is_open`), so a host may keep one mounted for the
@@ -171,7 +172,7 @@ class Modal:
         self._focus = focus
         self._trap = False
         #: The pending result: written by :meth:`close`; read once through
-        #: :meth:`take_result`, which clears it.
+        #: :meth:`take`, which clears it.
         self._result: object | None = None
         # The driver's frame seam (module docstring): the overlay registers
         # here for the frame's life, exactly as the toasts' controller does.
@@ -245,7 +246,7 @@ class Modal:
         if self in self._tui.frame.overlays:
             self._tui.frame.remove_overlay(self)
 
-    def take_result(self) -> object | None:
+    def take(self) -> object | None:
         """Read the pending result once and clear it.
 
         The one-shot result door every panel of the tier speaks: ``None``
@@ -328,7 +329,9 @@ class Modal:
         panel, _rows = placed
         if panel.x <= event.x < panel.right and panel.y <= event.y < panel.bottom:
             self._arm()
-            self._dialog.click(event.y - panel.y, event.x - panel.x)
+            on_click = getattr(self._dialog, "on_click", None)
+            if on_click is not None:
+                on_click(Pos(x=event.x - panel.x, y=event.y - panel.y))
             decision = self._collect()
             if decision is not _PENDING:
                 self.close(decision)
@@ -339,12 +342,12 @@ class Modal:
     def _key(self, event: Event) -> bool:
         """Route one key or paste into the panel; always consumed (the modal).
 
-        Body-first: a panel's ``body`` with a ``handle`` gets the event and,
+        Body-first: a panel's ``body`` with the typed hooks gets the event and,
         taking it, keeps it -- an input field's editing keys, its pastes and
         its own ``enter`` where it binds one.  What the body left alone goes
-        to the panel's own ``handle``: a **key** always (the dialog's button
+        to the panel's own typed hook: a **key** always (the dialog's button
         row), a **paste** only when the panel is its own whole keyboard (no
-        ``body`` -- the CommandPalette's panel; a dialog's own handle is the button
+        ``body`` -- the CommandPalette's panel; a dialog's own hook is the button
         row's surface and reads keys alone).  A decision either of them
         leaves in the panel's one-shot result closes the modal with it (the
         value, ``None`` included); otherwise a key nobody took is the
@@ -358,12 +361,10 @@ class Modal:
         keys = isinstance(event, KeyEvent)
         self._arm()
         consumed = False
-        if body is not None and hasattr(body, "handle"):
-            consumed = bool(body.handle(event))
+        if body is not None:
+            consumed = self._route(body, event)
         if not consumed and (keys or body is None):
-            handle = getattr(dialog, "handle", None)
-            if handle is not None:
-                consumed = bool(handle(event))
+            consumed = self._route(dialog, event)
         decision = self._collect()
         if decision is not _PENDING:
             self.close(decision)
@@ -377,31 +378,42 @@ class Modal:
 
     # -- the write detector ------------------------------------------------------
 
+    @staticmethod
+    def _route(target: object, event: Event) -> bool:
+        """Send ``event`` to ``target``'s typed hook; ``True`` when consumed."""
+        if isinstance(event, KeyEvent):
+            hook = getattr(target, "on_key", None)
+        elif isinstance(event, PasteEvent):
+            hook = getattr(target, "on_paste", None)
+        else:
+            return False
+        return bool(hook(event)) if hook is not None else False
+
     def _arm(self) -> None:
         """Discard any pending panel result before one routing."""
         take_decision = getattr(self._dialog, "_take_decision", None)
         if take_decision is not None:
             take_decision()
             return
-        take_result = getattr(self._dialog, "take_result", None)
-        if take_result is not None:
-            take_result()
+        take = getattr(self._dialog, "take", None)
+        if take is not None:
+            take()
 
     def _collect(self) -> object:
         """The routing's decision, or ``_PENDING`` when it made none.
 
         A panel that can decide a ``None`` value implements the private
-        ``_take_decision()`` (the dialog does); every other ``Resultful``
-        panel answers through ``take_result()``, whose ``None`` is "nothing
+        ``_take_decision()`` (the dialog does); every other taking
+        panel answers through ``take()``, whose ``None`` is "nothing
         pending" -- a menu's take is always an option.
         """
         take_decision = getattr(self._dialog, "_take_decision", None)
         if take_decision is not None:
             made, value = take_decision()
             return value if made else _PENDING
-        take_result = getattr(self._dialog, "take_result", None)
-        if take_result is not None:
-            value = take_result()
+        take = getattr(self._dialog, "take", None)
+        if take is not None:
+            value = take()
             return value if value is not None else _PENDING
         return _PENDING
 
