@@ -37,7 +37,8 @@ from __future__ import annotations
 from typing import Sequence
 
 from ..kernel.glyphs import GLYPHS, Glyphs, seat
-from ..kernel.cell import Line, Segment, fuse
+from ..kernel.cell import Line, Segment, Surface, fuse
+from ..kernel.layout import Constraints, as_constraints
 from ..kernel.style import NONE, Style
 from ..kernel.text import visible_width
 from ..kernel.theme import Styles, Theme
@@ -119,13 +120,24 @@ class StatusLine(Widget):
         """
         return (self.left, self.right, self.theme, self.styles)
 
-    def render(self, width: int) -> list[Line]:
+    def render(self, c: Constraints | int) -> Surface:
+        """The one status row, fitted to the constraint width.
+
+        A bare ``int`` is the 1.x spelling and is normalized through
+        :func:`motui.kernel.layout.as_constraints`; the row is
+        :meth:`Surface.clipped`, so short rows keep the bytes they always
+        had, and a ``max_height`` of zero paints no row.
+        """
+        c = as_constraints(c)
         default = self.group("text").faint
         gap_style = default
         used = _width(self.left, default) + _width(self.right, default)
-        gutter = max(1, width - used - 1)  # one trailing column of right margin
+        gutter = max(1, c.width - used - 1)  # one trailing column of right margin
         parts = [*self.left, (" " * gutter, gap_style), *self.right]
-        return [_row(parts, default).fit(width)]
+        rows = [_row(parts, default).fit(c.width)]
+        if c.max_height is not None:
+            rows = rows[: c.max_height]
+        return Surface.clipped(rows, c.width)
 
     def __repr__(self) -> str:
         return f"StatusLine(left={self.left!r}, right={self.right!r})"
@@ -175,7 +187,15 @@ class ShortcutBar(Widget):
             self.styles,
         )
 
-    def render(self, width: int) -> list[Line]:
+    def render(self, c: Constraints | int) -> Surface:
+        """The one hint row, fitted to the constraint width.
+
+        A bare ``int`` is the 1.x spelling and is normalized through
+        :func:`motui.kernel.layout.as_constraints`; the row is
+        :meth:`Surface.clipped`, so short rows keep the bytes they always
+        had, and a ``max_height`` of zero paints no row.
+        """
+        c = as_constraints(c)
         key_style = self.group("content").accent
         label_style = self.group("text").faint
         segments: list[Segment] = []
@@ -184,7 +204,10 @@ class ShortcutBar(Widget):
                 segments.append(Segment(self.glyphs.separator, NONE))
             segments.append(Segment(key, key_style))
             segments.append(Segment(f" {label}", label_style))
-        return [Line(segments).fit(width)]
+        rows = [Line(segments).fit(c.width)]
+        if c.max_height is not None:
+            rows = rows[: c.max_height]
+        return Surface.clipped(rows, c.width)
 
     def __repr__(self) -> str:
         return f"ShortcutBar({self.items!r})"
@@ -240,13 +263,25 @@ class Notice(Widget):
             return self.glyphs.notice_error, self.group("status").danger
         return self.glyphs.notice_info, self.group("text").base
 
-    def render(self, width: int) -> list[Line]:
+    def render(self, c: Constraints | int) -> Surface:
+        """The one message row, fitted to the constraint width.
+
+        A bare ``int`` is the 1.x spelling and is normalized through
+        :func:`motui.kernel.layout.as_constraints`; the row is
+        :meth:`Surface.clipped`, so short rows keep the bytes they always
+        had, and a ``max_height`` of zero paints no row.
+        """
+        c = as_constraints(c)
         glyph, style = self._level_style()
         prefix = seat(glyph)
         if not prefix:
-            return [Line.from_text(self.text, NONE).fit(width)]
-        line = Line((Segment(prefix, style), Segment(self.text, NONE)))
-        return [line.fit(width)]
+            rows = [Line.from_text(self.text, NONE).fit(c.width)]
+        else:
+            line = Line((Segment(prefix, style), Segment(self.text, NONE)))
+            rows = [line.fit(c.width)]
+        if c.max_height is not None:
+            rows = rows[: c.max_height]
+        return Surface.clipped(rows, c.width)
 
     def __repr__(self) -> str:
         return f"Notice({self.text!r}, level={self.level!r})"
