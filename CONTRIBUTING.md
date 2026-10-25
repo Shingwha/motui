@@ -16,14 +16,12 @@ process.
    that the root is a subset of the layers.
 3. **One source module, one test file.** `src/motui/x/y.py` is exercised by
    the matching test module; a component family shares one test file.
-4. **Rendering is pinned.** `tests/golden/semantic/` is the primary cell
-   grid contract; `tests/golden/topics/*.txt` is an additional byte-level
-   regression gate. `tools/framebench.py`'s render hash is the coarse proof
-   that a refactor moved nothing.
+4. **Rendering is pinned.** `tests/golden/semantic/` is the cell-grid
+   contract: five showcase scenes, one file each. `tools/framebench.py`'s
+   render hash is the coarse proof that a refactor moved nothing.
 5. **No compatibility shims.** A renamed name is deleted with its last
-   consumer: no alias, no `_deprecated` re-export, no forwarding module.
-   The small documented string entries in `MIGRATION.md` are the exception,
-   and they are temporary.
+   consumer: no alias, no `_deprecated` re-export, no forwarding module, no
+   accepted legacy string or argument. `MIGRATION.md` records the mapping.
 6. **Within 2.x the contract is additive.** A release adds names,
    components and hooks; it does not rename or re-purpose an existing one.
    A removal is a MAJOR decision.
@@ -45,18 +43,18 @@ src/motui/
                     sources, capability, clipboard, Painter, SGR render,
                     private ansi
   widgets/          the component library (46 names) and Widget/Container
-  app/              Runtime, Workspace, App, focus/pointer/gesture/find/
-                    modal/palette/overlays/scrollbar/commands
-  testing/          headless_tui, ScriptedEvents, snapshot, Emulator
-  demo/             python -m motui; the golden frames render from it
+  app/              Runtime, Workspace, App, Router, focus/pointer/gesture/
+                    find/modal/palette/overlays/scrollbar/commands
+  testing/          Harness, headless_tui, ScriptedEvents, snapshot, Emulator
+  demo/             python -m motui: art, showcase (splash/menu/gallery/
+                    dashboard) and breakout
 tests/
   kernel/ widgets/ app/ terminal/   behavior and contract tests
-  golden/semantic/                 cell-grid snapshots per topic
-  golden/topics/                   byte-level snapshots per topic
+  golden/semantic/                 five cell-grid scene snapshots
   testing/                         clocks, doubles, events, layout helpers
 tools/
-  golden.py semantic.py            the frame gates
-  framebench.py                    nine timing workloads and render hash
+  semantic.py                      the semantic frame gate
+  framebench.py                    timing workloads and render hash
   api.py growth.py                 public surface and growth probe
 docs/                              ARCHITECTURE, CONTRACT, WIDGETS, MIGRATION, adr/
 ```
@@ -81,18 +79,19 @@ Every commit passes all of these:
 ```bash
 uv sync --locked
 uv run pytest -q -p no:cacheprovider
-uv run python tools/golden.py --check
 uv run python tools/semantic.py --check
 uv run python tools/framebench.py
 uv run python -m motui < /dev/null
 uv run python -m motui --pages
+uv run python -m motui --scene breakout --frames 30 --headless
+uv run python -m motui --scene dashboard --frames 30 --headless
 uv run ruff check .
 uv run pyright
 uv run lint-imports
 uv run python tools/api.py --check
 uv run python tools/growth.py
-uv run python examples/snake.py --headless
-uv run python examples/dashboard.py --headless
+uv run python examples/quickstart.py --headless
+uv run python examples/code.py --headless
 uv run python examples/wide_table.py --headless
 ```
 
@@ -101,10 +100,9 @@ What each protects:
 | Gate | Protects |
 |---|---|
 | `pytest` | behavior, the API pin, the import graph and packaging |
-| `golden.py --check` | the byte-level topic frames (an extra gate) |
 | `semantic.py --check` | the cell grid users actually see |
 | `framebench.py` | timing workloads and the render hash |
-| the two piped demo entries | headless replay and the plain-text page dump |
+| the piped demo entries | headless replay, the plain-text page dump and the two game scenes |
 | `ruff` / `pyright` | style, imports and types |
 | `lint-imports` | the four layering contracts |
 | `api.py --check` | every exported name and signature |
@@ -129,9 +127,9 @@ The definition of done for a behavior change:
 
 - tests for the behavior, in the same commit;
 - its documentation updated in the same commit;
-- if it moves what a user sees, re-record the golden frames with
-  `tools/semantic.py --update` (and `tools/golden.py --update` for the byte
-  set) and explain every changed frame in the commit message;
+- if it moves what a user sees, re-record the semantic frames with
+  `tools/semantic.py --update` and explain every changed scene in the
+  commit message;
 - if it touches a facade, make a version decision first and update
   `tools/api-2.0.txt` with `tools/api.py --update`.
 
@@ -165,46 +163,44 @@ Five things, in one commit:
 2. The capability flags it honors (`focusable`, `clickable`, `hoverable`,
    `activatable`) and the typed hooks it overrides (`on_key`, `on_click`,
    `on_action`, ...). `Widget` supplies all hooks as no-ops.
-3. A `revision()` snapshot when it holds mutable state, including `theme`
-   and `styles` when those change its rows.
+3. A `touch()` on every in-place mutation (attribute assignment does it
+   automatically); `Section` caches rows by `widget.generation`, and
+   `theme`/`styles` are read at render time.
 4. Tests for rendering, every hook and the capability surface. Do not add
    per-token `*_style` constructor arguments or a `focused=` flag; assign
    the shared flags and override role groups with `Styles`.
-5. A catalogue entry in [`docs/WIDGETS.md`](docs/WIDGETS.md) and, if the
-   component belongs on the tour, a demo topic.
+5. A catalogue entry in [`docs/WIDGETS.md`](docs/WIDGETS.md) and, when it
+   belongs in the component tour, a place in the Gallery scene.
 
 If the component joins a public facade, update the facade `__all__` and the
-API snapshot. If it changes what a topic renders, re-record that topic's
-golden frames.
+API snapshot. If it changes what a scene renders, re-record that scene's
+semantic frame.
 
-## Adding a demo topic
+## Adding a showcase scene
 
-The demo is a master-detail explorer, not a gallery. A topic is one
-`Topic` value registered in `src/motui/demo/registry.py` and one entry in a
-`topics/*.py` module. Keep the template:
-
-- a title, one summary line, a `Divider`, a live preview panel;
-- optional variants and one extra block;
-- at most one `Try:` line and one `API:` line;
-- no more than eight blocks.
+`src/motui/demo/showcase.py` holds `Showcase`, `Splash`, `Menu`, `Gallery`
+and `DashboardScene`; `src/motui/demo/breakout.py` holds the game. A scene
+registers its name in `SCENES` (via `demo/__init__.py`) and answers
+`render(Constraints) -> Surface` plus `tick()`/`on_key()`/`on_click()` as
+needed. Keep it deterministic: derive motion from the phase, never from the
+clock, stdin or randomness.
 
 Then:
 
 ```bash
-uv run python tools/golden.py --update      # byte topics
-uv run python tools/semantic.py --update    # semantic snapshots
+uv run python tools/semantic.py --update    # five scene snapshots
 uv run python -m motui --pages              # review the plain-text dump
 ```
 
-Do not invent a second rendering path: `--pages`, the golden tools and the
-tests share the same topic renderer.
+Do not invent a second rendering path: `--pages`, the semantic tool, the
+headless entry and the tests share the same scene renderer.
 
 ## Versioning
 
 SemVer, with a deliberately slow MAJOR cadence. The current release is
 **2.0.0**. The 2.0 break is documented name by name in
-[`docs/MIGRATION.md`](docs/MIGRATION.md); no compatibility aliases are
-provided beyond the small entries that page lists.
+[`docs/MIGRATION.md`](docs/MIGRATION.md); no compatibility aliases or
+legacy arguments are provided.
 
 Inside 2.x the public contract is **additive**: a name joins a facade, no
 existing name changes meaning, and no name is removed without a MAJOR. A
