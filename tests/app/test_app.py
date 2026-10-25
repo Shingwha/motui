@@ -3,9 +3,11 @@
 from __future__ import annotations
 
 from motui.app import App, Runtime, Workspace
+from motui.app.runtime import Timer
 from motui.kernel import Theme
 from motui.kernel.cell import Line, Surface
-from motui.kernel.document import Sizing
+from motui.kernel.document import Placement, Sizing
+from motui.kernel.geom import Axis
 from motui.kernel.layout import Constraints
 from motui.terminal import (
     HeadlessScreen,
@@ -97,10 +99,10 @@ def test_add_focus_and_bind_reach_the_right_component():
     app.add(button)
     app.bind("enter", lambda: button.on_action("activate"))
 
-    assert name == "name"
+    assert name.id == "name"
     assert app.focus("name") is True
     assert app.dispatch(key("a", "a")) is True
-    assert app.get("name").text == "a"
+    assert app.get("name").widget.text == "a"
     assert app.dispatch(key("enter")) is True
     assert button.take() is True
 
@@ -160,11 +162,73 @@ def test_removing_a_parent_drops_its_subtree_from_the_ring():
     assert app.focus(button) is True
     assert app.focus_manager is not None
 
-    app.remove(block)
+    app.remove(block.id)
 
     assert app.focus_manager.targets == ()
     assert app.focus_manager.focused is None
     assert button.focused is False
+
+
+def test_app_split_dock_and_undock_accept_the_2_0_enums():
+    app = App(screen=HeadlessScreen(40, 8), keys=ScriptedEvents(()))
+    left, right = app.split(Axis.X, weights=(2, 1))
+    assert [pane.id for pane in app.workspace.panes] == ["primary", "pane-1"]
+    assert left.rect.width > right.rect.width
+
+    top = app.dock(Rows("top"), placement=Placement.TOP)
+    bottom = app.dock(Rows("foot"), placement=Placement.BOTTOM, size=1)
+    assert app.workspace.frame.dock("top") is top
+    assert app.workspace.frame.dock("bottom") is bottom
+    assert app.undock(Placement.BOTTOM) is bottom
+    assert app.undock("top") is top  # legacy edge string, removed in W5
+
+
+def test_remove_accepts_the_section_the_demo_keeps():
+    """The demo stores ``add``'s answer and passes it back to ``remove``.
+
+    Sections are the 2.0 return value, so the App resolves ``section.id``;
+    W5 tightens the parameter once the demo's bookkeeping migrates.
+    """
+    app = App(screen=HeadlessScreen(20, 4), keys=ScriptedEvents(()))
+    section = app.add(Rows("one"))
+
+    assert app.remove(section) is section
+    assert app.runtime.document.blocks() == ()
+
+
+def test_app_proxies_the_runtime_schedule_and_paint():
+    app = App(screen=HeadlessScreen(20, 3), keys=ScriptedEvents(()))
+    app.runtime._clock = lambda: 0.0
+    calls: list[str] = []
+    timer = app.every(0.05, lambda: calls.append("tick"))
+    animation = app.animation(20, lambda: calls.append("draw"))
+
+    assert isinstance(timer, Timer) and timer.period == 0.05
+    assert isinstance(animation, Timer) and animation.period == 0.05
+    app.runtime.advance(0.11)
+    assert calls.count("tick") == 2
+    assert calls.count("draw") == 2
+
+    app.add(Rows("x"))
+    app.invalidate()
+    app.paint_now()
+    assert rows(app.runtime)[0] == "x"
+
+
+def test_walk_visits_each_mounted_node_once_in_frame_order():
+    app = App(screen=HeadlessScreen(30, 6), keys=ScriptedEvents(()))
+    button = Button("Go")
+    row = Row([button])
+    section = app.add(row)
+    docked = Button("Dock")
+    app.dock(docked, placement=Placement.BOTTOM)
+
+    nodes = list(app.walk())
+
+    assert section.widget is row
+    assert nodes[0] is row and nodes[1] is button
+    assert docked in nodes
+    assert len(nodes) == len({id(node) for node in nodes})
 
 
 def test_set_focus_targets_is_gone():

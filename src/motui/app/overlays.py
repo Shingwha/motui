@@ -58,7 +58,6 @@ from typing import TYPE_CHECKING
 from ..kernel.document import Component
 from ..kernel.events import Event, KeyEvent, MouseEvent, PasteEvent
 from ..kernel.frame import Frame, Rect, splice_row
-from ..kernel.hit import EveryHandle
 from ..kernel.cell import Line, overlay
 from ..widgets.text import Text
 from ..kernel.style import Style
@@ -68,7 +67,7 @@ from ..kernel.layout import Constraints
 from ..kernel.text import WrapMode
 
 if TYPE_CHECKING:
-    from .runtime import Runtime
+    from .runtime import Runtime, Timer
     from .pointer import Pointer
 
 __all__ = ["Stats", "Toasts", "Tooltip"]
@@ -244,7 +243,7 @@ class Toasts:
         self._theme = theme
         self._toasts: list[_Toast] = []
         self._detached = False
-        self._handle: EveryHandle | None = None
+        self._handle: Timer | None = None
         # The driver's frame seam (module docstring): the overlay registers
         # here for the frame's life -- a retile re-divides the tiling in
         # place, so nothing carries across.
@@ -286,7 +285,7 @@ class Toasts:
             self._handle = self._tui.every(EXPIRY_TICK, self._tick)
 
     def detach(self) -> None:
-        """Unregister the overlay and cancel the ticker (the EveryHandle
+        """Unregister the overlay and cancel the ticker (the timer-handle
         convention).
 
         The symmetric of the constructor's registration: the frame drops
@@ -458,7 +457,7 @@ class _MountedOverlay(Themed):
         self._tui.refresh()
 
     def detach(self) -> None:
-        """Unregister the overlay (the ``EveryHandle`` convention).
+        """Unregister the overlay (the timer-handle convention).
 
         The symmetric of the constructor's registration; idempotent --
         :attr:`_detached` is the one identity that makes it so, so a second

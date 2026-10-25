@@ -24,8 +24,15 @@ from __future__ import annotations
 from typing import TYPE_CHECKING
 
 from ..kernel.cell import Line
-from ..kernel.document import Component, Document, Section, Sizing
+from ..kernel.document import (
+    Component,
+    Document,
+    Placement,
+    Section,
+    Sizing,
+)
 from ..kernel.frame import Frame, Pane, Rect
+from ..kernel.geom import Axis
 from ..kernel.hit import Hit, RowRange
 from ..kernel.layout import Viewport
 from ..kernel.selection import Selection
@@ -99,9 +106,16 @@ class Workspace:
         placement=None,
         sizing: Sizing = Sizing.NATURAL,
         pane: Pane | str | None = None,
-    ) -> str:
-        """Append a block to a pane's document; answer its id."""
-        return self._runtime.add(
+    ) -> Section:
+        """Append a block to a pane's document; answer its section.
+
+        :meth:`Runtime.add <motui.app.runtime.Runtime.add>` still answers the
+        block id -- the low-level handle -- and this facade resolves it to
+        the :class:`~motui.kernel.document.Section` the caller keeps.  The
+        section is looked up through its owning pane, so a ``pane=`` write
+        answers a section from that pane's document, not the main one.
+        """
+        block_id = self._runtime.add(
             component,
             id=id,
             pin=pin,
@@ -109,33 +123,52 @@ class Workspace:
             sizing=sizing,
             pane=pane,
         )
+        return self._section(block_id)
 
     def fill(self, component: Component, *, pane: Pane | str | None = None) -> Section:
         """Make ``component`` the fill of a pane; answer the section."""
         return self._runtime.fill(component, pane=pane)
 
-    def get(self, id: str) -> Component:
-        """The component with ``id``, resolved frame-wide."""
-        return self._runtime.get(id)
+    def get(self, id: str) -> Section:
+        """The section with ``id``, resolved frame-wide."""
+        return self._section(id)
 
-    def remove(self, id: str) -> Component:
-        """Detach the block with ``id`` and answer its component."""
-        return self._runtime.remove(id)
+    def remove(self, id: str) -> Section:
+        """Detach the block with ``id`` and answer its section.
+
+        The section is read before the detach (the document drops it), so
+        the caller still holds the value and the component it wraps.
+        """
+        section = self._section(id)
+        self._runtime.remove(id)
+        return section
+
+    def _section(self, id: str) -> Section:
+        """The section ``id`` in whichever pane's document holds it."""
+        return self._runtime._holder(id).viewport.document.get(id)
 
     # -- split / dock / scroll surface -------------------------------------------
 
     def split(
         self,
-        orientation: str,
+        axis: Axis | str,
         *,
-        ratios: tuple[float, ...] = (1, 1),
+        weights: tuple[float, ...] | None = None,
+        ratios: tuple[float, ...] | None = None,
         min_size: int = 1,
         separator: bool = True,
         pane: Pane | str | None = None,
     ) -> tuple[Pane, ...]:
-        """Split a pane; return the panes it became, in paint order."""
+        """Split a pane; return the panes it became, in paint order.
+
+        ``axis`` is :class:`~motui.kernel.geom.Axis` (``X`` divides the
+        width, ``Y`` the height) or the 1.x ``"vertical"``/``"horizontal"``
+        string, kept for compatibility until W5.  ``weights`` is the 2.0
+        spelling and wins over ``ratios``.
+        """
         return self._runtime.split(
-            orientation,
+            axis,
+            weights=weights,
             ratios=ratios,
             min_size=min_size,
             separator=separator,
@@ -146,15 +179,26 @@ class Workspace:
         self,
         component: Component,
         *,
+        placement: Placement | None = None,
         edge: str = "bottom",
         size: int | None = None,
     ) -> Pane:
-        """Pin ``component`` against ``edge``; return its pane."""
-        return self._runtime.dock(component, edge=edge, size=size)
+        """Pin ``component`` against a dock placement; return its pane.
 
-    def undock(self, edge: str = "bottom") -> Pane | None:
-        """Release the dock on ``edge``; return its pane (``None`` when empty)."""
-        return self._runtime.undock(edge)
+        ``placement`` is the 2.0 spelling (``TOP``/``BOTTOM``); the legacy
+        ``edge`` string stays until W5.
+        """
+        return self._runtime.dock(
+            component, placement=placement, edge=edge, size=size
+        )
+
+    def undock(
+        self,
+        placement: Placement | str | None = None,
+        edge: str = "bottom",
+    ) -> Pane | None:
+        """Release the dock named by ``placement``; return its pane (or ``None``)."""
+        return self._runtime.undock(placement, edge)
 
     def dock_region(self, edge: str = "bottom") -> Rect | None:
         """The rectangle the last composition laid the dock on ``edge`` in."""

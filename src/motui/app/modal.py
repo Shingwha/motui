@@ -227,7 +227,7 @@ class Modal:
         self._tui.refresh()
 
     def detach(self) -> None:
-        """Unregister the overlay and close the panel (the ``EveryHandle`` convention).
+        """Unregister the overlay and close the panel (the timer-handle convention).
 
         By identity, and idempotent: nothing is unregistered when the frame
         no longer holds the modal, so a second detach is a no-op.  Unlike

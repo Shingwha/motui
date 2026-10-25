@@ -197,7 +197,7 @@ class Pointer:
         self._position = None
 
     def detach(self) -> None:
-        """Unmount cleanly (the ``EveryHandle`` convention): drop every state.
+        """Unmount cleanly (the timer-handle convention): drop every state.
 
         :meth:`clear`'s drop, plus the pointer goes inert: a detached
         pointer answers ``False`` to every event, so a release arriving

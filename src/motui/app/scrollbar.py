@@ -53,7 +53,6 @@ from ..kernel.events import Event, MouseEvent
 from ..kernel.frame import Chrome, Pane, Rect
 from ..kernel.geom import Axis
 from ..kernel.glyphs import GLYPHS, Glyphs
-from ..kernel.hit import EveryHandle
 from ..kernel.cell import Line, Segment
 from ..kernel.layout import ScrollAxis, ScrollState, ScreenLayout
 from ..kernel.style import Style
@@ -61,7 +60,7 @@ from ..kernel.theme import DEFAULT_THEME, Theme
 from ..widgets.scroll import ScrollPanel
 
 if TYPE_CHECKING:
-    from .runtime import Runtime
+    from .runtime import Runtime, Timer
 
 __all__ = ["Scrollbar"]
 
@@ -264,7 +263,7 @@ class Scrollbar:
         self._held = False
         self._grab: tuple[int, int] | None = None  # (strip row, offset) of the grab
         self._repeat = 0  # the held-track page direction: 0, 1 (down), -1 (up)
-        self._handle: EveryHandle | None = None
+        self._handle: Timer | None = None
         # The last strip painted and the state it was painted from: the memo
         # of :meth:`_paint`, keyed by everything that paint reads.
         self._strip_cache: tuple[tuple, tuple[Line, ...]] | None = None
@@ -346,7 +345,7 @@ class Scrollbar:
     # -- lifecycle ---------------------------------------------------------------
 
     def detach(self) -> None:
-        """Unregister the chrome and cancel the ticker (the EveryHandle convention).
+        """Unregister the chrome and cancel the ticker (the timer-handle convention).
 
         The stored selection of a gesture is not ours to clear; the strip
         is: the pane gives the bar's column back to its viewport, which

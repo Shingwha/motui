@@ -72,7 +72,7 @@ from typing import TYPE_CHECKING, Any
 
 from ..kernel.document import Component, Placement, Section, Sizing
 from ..kernel.events import Event, KeyEvent, MouseEvent, ResizeEvent
-from ..kernel.geom import Pos
+from ..kernel.geom import Axis, Pos
 from ..kernel.hit import Hit
 from ..kernel.layout import Scrollable, ScrollableX
 from ..terminal.screen import MouseMode, Screen, TerminalOptions
@@ -82,7 +82,8 @@ from ..kernel.style import ColorMode, Style
 from ..kernel.theme import DEFAULT_THEME, Theme
 from ..widgets.base import Widget
 from .command_palette import CommandPalette
-from .runtime import Runtime
+from .commands import CommandRegistry
+from .runtime import Runtime, Timer
 from .find import Find
 from .focus import FocusManager, focus_targets, iter_widgets
 from .gesture import SelectionGesture
@@ -342,17 +343,18 @@ class App:
         placement: Placement | None = None,
         sizing: Sizing = Sizing.NATURAL,
         pane: Any = None,
-    ) -> str:
-        """Mount ``component``; answer its block id.
+    ) -> Section:
+        """Mount ``component``; answer its section.
 
         The component's subtree takes the App theme where no explicit one
         is set, and its interactive widgets join the focus ring (when the
         default controllers are mounted).  With no ``pane=`` the block lands
-        in the main (primary) document, never the focused pane.  The id is
-        :meth:`~motui.app.runtime.Runtime.add`'s -- unique across the frame.
+        in the main (primary) document, never the focused pane.  The section
+        carries :meth:`~motui.app.runtime.Runtime.add`'s id -- unique across
+        the frame -- and the mounted component.
         ``placement``/``sizing`` are the 2.0 document spellings.
         """
-        block_id = self.workspace.add(
+        section = self.workspace.add(
             component,
             id=id,
             pin=pin,
@@ -361,7 +363,7 @@ class App:
             pane=pane,
         )
         self._mount(component)
-        return block_id
+        return section
 
     def fill(self, component: Component, *, pane: Any = None) -> Section:
         """Fill a pane with ``component``; answer the ``FILL`` section.
@@ -390,19 +392,24 @@ class App:
         if self._focus is not None:
             self._focus.sync(focus_targets(self.runtime))
 
-    def get(self, id: str) -> Component:
-        """The component with ``id`` (the workspace's frame-wide lookup)."""
+    def get(self, id: str) -> Section:
+        """The section with ``id`` (the workspace's frame-wide lookup)."""
         return self.workspace.get(id)
 
-    def remove(self, id: str) -> Component:
-        """Unmount the component with ``id``; answer it.
+    def remove(self, id: Any) -> Section:
+        """Unmount the block with ``id``; answer its section.
 
         The focus ring drops every widget in its subtree first, so a
-        removed target can never keep holding the focus.
+        removed target can never keep holding the focus.  A
+        :class:`~motui.kernel.document.Section` is accepted as well as an
+        id: the demo keeps the values :meth:`add` answers, and resolving
+        ``section.id`` keeps that call site working without touching it.
+        W5 tightens this back to ``str`` once the demo migrates.
         """
-        component = self.workspace.remove(id)
-        self._forget(component)
-        return component
+        block_id = id.id if isinstance(id, Section) else id
+        section = self.workspace.remove(block_id)
+        self._forget(section.widget)
+        return section
 
     def _forget(self, component: Component) -> None:
         """Drop ``component`` from the theme walk and re-derive the focus ring."""
@@ -410,6 +417,44 @@ class App:
             held for held in self._components if held is not component
         ]
         self._sync_focus()
+
+    # -- runtime proxies ----------------------------------------------------------
+
+    def every(
+        self,
+        period: float,
+        fn: Callable[[], object],
+        *,
+        catch_up: str = "skip",
+    ) -> Timer:
+        """Call ``fn`` every ``period`` seconds; answer the cancellable timer.
+
+        The :meth:`Runtime.every <motui.app.runtime.Runtime.every>` schedule:
+        the first run lands one period from now and every run adds exactly
+        one period.  ``catch_up`` is ``"skip"`` or ``"coalesce"``.
+        """
+        return self.runtime.every(period, fn, catch_up=catch_up)
+
+    def animation(self, hz: float, draw: Callable[[], object]) -> Timer:
+        """Call ``draw`` at ``hz`` frames per second; answer the timer."""
+        return self.runtime.animation(hz, draw)
+
+    def invalidate(self) -> None:
+        """Mark the frame dirty (the next pump paint shows the change)."""
+        self.runtime.invalidate()
+
+    def paint_now(self) -> None:
+        """Paint one frame now, bypassing the throttle."""
+        self.runtime.paint_now()
+
+    def walk(self) -> Iterator[Component]:
+        """Every mounted node once, depth first, in frame order.
+
+        The tree the App itself derives the focus ring and the resize
+        broadcast from: every pane and dock document root, each walked
+        explicitly (``Widget.walk``), shared nodes yielded once.
+        """
+        yield from iter_widgets(self.runtime)
 
     # -- focus ------------------------------------------------------------------
 
@@ -420,7 +465,7 @@ class App:
     def focus(self, target: "str | Component") -> bool:
         """Focus a block id or a component that is in the tree-derived ring."""
         if isinstance(target, str):
-            target = self.workspace.get(target)
+            target = self.workspace.get(target).widget
         if self._focus is None:
             return False
         self._focus.sync(focus_targets(self.runtime))
@@ -450,26 +495,65 @@ class App:
 
     # -- frame surface ------------------------------------------------------------
 
-    def split(self, orientation: str, **kwargs: Any) -> Any:
-        """Split a pane (the workspace's own ``split``)."""
-        return self.workspace.split(orientation, **kwargs)
+    def split(
+        self,
+        axis: Axis | str,
+        *,
+        weights: tuple[float, ...] | None = None,
+        ratios: tuple[float, ...] | None = None,
+        min_size: int = 1,
+        separator: bool = True,
+        pane: Any = None,
+    ) -> tuple[Any, ...]:
+        """Split a pane (the workspace's own ``split``).
 
-    def dock(self, component: Component, *, edge: str = "bottom", size: int | None = None) -> Any:
-        """Dock ``component`` (the workspace's own ``dock``); theme it first."""
+        ``axis`` is ``Axis.X``/``Axis.Y`` or the 1.x
+        ``"vertical"``/``"horizontal"`` string; ``weights`` (2.0) wins over
+        ``ratios`` (legacy).
+        """
+        return self.workspace.split(
+            axis,
+            weights=weights,
+            ratios=ratios,
+            min_size=min_size,
+            separator=separator,
+            pane=pane,
+        )
+
+    def dock(
+        self,
+        component: Component,
+        *,
+        placement: Placement | None = None,
+        edge: str = "bottom",
+        size: int | None = None,
+    ) -> Any:
+        """Dock ``component`` (the workspace's own ``dock``); theme it first.
+
+        ``placement`` is ``Placement.TOP``/``BOTTOM``; the legacy ``edge``
+        string stays until W5.
+        """
         for current in _nodes(component):
             if isinstance(current, Widget) and current.theme is None:
                 current.theme = self._theme
         self._components.append(component)
-        return self.workspace.dock(component, edge=edge, size=size)
+        return self.workspace.dock(
+            component, placement=placement, edge=edge, size=size
+        )
 
-    def undock(self, edge: str = "bottom") -> Any:
-        """Release the dock on ``edge`` and forget its component.
+    def undock(
+        self,
+        placement: Placement | str | None = None,
+        edge: str = "bottom",
+    ) -> Any:
+        """Release the dock named by ``placement`` and forget its component.
 
         The workspace's :meth:`~motui.app.workspace.Workspace.undock` plus
         the App-side bookkeeping: the docked component's subtree leaves the
-        focus ring and the theme walk with it.
+        focus ring and the theme walk with it.  The legacy edge string is
+        accepted (positionally, as the demo passes it) until W5.
         """
-        pane = self.workspace.undock(edge)
+        pane = self.workspace.undock(placement, edge)
         if pane is not None:
             for block in pane.document.blocks():
                 self._forget(block.component)
@@ -492,12 +576,23 @@ class App:
         self._modals.append(modal)
         return modal
 
-    def open_palette(self, commands: list[object], **kwargs: Any) -> CommandPalette:
-        """Open the lazily created command palette over ``commands``."""
+    def open_palette(
+        self,
+        commands: "CommandRegistry | list[object]",
+        **kwargs: Any,
+    ) -> CommandPalette:
+        """Open the lazily created command palette over ``commands``.
+
+        ``commands`` is a :class:`~motui.app.commands.CommandRegistry` --
+        its :meth:`~motui.app.commands.CommandRegistry.options` view is what
+        the palette renders -- or a ready list of options (the 1.x path,
+        kept for compatibility until W5).
+        """
+        options = commands.options() if isinstance(commands, CommandRegistry) else commands
         if self._palette is None:
             kwargs.setdefault("theme", self._theme)
             kwargs.setdefault("focus", self._focus)
-            self._palette = CommandPalette(self.runtime, commands, **kwargs)
+            self._palette = CommandPalette(self.runtime, options, **kwargs)
         self._palette.open()
         return self._palette
 

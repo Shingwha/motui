@@ -2,11 +2,12 @@
 
 from __future__ import annotations
 
-from motui.app import FocusManager, CommandPalette
+from motui.app import App, Command, CommandRegistry, FocusManager, CommandPalette
 from motui.kernel.events import MouseEvent, PasteEvent
 from motui.widgets.text import Text
 from motui.widgets.choice import Option
-from tests.testing import headless_tui, key
+from motui.terminal import HeadlessScreen
+from tests.testing import ScriptedEvents, headless_tui, key
 from motui.kernel.layout import Constraints
 
 _MENU = [
@@ -216,3 +217,18 @@ def test_enter_and_escape_close_the_palette_with_a_result():
         assert palette_.is_open is False
         assert list(palette_.render(Constraints(width=40))) == []
         assert palette_.take() is None
+
+
+def test_the_app_opens_a_palette_straight_from_a_registry():
+    registry = CommandRegistry(
+        [
+            Command(name="save", description="Save the document", keys=("c-s",)),
+            Command(name="quit", group="App", description="Leave"),
+        ]
+    )
+    app = App(screen=HeadlessScreen(40, 8), keys=ScriptedEvents(()))
+
+    palette_ = app.open_palette(registry)
+
+    assert palette_ is app.palette and palette_.is_open
+    assert labels(palette_) == ["save", "quit"]

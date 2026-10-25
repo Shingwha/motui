@@ -78,14 +78,14 @@ from typing import TYPE_CHECKING
 
 from ..kernel.events import Event, MouseEvent
 from ..kernel.frame import Pane
-from ..kernel.hit import EveryHandle, Hit
+from ..kernel.hit import Hit
 from ..kernel.cell import Line
 from ..kernel.selection import Selection, SelectionAnchor, extract
 from ..kernel.text import visible_width
 from ..kernel.layout import Constraints
 
 if TYPE_CHECKING:
-    from .runtime import Runtime
+    from .runtime import Runtime, Timer
 
 __all__ = ["SelectionGesture", "copy_on_select"]
 
@@ -186,7 +186,7 @@ class SelectionGesture:
         self._double_click_seconds = double_click_seconds
         self._anchor: SelectionAnchor | None = None
         self._head: SelectionAnchor | None = None
-        self._handle: EveryHandle | None = None
+        self._handle: Timer | None = None
         self._dir = 0
         self._last_press: tuple[int, int, float] | None = None
         self._pane_id: str | None = None
@@ -235,7 +235,7 @@ class SelectionGesture:
         return False
 
     def detach(self) -> None:
-        """End the gesture cleanly (the ``EveryHandle`` convention).
+        """End the gesture cleanly (the timer-handle convention).
 
         Cancels the edge ticker -- the one thing the pump may still be holding
         -- and drops the in-flight drag so a later release cannot finalize it.

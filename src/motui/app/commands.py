@@ -17,27 +17,71 @@ them explicitly) but are filtered out of ``match`` by default and
 
 from __future__ import annotations
 
+import inspect
 from collections.abc import Callable, Iterable, Iterator
 from dataclasses import dataclass
+from typing import TYPE_CHECKING
 
 from ..widgets.choice import Option
+
+if TYPE_CHECKING:
+    from .application import App
 
 __all__ = ["Command", "CommandRegistry"]
 
 
-@dataclass(frozen=True, slots=True)
-class Command:
-    """One named action: description, handler, key bindings and enabled flag.
+class _LegacyCommandMeta(type):
+    """Accept the 1.x positional ``Command(name, description)`` form.
 
-    ``keys`` is normalized to a tuple at construction (a list argument is
-    copied), so the value is hashable and cannot be mutated behind the
-    registry's back.  ``handler`` receives whatever the caller passes to
+    The 2.0 constructor is keyword-only; the demo (frozen in this wave)
+    still passes its name and description positionally.  The metaclass maps
+    those two legacy positions onto their keyword names before the
+    generated ``__init__`` runs, so the class keeps a genuinely kw_only
+    signature while the old call site keeps working.  W5 deletes this shim
+    together with the demo migration.
+    """
+
+    _POSITIONAL = ("name", "description")
+
+    @property
+    def __signature__(cls) -> inspect.Signature:
+        """The keyword-only constructor signature (the legacy shim is invisible)."""
+        signature = inspect.signature(cls.__init__)
+        parameters = list(signature.parameters.values())[1:]
+        return signature.replace(parameters=parameters)
+
+    def __call__(cls, *args: object, **kwargs: object) -> object:
+        if args:
+            names = cls._POSITIONAL
+            if len(args) > len(names):
+                raise TypeError(
+                    f"Command() takes at most {len(names)} positional arguments "
+                    f"({len(args)} given); pass group/handler/keys by keyword"
+                )
+            for name, value in zip(names, args):
+                if name in kwargs:
+                    raise TypeError(f"Command() got multiple values for {name!r}")
+                kwargs[name] = value
+        return super().__call__(**kwargs)
+
+
+@dataclass(frozen=True, slots=True, kw_only=True)
+class Command(metaclass=_LegacyCommandMeta):
+    """One named action: group, description, handler, keys and enabled flag.
+
+    ``group`` is the first-class palette grouping (the demo used to put a
+    topic's group into ``description``); the palette still renders the
+    description this wave, and grouping arrives in W5.  ``keys`` is
+    normalized to a tuple at construction (a list argument is copied), so
+    the value is hashable and cannot be mutated behind the registry's back.
+    ``handler`` receives whatever the caller passes to
     :meth:`CommandRegistry.invoke`; ``None`` means the command is
     declarative -- it matches and lists, but invocation is a no-op.
     """
 
     name: str
     description: str = ""
+    group: str = ""
     handler: Callable[..., object] | None = None
     keys: tuple[str, ...] = ()
     enabled: bool = True
@@ -132,6 +176,20 @@ class CommandRegistry:
         if not command.enabled or command.handler is None:
             return None
         return command.handler(*args, **kwargs)
+
+    def bind(self, app: App) -> None:
+        """Route every command key to an invoke of that command on ``app``.
+
+        One binding per key, in registry order, so the first command added
+        wins a key exactly as :meth:`by_key` resolves it.  The callback is
+        closed over the name (not the loop variable), so ``invoke`` reads
+        the registry's current command -- a later ``remove``/``add`` is
+        seen.  Disabled commands stay bound; ``invoke`` is the enforcement
+        point.
+        """
+        for command in self._commands.values():
+            for key in command.keys:
+                app.bind(key, lambda name=command.name: self.invoke(name))
 
     def options(self) -> list[Option]:
         """The registry as palette options: label=name, value=command, description.

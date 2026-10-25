@@ -40,7 +40,6 @@ EXPECTED = {
     "ELLIPSIS",
     "Event",
     "EventSource",
-    "EveryHandle",
     "FG_CODES",
     "FocusEvent",
     "Frame",
