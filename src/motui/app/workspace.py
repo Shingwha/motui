@@ -99,9 +99,16 @@ class Workspace:
         placement=None,
         sizing: Sizing = Sizing.NATURAL,
         pane: Pane | str | None = None,
-    ) -> str:
-        """Append a block to a pane's document; answer its id."""
-        return self._runtime.add(
+    ) -> Section:
+        """Append a block to a pane's document; answer its section.
+
+        :meth:`Runtime.add <motui.app.runtime.Runtime.add>` still answers the
+        block id -- the low-level handle -- and this facade resolves it to
+        the :class:`~motui.kernel.document.Section` the caller keeps.  The
+        section is looked up through its owning pane, so a ``pane=`` write
+        answers a section from that pane's document, not the main one.
+        """
+        block_id = self._runtime.add(
             component,
             id=id,
             pin=pin,
@@ -109,18 +116,29 @@ class Workspace:
             sizing=sizing,
             pane=pane,
         )
+        return self._section(block_id)
 
     def fill(self, component: Component, *, pane: Pane | str | None = None) -> Section:
         """Make ``component`` the fill of a pane; answer the section."""
         return self._runtime.fill(component, pane=pane)
 
-    def get(self, id: str) -> Component:
-        """The component with ``id``, resolved frame-wide."""
-        return self._runtime.get(id)
+    def get(self, id: str) -> Section:
+        """The section with ``id``, resolved frame-wide."""
+        return self._section(id)
 
-    def remove(self, id: str) -> Component:
-        """Detach the block with ``id`` and answer its component."""
-        return self._runtime.remove(id)
+    def remove(self, id: str) -> Section:
+        """Detach the block with ``id`` and answer its section.
+
+        The section is read before the detach (the document drops it), so
+        the caller still holds the value and the component it wraps.
+        """
+        section = self._section(id)
+        self._runtime.remove(id)
+        return section
+
+    def _section(self, id: str) -> Section:
+        """The section ``id`` in whichever pane's document holds it."""
+        return self._runtime._holder(id).viewport.document.get(id)
 
     # -- split / dock / scroll surface -------------------------------------------
 

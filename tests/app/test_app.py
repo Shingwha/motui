@@ -97,10 +97,10 @@ def test_add_focus_and_bind_reach_the_right_component():
     app.add(button)
     app.bind("enter", lambda: button.on_action("activate"))
 
-    assert name == "name"
+    assert name.id == "name"
     assert app.focus("name") is True
     assert app.dispatch(key("a", "a")) is True
-    assert app.get("name").text == "a"
+    assert app.get("name").widget.text == "a"
     assert app.dispatch(key("enter")) is True
     assert button.take() is True
 
@@ -160,11 +160,24 @@ def test_removing_a_parent_drops_its_subtree_from_the_ring():
     assert app.focus(button) is True
     assert app.focus_manager is not None
 
-    app.remove(block)
+    app.remove(block.id)
 
     assert app.focus_manager.targets == ()
     assert app.focus_manager.focused is None
     assert button.focused is False
+
+
+def test_remove_accepts_the_section_the_demo_keeps():
+    """The demo stores ``add``'s answer and passes it back to ``remove``.
+
+    Sections are the 2.0 return value, so the App resolves ``section.id``;
+    W5 tightens the parameter once the demo's bookkeeping migrates.
+    """
+    app = App(screen=HeadlessScreen(20, 4), keys=ScriptedEvents(()))
+    section = app.add(Rows("one"))
+
+    assert app.remove(section) is section
+    assert app.runtime.document.blocks() == ()
 
 
 def test_set_focus_targets_is_gone():

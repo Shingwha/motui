@@ -342,17 +342,18 @@ class App:
         placement: Placement | None = None,
         sizing: Sizing = Sizing.NATURAL,
         pane: Any = None,
-    ) -> str:
-        """Mount ``component``; answer its block id.
+    ) -> Section:
+        """Mount ``component``; answer its section.
 
         The component's subtree takes the App theme where no explicit one
         is set, and its interactive widgets join the focus ring (when the
         default controllers are mounted).  With no ``pane=`` the block lands
-        in the main (primary) document, never the focused pane.  The id is
-        :meth:`~motui.app.runtime.Runtime.add`'s -- unique across the frame.
+        in the main (primary) document, never the focused pane.  The section
+        carries :meth:`~motui.app.runtime.Runtime.add`'s id -- unique across
+        the frame -- and the mounted component.
         ``placement``/``sizing`` are the 2.0 document spellings.
         """
-        block_id = self.workspace.add(
+        section = self.workspace.add(
             component,
             id=id,
             pin=pin,
@@ -361,7 +362,7 @@ class App:
             pane=pane,
         )
         self._mount(component)
-        return block_id
+        return section
 
     def fill(self, component: Component, *, pane: Any = None) -> Section:
         """Fill a pane with ``component``; answer the ``FILL`` section.
@@ -390,19 +391,24 @@ class App:
         if self._focus is not None:
             self._focus.sync(focus_targets(self.runtime))
 
-    def get(self, id: str) -> Component:
-        """The component with ``id`` (the workspace's frame-wide lookup)."""
+    def get(self, id: str) -> Section:
+        """The section with ``id`` (the workspace's frame-wide lookup)."""
         return self.workspace.get(id)
 
-    def remove(self, id: str) -> Component:
-        """Unmount the component with ``id``; answer it.
+    def remove(self, id: Any) -> Section:
+        """Unmount the block with ``id``; answer its section.
 
         The focus ring drops every widget in its subtree first, so a
-        removed target can never keep holding the focus.
+        removed target can never keep holding the focus.  A
+        :class:`~motui.kernel.document.Section` is accepted as well as an
+        id: the demo keeps the values :meth:`add` answers, and resolving
+        ``section.id`` keeps that call site working without touching it.
+        W5 tightens this back to ``str`` once the demo migrates.
         """
-        component = self.workspace.remove(id)
-        self._forget(component)
-        return component
+        block_id = id.id if isinstance(id, Section) else id
+        section = self.workspace.remove(block_id)
+        self._forget(section.widget)
+        return section
 
     def _forget(self, component: Component) -> None:
         """Drop ``component`` from the theme walk and re-derive the focus ring."""
@@ -420,7 +426,7 @@ class App:
     def focus(self, target: "str | Component") -> bool:
         """Focus a block id or a component that is in the tree-derived ring."""
         if isinstance(target, str):
-            target = self.workspace.get(target)
+            target = self.workspace.get(target).widget
         if self._focus is None:
             return False
         self._focus.sync(focus_targets(self.runtime))

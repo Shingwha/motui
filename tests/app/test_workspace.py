@@ -31,17 +31,20 @@ def test_add_get_and_remove_delegate_to_the_runtime():
     runtime = _runtime()
     workspace = runtime.workspace
 
-    block = workspace.add(Text("one"))
-    assert block == "b0"
-    assert runtime.get(block).text == "one"
-    assert workspace.get(block) is runtime.get(block)
+    section = workspace.add(Text("one"))
+    assert section.id == "b0"
+    assert section.widget.text == "one"
+    assert runtime.get(section.id).text == "one"
+    assert workspace.get(section.id) is section
     assert workspace.document is runtime.document
     assert [held.id for held in workspace.document.blocks()] == ["b0"]
 
-    assert workspace.remove(block).text == "one"
+    removed = workspace.remove(section.id)
+    assert removed is section
+    assert removed.widget.text == "one"
     assert workspace.document.blocks() == ()
     with pytest.raises(KeyError):
-        workspace.get(block)
+        workspace.get(section.id)
 
 
 def test_fill_split_and_pane_delegate_to_the_runtime():
@@ -71,9 +74,9 @@ def test_dock_hit_and_reveal_delegate_to_the_runtime():
     block = workspace.add(Text("hello"))
     runtime.paint()
     hit = workspace.hit(0, 0)
-    assert hit is not None and hit.block.id == block
+    assert hit is not None and hit.block.id == block.id
     assert workspace.hit_leaf(0, 0) == runtime.hit_leaf(0, 0)
-    assert workspace.reveal(block, 0) is True
+    assert workspace.reveal(block.id, 0) is True
 
     assert workspace.undock() is dock
     assert workspace.frame.dock("bottom") is None
@@ -85,7 +88,7 @@ def test_selection_reads_and_writes_through_the_facade():
     block = workspace.add(Text("alpha"))
     runtime.paint()
 
-    selection = Selection.between((block, 0, 1), (block, 0, 3))
+    selection = Selection.between((block.id, 0, 1), (block.id, 0, 3))
     workspace.set_selection(selection)
     assert workspace.selection is selection
     assert runtime.selection is selection
@@ -102,8 +105,8 @@ def test_the_private_delegates_reach_the_same_state():
     block = workspace.add(Text("one"))
 
     assert workspace._next_block_id() == runtime._next_block_id() == "b1"
-    assert workspace._holder(block) is runtime._holder(block)
-    assert workspace._panes_holding(block) == runtime._panes_holding(block)
+    assert workspace._holder(block.id) is runtime._holder(block.id)
+    assert workspace._panes_holding(block.id) == runtime._panes_holding(block.id)
     assert workspace._document_panes() == runtime._document_panes()
     assert workspace._content_pane(None) is runtime._content_pane(None)
     assert workspace._focus_pane(None) is runtime._focus_pane(None)
