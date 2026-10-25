@@ -65,3 +65,28 @@ text, different SGR runs), **link** (a run's `:L...` changed) or **cursor**
 correct for an intended change; an unintended diff in one class is a bug
 report, not an update.
 
+## W2.5b default changes
+
+W2.5b moved two component defaults without moving a single recorded frame:
+
+| Default | Before | After |
+|---|---|---|
+| Markdown code rows | cut with `…` (ELLIPSIS) | `code_wrap=WrapMode.WORD` (long lines wrap) |
+| Input rows | wrap at the field width (ELLIPSIS guard) | `wrap=WrapMode.OVERFLOW` (one row, horizontal follow) |
+
+Both sets were re-recorded with `tools/golden.py --update` and
+`tools/semantic.py --update`: **0 of 57 byte files and 0 of 57 semantic files
+changed**. The demo frames exercise neither default with an over-wide value:
+every fenced code line in demo content fits the 85-column preview pane (the
+longest, in `fixture.md`, is 68 columns), and every demo `Input` value fits
+its field, so the old and new policies paint the same cells. The moved
+behavior is pinned by unit tests instead: `tests/widgets/test_markdown.py`
+renders a 200-character code line across rows, and
+`tests/widgets/test_editing.py` pins the one-row Input, its horizontal window
+and the end-of-row cursor.
+
+The diff classification for this wave is therefore empty -- **no
+`code-block` rows, no `input-single-line` rows**. A later topic that feeds an
+over-wide code line or input value through the demo should move exactly those
+two classes and nothing else.
+
