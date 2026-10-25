@@ -5,6 +5,7 @@ from dataclasses import replace
 from motui.kernel.cell import Line, Surface
 from motui.kernel.layout import Constraints
 from motui.kernel.style import Style
+from motui.kernel.text import WrapMode
 from motui.kernel.theme import DEFAULT_THEME
 from motui.widgets import Markdown
 from motui.widgets.markdown import default_block_rules
@@ -156,7 +157,7 @@ def test_a_custom_block_rule_interrupts_a_paragraph():
             return 1 if lines[index].startswith("!") else None
 
         def render(self, lines, width, ctx):
-            return [Line.from_text(lines[0][1:].strip().upper()).fit(width)]
+            return [Line.from_text(lines[0][1:].strip().upper()).clip(WrapMode.ELLIPSIS, width)]
 
     md = Markdown("para\n!loud", block_rules=[Shout(), *default_block_rules()])
     assert texts(md, 20) == ["para", "", "LOUD"]

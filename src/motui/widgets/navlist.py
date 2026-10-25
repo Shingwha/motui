@@ -118,7 +118,7 @@ class NavList(ClampedCursor, Widget):
 
     Every row renders the bar column -- ``glyphs.rail`` (the active row) or
     the blank ``_bar_seat`` (the others) -- then the ``_separator``, then the
-    label -- ``Line.fit`` to the painting width -- so all rows share one
+    label -- ``Line.clip`` to the painting width -- so all rows share one
     shape and the labels line up in one column.  ``glyphs.rail`` comes from
     the vocabulary; its column is the glyph's own display width, the blank
     rows leave that column empty, and

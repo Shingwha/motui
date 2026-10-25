@@ -431,8 +431,9 @@ class Dialog(Widget):
         the pane's own width always wins, so no row ever exceeds it.  The
         body renders one pad column in from each edge (at ``box - 4``
         columns framed, ``box - 2`` with ``frame=False``); every row is
-        closed with :meth:`~motui.kernel.cell.Line.fit` so a squeezed box
-        truncates instead of overflowing.  Borderless, the frame rows and
+        closed with :meth:`~motui.kernel.cell.Line.clip`
+        (``WrapMode.ELLIPSIS``) so a squeezed box truncates instead of
+        overflowing.  Borderless, the frame rows and
         the title are gone and the body is the box's first row.
 
         The body and buttons render at their inner widths.  A ``max_height`` budget truncates

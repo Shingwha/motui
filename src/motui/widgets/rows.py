@@ -26,7 +26,8 @@ computed here, never drawn.
 Overflow ruling for the status row (decided and documented here): the **left
 part is preserved first** and the **right part is cut from its tail** -- the
 row is composed at full length and closed with the kernel's
-:meth:`~motui.kernel.cell.Line.fit`, which ellipsizes the end.  A narrow
+:meth:`~motui.kernel.cell.Line.clip` (``WrapMode.ELLIPSIS``), which
+ellipsizes the end.  A narrow
 terminal therefore drops the tail of the right-hand information -- typically
 the end of a model name or mode -- while the left-hand counters stay
 readable.
