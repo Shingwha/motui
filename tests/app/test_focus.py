@@ -9,6 +9,7 @@ from motui.app.focus import focus_targets
 from motui.kernel import Constraints, Document, Pane, Rect, Section, Surface, Viewport
 from motui.kernel.document import Activable, Focusable, descend_chain
 from motui.kernel.events import KeyEvent
+from motui.kernel.geom import Pos
 from motui.kernel.hit import Hit
 from motui.kernel.cell import Line
 from motui.kernel.text import WrapMode
@@ -68,24 +69,29 @@ class SoftField(Plain):
         return getattr(event, "key", "") == "backspace"
 
 
-class Vertical(Plain):
-    """A text-field shape: only the vertical arrow verbs."""
+class Keyed(Plain):
+    """A target with a key table and both typed hooks."""
+
+    keymap = {"j": "next", "k": "prev"}
 
     def __init__(self) -> None:
         super().__init__()
-        self.calls: list[str] = []
+        self.actions: list[str] = []
+        self.keys: list[str] = []
 
-    def move_up(self) -> bool:
-        self.calls.append("move_up")
-        return True
+    def on_action(self, name: str) -> bool:
+        self.actions.append(name)
+        return name == "next"
 
-    def move_down(self) -> bool:
-        self.calls.append("move_down")
-        return True
+    def on_key(self, event) -> bool:
+        self.keys.append(getattr(event, "key", ""))
+        return getattr(event, "key", "") == "backspace"
 
 
 class Pick(Plain):
-    """An activable target."""
+    """An activatable target."""
+
+    activatable = True
 
     def __init__(self, answer: bool = True) -> None:
         super().__init__()
@@ -98,7 +104,10 @@ class Pick(Plain):
 
 
 class Strip(Plain):
-    """A clickable and activable target (a menu row)."""
+    """A clickable and activatable target (a menu row)."""
+
+    clickable = True
+    activatable = True
 
     def __init__(self, *, answer: bool = True, activation: bool = True) -> None:
         super().__init__()
@@ -114,6 +123,21 @@ class Strip(Plain):
     def activate(self) -> bool:
         self.activations += 1
         return self.activation
+
+
+class Recorder(Plain):
+    """A focusable, clickable target that records the typed click position."""
+
+    focusable = True
+    clickable = True
+
+    def __init__(self) -> None:
+        super().__init__()
+        self.positions: list[Pos] = []
+
+    def on_click(self, pos: Pos) -> bool:
+        self.positions.append(pos)
+        return True
 
 
 class RouteOnly:
@@ -358,7 +382,7 @@ def test_the_focused_targets_handle_goes_first():
     assert field.steps == []
 
 
-def test_a_declined_handle_falls_through_to_the_manager_table():
+def test_a_declined_hook_leaves_the_key_to_the_host():
     field = SoftField()
     manager = FocusManager([field])
     manager.focus_next()
@@ -370,14 +394,54 @@ def test_a_declined_handle_falls_through_to_the_manager_table():
     ]
 
 
-def test_a_target_without_move_falls_back_to_its_arrow_verbs():
-    vertical = Vertical()
-    manager = FocusManager([vertical])
+def test_a_keymap_action_runs_before_and_instead_of_on_key():
+    keyed = Keyed()
+    manager = FocusManager([keyed])
     manager.focus_next()
-    assert manager.handle(KeyEvent("up")) is True
-    assert manager.handle(KeyEvent("down")) is True
-    assert vertical.calls == ["move_up", "move_down"]
-    assert manager.handle(KeyEvent("left")) is False
+    assert manager.handle(KeyEvent("j", "j")) is True
+    assert keyed.actions == ["next"]
+    assert keyed.keys == []
+
+
+def test_an_unconsumed_keymap_action_falls_through_to_on_key():
+    keyed = Keyed()
+    manager = FocusManager([keyed])
+    manager.focus_next()
+    assert manager.handle(KeyEvent("backspace")) is True
+    assert keyed.keys == ["backspace"]
+
+
+def test_a_rebound_instance_key_drives_the_data_view():
+    from motui.widgets import List
+
+    listing = List(["a", "b", "c"])
+    manager = FocusManager([listing])
+    manager.focus_next()
+    listing.keymap["j"] = "next"
+    assert manager.handle(KeyEvent("j", "j")) is True
+    assert listing.index == 1
+
+
+def test_a_text_field_keeps_its_own_arrow_keys():
+    field = Input("ab")
+    manager = FocusManager([field])
+    manager.focus_next()
+    assert field.cursor == (0, 0)
+    assert manager.handle(KeyEvent("right")) is True
+    assert field.cursor == (0, 1)
+    assert manager.handle(KeyEvent("left")) is True
+    assert field.cursor == (0, 0)
+
+
+def test_a_scope_routes_keys_to_its_own_fields():
+    first, second = Input(), Input()
+    form = Form([FormField("first", first), FormField("second", second)])
+    manager = FocusManager([form])
+    manager.focus_next()
+    assert manager.handle(KeyEvent("tab")) is True
+    assert form.index == 1
+    assert manager.handle(KeyEvent("b", "b")) is True
+    assert second.text == "b" and first.text == ""
 
 
 def test_enter_activates_an_activable_target():
@@ -439,8 +503,18 @@ def test_a_click_through_a_container_lands_on_the_leaf_target():
 
 def test_the_arrows_call_move_with_the_signed_delta():
     cursor = Cursor()
+    cursor.keymap = {"up": "prev", "left": "prev", "down": "next", "right": "next"}
+    cursor.on_action = lambda name: cursor.move(-1 if name == "prev" else 1)
     manager = FocusManager([cursor])
     manager.focus_next()
     for name, delta in (("up", -1), ("left", -1), ("down", 1), ("right", 1)):
         assert manager.handle(KeyEvent(name)) is True
         assert cursor.steps[-1] == delta
+
+
+def test_a_click_carries_the_leaf_cell_as_a_pos():
+    recorder = Recorder()
+    manager = FocusManager([recorder])
+    manager.focus_next()
+    assert manager.click(hit(recorder, row=3, col=7)) is True
+    assert recorder.positions == [Pos(x=7, y=3)]

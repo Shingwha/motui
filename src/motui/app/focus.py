@@ -5,33 +5,27 @@ This module is the assembly tier (D3) -- the peer of
 driver's value types, and it is where every focus *behavior* lands.  Focus
 is a layer, never a component's responsibility (the interaction charter's
 rule 3): a component declares only that it can be focused -- one read-write
-``focused: bool`` (:class:`~motui.kernel.document.Focusable`) -- and renders by
-it; *who* is focused, *how* the focus cycles and *where* an event goes live
-here, in one place.
+``focused: bool`` -- and renders by it; *who* is focused, *how* the focus
+cycles and *where* an event goes live here, in one place.
 
-A host opts in with two explicit lines, the same explicit-mounting rule
-:class:`~motui.app.gesture.SelectionGesture` follows -- ``TUI`` never
-attaches a manager itself::
+The target tuple is the mounted tree's focus ring: the App re-derives it
+with :func:`focus_targets` and hands it over through
+:meth:`FocusManager.sync` before every focus verb, so mounting or removing
+a block needs no registration bookkeeping.  The constructor still takes an
+explicit tuple, which is what a trap, a modal and the demo's per-topic ring
+use.  A target is a node of the explicit widget tree -- ``focusable``, or a
+``focus_scope`` container (a ``Form`` routes its fields itself, so the ring
+stops at it).  A target without a ``focused`` attribute is a pure routing
+target (a plain ``Component`` handed to a trap); it is focused by identity
+and no flag is written.
 
-    focus = FocusManager([menu, tree])
-    focus.focus_next()                    # the first target is not focused until asked
-    event = await tui.read_event()
-    if not focus.handle(event):
-        ...                               # the host's own dispatch
-
-The manager holds registered targets and flips every ``Focusable`` target's
-``focused`` flag as the focus moves, so a component never learns a manager
-exists; an unregistered component is never touched.  A non-``Focusable``
-target is still a legal route target (a ``Dialog`` is the shipped example):
-the manager focuses it by identity without writing a flag.  Cycling is the
-host's key: the manager binds nothing of its own -- the host routes the
-``tab`` key to :meth:`FocusManager.focus_next` -- and every other key is
-dispatched to the focused target by :meth:`FocusManager.handle`.  A click is
-resolved to a cell by the host's hit test and handed to
+Cycling is the host's key: the manager binds nothing of its own -- the host
+routes ``tab`` to :meth:`FocusManager.focus_next` -- and every other key is
+dispatched to the focused target by :meth:`FocusManager.handle`.  A click
+is resolved to a cell by the host's hit test and handed to
 :meth:`FocusManager.click`, which first descends every container to the leaf
-under the cell (:func:`~motui.kernel.document.descend`), then dispatches it,
-focuses the component it landed on, and activates it on the second click (the
-standard desktop semantic).
+under the cell, then dispatches it, focuses the component it landed on, and
+activates it on the second click (the standard desktop semantic).
 
 **Traps.**  :meth:`FocusManager.push_trap` saves the current target tuple
 and focus, then narrows the manager to the trapped targets (the first one
@@ -45,8 +39,9 @@ from __future__ import annotations
 from collections.abc import Callable, Iterable, Iterator
 from typing import TYPE_CHECKING
 
-from ..kernel.document import Activable, Component, Container, Focusable, descend_chain
-from ..kernel.events import Event, KeyEvent
+from ..kernel.document import Component, descend_chain
+from ..kernel.events import Event, KeyEvent, MouseEvent, PasteEvent
+from ..kernel.geom import Pos
 from ..kernel.hit import Hit
 
 if TYPE_CHECKING:
@@ -124,9 +119,9 @@ def focus_targets(tui: "TUI") -> tuple[Component, ...]:
 class FocusManager:
     """The focus tier: who is focused, how it cycles, where events go.
 
-    ``targets`` are the manager's registered components, in the order the
-    focus cycles through them; ``wrap`` makes :meth:`focus_next` step from
-    the last target back onto the first.  The constructor does **not** focus
+    ``targets`` are the manager's components, in the order the focus cycles
+    through them; ``wrap`` makes :meth:`focus_next` step from the last
+    target back onto the first.  The constructor does **not** focus
     anything: a freshly built manager holds no focus and no target's flag is
     touched, so mounting a page never plays with the components' own
     defaults.  :meth:`focus_next` from that empty focus selects the first
@@ -136,50 +131,54 @@ class FocusManager:
     ``on_change`` is called with the new focus -- a component, or ``None``
     when the focus was cleared -- after every real change.
 
-    A target need not be :class:`~motui.kernel.document.Focusable`; it is then a
-    pure routing target (the modal's dialog), focused by identity without a
-    flag write.  Every currently registered ``Focusable`` target's flag is
-    still rewritten on a move, so one manager always has at most one focused
-    flag set.
+    A target need not have a ``focused`` attribute; it is then a pure
+    routing target (a plain component in a trap), focused by identity
+    without a flag write.  Every target that does have the attribute is
+    rewritten on a move, so one manager always has at most one focused flag
+    set.
 
     **The routing table** -- :meth:`handle` dispatches ``event`` in this
     order, answering whether the manager consumed it:
 
     1. the focus is empty -> ``False`` (there is nobody to route to);
-    2. the focused target has a ``handle`` method -- it **goes first**,
-       before any manager verb (a field or controller consumes its own keys:
-       ``TextBuffer.handle`` takes printable characters, the arrows, the
-       backspace, and a :class:`~motui.kernel.events.PasteEvent`);
-    3. while the target left the event alone, only a
-       :class:`~motui.kernel.events.KeyEvent` is read: ``up``/``left`` ->
-       ``move(-1)``; ``down``/``right`` -> ``move(+1)`` -- with no ``move``
-       method the arrow falls back to its own verb -- ``up`` -> ``move_up()``,
-       ``left`` -> ``move_left()``, ``down`` -> ``move_down()``, ``right`` ->
-       ``move_right()`` -- which is the text fields' shape; ``enter`` ->
-       ``activate()`` (a target that is not
-       :class:`~motui.kernel.document.Activable` answers ``False``);
-    4. everything else -> ``False`` (the host keeps routing its own keys:
+    2. a :class:`~motui.kernel.events.KeyEvent` reads the target's
+       :attr:`keymap <motui.widgets.base.Widget.keymap>` first: a bound
+       action runs through ``on_action(name)``;
+    3. an unconsumed key goes to ``on_key(event)`` (the widget default
+       forwards to the 1.x ``handle``);
+    4. an unconsumed ``enter`` on an ``activatable`` target runs
+       ``on_action("activate")`` -- the 1.x activation fallback, now opt-in
+       through the capability flag instead of a hard-coded key table;
+    5. a :class:`~motui.kernel.events.PasteEvent` goes to ``on_paste`` and a
+       :class:`~motui.kernel.events.MouseEvent` to ``on_mouse``;
+    6. everything else -> ``False`` (the host keeps routing its own keys:
        the submit gesture, the palette, quit).
+
+    The manager binds no arrow itself: a data view declares its arrows in
+    its keymap, a text field consumes them in ``on_key``, and a widget with
+    neither keeps the key for the host.
 
     **The click policy** -- :meth:`click` runs one click through four
     steps, answering whether any component consumed it.  The click first
-    **descends**: the hit's cell is walked through every
-    :class:`~motui.kernel.document.Container.child_at` to the deepest leaf
-    (a ``Padding(Select)`` click lands on the ``Select``), and every step
-    below works on that leaf:
+    **descends**: the hit's cell is walked through every container's
+    ``child_at`` to the deepest leaf (a ``Padding(Select)`` click lands on
+    the ``Select``), and every step below works on that leaf:
 
-    1. a :class:`~motui.kernel.document.Clickable` leaf is dispatched
-       its own cell -- ``component.click(row, col)`` -- **any** clickable
-       component, not only a manager target (a page may hold mouse-only
-       widgets beside the focus list);
-    2. a leaf that is registered and is **not** the current focus is
+    1. a leaf whose ``clickable`` flag is set is dispatched its own cell --
+       ``on_click(Pos(x=col, y=row))`` -- **any** clickable component, not
+       only a manager target (a page may hold mouse-only widgets beside the
+       focus list);
+    2. every ancestor gets ``focus_at(row, col)``: the focus-routing half of
+       a click (a ``Form`` moves its field cursor, a ``Dialog`` its button
+       cursor) without repeating the leaf's action;
+    3. the nearest target in the chain that is **not** the current focus is
        focused: the first click only moves the focus;
-    3. a leaf that is registered and **already** the current focus is
-       activated (``activate()``, when it is
-       :class:`~motui.kernel.document.Activable`): the second click
-       activates -- the standard desktop semantic;
-    4. the answer is whether a component consumed the click (the host
-       repaints or toasts on it).
+    4. a target that is already the focus and is ``activatable`` is
+       activated through ``on_action("activate")``: the second click
+       activates -- the standard desktop semantic.
+
+    The answer is whether a component consumed the click (the host repaints
+    or toasts on it).
 
     **Out of scope, deliberately**: no hover of its own (the manager reads no
     motion report and flips no hover flag: hover is the
@@ -208,7 +207,7 @@ class FocusManager:
 
     @property
     def targets(self) -> tuple[Component, ...]:
-        """The registered targets, in focus-cycle order."""
+        """The current targets, in focus-cycle order."""
         return self._targets
 
     @property
@@ -302,53 +301,62 @@ class FocusManager:
         """Route ``event`` to the focused target; ``True`` when consumed.
 
         The routing table is in the class docstring, in order: an empty
-        focus declines; the focused target's own ``handle`` goes first; an
-        unconsumed ``KeyEvent`` drives the target's cursor (``move``, or
-        ``move_up``/``move_left``/``move_down``/``move_right``) or its
-        ``activate()``; everything else declines, so the host keeps
-        routing the keys it owns.
+        focus declines; a key reads the target's keymap through
+        ``on_action``, then ``on_key``, then the ``enter`` activation
+        fallback for an ``activatable`` target; a paste and a mouse report
+        go to their typed hooks; everything else declines, so the host
+        keeps routing the events it owns.
         """
         target = self._focused
         if target is None:
             return False
-        handler = getattr(target, "handle", None)
-        if handler is not None and handler(event):
-            return True
-        if not isinstance(event, KeyEvent):
+        if isinstance(event, KeyEvent):
+            action = dict(getattr(target, "keymap", {}) or {}).get(event.key)
+            if action is not None:
+                on_action = getattr(target, "on_action", None)
+                if on_action is not None and on_action(action):
+                    return True
+            if self._hook(target, "on_key", event):
+                return True
+            if event.key == "enter" and bool(
+                getattr(target, "activatable", False)
+            ):
+                return self._activate(target)
             return False
-        if event.key == "up":
-            return self._step(-1, "move_up")
-        if event.key == "left":
-            return self._step(-1, "move_left")
-        if event.key == "down":
-            return self._step(1, "move_down")
-        if event.key == "right":
-            return self._step(1, "move_right")
-        if event.key == "enter":
-            return self._activate()
+        if isinstance(event, PasteEvent):
+            return self._hook(target, "on_paste", event)
+        if isinstance(event, MouseEvent):
+            return self._hook(target, "on_mouse", event)
         return False
 
     def click(self, hit: Hit) -> bool:
         """Resolve one click: act on the leaf, update the focus owner; consumed?
 
         The click walks the hit's ancestor chain.  The deepest leaf gets the
-        action -- a field's caret, a button's press, a list row's cursor --
-        and every ancestor gets :meth:`~motui.widgets.base.Widget.focus_at`,
-        the focus-routing half (a ``Form`` moves its field cursor, a
-        ``Dialog`` its button cursor) without repeating the leaf's action.
-        The **nearest registered ancestor** is the focus owner: it receives
-        the focus when it was elsewhere.  Activation on a repeat click only
-        applies to a leaf target that is not a container, so a second click
+        action through its ``clickable`` flag -- a field's caret, a button's
+        press, a list row's cursor -- and every ancestor gets its
+        ``focus_at``, the focus-routing half (a ``Form`` moves its field
+        cursor, a ``Dialog`` its button cursor) without repeating the leaf's
+        action.  The **nearest target ancestor** is the focus owner: it
+        receives the focus when it was elsewhere.  Activation on a repeat
+        click applies to an ``activatable`` leaf target, so a second click
         on a form's background never submits it.
         """
         chain = hit.chain or descend_chain(
             hit.block.component, hit.row, hit.col
         )
+        if not chain:
+            return False
         leaf, leaf_row, leaf_col = chain[-1]
         consumed = False
-        click = getattr(leaf, "click", None)
-        if click is not None and click(leaf_row, leaf_col):
-            consumed = True
+        if bool(getattr(leaf, "clickable", False)):
+            on_click = getattr(leaf, "on_click", None)
+            if on_click is not None:
+                consumed = bool(on_click(Pos(x=leaf_col, y=leaf_row))) or consumed
+            else:
+                click = getattr(leaf, "click", None)
+                if click is not None:
+                    consumed = bool(click(leaf_row, leaf_col)) or consumed
         for owner, owner_row, owner_col in reversed(chain[:-1]):
             focus_at = getattr(owner, "focus_at", None)
             if focus_at is not None and focus_at(owner_row, owner_col):
@@ -362,12 +370,8 @@ class FocusManager:
         if target is not self._focused:
             self.focus(target)
             return True
-        if (
-            target is leaf
-            and isinstance(target, Activable)
-            and not isinstance(target, Container)
-        ):
-            return target.activate() or consumed
+        if target is leaf and bool(getattr(target, "activatable", False)):
+            return self._activate(target) or consumed
         return consumed
 
     def push_trap(self, targets: Iterable[Component]) -> None:
@@ -418,37 +422,36 @@ class FocusManager:
         self._targets = tuple(targets)
         self._focused = target
         for known in self._targets:
-            if isinstance(known, Focusable):
+            if hasattr(known, "focused"):
                 known.focused = known is target
         if (
             previous is not None
             and previous is not target
-            and isinstance(previous, Focusable)
+            and hasattr(previous, "focused")
             and not any(previous is known for known in self._targets)
         ):
             previous.focused = False
         if previous is not target and self._on_change is not None:
             self._on_change(target)
 
-    def _step(self, delta: int, fallback: str) -> bool:
-        """Drive the focused target's cursor: ``move(delta)``, else ``fallback``.
+    @staticmethod
+    def _hook(target: Component, name: str, event: Event) -> bool:
+        """Run ``target``'s typed hook, falling back to its 1.x ``handle``.
 
-        The fallback is the arrow's own verb on the fields' shape
-        (``move_up``/``move_down``/``move_left``/``move_right``); a target
-        with neither answers ``False``.
+        A widget always has the hook (its base forwards to ``handle``); the
+        fallback keeps a plain routing object handed to a trap working
+        without double-calling a widget's ``handle``.
         """
-        target = self._focused
-        if target is None:
-            return False
-        move = getattr(target, "move", None)
-        if move is not None:
-            return bool(move(delta))
-        step = getattr(target, fallback, None)
-        return bool(step()) if step is not None else False
+        hook = getattr(target, name, None)
+        if hook is None:
+            hook = getattr(target, "handle", None)
+        return bool(hook(event)) if hook is not None else False
 
-    def _activate(self) -> bool:
-        """Run the focused target's ``activate()``; a non-Activable answers False."""
-        target = self._focused
-        if not isinstance(target, Activable):
-            return False
-        return target.activate()
+    @staticmethod
+    def _activate(target: Component) -> bool:
+        """Run ``on_action("activate")``, else the 1.x ``activate()``."""
+        on_action = getattr(target, "on_action", None)
+        if on_action is not None:
+            return bool(on_action("activate"))
+        activate = getattr(target, "activate", None)
+        return bool(activate()) if activate is not None else False
