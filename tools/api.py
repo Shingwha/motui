@@ -40,7 +40,7 @@ sys.path.insert(0, str(ROOT / "src"))
 FACES = (
     "motui",
     "motui.kernel",
-    "motui.core",
+    "motui.terminal",
     "motui.widgets",
     "motui.app",
     "motui.testing",
