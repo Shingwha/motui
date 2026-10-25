@@ -1,0 +1,30 @@
+"""The smallest motui app: a Text row and an Input, painted once headless.
+
+    uv run python examples/quickstart.py --headless
+
+The example always uses a ``HeadlessScreen``, so a run without a TTY exits 0.
+"""
+
+from __future__ import annotations
+
+import argparse
+
+from motui import App, Input, Text
+from motui.terminal import HeadlessScreen, TerminalOptions
+
+
+def main(argv: list[str] | None = None) -> int:
+    parser = argparse.ArgumentParser(description="motui quickstart")
+    parser.add_argument("--headless", action="store_true", help="paint without a terminal")
+    parser.parse_args(argv)
+    app = App(terminal=TerminalOptions(screen=HeadlessScreen(60, 6)), auto=False)
+    app.add(Text("Hello, motui."))
+    app.add(Input("type here"))
+    app.paint_now()
+    for row in app.runtime.rows[:3]:
+        print(row.text)
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())
