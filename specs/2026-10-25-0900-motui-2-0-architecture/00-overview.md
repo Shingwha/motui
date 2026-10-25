@@ -138,6 +138,8 @@ uv run python tools/growth.py
 | W3a | ✅ 2026-10-25 @ `2.0/w3a-base`（1422 passed / 基座加法 / golden 不变） |
 | W3b1/W3b2 | ✅ 2026-10-25 @ `2.0/w3b1-controls` + `2.0/w3b2-views`（1513 passed / golden 不变） |
 | W3b3a/b | ✅ 2026-10-25 @ `2.0/w3b3a-focus` + `2.0/w3b3b-interaction`（1531 passed / 能力协议删除 / golden 不变） |
-| W4a | ⏳ |
+| W4a1 | ✅ 2026-10-25 @ `2.0/w4a1-terminal`（1568 passed / TerminalOptions / Timer） |
+| W4a2 | ✅ 2026-10-25 @ `2.0/w4a2-runtime`（1576 passed / TUI 删除 / Workspace facade） |
+| W4b | ✅ 2026-10-25 @ `2.0/w4b-api`（1592 passed / Section/Axis/Command） |
 | W4b | ⏳ |
 | W5 | ⏳ |
