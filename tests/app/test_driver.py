@@ -8,11 +8,12 @@ import io
 import pytest
 
 from motui.app import TUI
-from motui.kernel import DEFAULT_THEME, Rect, RowRange
+from motui.app.driver import Timer
+from motui.kernel import DEFAULT_THEME, EveryHandle, Rect, RowRange
 from motui.kernel.document import Placement, Sizing
 from motui.widgets.text import Text
-from motui.terminal import HeadlessScreen
-from motui.terminal.ansi import enter_alt_screen, leave_alt_screen
+from motui.terminal import HeadlessScreen, Terminal, TerminalOptions
+from motui.terminal.ansi import copy_clipboard, enter_alt_screen, leave_alt_screen
 from motui.terminal.screen import TerminalScreen
 from tests.testing import (
     Clock,
@@ -329,6 +330,82 @@ async def test_exit_unblocks_a_pending_read_event_immediately():
     assert not source.closed  # closing the source belongs to teardown
 
 
+# -- terminal wiring ---------------------------------------------------------
+
+
+async def test_a_terminal_driver_reads_through_the_terminal_source():
+    screen = HeadlessScreen(20, 4)
+    source = ScriptedEvents([key("a", "a"), None])
+    terminal = Terminal(TerminalOptions(screen=screen, input=source))
+    tui = TUI(terminal=terminal, interactive=False)
+
+    assert tui.screen is screen
+    assert tui.keys is source
+    assert await tui.read_event() == key("a", "a")
+    assert await tui.read_event() is None
+
+
+def test_a_terminal_driver_on_a_non_live_screen_reads_nothing():
+    terminal = Terminal(
+        TerminalOptions(stream=io.StringIO(), input=ScriptedEvents([key("a", "a")]))
+    )
+    tui = TUI(terminal=terminal, interactive=False)
+    assert asyncio.run(tui.read_event()) is None
+
+
+async def test_a_terminal_run_brackets_the_session_through_the_terminal():
+    screen = HeadlessScreen(20, 3)
+    tui = TUI(
+        terminal=Terminal(TerminalOptions(screen=screen)), interactive=False
+    )
+
+    async def body(app: TUI) -> None:
+        app.add(Text("hi"))
+
+    await tui.run_session(body)
+    output = screen.output
+    assert output.find(enter_alt_screen()) >= 0
+    assert output.find(leave_alt_screen()) > output.find(enter_alt_screen())
+
+
+async def test_a_non_live_terminal_run_stays_silent_and_dumps_plain_text():
+    stream = io.StringIO()
+    tui = TUI(
+        terminal=Terminal(TerminalOptions(stream=stream)), interactive=False
+    )
+    seen: list[str] = []
+
+    async def body(app: TUI) -> None:
+        app.add(Text("hello"))
+        seen.append(stream.getvalue())
+
+    await tui.run_session(body)
+    assert seen == [""]
+    assert stream.getvalue() == "hello\n"
+    assert enter_alt_screen() not in stream.getvalue()
+
+
+def test_the_terminal_wins_over_the_legacy_screen_and_keys():
+    legacy = HeadlessScreen(10, 2)
+    chosen = HeadlessScreen(20, 5)
+    source = ScriptedEvents(())
+    tui = TUI(
+        screen=legacy,
+        keys=ScriptedEvents(()),
+        terminal=Terminal(TerminalOptions(screen=chosen, input=source)),
+        interactive=False,
+    )
+    assert tui.screen is chosen
+    assert tui.keys is source
+
+
+def test_a_terminal_driver_copies_through_the_terminal_clipboard():
+    screen = HeadlessScreen()
+    tui = TUI(terminal=Terminal(TerminalOptions(screen=screen)), interactive=False)
+    assert tui.copy_to_clipboard("copied") is True
+    assert screen.output == copy_clipboard("copied")
+
+
 # -- lifecycle ---------------------------------------------------------------
 
 
@@ -591,3 +668,118 @@ def test_a_direct_frame_split_is_painted_by_the_pump():
     tui.tick(clock())
     assert len(tui.screen.output) > painted
     assert [pane.id for pane in tui.frame.panes] == ["primary", "pane-1"]
+
+
+# -- deadline timers ---------------------------------------------------------
+
+
+def test_a_fifty_millisecond_timer_runs_nineteen_to_twenty_times_a_virtual_second():
+    tui = headless_tui()
+    tui._clock = lambda: 0.0
+    calls: list[float] = []
+    tui.every(0.05, lambda: calls.append(tui.clock()))
+
+    tui.advance(1.0)
+
+    assert 19 <= len(calls) <= 20
+    assert calls[0] == pytest.approx(0.05)
+    assert calls[-1] <= 1.0
+
+
+def test_advance_replays_the_same_script_deterministically():
+    def run() -> tuple[list[float], str]:
+        tui = headless_tui(20, 3)
+        tui._clock = lambda: 100.0
+        calls: list[float] = []
+        tui.every(0.05, lambda: calls.append(tui.clock()))
+        tui.advance(1.3)
+        return calls, tui.screen.output
+
+    first, second = run(), run()
+    assert first == second
+    assert 25 <= len(first[0]) <= 26
+
+
+def test_the_deadlines_do_not_drift_with_late_ticks():
+    tui = headless_tui()
+    tui._clock = lambda: 100.0
+    timer = tui.every(0.05, lambda: None)
+    assert timer.next_run == pytest.approx(100.05)
+
+    tui._clock = lambda: 100.07
+    tui.tick(100.07)
+    # The deadline advanced by exactly one period, not by the late tick's time.
+    assert timer.next_run == pytest.approx(100.10)
+
+
+def test_skip_realigns_to_now_and_coalesce_preserves_the_phase():
+    tui = headless_tui()
+    tui._clock = lambda: 10.0
+    skip_calls: list[float] = []
+    skip = tui.every(0.05, lambda: skip_calls.append(tui.clock()), catch_up="skip")
+    coalesce_calls: list[float] = []
+    coalesce = tui.every(
+        0.05, lambda: coalesce_calls.append(tui.clock()), catch_up="coalesce"
+    )
+
+    tui._clock = lambda: 10.17
+    tui.tick(10.17)
+
+    assert skip_calls == coalesce_calls == [10.17]
+    assert skip.next_run == pytest.approx(10.22)  # now + period
+    assert coalesce.next_run == pytest.approx(10.20)  # whole periods only
+
+
+def test_cancelling_a_timer_stops_every_future_run():
+    tui = headless_tui()
+    tui._clock = lambda: 0.0
+    calls: list[int] = []
+    timer = tui.every(0.05, lambda: calls.append(1))
+    timer.cancel()
+
+    tui.advance(1.0)
+
+    assert calls == []
+    assert timer.cancelled is True
+
+
+def test_timer_is_the_every_handle_and_validates_its_configuration():
+    tui = headless_tui()
+    timer = tui.every(0.05, lambda: None)
+    assert isinstance(timer, Timer)
+    assert isinstance(timer, EveryHandle)
+    with pytest.raises(ValueError, match="period must be positive"):
+        tui.every(0.0, lambda: None)
+    with pytest.raises(ValueError, match="catch_up"):
+        tui.every(0.05, lambda: None, catch_up="later")
+    with pytest.raises(ValueError, match="rate must be positive"):
+        tui.animation(0.0, lambda: None)
+
+
+def test_animation_schedules_one_draw_per_frame():
+    tui = headless_tui()
+    tui._clock = lambda: 0.0
+    draws: list[int] = []
+    timer = tui.animation(20, lambda: draws.append(1))
+    assert timer.period == pytest.approx(0.05)
+
+    tui.advance(1.0)
+
+    assert 19 <= len(draws) <= 20
+
+
+def test_invalidate_and_paint_now_are_the_20_names():
+    tui = headless_tui(20, 3)
+    clock = Clock(1000.0).install(tui)
+    tui.add(Text("x"))
+    tui.paint_now()
+    painted = len(tui.screen.output)
+    assert painted > 0
+
+    tui.add(Text("y"))
+    tui.invalidate()
+    tui.tick(clock())
+    assert len(tui.screen.output) == painted  # still inside the throttle
+    clock.advance(tui.throttle + 0.01)
+    tui.tick(clock())
+    assert len(tui.screen.output) > painted

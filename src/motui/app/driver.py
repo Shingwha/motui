@@ -66,7 +66,6 @@ import asyncio
 import sys
 import time
 from collections.abc import Awaitable, Callable
-from dataclasses import dataclass
 
 from ..terminal.ansi import cursor_shape, set_window_title
 from ..kernel.document import Section, Component, Document, Sizing, descend_chain
@@ -78,7 +77,8 @@ from ..kernel.hit import EveryHandle, Hit, RowRange
 from ..kernel.cell import Line
 from ..widgets.text import Text
 from ..terminal.paint import Painter
-from ..terminal.screen import Screen, TerminalScreen
+from ..terminal.screen import MouseMode, Screen, TerminalScreen
+from ..terminal.terminal import Terminal
 from ..kernel.selection import Selection, highlight
 from ..kernel.style import ColorMode
 from ..kernel.theme import DEFAULT_THEME, Theme
@@ -89,14 +89,52 @@ from ..kernel.layout import Constraints
 __all__ = ["TUI"]
 
 
-@dataclass
-class _Every:
-    """One periodic callback: period, next due time, and its handle."""
+class Timer(EveryHandle):
+    """One periodic callback scheduled on the driver's clock.
 
-    period: float
-    next_run: float
-    fn: Callable[[], object]
-    handle: EveryHandle
+    ``next_run`` is an **absolute deadline**, not a delay: each firing adds
+    exactly one ``period`` to it, so a callback that takes time to run does
+    not push the schedule out.  When a tick arrives late, ``catch_up`` picks
+    the posture -- ``"skip"`` runs the callback once and realigns the next
+    deadline to ``now + period`` when the deadline already passed, while
+    ``"coalesce"`` runs once and advances the deadline by whole periods until
+    it is in the future, preserving the phase.  Either way one tick invokes a
+    callback at most once.
+
+    The class subclasses the 1.x
+    :class:`~motui.kernel.hit.EveryHandle` so old annotations and
+    ``isinstance`` checks keep working; ``cancelled`` and ``cancel`` are the
+    inherited members and keep their meaning.  ``every`` is the only
+    constructor a host needs.
+    """
+
+    __slots__ = ("catch_up", "fn", "next_run", "period")
+
+    def __init__(
+        self,
+        period: float,
+        fn: Callable[[], object],
+        next_run: float = 0.0,
+        *,
+        catch_up: str = "skip",
+    ) -> None:
+        super().__init__()
+        if period <= 0:
+            raise ValueError(f"timer period must be positive, got {period!r}")
+        if catch_up not in ("skip", "coalesce"):
+            raise ValueError(
+                f"catch_up must be 'skip' or 'coalesce', got {catch_up!r}"
+            )
+        self.period = period
+        self.fn = fn
+        self.next_run = next_run
+        self.catch_up = catch_up
+
+    def __repr__(self) -> str:
+        return (
+            f"Timer(period={self.period!r}, next_run={self.next_run!r}, "
+            f"catch_up={self.catch_up!r}, cancelled={self.cancelled})"
+        )
 
 
 def _stdin_isatty() -> bool:
@@ -218,6 +256,15 @@ class TUI:
     (and closed) by :meth:`run`; an explicit ``keys=`` source is always used
     as given.
 
+    ``terminal=`` is the 2.0 door: a :class:`~motui.terminal.terminal.Terminal`
+    brings its own screen (with the mouse mode already mapped), input source
+    and clipboard, and the driver enters, leaves and reads through it.  When
+    it is given it wins over ``screen``/``keys`` and every screen-shaped
+    switch (``mouse``/``hover``/``focus_events``/``sync``/``color_mode``);
+    the legacy arguments stay for hosts that hand the driver a screen
+    directly.  Either path paints through the same :class:`Painter` and
+    stays byte-identical on a live screen.
+
     Internally the driver holds one
     :class:`~motui.kernel.frame.Frame` whose primary pane is
     :attr:`document` / :attr:`viewport`: every frame composes through it
@@ -244,23 +291,34 @@ class TUI:
         sync: bool = True,
         color_mode: ColorMode | None = None,
         theme: Theme | None = None,
+        terminal: Terminal | None = None,
     ) -> None:
-        if screen is not None:
-            self._screen = screen
+        if terminal is not None:
+            # The terminal owns the screen's switches and its input; the
+            # legacy screen/keys/mouse/hover arguments are not consulted.
+            self._terminal: Terminal | None = terminal
+            self._screen = terminal.screen
+            keys = terminal.input
+            self._hover = terminal.options.mouse is MouseMode.MOVE
+            sync = terminal.options.sync
         else:
-            # A switch left at its default is not forwarded: the screen's own
-            # default (color_mode="auto" -> the env probe) is the contract.
-            extra = {} if color_mode is None else {"color_mode": color_mode}
-            self._screen = TerminalScreen(
-                mouse=mouse,
-                hover=hover,
-                focus_events=focus_events,
-                **extra,
-            )
-        #: The hover switch :meth:`run` hands the default key source: it
-        #: gates the record path's button-free motion (see the class
-        #: docstring).  An explicit ``keys=`` source is used as given.
-        self._hover = hover
+            self._terminal = None
+            if screen is not None:
+                self._screen = screen
+            else:
+                # A switch left at its default is not forwarded: the screen's own
+                # default (color_mode="auto" -> the env probe) is the contract.
+                extra = {} if color_mode is None else {"color_mode": color_mode}
+                self._screen = TerminalScreen(
+                    mouse=mouse,
+                    hover=hover,
+                    focus_events=focus_events,
+                    **extra,
+                )
+            #: The hover switch :meth:`run` hands the default key source: it
+            #: gates the record path's button-free motion (see the class
+            #: docstring).  An explicit ``keys=`` source is used as given.
+            self._hover = hover
         self._document = Document()
         self._viewport = Viewport(self._document)
         #: The theme the driver's own chrome reads (the split's divider);
@@ -292,7 +350,12 @@ class TUI:
         #: :meth:`_set_selection`, alongside :attr:`_selection`.
         self._selection_pane_id: str | None = None
         self._layout_width: int | None = None
-        self._every: list[_Every] = []
+        self._timers: list[Timer] = []
+        #: The clock the driver adds its virtual offset to.  A test may swap
+        #: this (or replace ``clock`` outright) to control time.
+        self._clock: Callable[[], float] = time.monotonic
+        #: The virtual time :meth:`advance` has added to the clock.
+        self._clock_offset = 0.0
         self._wake_event: asyncio.Event | None = None
         self._wake_loop: asyncio.AbstractEventLoop | None = None
         #: The source this driver attached itself (never one the caller handed
@@ -321,10 +384,15 @@ class TUI:
     def copy_to_clipboard(self, text: str) -> bool:
         """Put ``text`` on the terminal's clipboard through the screen (OSC 52).
 
-        A non-live screen answers ``False`` without touching the stream,
-        exactly as :meth:`Screen.copy_to_clipboard
+        A terminal-attached driver goes through the terminal's
+        :class:`~motui.terminal.clipboard.ScreenClipboard`; either path
+        writes the same OSC 52 bytes.  A non-live screen answers ``False``
+        without touching the stream, exactly as
+        :meth:`Screen.copy_to_clipboard
         <motui.terminal.screen.Screen.copy_to_clipboard>` does.
         """
+        if self._terminal is not None:
+            return self._terminal.clipboard.copy(text)
         return self._screen.copy_to_clipboard(text)
 
     @property
@@ -919,18 +987,45 @@ class TUI:
             )
         return pane_id
 
-    def every(self, seconds: float, fn: Callable[[], object]) -> EveryHandle:
-        """Call ``fn`` every ``seconds`` until the returned handle is cancelled.
+    def every(
+        self,
+        period: float,
+        fn: Callable[[], object],
+        *,
+        catch_up: str = "skip",
+    ) -> Timer:
+        """Call ``fn`` every ``period`` seconds until the timer is cancelled.
 
-        ``fn`` takes no arguments and decides for itself whether to
-        invalidate the frame; the pump invokes it from :meth:`tick`.
+        The schedule is deadline-based: the first run is one ``period``
+        after registration and every run adds exactly one ``period`` to
+        ``next_run`` (see :class:`Timer`).  ``fn`` takes no arguments and
+        decides for itself whether to invalidate the frame; the pump invokes
+        it from :meth:`tick`.  ``catch_up`` selects the missed-deadline
+        posture (``"skip"`` or ``"coalesce"``).
         """
-        handle = EveryHandle()
-        self._every.append(
-            _Every(period=seconds, next_run=self.clock() + seconds, fn=fn, handle=handle)
-        )
+        timer = Timer(period, fn, self.clock() + period, catch_up=catch_up)
+        self._timers.append(timer)
         self._wake()
-        return handle
+        return timer
+
+    def animation(self, hz: float, draw: Callable[[], object]) -> Timer:
+        """Call ``draw`` at ``hz`` frames per second, deadline-based.
+
+        The convenience over :meth:`every` an animated host wants: one
+        callback per frame, with the same cancellation handle and catch-up
+        policy.  A non-positive rate raises ``ValueError``.
+        """
+        if hz <= 0:
+            raise ValueError(f"animation rate must be positive, got {hz!r}")
+        return self.every(1.0 / hz, draw)
+
+    def invalidate(self) -> None:
+        """Mark the frame dirty (the 2.0 name for :meth:`refresh`)."""
+        self.refresh()
+
+    def paint_now(self) -> None:
+        """Paint one frame right now, bypassing the throttle (see :meth:`paint`)."""
+        self.paint()
 
     async def read_event(self) -> Event | None:
         """Read the next event, or ``None``.
@@ -952,16 +1047,22 @@ class TUI:
         """
         if not self.screen.live:
             return None
-        source = self.keys
-        if source is None:
-            return None
+        if self._terminal is not None:
+            if self._terminal.input is None:
+                return None
+            read = self._terminal.read_event
+        else:
+            source = self.keys
+            if source is None:
+                return None
+            read = source.read
         exit_event = self._exit_event
         if exit_event is None:
             self._exit_event = exit_event = asyncio.Event()
         while True:
             if self._stopped or exit_event.is_set():
                 return None
-            read_task = asyncio.ensure_future(source.read())
+            read_task = asyncio.ensure_future(read())
             exit_task = asyncio.ensure_future(exit_event.wait())
             try:
                 done, _ = await asyncio.wait(
@@ -1076,11 +1177,47 @@ class TUI:
     def clock(self) -> float:
         """The driver's monotonic clock: the one seam time enters through.
 
-        Timestamps (``every`` schedules, toast expiries, double-click
-        windows) read it, and a host or a test replaces the method with its
-        own reading to drive time.
+        It answers ``_clock() + offset``: ``_clock`` is
+        :func:`time.monotonic` unless a host replaces it, and the offset is
+        the virtual time :meth:`advance` has added, so a replay script can
+        move time without touching the system clock.  Timestamps (``every``
+        schedules, toast expiries, double-click windows) read it, and a host
+        or a test may also replace this method with its own reading.
         """
-        return time.monotonic()
+        return self._clock() + self._clock_offset
+
+    def advance(self, dt: float) -> None:
+        """Move the virtual clock by ``dt`` and run every deadline it crosses.
+
+        The driver steps from due deadline to due deadline, running
+        :meth:`tick` at each one -- timers fire exactly as they would have
+        under a pump that never slept -- and lands on the target time with a
+        final tick.  No real time is sampled between the steps and nothing
+        sleeps, so a scripted interval replays deterministically.  A
+        non-positive ``dt`` does nothing.
+        """
+        if dt <= 0:
+            return
+        target = self.clock() + dt
+        while True:
+            deadline = self._next_deadline()
+            if deadline is None or deadline > target:
+                break
+            now = self.clock()
+            if deadline > now:
+                self._clock_offset += deadline - now
+            self.tick(self.clock())
+        now = self.clock()
+        if target > now:
+            self._clock_offset += target - now
+        self.tick(self.clock())
+
+    def _next_deadline(self) -> float | None:
+        """The earliest scheduled deadline, ``None`` when no live timer exists."""
+        deadlines = [
+            timer.next_run for timer in self._timers if not timer.cancelled
+        ]
+        return min(deadlines) if deadlines else None
 
     def _paint_at(self, now: float) -> None:
         """Paint one frame and record ``now`` as the last flush time.
@@ -1146,35 +1283,55 @@ class TUI:
     def tick(self, now: float) -> float | None:
         """Advance the pump one step; return the seconds until the next wake.
 
-        The pump's manual seam: due ``every`` callbacks run first (they may
-        invalidate the frame), then at most one frame is painted -- only
-        when the document is dirty *and* the throttle has elapsed since the
-        last flush.  The return value is the delay until the pump next needs
-        to run, or ``None`` when nothing is pending and the pump should
-        sleep until woken.
+        The pump's manual seam: due timers run first (they may invalidate the
+        frame), then at most one frame is painted -- only when the document
+        is dirty *and* the throttle has elapsed since the last flush.  Each
+        due timer fires at most once and reschedules from its own deadline
+        (see :class:`Timer`), so a late tick never shifts the phase.  The
+        return value is the delay until the pump next needs to run, or
+        ``None`` when nothing is pending and the pump should sleep until
+        woken.
         """
-        if self._every:
-            alive: list[_Every] = []
-            for entry in self._every:
-                if entry.handle.cancelled:
+        if self._timers:
+            alive: list[Timer] = []
+            for timer in self._timers:
+                if timer.cancelled:
                     continue
-                if entry.next_run <= now:
-                    entry.fn()
-                    if entry.handle.cancelled:
+                if now >= timer.next_run:
+                    timer.fn()
+                    if timer.cancelled:
                         continue
-                    entry.next_run = now + entry.period
-                alive.append(entry)
-            self._every = alive
+                    self._reschedule(timer, now)
+                alive.append(timer)
+            self._timers = alive
         if self._dirty and now - self._last_paint >= self.throttle:
             self._paint_at(now)
         wake_at: float | None = None
         if self._dirty:
             wake_at = self._last_paint + self.throttle
-        for entry in self._every:
-            wake_at = entry.next_run if wake_at is None else min(wake_at, entry.next_run)
+        for timer in self._timers:
+            wake_at = timer.next_run if wake_at is None else min(wake_at, timer.next_run)
         if wake_at is None:
             return None
         return max(0.0, wake_at - now)
+
+    @staticmethod
+    def _reschedule(timer: Timer, now: float) -> None:
+        """Move ``timer`` past ``now`` according to its catch-up posture.
+
+        The deadline advances by whole periods in both postures.  ``skip``
+        gives up on the missed ones and realigns to ``now + period`` as soon
+        as the next deadline is still in the past; ``coalesce`` keeps
+        stepping by periods until the deadline is in the future, so the
+        schedule's phase survives a late tick.
+        """
+        timer.next_run += timer.period
+        if timer.catch_up == "skip":
+            if timer.next_run <= now:
+                timer.next_run = now + timer.period
+        else:
+            while timer.next_run <= now:
+                timer.next_run += timer.period
 
     async def _pump(self) -> None:
         """Repaint on the throttle and run periodic callbacks until stopped."""
@@ -1205,15 +1362,15 @@ class TUI:
         A host builds its shell before it calls ``run_session`` -- the demo
         registers its animation beat there -- so ``every`` callbacks made
         before entering survive the reset and are rescheduled from this
-        run's clock.  Only cancelled handles are dropped; a timer lasts
+        run's clock.  Only cancelled timers are dropped; a timer lasts
         until its handle is cancelled, across runs.
         """
         self._stopped = False
         self._exit_event = asyncio.Event()
         now = self.clock()
-        self._every = [entry for entry in self._every if not entry.handle.cancelled]
-        for entry in self._every:
-            entry.next_run = now + entry.period
+        self._timers = [timer for timer in self._timers if not timer.cancelled]
+        for timer in self._timers:
+            timer.next_run = now + timer.period
         self._selection = None
         self._selection_pane_id = None
         self._tiling = None
@@ -1228,8 +1385,13 @@ class TUI:
             source.start()
             self.keys = source
             self._owned_source = source
+            if self._terminal is not None:
+                self._terminal.attach(source)
         if self.screen.live:
-            self.screen.enter()
+            if self._terminal is not None:
+                self._terminal.enter()
+            else:
+                self.screen.enter()
         # Every run starts from a blank screen: the alternate screen starts
         # blank, and a non-live run still paints its final frame from scratch.
         self.painter.reset()
@@ -1312,12 +1474,17 @@ class TUI:
             self._owned_source.close()
             if self.keys is self._owned_source:
                 self.keys = None  # the next run attaches a fresh source
+            if self._terminal is not None:
+                self._terminal.attach(None)
             self._owned_source = None
         # The final frame: painted rows before the live screen leaves, a
         # zero-write logical frame (the dump reads it) on a piped one.
         self._paint_at(self.clock())
         if self.screen.live:
-            self.screen.leave()
+            if self._terminal is not None:
+                self._terminal.leave()
+            else:
+                self.screen.leave()
             self.screen.flush()
         else:
             self._dump_final_screen()

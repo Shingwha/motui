@@ -14,8 +14,11 @@ from __future__ import annotations
 import io
 import sys
 from abc import ABC, abstractmethod
-from typing import Literal
+from dataclasses import dataclass
+from enum import Enum
+from typing import Literal, TextIO
 
+from ..kernel.events import EventSource
 from ..kernel.style import ColorMode
 from .ansi import (
     copy_clipboard,
@@ -33,7 +36,72 @@ from .ansi import (
 )
 from .capability import detect_color_mode, terminal_size
 
-__all__ = ["HeadlessScreen", "Screen", "TerminalScreen"]
+__all__ = [
+    "HeadlessScreen",
+    "MouseMode",
+    "Screen",
+    "TerminalOptions",
+    "TerminalScreen",
+    "mouse_switches",
+]
+
+
+class MouseMode(Enum):
+    """The mouse reporting a host asks the terminal for.
+
+    ``OFF`` leaves tracking disabled; ``BUTTON`` reports presses and the
+    wheel (DECSET 1000 only, no motion); ``DRAG`` adds button-held motion
+    (1002), which is what a drag gesture consumes; ``MOVE`` reports every
+    motion event (1003), which is what a hover tier needs.  Buttons are
+    reported for all three enabled modes -- the distinction is solely which
+    motion the terminal also sends.
+    """
+
+    OFF = "off"
+    BUTTON = "button"
+    DRAG = "drag"
+    MOVE = "move"
+
+
+def mouse_switches(mode: MouseMode) -> tuple[bool, bool]:
+    """Map a :class:`MouseMode` to a screen's ``(mouse, hover)`` switches.
+
+    ``BUTTON`` and ``DRAG`` share the screen's default 1002 motion: the
+    screen reports motion only while a button is held, so its button-event
+    tracking is enough for both.  ``MOVE`` is the only mode that needs the
+    screen's 1003 any-event tracking.
+    """
+    if mode is MouseMode.OFF:
+        return (False, False)
+    if mode is MouseMode.MOVE:
+        return (True, True)
+    return (True, False)
+
+
+@dataclass(frozen=True, slots=True, kw_only=True)
+class TerminalOptions:
+    """One terminal configuration: the switches a host used to spread around.
+
+    ``stream`` is the output sink (``sys.stdout`` when ``None``); ``input``
+    is the event source a :class:`~motui.terminal.terminal.Terminal` reads
+    (``None`` means no source and therefore EOF).  ``mouse`` folds the old
+    ``mouse``/``hover`` pair into one mode (see :class:`MouseMode`);
+    ``paste`` and ``focus_events`` are the independent reporting switches,
+    and ``color_mode`` is forwarded to a constructed screen (``"auto"`` runs
+    the environment probe once).  ``sync`` asks the painter for the
+    synchronized-update bracket.  ``screen`` is the testing/headless escape
+    hatch: a screen given here is used as-is, overriding every screen-shaped
+    option above.
+    """
+
+    stream: TextIO | None = None
+    input: EventSource | None = None
+    mouse: MouseMode = MouseMode.MOVE
+    paste: bool = True
+    focus_events: bool = False
+    color_mode: ColorMode | Literal["auto"] = "auto"
+    sync: bool = True
+    screen: Screen | None = None
 
 
 class Screen(ABC):

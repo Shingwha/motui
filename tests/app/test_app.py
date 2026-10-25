@@ -7,7 +7,12 @@ from motui.kernel import Theme
 from motui.kernel.cell import Line, Surface
 from motui.kernel.document import Sizing
 from motui.kernel.layout import Constraints
-from motui.terminal import HeadlessScreen
+from motui.terminal import (
+    HeadlessScreen,
+    MouseMode,
+    Terminal,
+    TerminalOptions,
+)
 from motui.kernel.events import KeyEvent
 from motui.widgets import Button, Field, Form, Input, Panel, Row, ScrollPanel
 from motui.widgets.base import Widget
@@ -20,6 +25,7 @@ from tests.testing import (
     press,
     release,
     resize,
+    rows,
     wheel,
 )
 
@@ -332,4 +338,82 @@ def test_a_form_owns_its_fields_and_a_click_moves_its_cursor():
     assert form.on_key(KeyEvent("b", "b")) is True
     assert email.text == "b"
     assert name.text == ""
+
+
+# -- terminal options --------------------------------------------------------
+
+
+def test_terminal_options_build_the_screen_and_input_the_driver_uses():
+    screen = HeadlessScreen(20, 4)
+    source = ScriptedEvents(())
+    app = App(terminal=TerminalOptions(screen=screen, input=source), auto=False)
+
+    assert isinstance(app.terminal, Terminal)
+    assert app.terminal.screen is screen
+    assert app.tui.screen is screen
+    assert app.tui.keys is source
+
+
+def test_terminal_options_win_over_the_legacy_arguments():
+    legacy = HeadlessScreen(10, 2)
+    chosen = HeadlessScreen(20, 5)
+    app = App(
+        screen=legacy,
+        keys=ScriptedEvents(()),
+        terminal=TerminalOptions(screen=chosen),
+        auto=False,
+    )
+    assert app.terminal.screen is chosen
+    assert app.tui.screen is chosen
+
+
+def test_legacy_arguments_fold_into_the_app_terminal():
+    screen = HeadlessScreen(30, 6)
+    source = ScriptedEvents(())
+    app = App(screen=screen, keys=source, auto=False)
+
+    assert isinstance(app.terminal, Terminal)
+    assert app.terminal.screen is screen
+    assert app.terminal.input is source
+    assert app.tui.screen is screen
+    assert app.tui.keys is source
+
+
+def test_the_legacy_mouse_and_hover_switches_map_to_one_mode():
+    screen = HeadlessScreen()
+    configured = App(terminal=TerminalOptions(screen=screen), auto=False)
+    assert configured.terminal.options.mouse is MouseMode.MOVE
+    assert App(hover=False, auto=False).terminal.options.mouse is MouseMode.DRAG
+    assert App(mouse=False, hover=True, auto=False).terminal.options.mouse is MouseMode.OFF
+
+
+def test_an_app_with_terminal_options_paints_the_same_rows():
+    app = App(
+        terminal=TerminalOptions(screen=HeadlessScreen(20, 4)),
+        auto=False,
+    )
+    app.add(Rows("one"))
+    app.tui.paint_now()
+    assert rows(app.tui) == ["one", "", "", ""]
+
+
+async def test_the_terminal_and_legacy_paths_paint_the_same_bytes():
+    async def rendered(app: App) -> str:
+        app.add(Rows("one"))
+        app.add(Rows("two"))
+
+        async def body(tui) -> None:
+            tui.paint_now()
+
+        await app.tui.run_session(body)
+        return app.tui.screen.output
+
+    legacy = App(screen=HeadlessScreen(20, 4), keys=ScriptedEvents(()), auto=False)
+    modern = App(
+        terminal=TerminalOptions(
+            screen=HeadlessScreen(20, 4), input=ScriptedEvents(())
+        ),
+        auto=False,
+    )
+    assert await rendered(legacy) == await rendered(modern)
 
