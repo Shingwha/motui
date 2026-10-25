@@ -91,7 +91,10 @@ def test_editor_keeps_the_newlines_of_a_paste():
 def test_an_explicit_insert_keeps_newlines_even_in_an_input():
     field = Input()
     field.insert("\n")
-    assert field.text == "\n" and len(field.render(Constraints(width=10))) == 2
+    # The buffer keeps the logical break; the single-line view paints it as
+    # one space, so the field still renders exactly one row.
+    assert field.text == "\n" and len(field.render(Constraints(width=10))) == 1
+    assert field.render(Constraints(width=10))[0].text == "\u276f   "
 
 
 # -- editing verbs -----------------------------------------------------------
@@ -296,7 +299,7 @@ def test_the_selection_outranks_the_cursor_on_a_shared_cell():
     "make, width, text, expected",
     [
         (Input, 10, "ab", ["\u276f ab"]),
-        (Input, 6, "a\nbb\nccc", ["\u276f a", "  bb", "  ccc"]),
+        (Input, 6, "a\nbb\nccc", ["\u276f a bb"]),
         (Editor, 4, "abcdefgh", ["abcd", "efgh"]),
     ],
 )
@@ -379,7 +382,7 @@ def test_max_rows_windows_the_rows_around_the_cursor():
 @pytest.mark.parametrize(
     "make, width, text, cursor, cell",
     [
-        (Input, 6, "abcdefgh", 5, (1, 3)),
+        (Input, 6, "abcdefgh", 5, (0, 5)),
         (Editor, 4, "abcdefgh", 5, (1, 1)),
     ],
 )
@@ -554,5 +557,96 @@ def test_editor_wrap_is_part_of_the_revision():
     assert editor.revision() == Editor("abc", wrap=WrapMode.CLIP).revision()
 
 
-def test_input_keeps_the_ellipsis_guard_this_wave():
-    assert Input("\u65e5", prompt="").render(Constraints(width=1))[0].text == "\u2026"
+def test_input_defaults_to_the_overflow_single_line_guard():
+    assert Input().wrap is WrapMode.OVERFLOW
+    # Two columns hold the wide glyph and its cursor block; one column cannot
+    # hold both, so the row is the cursor's own cell (no ellipsis marker).
+    assert Input("\u65e5", prompt="").render(Constraints(width=2))[0].text == "\u65e5"
+    assert Input("\u65e5", prompt="").render(Constraints(width=1))[0].text == " "
+
+
+# -- single-line overflow: the W2.5b default ---------------------------------
+
+
+@pytest.mark.parametrize("width", [20, 40])
+def test_a_long_input_stays_one_row(width):
+    field = Input("x" * 200)
+    assert field.render(Constraints(width=width)).height == 1
+    park(field, 200)
+    surface = field.render(Constraints(width=width))
+    assert surface.height == 1
+    assert all(len(row.text) <= width for row in surface)
+
+
+def test_the_input_cursor_at_the_end_stays_visible():
+    field = Input("abcdefghij", prompt="", styles=CARET_STYLES)
+    park(field, 10)
+    row = field.render(Constraints(width=5))[0]
+    assert row.text == "ghij "
+    caret = DEFAULT_THEME.text.base.merge(INJECTED)
+    assert row.segments[-1].text == " " and row.segments[-1].style == caret
+    assert field.cursor_position(5) == (0, 4)
+
+
+def test_home_and_end_move_the_horizontal_window():
+    field = Input("abcdefghij", prompt="")
+    park(field, 10)
+    assert field.render(Constraints(width=5))[0].text == "ghij "
+    field.home()
+    assert field.render(Constraints(width=5))[0].text == "abcde"
+    field.end()
+    assert field.render(Constraints(width=5))[0].text == "ghij "
+
+
+def test_a_long_placeholder_stays_one_row_without_a_cursor():
+    field = Input("", placeholder="a very long hint that cannot fit")
+    surface = field.render(Constraints(width=10))
+    assert surface.height == 1
+    assert surface[0].text == "\u276f a very l"
+    assert all(seg.style.reverse is False for seg in surface[0].segments)
+
+
+def test_a_masked_input_is_one_row_and_keeps_the_caret_on_the_mask():
+    field = Input("secret", mask="\u2022", prompt="")
+    park(field, 6)
+    surface = field.render(Constraints(width=4))
+    assert surface.height == 1
+    assert surface[0].text == "\u2022\u2022\u2022 "
+    assert "s" not in surface[0].text
+    assert field.cursor_position(4) == (0, 3)
+
+
+def test_a_prompt_wider_than_the_field_shows_only_the_prompt():
+    field = Input("hello", prompt="verylongprompt")
+    surface = field.render(Constraints(width=5))
+    assert surface.height == 1
+    assert surface[0].text == "veryl"
+
+
+def test_newlines_paint_one_cell_and_keep_the_character_offsets():
+    field = Input("ab\ncd", prompt="", styles=CARET_STYLES)
+    park(field, 4)  # on the 'd' after the folded break
+    row = field.render(Constraints(width=4))[0]
+    assert row.text == "b cd"
+    assert field.cursor == (0, 4)
+    caret = DEFAULT_THEME.text.base.merge(INJECTED)
+    assert row.segments[1].text == "d" and row.segments[1].style == caret
+
+
+def test_a_crlf_pair_keeps_both_character_offsets():
+    field = Input("ab\r\ncd", prompt="")
+    field.focused = False
+    assert field.render(Constraints(width=10))[0].text == "ab  cd"
+    field.focused = True
+    park(field, 6)
+    assert field.render(Constraints(width=4))[0].text == " cd "
+    assert field.cursor_position(4) == (0, 3)
+
+
+def test_an_input_can_opt_back_into_the_shared_wrap_guard():
+    field = Input("\u65e5", prompt="")
+    assert field.render(Constraints(width=1))[0].text == " "
+    field.wrap = WrapMode.ELLIPSIS
+    assert field.wrap is WrapMode.ELLIPSIS
+    assert field.render(Constraints(width=1))[0].text == "\u2026"
+    assert Input("abc").revision() != Input("abc", wrap=WrapMode.CLIP).revision()

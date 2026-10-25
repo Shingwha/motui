@@ -8,11 +8,13 @@ buffer composition, event routing, the render trunk -- in
 
 The two public fields are one component twice:
 
-* :class:`Input` leads every row with a prompt and wraps at
-  ``width - visible_width(prompt)``; a :class:`~motui.kernel.events.PasteEvent`
-  entering a **single-line** field has every run of newlines folded into one
-  space, so a pasted paragraph stays one row (the editor's paste path keeps
-  its newlines, and so does an explicit ``insert``).
+* :class:`Input` leads its **one** row with a prompt and keeps the text on a
+  single line: a row wider than the field scrolls horizontally under the
+  cursor (``WrapMode.OVERFLOW``, the default) instead of wrapping or losing
+  its tail; a :class:`~motui.kernel.events.PasteEvent` entering a
+  **single-line** field has every run of newlines folded into one space, so a
+  pasted paragraph stays one row (the editor's paste path keeps its newlines,
+  and so does an explicit ``insert``).
 * :class:`Editor` spans the full width and slides an optional ``max_rows``
   window around the cursor.
 
@@ -54,7 +56,7 @@ from ..kernel.events import Event, PasteEvent
 from ..kernel.glyphs import GLYPHS, Glyphs, seat
 from ..kernel.cell import Line, Segment, Surface
 from ..kernel.layout import Constraints
-from ..kernel.text import WrapMode, visible_width
+from ..kernel.text import WrapMode, index_pair_at_columns, visible_width
 from ..kernel.theme import Styles, Theme
 from ..widgets.base import Widget
 from ..kernel.keymap import (
@@ -155,8 +157,8 @@ class _TextField(Widget):
         # The single-row response to a row wider than the field.  The buffer
         # geometry is always word-aware; this only shapes the final row
         # guard, so the editing algorithm does not move.  The plain Input
-        # keeps the 1.x ellipsis (W2.5b switches it to OVERFLOW); Editor
-        # opts into WORD.
+        # scrolls horizontally (OVERFLOW, its own ``_rows_for``), the Editor
+        # re-wraps (WORD).
         self._wrap = wrap
         # The memory: the rows of the last render while ``_memo_revision``
         # and ``_memo_width`` still describe the field.  ``None`` rows mean
@@ -652,6 +654,20 @@ class Input(_TextField):
     field reads best with the terminal's bar cursor, and the host reads the
     attribute off the focused leaf and passes it to
     :meth:`~motui.app.TUI.set_cursor_shape`.
+
+    ``wrap`` defaults to :data:`~motui.kernel.text.WrapMode.OVERFLOW`: the
+    field renders **exactly one row** (placeholder included) and slides a
+    visible window under the cursor instead of wrapping, so a 200-character
+    value stays one editable line and the cursor is always on screen.  The
+    window is a display-column range mapped back to character indices
+    (:func:`~motui.kernel.text.index_pair_at_columns`); the prompt keeps its
+    width, and a prompt wider than the field leaves no room for text (the
+    clipped prompt is the row).  Logical newlines cannot paint a control
+    character, so each one is replaced by one space **in place** -- the
+    display string stays as long as the buffer's value and the cursor's
+    character offset stays 1:1.  The mask replaces every displayed character
+    with its one glyph, also 1:1.  A non-OVERFLOW mode hands the row back to
+    the shared shell (the old wrap/ellipsis behavior).
     """
 
     __slots__ = ("_prompt",)
@@ -671,6 +687,7 @@ class Input(_TextField):
         styles: Styles | None = None,
         keymap: Keymap | None = None,
         read_only: bool = False,
+        wrap: WrapMode = WrapMode.OVERFLOW,
     ) -> None:
         super().__init__(
             text,
@@ -680,6 +697,7 @@ class Input(_TextField):
             keymap=keymap if keymap is not None else DEFAULT_INPUT_KEYMAP,
             mask=mask,
             read_only=read_only,
+            wrap=wrap,
         )
         # The default prompt is the vocabulary's cue plus one separator
         # column; an explicit prompt wins and may be ``""`` (no prompt).
@@ -696,6 +714,25 @@ class Input(_TextField):
     def prompt(self, value: str) -> None:
         self._prompt = value
         self._buf.indent = visible_width(value)
+
+    @property
+    def wrap(self) -> WrapMode:
+        """How a value wider than the field responds to ``render``'s width.
+
+        ``OVERFLOW`` (the default) renders one horizontally sliding row;
+        any other mode delegates to the shared shell's row guard.  A write
+        drops the row memory in addition to moving :meth:`_revision`, so
+        the very next render answers under the new policy.
+        """
+        return self._wrap
+
+    @wrap.setter
+    def wrap(self, value: WrapMode) -> None:
+        if value is self._wrap:
+            return
+        self._wrap = value
+        self._memo_rows = None
+        self._memo_revision = None
 
     @property
     def cursor(self) -> tuple[int, int]:
@@ -727,6 +764,123 @@ class Input(_TextField):
         return super().handle(event)
 
     # -- rendering ---------------------------------------------------------------
+
+    def cursor_position(self, width: int) -> tuple[int, int]:
+        """The cursor cell as ``(0, col)`` of the single-row render.
+
+        The OVERFLOW view paints one row, so the shared buffer geometry
+        would report a wrapped row the user cannot see.  The reported cell
+        is the one :meth:`_rows_for` paints: the prompt's columns plus the
+        cursor's display offset inside the visible window, clamped to the
+        field.  A prompt that leaves no text column reports the last cell.
+        Non-OVERFLOW modes keep the shared answer.
+        """
+        if self._wrap is not WrapMode.OVERFLOW or width <= 0:
+            return super().cursor_position(width)
+        indent = self._indent()
+        if indent >= width:
+            return 0, width - 1
+        visible, local, _start = self._single_line_geometry(width)
+        return 0, min(width - 1, indent + visible_width(visible[:local]))
+
+    def _single_line_geometry(self, width: int) -> tuple[str, int, int]:
+        """The visible window, the cursor's index in it, and its start index.
+
+        ``display`` is the buffer's value with one printable stand-in per
+        character: the mask glyph when a mask is set, a space for every
+        ``\\r`` / ``\\n`` otherwise.  The replacement is **in place**, so the
+        display index space is exactly the buffer's character offset space
+        and the caret cannot drift across a folded logical break (a
+        ``\\r\\n`` pair is two buffer characters and paints two spaces).
+        ``cursor_col`` is the cursor's display column; once it reaches the
+        field's inner width the window starts one column past the point
+        that would hide it, and :func:`~motui.kernel.text.index_pair_at_columns`
+        maps the display range back to character indices (flooring a
+        boundary inside a wide cluster).  A window ending exactly at the
+        cursor with no cell left for the block drops leading clusters until
+        the cursor's space fits.
+        """
+        inner = max(0, width - self._indent())
+        value = self._buf.value
+        display = self._mask[0] * len(value) if self._mask else value
+        display = (
+            display.replace("\r\n", "  ").replace("\r", " ").replace("\n", " ")
+        )
+        cursor = self._buf.offset
+        cursor_col = visible_width(display[:cursor])
+        scroll_x = cursor_col - inner + 1 if cursor_col >= inner else 0
+        start, end = index_pair_at_columns(display, scroll_x, scroll_x + inner)
+        if cursor >= len(display) and visible_width(display[start:end]) + 1 > inner:
+            while start < end and visible_width(display[start:end]) + 1 > inner:
+                start += 1
+        visible = display[start:end]
+        local = max(0, min(len(visible), cursor - start))
+        return visible, local, start
+
+    @staticmethod
+    def _window_selection(
+        selection: tuple[int, int] | None, start: int, length: int
+    ) -> tuple[int, int] | None:
+        """A flat selection mapped into the visible window's character range."""
+        if selection is None:
+            return None
+        lo = min(max(selection[0] - start, 0), length)
+        hi = (
+            length
+            if selection[1] >= start + length
+            else min(max(selection[1] - start, 0), length)
+        )
+        return (lo, hi) if lo < hi else None
+
+    def _rows_for(self, width: int) -> list[Line]:
+        """The single row of the horizontal-overflow view.
+
+        The OVERFLOW policy is the Input's own: the shared shell wraps the
+        buffer geometry, which is exactly what a single-line field must not
+        show.  The prompt takes its columns; the visible text is the
+        display-column window :meth:`_single_line_geometry` computes, and
+        the buffer's row-body builder draws the base run, the caret and the
+        selection band.  The row is hard-clipped to ``width`` (never
+        ellipsized), and a prompt wider than the field leaves only the
+        clipped prompt.  An empty focused field's placeholder is a label,
+        not content: it takes the row's text slots and carries no cursor
+        cell, exactly as the shared shell paints it.
+        """
+        if self._wrap is not WrapMode.OVERFLOW:
+            return super()._rows_for(width)
+        text_styles = self.group("text")
+        indent = self._indent()
+        prefix = self._row_prefix(0, indent)
+        if indent >= width:
+            line = Line((prefix,))
+        elif self.placeholder and self._buf.empty and self.focused:
+            line = Line((prefix, Segment(self.placeholder, text_styles.faint)))
+        else:
+            visible, local, start = self._single_line_geometry(width)
+            selection = self._buf.selection_range()
+            marked = (
+                self.focused
+                and selection is not None
+                and selection[0] <= self._buf.offset < selection[1]
+            )
+            body = self._buf.row_body(
+                visible,
+                local,
+                max(0, width - indent),
+                text_styles.base,
+                text_styles.caret,
+                selection=self._window_selection(selection, start, len(visible)),
+                selection_style=text_styles.selection,
+                show_cursor=self.focused,
+                cursor_marked=marked,
+            )
+            line = Line((prefix, *body))
+        if self.hover:
+            # The block-level hover band covers the prompt and the cursor
+            # cell, the shared shell's rule for the row.
+            band = self.group("surfaces").hover
+            line = Line(seg.with_style(seg.style.merge(band)) for seg in line.segments)
+        return [line.clip(WrapMode.CLIP, width)]
 
     def _indent(self) -> int:
         return visible_width(self._prompt)
