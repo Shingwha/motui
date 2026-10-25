@@ -37,7 +37,7 @@ flip doors and renders its title in ``text.faint``.
 
 from __future__ import annotations
 
-from ..kernel.document import Component, Revisioned
+from ..kernel.document import Component
 from ..kernel.geom import Pos
 from ..kernel.glyphs import GLYPHS, Glyphs, seat
 from ..kernel.cell import Line, Segment, Surface
@@ -225,8 +225,9 @@ class Collapsible(Widget):
         """
         body = self.body
         body_snapshot: object = None
-        if isinstance(body, Revisioned):
-            snapshot = body.revision()
+        revision = getattr(body, "revision", None)
+        if revision is not None:
+            snapshot = revision()
             if snapshot is not None:
                 body_snapshot = ("revision", snapshot)
         if body_snapshot is None:

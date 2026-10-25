@@ -14,7 +14,7 @@ here, never drawn.  The divider / panel border color comes from the
 
 from __future__ import annotations
 
-from ..kernel.document import Component, Revisioned
+from ..kernel.document import Component
 from ..kernel.glyphs import GLYPHS, Border, Glyphs
 from ..kernel.cell import Line, Segment, Surface
 from ..kernel.layout import Constraints
@@ -45,8 +45,9 @@ def _child_key(child: object) -> object:
     renders equal rows; a mutable child's own ``revision`` is what carries
     its in-place changes through a parent that is otherwise unchanged.
     """
-    if isinstance(child, Revisioned):
-        return (id(child), child.revision())
+    revision = getattr(child, "revision", None)
+    if revision is not None:
+        return (id(child), revision())
     return id(child)
 
 

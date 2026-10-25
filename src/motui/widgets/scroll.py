@@ -55,7 +55,7 @@ from __future__ import annotations
 from dataclasses import replace
 
 from ..kernel.cell import Line, Segment, Surface, cut_line
-from ..kernel.document import Component, Revisioned
+from ..kernel.document import Component
 from ..kernel.geom import Pos
 from ..kernel.events import KeyEvent, MouseEvent
 from ..kernel.glyphs import GLYPHS, Glyphs
@@ -487,8 +487,9 @@ class ScrollPanel(Widget):
         """
         child = self.child
         snapshot: object = None
-        if isinstance(child, Revisioned):
-            snapshot = child.revision()
+        revision = getattr(child, "revision", None)
+        if revision is not None:
+            snapshot = revision()
         child_key: object = snapshot if snapshot is not None else id(child)
         return (
             child_key,

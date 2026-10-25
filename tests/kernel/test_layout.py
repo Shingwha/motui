@@ -23,24 +23,26 @@ def _texts(rows) -> list[str]:
 
 
 class _Counting:
-    """A ``Revisioned`` component double that counts its renders."""
+    """A component double carrying a generation counter and counting renders."""
 
     def __init__(self, *texts: str) -> None:
         self.texts = list(texts)
+        self.generation = 0
         self.renders = 0
+
+    def touch(self) -> None:
+        self.generation += 1
 
     def render(self, c: Constraints) -> Surface:
         self.renders += 1
         return Surface.clipped([Line.from_text(t) for t in self.texts], c.width)
 
-    def revision(self) -> object:
-        return tuple(self.texts)
-
 
 class _WidthShaped:
-    """A ``Revisioned`` double whose row count follows the width alone."""
+    """A generation-carrying double whose row count follows the width alone."""
 
     def __init__(self) -> None:
+        self.generation = 0
         self.renders = 0
 
     def render(self, c: Constraints) -> Surface:
@@ -53,12 +55,9 @@ class _WidthShaped:
             c.width,
         )
 
-    def revision(self) -> object:
-        return "stable"  # the same snapshot at every width
-
 
 class _Open:
-    """A component double with no revision protocol: never cacheable."""
+    """A component double without a generation counter: never cacheable."""
 
     def __init__(self, *texts: str) -> None:
         self.texts = list(texts)
@@ -308,7 +307,8 @@ def test_a_moved_block_remeasures_alone():
     view = Viewport(doc)
     view.layout(80, 4)
     assert (head.renders, mid.renders, tail.renders) == (1, 1, 1)
-    mid.texts = ["m0", "m1", "m2", "m3"]  # the snapshot moves: only mid re-renders
+    mid.texts = ["m0", "m1", "m2", "m3"]
+    mid.touch()  # the generation moves: only mid re-renders
     view.layout(80, 4)
     assert (head.renders, mid.renders, tail.renders) == (1, 2, 1)
 
@@ -344,7 +344,7 @@ def test_a_width_change_rebuilds_every_entry():
     assert shaped.renders == rendered_wide + 2  # and back is a rebuild again
 
 
-def test_an_unrevisioned_block_rerenders_every_frame():
+def test_a_block_without_a_generation_rerenders_every_frame():
     doc = Document()
     open_block = _Open("only")
     doc.add(open_block)
@@ -352,27 +352,41 @@ def test_an_unrevisioned_block_rerenders_every_frame():
     view.layout(80, 3)
     view.layout(80, 3)
     view.layout(80, 3)
-    assert open_block.renders == 3  # no snapshot, no memory: never frozen
+    assert open_block.renders == 3  # no counter, no memory: never frozen
     open_block.texts = ["moved"]
     assert _texts(view.layout(80, 3).body_rows) == ["moved", "", ""]
     assert open_block.renders == 4
 
 
+def test_a_touched_block_recomputes_its_indexed_height():
+    doc = Document()
+    block = _Counting("a")
+    doc.add(block)
+    view = Viewport(doc)
+    assert view.layout(80, 4).total_rows == 1
+    block.texts = ["a", "b", "c"]
+    block.touch()
+    layout = view.layout(80, 4)
+    assert layout.total_rows == 3
+    assert _texts(layout.body_rows) == ["a", "b", "c", ""]
+
+
 class _SurfaceRows:
-    """A ``Revisioned`` component already on the Constraints -> Surface shape."""
+    """A generation-carrying component on the Constraints -> Surface shape."""
 
     def __init__(self, *texts: str) -> None:
         self.texts = list(texts)
+        self.generation = 0
         self.constraints: list[Constraints] = []
+
+    def touch(self) -> None:
+        self.generation += 1
 
     def render(self, c: Constraints) -> Surface:
         self.constraints.append(c)
         return Surface.clipped(
             [Line.from_text(text) for text in self.texts], c.width
         )
-
-    def revision(self) -> object:
-        return tuple(self.texts)
 
 
 def test_a_surface_component_lays_out_through_the_bridge():

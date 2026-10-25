@@ -32,7 +32,7 @@ from __future__ import annotations
 from collections.abc import Callable, Sequence
 from dataclasses import dataclass
 
-from ..kernel.document import Component, Revisioned
+from ..kernel.document import Component
 from ..kernel.events import Event, KeyEvent, MouseEvent, PasteEvent
 from ..kernel.cell import Line, Surface
 from ..kernel.geom import Pos
@@ -65,8 +65,9 @@ class Field:
 
 def _child_key(component: Component) -> object:
     """A field component's revision when it has one, else its identity."""
-    if isinstance(component, Revisioned):
-        snapshot = component.revision()
+    revision = getattr(component, "revision", None)
+    if revision is not None:
+        snapshot = revision()
         if snapshot is not None:
             return ("revision", snapshot)
     return id(component)

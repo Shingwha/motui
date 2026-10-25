@@ -13,7 +13,7 @@ from tests.testing import Rows
 
 
 class _SurfaceRows:
-    """A component already on the 2.0 render shape: Constraints -> Surface."""
+    """A pure component on the 2.0 render shape: Constraints -> Surface."""
 
     def __init__(self, *texts: str) -> None:
         self.texts = list(texts)
@@ -26,8 +26,21 @@ class _SurfaceRows:
             rows = rows[: c.max_height]
         return Surface.clipped(rows, c.width)
 
-    def revision(self) -> object:
-        return tuple(self.texts)
+
+class _Touchable:
+    """A component double carrying the widget change counter."""
+
+    def __init__(self, *texts: str) -> None:
+        self.texts = list(texts)
+        self.generation = 0
+        self.renders = 0
+
+    def touch(self) -> None:
+        self.generation += 1
+
+    def render(self, c: Constraints) -> Surface:
+        self.renders += 1
+        return Surface.clipped([Line.from_text(t) for t in self.texts], c.width)
 
 
 def test_block_render_forwards_to_its_component():
@@ -66,7 +79,7 @@ def test_block_row_count_matches_len_rows_in_both_cache_states():
     block = Section("b", Text("hello world"))  # cacheable
     for _ in range(2):  # first pass fills the cache (miss), second reads it (hit)
         assert block.row_count(Constraints(width=5)) == len(block.rows(Constraints(width=5))) == 2
-    plain = Section("p", Rows("a", "b", "c"))  # no revision protocol: never cached
+    plain = Section("p", Rows("a", "b", "c"))  # no generation: never cached
     for _ in range(2):
         assert plain.row_count(Constraints(width=20)) == len(plain.rows(Constraints(width=20))) == 3
 
@@ -163,12 +176,34 @@ def test_a_section_takes_constraints_and_forwards_them_to_a_surface_component():
 
 
 def test_the_height_budget_is_part_of_the_section_cache_key():
-    component = _SurfaceRows("a", "b", "c")
+    component = _Touchable("a", "b", "c")
     block = Section("b", component)
     assert len(block.rows(Constraints(width=5, max_height=1))) == 1
     assert len(block.rows(Constraints(width=5, max_height=2))) == 2
     assert len(block.rows(Constraints(width=5, max_height=1))) == 1
-    assert len(component.constraints) == 3  # the third call missed the cache
+    assert component.renders == 3  # the third call missed the cache
+
+
+def test_a_touch_invalidates_the_section_rows_and_an_equal_generation_hits():
+    component = _Touchable("old")
+    block = Section("b", component)
+    assert [row.text for row in block.rows(Constraints(width=10))] == ["old"]
+    assert block.rows_view(Constraints(width=10)) is block.rows_view(
+        Constraints(width=10)
+    )  # no touch: the same cache list
+    assert component.renders == 1
+    component.texts = ["new"]
+    component.touch()
+    assert [row.text for row in block.rows(Constraints(width=10))] == ["new"]
+    assert component.renders == 2
+
+
+def test_a_pure_component_without_a_generation_renders_fresh_every_call():
+    component = _SurfaceRows("a")
+    block = Section("b", component)
+    block.rows(Constraints(width=10))
+    block.rows(Constraints(width=10))
+    assert component.constraints == [Constraints(width=10), Constraints(width=10)]
 
 
 def test_a_legacy_component_is_wrapped_in_a_clipped_surface():

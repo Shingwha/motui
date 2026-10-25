@@ -31,7 +31,7 @@ from __future__ import annotations
 from dataclasses import dataclass, replace
 from typing import Sequence
 
-from ..kernel.document import Component, Revisioned
+from ..kernel.document import Component
 from ..kernel.events import Event, KeyEvent
 from ..kernel.geom import Pos
 from ..kernel.glyphs import GLYPHS, Border, Glyphs
@@ -605,10 +605,8 @@ class Dialog(Widget):
         lists), so it costs far less than one render.
         """
         body = self.body
-        if isinstance(body, Revisioned):
-            body_revision = body.revision()
-        else:
-            body_revision = None
+        revision = getattr(body, "revision", None)
+        body_revision = revision() if revision is not None else None
         if body_revision is None:
             body_snapshot = ("rows", tuple(map(id, self._body_rows)))
         else:

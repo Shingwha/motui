@@ -21,7 +21,7 @@ whitespace around a child (optionally filled into a solid band).
 
 from __future__ import annotations
 
-from ..kernel.document import Component, Revisioned
+from ..kernel.document import Component
 from ..kernel.cell import Line, Segment, Surface
 from ..kernel.layout import Constraints
 from ..kernel.style import NONE, Style
@@ -34,8 +34,9 @@ __all__ = ["Column", "Padding", "Row", "Spacer"]
 
 def _child_key(child: object) -> object:
     """The cache key of one child: identity plus its revision when it has one."""
-    if isinstance(child, Revisioned):
-        return (id(child), child.revision())
+    revision = getattr(child, "revision", None)
+    if revision is not None:
+        return (id(child), revision())
     return id(child)
 
 

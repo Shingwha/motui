@@ -2,9 +2,9 @@
 
 The toolkit's unit of content is a :class:`Section`: a stable id, a
 :class:`Component` that knows how to render itself at a given width, and a
-row cache that follows the component's own revision snapshot.  There is no
-lifecycle flag: a block caches exactly when its component can prove the rows
-are unchanged (:class:`Revisioned` answering a snapshot), and re-renders
+row cache that follows the component's own change counter.  There is no
+lifecycle flag: a block caches exactly when its component carries a
+``generation`` counter (:class:`~motui.widgets.base.Widget`), and re-renders
 otherwise.
 """
 
@@ -13,7 +13,7 @@ from __future__ import annotations
 from collections.abc import Sequence
 from dataclasses import dataclass
 from enum import Enum
-from typing import TYPE_CHECKING, Protocol, cast, runtime_checkable
+from typing import TYPE_CHECKING, Protocol, runtime_checkable
 
 from .cell import Line, Surface
 
@@ -25,7 +25,6 @@ __all__ = [
     "Document",
     "Fill",
     "Placement",
-    "Revisioned",
     "Section",
     "Sizing",
     "descend",
@@ -83,49 +82,6 @@ class Component(Protocol):
     """
 
     def render(self, c: Constraints) -> Surface:
-        ...
-
-
-@runtime_checkable
-class Revisioned(Protocol):
-    """A component whose rows are a pure function of a value snapshot.
-
-    ``revision()`` answers *everything the component's rows depend on*, as a
-    value: while two calls answer **equal** snapshots the component promises
-    that ``render(c)`` answers equal rows at any one width -- so a cache
-    keyed on the pair ``(width, revision())`` may hand the older rows back.
-    The row cache on :meth:`Section.rows` is exactly that cache, and the
-    promise is what makes it safe to keep a block's rows between frames: a
-    hover that moves, a streamed assignment, a toggled mark changes the
-    snapshot, so the next ``rows()`` misses and re-renders.
-
-    Two rules make the promise hold.
-
-    The snapshot must be **value semantics**: every mutable field the rows
-    read goes in copied, not by reference.  ``Table.rows`` is the canonical
-    trap -- ``rows == cached`` is trivially true when "cached" holds the very
-    same list, so an in-place edit would never be seen -- and a tuple built
-    over a snapshot (``tuple(map(tuple, self.rows))``) is the shape that
-    catches it.  Reference identity is not value identity, and a component
-    that hands its live state out is worse than one without a revision at
-    all: it would freeze under a cache instead of merely being re-rendered.
-
-    The snapshot must **cost much less than the render it guards** -- the
-    design bound is at most a few percent of one ``render(c)``, because
-    every cached frame pays the snapshot again while only a miss pays the
-    render; a snapshot that re-wraps the text it guards has moved the cost,
-    not removed it.
-
-    ``None`` is the off switch, not a snapshot: :meth:`Section.rows` never
-    caches a block whose revision answers ``None`` (no snapshot, no
-    invalidation), and ``Text._revision`` returning ``None`` closes that
-    component's own row memory the same way.  A block whose component does
-    not implement this protocol at all also re-renders every layout.
-    Optional: hosts and blocks check ``isinstance(component,
-    Revisioned)``.
-    """
-
-    def revision(self) -> object:
         ...
 
 
@@ -190,10 +146,10 @@ class Section:
     layout side had to be pruned by id every frame -- a per-frame walk of the
     whole document to catch a removed block or an id reused by a new one; a
     cache on the block dies with the block and nothing reuses it.  The cache
-    is keyed ``(width, max_height, revision)``, and only a widget that
-    implements :class:`Revisioned` and answers a non-``None`` snapshot is
-    cached: an unrevisioned widget re-renders on every call, because the
-    block has no way to see that its content changed.
+    is keyed ``(width, max_height, widget.generation)``, and only a widget
+    that carries a ``generation`` counter is cached: a pure component
+    without one re-renders on every call, because the block has no way to
+    see that its content changed.
     """
 
     __slots__ = (
@@ -201,8 +157,8 @@ class Section:
         "_id",
         "_placement",
         "_rows_cache",
+        "_rows_generation",
         "_rows_max_height",
-        "_rows_revision",
         "_rows_width",
         "_sizing",
         "_widget",
@@ -226,19 +182,18 @@ class Section:
         self._widget = widget
         self._placement = placement
         self._sizing = sizing
-        # The widget's protocol membership never changes (it is fixed by
-        # the type), so it is decided once here: a per-frame isinstance on
-        # every block would cost more than the cache saves.
-        self._cacheable = isinstance(widget, Revisioned)
+        # The widget's generation counter is fixed by its type, so protocol
+        # membership is decided once here: a per-frame hasattr on every
+        # block would cost more than the cache saves.
+        self._cacheable = hasattr(widget, "generation")
         # The cache slot: the last rows rendered at ``_rows_width`` whose
-        # widget answered ``_rows_revision``.  ``None`` rows mean "nothing
-        # cached yet" -- a revision of ``None`` (a widget without the
-        # protocol, or one with its memory switched off) is a legitimate key,
-        # so it cannot double as the empty marker.
+        # widget answered ``_rows_generation``.  ``None`` rows mean "nothing
+        # cached yet" -- generation ``0`` is a legitimate key, so it cannot
+        # double as the empty marker.
         self._rows_cache: list[Line] | None = None
         self._rows_width: int | None = None
         self._rows_max_height: int | None = None
-        self._rows_revision: object = None
+        self._rows_generation: int | None = None
 
     @property
     def id(self) -> str:
@@ -259,16 +214,17 @@ class Section:
         """Whether the block takes its natural height or the remaining one."""
         return self._sizing
 
-    def revision(self) -> object:
-        """The widget's snapshot for the rows it renders, or ``None``.
+    @property
+    def generation(self) -> int | None:
+        """The widget's change counter for the rows it renders, or ``None``.
 
-        Forwards to a :class:`Revisioned` widget and answers ``None``
-        for anything else -- "no snapshot", the answer that leaves the row
-        cache off.
+        Answers the widget's ``generation`` when it has one and ``None`` for
+        a pure component -- "no counter", the answer that leaves the row
+        cache off.  Every :meth:`~motui.widgets.base.Widget.touch` (on the
+        widget or any descendant) moves the counter, so a mutator that
+        changes what it paints must touch.
         """
-        if self._cacheable:
-            return cast("Revisioned", self._widget).revision()
-        return None
+        return getattr(self._widget, "generation", None)
 
     def render(self, c: Constraints) -> list[Line]:
         """Forward rendering to the block's component: the *fresh-rows* door.
@@ -286,14 +242,14 @@ class Section:
         The one door for "a list of this block's rows the caller owns" --
         the door to reach for whenever the rows (or the list holding them)
         might be kept or changed -- and the cache it answers from is the
-        block's own, keyed ``(width, max_height, revision())``.  The caching
+        block's own, keyed ``(width, max_height, generation)``.  The caching
         rule is one line:
 
-        * a component that implements :class:`Revisioned` **and** answers a
-          snapshot is cached until the width or the snapshot moves;
-        * anything else -- no protocol, or a ``None`` snapshot ("memory
-          off") -- re-renders per call, because the block cannot see a
-          change it would have to invalidate on.
+        * a widget that carries a ``generation`` counter is cached until
+          the width, the height budget or the counter moves;
+        * anything else -- a pure component without the counter -- re-renders
+          per call, because the block cannot see a change it would have to
+          invalidate on.
 
         The returned list is a fresh copy the caller owns (the cache keeps
         its own); the :class:`Line` values inside it are immutable and may
@@ -349,30 +305,30 @@ class Section:
         the caller owns it).  Doors that hand the list out copy it
         (:meth:`rows`); doors that only read take it as is.
 
-        The cache key is ``(width, max_height, revision)``: a height budget
+        The cache key is ``(width, max_height, generation)``: a height budget
         changes the rows a component answers, so it must miss exactly like a
-        width change does.
+        width change does, and a generation move means the widget touched
+        something the rows read.
         """
         if not self._cacheable:
-            return self._render(c)  # no snapshot
-        revision = cast("Revisioned", self._widget).revision()
-        if revision is None:
-            # A component with the protocol switched its memory off (``None``
-            # is "no snapshot"): the block must not cache what it cannot
-            # invalidate.
+            return self._render(c)  # no generation counter
+        generation = self.generation
+        if generation is None:
+            # A widget-like component without a counter cannot be
+            # invalidated, so it is never cached.
             return self._render(c)
         if (
             self._rows_cache is not None
             and self._rows_width == c.width
             and self._rows_max_height == c.max_height
-            and self._rows_revision == revision
+            and self._rows_generation == generation
         ):
             return self._rows_cache
         rows = self._render(c)
         self._rows_cache = rows
         self._rows_width = c.width
         self._rows_max_height = c.max_height
-        self._rows_revision = revision
+        self._rows_generation = generation
         return rows
 
     def _render(self, c: Constraints) -> list[Line]:
