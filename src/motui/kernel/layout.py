@@ -19,12 +19,11 @@ that implements it.
 
 ``ScrollAxis``/``Scroll`` are the 2.0 immutable two-axis values.  The thumb
 formula they carry is copied verbatim from ``ScrollState`` (including the
-builtin ``round`` half-to-even rule).  The 1.x clamp remembers the previous
-extent so a tail-following window can pin to a bottom that moved; this wave
-does not carry that bookkeeping -- the ``sticky`` branch compares the offset
-against this value's own extent, which is the equivalent test the W0a work
-order asks for.  W2.6 restores the previous-extent behavior when
-``ScrollState`` is retired.
+builtin ``round`` half-to-even rule).  The value is stateless: the one piece
+of bookkeeping a tail-following window needs -- the extent the last clamp
+derived -- is passed back in by the surface that holds the value (see
+:meth:`ScrollAxis.clamp`), so ``sticky`` can pin to a bottom that moved
+without being stored on the axis.
 """
 
 from __future__ import annotations
@@ -98,16 +97,23 @@ class ScrollAxis:
         """The furthest legal window start: the content past the window."""
         return max(0, self.content - self.viewport)
 
-    def clamp(self) -> ScrollAxis:
-        """Re-derive the offset for this extent.
+    def clamp(self, previous_extent: int | None = None) -> ScrollAxis:
+        """Re-derive the offset for this extent, given the previous one.
 
-        A sticky axis whose offset stood at the extent pins to the bottom;
-        every other axis clamps into ``[0, max_offset]``.  With no previous
-        extent stored on the value, ``max_offset`` is the equivalent test
-        (see the module docstring), so the two branches coincide until W2.6.
+        ``previous_extent`` is the ``max_offset`` the caller's last clamp
+        derived (``None`` before the first), the bookkeeping the 1.x
+        mutable state held itself.  A sticky axis whose offset stood at
+        that previous bottom pins to the new bottom, so content that grew
+        under a tail-following window carries it along; a detached axis --
+        offset below the previous extent -- clamps in place.  Every
+        non-sticky axis always clamps into ``[0, max_offset]``.  Calling
+        without an argument is the same as ``previous_extent=None``: a
+        sticky axis pins to its own bottom, which is the right answer for
+        a value seen for the first time.
         """
         limit = self.max_offset
-        if self.sticky and self.offset >= limit:
+        at_previous_bottom = previous_extent is None or self.offset >= previous_extent
+        if self.sticky and at_previous_bottom:
             return replace(self, offset=limit)
         return replace(self, offset=max(0, min(self.offset, limit)))
 

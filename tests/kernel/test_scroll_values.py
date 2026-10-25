@@ -52,14 +52,37 @@ def test_clamp_matches_scroll_state_without_stickiness() -> None:
         assert value.offset == state.offset
 
 
-def test_sticky_follows_the_extent_it_can_see() -> None:
-    # At or past the bottom, sticky stays at the bottom.
+def test_sticky_without_a_previous_extent_pins_to_the_bottom() -> None:
+    # No previous extent means "never clamped yet": a sticky axis follows
+    # the tail on its first clamp, whatever offset it was born with.
+    assert ScrollAxis(offset=3, content=100, viewport=10, sticky=True).clamp().offset == 90
     assert ScrollAxis(offset=90, content=100, viewport=10, sticky=True).clamp().offset == 90
-    # Detached (offset above the top but below the bottom) stays put: the
-    # value has no previous extent to compare against in this wave.
-    assert ScrollAxis(offset=3, content=100, viewport=10, sticky=True).clamp().offset == 3
-    # Stickiness never changes the other axis' answer.
+    # Without stickiness the offset is left where it is.
     assert ScrollAxis(offset=3, content=100, viewport=10, sticky=False).clamp().offset == 3
+
+
+def test_sticky_previous_extent_follows_a_moving_bottom() -> None:
+    # Stood at the previous bottom (6): content growing carries the window
+    # to the new bottom; content shrinking pulls it back to the new bottom.
+    assert ScrollAxis(offset=6, content=12, viewport=4, sticky=True).clamp(6).offset == 8
+    assert ScrollAxis(offset=6, content=10, viewport=4, sticky=True).clamp(6).offset == 6
+    assert ScrollAxis(offset=6, content=8, viewport=4, sticky=True).clamp(6).offset == 4
+    # Past the previous bottom still counts as "at the bottom".
+    assert ScrollAxis(offset=9, content=12, viewport=4, sticky=True).clamp(6).offset == 8
+
+
+def test_sticky_detached_does_not_follow_growth() -> None:
+    # The user left the bottom before the content grew: the window stays.
+    assert ScrollAxis(offset=3, content=100, viewport=10, sticky=True).clamp(6).offset == 3
+    # A shrunken extent still clamps a detached offset into range.
+    assert ScrollAxis(offset=3, content=8, viewport=10, sticky=True).clamp(6).offset == 0
+
+
+def test_the_horizontal_axis_never_follows_a_previous_bottom() -> None:
+    # Non-sticky at the previous bottom: growth leaves the offset alone.
+    assert ScrollAxis(offset=6, content=100, viewport=10, sticky=False).clamp(6).offset == 6
+    to = ScrollAxis(offset=-4, content=100, viewport=10, sticky=False).clamp(6)
+    assert to.offset == 0
 
 
 def test_reveal_moves_up() -> None:
