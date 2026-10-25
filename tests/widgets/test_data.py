@@ -246,6 +246,33 @@ def test_cell_wrap_char_breaks_between_cells_not_words():
     assert char[3:5] == ["\u2502 aaa b \u2502", "\u2502 bb    \u2502"]
 
 
+def test_cell_wrap_overflow_keeps_the_natural_grid_width():
+    cell = "x" * 200
+    table = Table(["A"], [[cell]], cell_wrap=WrapMode.OVERFLOW)
+    surface = table.render(Constraints(width=80))
+    assert surface.width == 204  # one rule + two pads + 200 + one rule
+    assert surface.height == 5
+    # The header, the rules and the data row all share the natural width.
+    assert {row.width for row in surface} == {204}
+    assert surface[3].text == "\u2502 " + cell + " \u2502"
+    # A pinned header keeps the same natural width as the grid.
+    assert [line.width for line in table.header_lines(80)] == [204]
+    # The default modes still answer the constrained width.
+    for mode in (WrapMode.WORD, WrapMode.ELLIPSIS):
+        narrow = Table(["A"], [[cell]], cell_wrap=mode).render(Constraints(width=80))
+        assert narrow.width == 80
+        assert all(row.width <= 80 for row in narrow)
+
+
+def test_cell_wrap_overflow_honours_set_widths_pins():
+    table = Table(["A"], [["x" * 200]], cell_wrap=WrapMode.OVERFLOW)
+    table.set_widths([12])
+    surface = table.render(Constraints(width=80))
+    assert surface.width == 80  # 12 + two pads + two rules is still narrow
+    assert surface[3].text == "\u2502 xxxxxxxxxxxx \u2502"
+    assert not any("\u2026" in row.text for row in surface)
+
+
 def test_cell_wrap_is_part_of_the_revision():
     headers, rows = ["A"], [["x"]]
     assert Table(headers, rows).revision() != Table(

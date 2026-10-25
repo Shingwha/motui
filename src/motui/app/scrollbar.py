@@ -11,7 +11,9 @@ state a layout carries (:attr:`~motui.kernel.layout.ScreenLayout.offset` /
 
 :class:`Scrollbar` is the reference chrome (D2): one budgeted column at its
 pane's right edge whose thumb maps the pane's ``offset`` over its
-``total_rows``.  The column is the pane's, but the strip is the pane's
+``total_rows`` -- or, with ``axis=Axis.X``, one budgeted row on the pane's
+bottom edge mapping a ``ScrollPanel``'s horizontal offset over its
+``total_columns`` and ``viewport_width``.  The column/row is the pane's, but the strip is the pane's
 **window**: the bar is a ``body``-scoped chrome
 (:attr:`~motui.kernel.frame.Chrome.scope`), so it covers exactly the rows the
 viewport scrolls and the rows a pane pins -- a header, a composer, a status
@@ -49,13 +51,14 @@ from typing import TYPE_CHECKING, NamedTuple
 
 from ..kernel.events import Event, MouseEvent
 from ..kernel.frame import Chrome, Pane, Rect
+from ..kernel.geom import Axis
 from ..kernel.glyphs import GLYPHS, Glyphs
 from ..kernel.hit import EveryHandle
-from ..kernel.cell import Line
-from ..kernel.layout import ScrollState
+from ..kernel.cell import Line, Segment
+from ..kernel.layout import ScrollAxis, ScrollState, ScreenLayout
 from ..kernel.style import Style
 from ..kernel.theme import DEFAULT_THEME, Theme
-from ..kernel.layout import ScreenLayout
+from ..widgets.scroll import ScrollPanel
 
 if TYPE_CHECKING:
     from .driver import TUI
@@ -119,7 +122,16 @@ class Scrollbar:
     a pane id, or ``None`` (the default) for the frame's first pane, the
     one the driver's document lives in -- and an id the frame does not hold
     raises ``ValueError`` at
-    construction.  ``size`` is the column budget the bar asks its pane
+    construction.  ``axis`` picks the strip: ``Axis.Y`` (the default) is the
+    right-edge body bar over the pane's window, exactly as it always was;
+    ``Axis.X`` is a one-row bar on the pane's bottom edge whose offset,
+    content and viewport are the horizontal scroll state of ``target`` --
+    the :class:`~motui.widgets.scroll.ScrollPanel` it maps.  An explicit
+    ``target`` wins; otherwise the pane's document must hold exactly one
+    ``ScrollPanel``, and a missing or ambiguous one raises ``ValueError``.
+    The horizontal bar only paints this wave; its gestures arrive with W4.
+    ``size`` is the column (or row, for ``Axis.X``) budget the bar asks its
+    pane
     for; the kernel clips a budget that would squeeze the pane's viewport
     out, and a bar clipped to nothing routes nothing.  ``min_thumb`` is
     the shortest thumb the geometry may shave a long document down to.
@@ -171,6 +183,7 @@ class Scrollbar:
     """
 
     __slots__ = (
+        "_axis",
         "_chrome",
         "_grab",
         "_glyphs",
@@ -183,6 +196,7 @@ class Scrollbar:
         "_size",
         "_strip_cache",
         "_style",
+        "_target",
         "_theme",
         "_thumb",
         "_thumb_style",
@@ -195,6 +209,8 @@ class Scrollbar:
         tui: TUI,
         *,
         pane: str | None = None,
+        axis: Axis = Axis.Y,
+        target: ScrollPanel | None = None,
         size: int = 1,
         min_thumb: int = 1,
         style: Style | None = None,
@@ -205,7 +221,10 @@ class Scrollbar:
         theme: Theme | None = None,
         scroll_tick: float = 0.05,
     ) -> None:
+        if axis not in (Axis.X, Axis.Y):
+            raise ValueError(f"axis must be Axis.X or Axis.Y, got {axis!r}")
         self._tui = tui
+        self._axis = axis
         self._size = size
         self._min_thumb = min_thumb
         self._style = style
@@ -229,7 +248,18 @@ class Scrollbar:
             known = [held.id for held in frame.panes]
             raise ValueError(f"no pane named {pane!r}: the frame holds {known}")
         self._pane_id = host.id
-        self._chrome = Chrome("right", size, self._paint, scope="body")
+        if axis is Axis.X:
+            # The horizontal bar maps one ScrollPanel's x state over the
+            # pane's bottom row.  An explicit target wins; otherwise the
+            # pane's document must hold exactly one ScrollPanel, because
+            # with two there is no honest implicit answer.
+            self._target = target if target is not None else self._find_target(host)
+            self._chrome = Chrome(
+                "bottom", size, self._paint_horizontal, scope="pane"
+            )
+        else:
+            self._target = None
+            self._chrome = Chrome("right", size, self._paint, scope="body")
         host.add_chrome(self._chrome)
         self._held = False
         self._grab: tuple[int, int] | None = None  # (strip row, offset) of the grab
@@ -239,8 +269,32 @@ class Scrollbar:
         # of :meth:`_paint`, keyed by everything that paint reads.
         self._strip_cache: tuple[tuple, tuple[Line, ...]] | None = None
 
+    @staticmethod
+    def _find_target(pane: Pane) -> ScrollPanel:
+        """The pane document's unique ScrollPanel, for an implicit axis-X target.
+
+        Only the document's own sections are walked: a ScrollPanel buried
+        inside another component's render is not addressable by the bar.
+        ``ValueError`` when there is none -- or more than one, which has no
+        unique answer.
+        """
+        found = [
+            block.component
+            for block in pane.document.blocks()
+            if isinstance(block.component, ScrollPanel)
+        ]
+        if len(found) != 1:
+            raise ValueError(
+                "an axis-X Scrollbar needs an explicit target or exactly one "
+                f"ScrollPanel in pane {pane.id!r}'s document, found {len(found)}"
+            )
+        return found[0]
+
     def __repr__(self) -> str:
-        return f"Scrollbar(pane={self._pane_id!r}, size={self._size})"
+        return (
+            f"Scrollbar(pane={self._pane_id!r}, size={self._size}, "
+            f"axis={self._axis.value})"
+        )
 
     # -- the event contract --------------------------------------------------------
 
@@ -261,7 +315,14 @@ class Scrollbar:
         routes the wheel) and every report outside the strip.  A detached bar's strip is no chrome of the pane's any more,
         so nothing under the pointer resolves as the bar's and every event
         passes through.
+
+        The horizontal bar (``axis=Axis.X``) is display-only this wave: it
+        paints the target's x state and declines every event, so its pane's
+        keys, wheel and presses keep their normal route until the W4
+        gestures land.
         """
+        if self._axis is Axis.X:
+            return False  # display-only this wave: never swallow an event
         if not isinstance(event, MouseEvent):
             return False
         if event.button != "left":
@@ -367,6 +428,40 @@ class Scrollbar:
         )
         self._strip_cache = (key, strip)
         return list(strip)
+
+    def _paint_horizontal(self, layout: ScreenLayout, length: int) -> list[Line]:
+        """The bottom strip: one row of ``length`` cells, track and thumb.
+
+        ``length`` is the pane's width -- a top/bottom band's extent along
+        the other axis -- so the strip spans the pane exactly.  The geometry
+        is the target's own last render: its ``x_offset``,
+        ``total_columns`` and ``viewport_width`` go through the *same*
+        :meth:`~motui.kernel.layout.ScrollAxis.thumb` formula as the
+        vertical bar (there is one thumb formula in the toolkit).  With no
+        thumb -- the content fits the viewport, or the view has not rendered
+        yet -- every cell is the plain track, which reads as "nothing to
+        scroll here".  The cells are one row, so the kernel's band splice
+        paints them over the pane's bottom row.
+        """
+        target = self._target
+        if length <= 0 or target is None:
+            return []
+        track_style, thumb_style = self._resolve_track(), self._resolve_thumb()
+        axis = ScrollAxis(
+            offset=target.x_offset,
+            content=target.total_columns,
+            viewport=target.viewport_width,
+        )
+        span = axis.thumb(length, self._min_thumb)
+        first, last = (span[0], span[0] + span[1]) if span is not None else (0, 0)
+        cells = [
+            Segment(
+                self._thumb if first <= column < last else self._track,
+                thumb_style if first <= column < last else track_style,
+            )
+            for column in range(length)
+        ]
+        return [Line(cells)]
 
     def _resolve_track(self) -> Style:
         """The track's style: explicit ``style`` > theme > DEFAULT (charter)."""

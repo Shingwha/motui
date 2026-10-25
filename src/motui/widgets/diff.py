@@ -615,6 +615,12 @@ class Diff(Widget):
         The ``@@`` headers and the elision rows have no cell, and with
         ``numbers`` left at ``False`` the rows are the single-segment lines
         they have always been, byte for byte.
+
+        ``OVERFLOW`` hands the whole rows back: the surface width is the
+        widest row the built view carries (``c.width`` when every row fits),
+        so a container can scroll the columns ``ELLIPSIS`` would have cut --
+        the ``@@`` and elision rows included.  Every other mode stays
+        :meth:`Surface.clipped` at ``c.width``.
         """
         key = (c.width, self.wrap, self.theme, self.styles)
         if self._rendered_rows is None or self._rendered_key != key:
@@ -642,8 +648,13 @@ class Diff(Widget):
                 )
             self._rendered_rows = rendered
         rows = list(self._rendered_rows)
+        content_width = max(
+            [c.width, *(row.width for row in rows)], default=c.width
+        )
         if c.max_height is not None:
             rows = rows[: c.max_height]
+        if self.wrap is WrapMode.OVERFLOW:
+            return Surface.of(rows, content_width, pad=False)
         return Surface.clipped(rows, c.width)
 
     def _paint(self, text: str, style: Style, gutter: str | None, hunk_style: Style) -> Line:

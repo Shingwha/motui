@@ -625,8 +625,10 @@ class Markdown(Widget):
     """A Markdown document rendered as rows, rule-registry driven.
 
     ``text`` is a mutable attribute (streaming text assigns to it);
-    ``render(c)`` is a pure function of ``text`` and ``c.width`` and never
-    returns a row wider than ``width``.  The last answer lives in one
+    ``render(c)`` is a pure function of ``text`` and ``c.width`` and, in
+    every mode except ``code_wrap=OVERFLOW``, never returns a row wider than
+    ``width`` (the OVERFLOW document hands its natural width out for a
+    horizontal scroll container).  The last answer lives in one
     :class:`_StreamCache` entry keyed on the ``(text, width)`` pair, so a
     document re-rendered every frame (the viewport re-renders an open block
     on every layout) parses once, not once per frame -- the cache is
@@ -917,8 +919,13 @@ class Markdown(Widget):
         The cap never pads: the rows come out narrower than the painting
         width and a painter clears the tail past them.  A ``max_height``
         budget truncates the assembled rows after the hover transform (the
-        cache key stays the width, never the budget) and the answer is
-        :meth:`~motui.kernel.cell.Surface.clipped`, not padded.
+        cache key stays the width, never the budget).  With
+        ``code_wrap=OVERFLOW`` a row wider than the painting width hands the
+        whole document its natural width (``max(c.width, widest row)``) and
+        the answer is :meth:`~motui.kernel.cell.Surface.of` with
+        ``pad=False``; every other mode -- the default ``WORD`` included --
+        answers :meth:`~motui.kernel.cell.Surface.clipped` and keeps the old
+        bytes.
 
         Three passes sit **around** the cache, never inside it, and the first
         two are remembered with the ``(text, width)`` render they describe
@@ -950,8 +957,13 @@ class Markdown(Widget):
                 rows[index] = rows[index].merge_span(
                     start, end, self._ctx.theme.surfaces.hover
                 )
+        content_width = c.width
+        if self._ctx.code_wrap is WrapMode.OVERFLOW:
+            content_width = max([c.width, *(row.width for row in rows)])
         if c.max_height is not None:
             rows = rows[: c.max_height]
+        if content_width > c.width:
+            return Surface.of(rows, content_width, pad=False)
         return Surface.clipped(rows, c.width)
 
     def revision(self) -> object:

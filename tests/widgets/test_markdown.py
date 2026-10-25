@@ -179,6 +179,23 @@ def test_code_wrap_ellipsis_keeps_one_marked_code_row():
     assert rows[1].endswith("…") and len(rows[1]) == 40
 
 
+def test_code_wrap_overflow_hands_the_document_its_natural_width():
+    line = "value=" + "x" * 200
+    md = Markdown(f"```python\n{line}\n```", code_wrap=WrapMode.OVERFLOW)
+    surface = md.render(Constraints(width=40))
+    assert surface.width == len(line)
+    assert [row.text for row in surface][1] == line
+    assert all(row.width <= surface.width for row in surface)
+    # WORD still wraps inside 40; ELLIPSIS keeps one marked row.
+    word = Markdown(f"```python\n{line}\n```").render(Constraints(width=40))
+    assert word.width == 40 and all(row.width <= 40 for row in word)
+    ellipsis = Markdown(
+        f"```python\n{line}\n```", code_wrap=WrapMode.ELLIPSIS
+    ).render(Constraints(width=40))
+    assert ellipsis.width == 40
+    assert ellipsis[1].text.endswith("\u2026")
+
+
 def test_a_wrapped_code_line_keeps_the_highlighter_style():
     style = Style(fg="#abcdef")
     line = "value=" + "x" * 200
