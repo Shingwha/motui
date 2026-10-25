@@ -127,15 +127,15 @@ class List(Widget):
     module docstring): each member is a plain string rendered as content,
     and an empty string disables the glyph and its seat -- ``cursor=""``
     starts every label at column 0, ``more_up=""`` drops the arrow from the
-    counter row's seat.  The vocabulary is a row input and part of
-    :meth:`revision`.
+    counter row's seat.  The vocabulary is a row input: assign it to touch the
+    widget.
     Styles resolve from the theme at render time through the row-band
     contract: the resting surface is ``rows.base``, the cursor row wears
     ``rows.active`` (``rows.inactive`` while unfocused) and the pointer's
     row ``rows.hover`` (D3: one token per signal), the counter rows
     ``text.muted`` and a disabled row ``text.faint``.  ``styles=`` replaces
-    a whole role group; ``theme`` and ``styles`` are part of
-    :meth:`revision`, so a theme switch repaints a mounted list.
+    a whole role group; assigning ``theme`` or ``styles`` touches the
+    widget, so a theme switch repaints a mounted list.
     """
 
     __slots__ = (
@@ -238,6 +238,7 @@ class List(Widget):
     @index.setter
     def index(self, value: int) -> None:
         self._index = Cursor(len(self.items)).clamp(value)
+        self.touch()
 
     def _cursor(self) -> Cursor:
         """The cursor value over the current items and disabled set."""
@@ -261,7 +262,9 @@ class List(Widget):
             return False
         cursor = self._cursor()
         moved = cursor.move(delta)
-        self._index = cursor.index
+        if moved:
+            self._index = cursor.index
+            self.touch()
         return moved
 
     def home(self) -> bool:
@@ -271,7 +274,9 @@ class List(Widget):
             return False
         cursor = self._cursor()
         moved = cursor.home()
-        self._index = cursor.index
+        if moved:
+            self._index = cursor.index
+            self.touch()
         return moved
 
     def end(self) -> bool:
@@ -281,7 +286,9 @@ class List(Widget):
             return False
         cursor = self._cursor()
         moved = cursor.end()
-        self._index = cursor.index
+        if moved:
+            self._index = cursor.index
+            self.touch()
         return moved
 
     def _is_disabled(self, index: int) -> bool:
@@ -314,6 +321,7 @@ class List(Widget):
         if self._current() is None:
             return False
         self.marked.toggle(self._index)
+        self.touch()
         return True
 
     def on_click(self, pos: Pos) -> bool:
@@ -342,6 +350,7 @@ class List(Widget):
             return False
         self._index = entry
         self._pending = self.items[entry]
+        self.touch()
         return True
 
     def on_hover(self, pos: Pos | None) -> bool:
@@ -365,7 +374,9 @@ class List(Widget):
                 if isinstance(entry, int):
                     target = entry
         changed = target != self._hover_row
-        self._hover_row = target
+        if changed:
+            self._hover_row = target
+            self.touch()
         return changed
 
     # -- the keyboard -----------------------------------------------------------
@@ -443,7 +454,9 @@ class List(Widget):
         for index, item in enumerate(self.items):
             if not self._is_disabled(index) and item.lower().startswith(needle):
                 moved = index != self._index
-                self._index = index
+                if moved:
+                    self._index = index
+                    self.touch()
                 return moved
         return False
 
@@ -512,35 +525,6 @@ class List(Widget):
             segments.append(Segment(pair_seat(glyph, other), style))
         segments.append(Segment(self.items[index], style))
         return Line(tuple(segments))
-
-    def revision(self) -> object:
-        """The list's value snapshot: items, cursor, marks, glyphs and bands.
-
-        Every row input in one tuple -- the items (a copy of the host's
-        list, so an in-place edit moves it), the cursor, the row under the
-        pointer, the marks (their ascending snapshot: the mark column is a
-        row input while anything is marked), the four row glyphs, the
-        window size, the focus flag, the whole-control
-        disabled flag, the disabled item set, the theme and the ``styles``
-        overrides (the bands and text roles resolve from them at render
-        time).  A pending result is deliberately out (no row reads it), and
-        so is ``prefix_jump`` (it routes keys, it paints nothing).  The
-        snapshot is what lets a **sealed** list's cursor band -- or a flipped
-        mark -- finally reach the screen (D4).
-        """
-        return (
-            tuple(self.items),
-            self._index,
-            self._hover_row,
-            tuple(self.marked),
-            self.glyphs,
-            self.window,
-            self.focused,
-            self.disabled,
-            tuple(sorted(self.disabled_items)),
-            self.theme,
-            self.styles,
-        )
 
     def render(self, c: Constraints) -> Surface:
         """The window of item rows and the counter rows, fitted to the width.

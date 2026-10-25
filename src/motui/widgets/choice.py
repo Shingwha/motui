@@ -297,6 +297,7 @@ class Select(Widget):
     @index.setter
     def index(self, value: int) -> None:
         self._index = self._cursor().clamp(value)
+        self.touch()
 
     def _cursor(self) -> Cursor:
         """The cursor value of the rows the cursor walks.
@@ -325,6 +326,8 @@ class Select(Widget):
         cursor = self._cursor()
         moved = cursor.select(index)
         self._index = cursor.index
+        if moved:
+            self.touch()
         if moved and self.commit and not self._multi:
             self._commit()
         return moved
@@ -345,6 +348,7 @@ class Select(Widget):
         moved = cursor.home() if which == "home" else cursor.end()
         if moved:
             self._index = cursor.index
+            self.touch()
             if self.commit and not self._multi:
                 self._commit()
         return moved
@@ -368,6 +372,7 @@ class Select(Widget):
         if not moved:
             return False
         self._index = cursor.index
+        self.touch()
         if not (self.commit or self._multi):
             self._pending = None
         if self.commit and not self._multi:
@@ -394,6 +399,7 @@ class Select(Widget):
         if target is None or self._is_disabled(target):
             return False
         self._index = target
+        self.touch()
         if self.commit and not self._multi:
             self._commit()
         return True
@@ -413,7 +419,9 @@ class Select(Widget):
         """
         target = None if pos is None else self._option_at(pos.y)
         changed = target != self._hover_row
-        self._hover_row = target
+        if changed:
+            self._hover_row = target
+            self.touch()
         return changed
 
     @property
@@ -636,49 +644,6 @@ class Select(Widget):
             return ""
         return f"({self._index + 1}/{count})"
 
-    def _revision(self) -> object:
-        """The value snapshot of everything the list's rows are made of.
-
-        The rows themselves (``tuple(_rows())`` -- the subclass seam, so an
-        ``Autocomplete`` snapshots its current matches), the whole option
-        universe (the description column is measured over *it*, never the
-        window or the filter), the title, the cursor glyph and the mark pair, the
-        window cap and policy, the multi-selection state (the class switch and,
-        for a :class:`MultiSelect`, a copy of the marks), the cursor, the
-        pointer's mark, the focus/disabled flags, the disabled item set and
-        the theme/``Styles`` the render resolves -- all plain values, so the
-        tuple is a copy by construction.  A pending result is deliberately
-        out: no row reads it.
-        """
-        return (
-            tuple(self._rows()),
-            tuple(self.options),
-            self.title,
-            self.glyphs.cursor,
-            (self.glyphs.check_on, self.glyphs.check_off),
-            self.max_rows,
-            self.window,
-            self._multi,
-            (tuple(self.marked) if self._multi else ()),
-            self._index,
-            self._hover_row,
-            self.focused,
-            self.disabled,
-            tuple(sorted(self.disabled_items)),
-            self.theme,
-            self.styles,
-        )
-
-    def revision(self) -> object:
-        """The :class:`~motui.kernel.document.Revisioned` snapshot.
-
-        The protocol's door to :meth:`_revision`: a block holding this list
-        keys its own row cache on the same value, so a moved cursor, a
-        re-filter, a flipped mark or a hover invalidates the block's copy --
-        and a **sealed** list's cursor band finally reaches the screen (D4).
-        """
-        return self._revision()
-
     def render(self, c: Constraints) -> Surface:
         """The window's rows, the title and the counter, each on its band.
 
@@ -809,6 +774,7 @@ class MultiSelect(Select):
             return False
         self.marked.toggle(self._index)
         self._sync_result()
+        self.touch()
         return True
 
     def _sync_result(self) -> None:
@@ -958,10 +924,6 @@ class RadioGroup(_FormGroup, Select):
             (Segment(mark, mark_style), Segment(option.label, label_style))
         )
 
-    def _revision(self) -> object:
-        """The base's snapshot (the glyph vocabulary included)."""
-        return super()._revision()
-
     def __repr__(self) -> str:
         return f"RadioGroup({self.labels!r}, index={self._index}, focused={self.focused})"
 
@@ -1041,6 +1003,7 @@ class CheckboxGroup(_FormGroup, MultiSelect):
         self._index = target
         self.marked.toggle(self._index)
         self._sync_result()
+        self.touch()
         return True
 
     def _row(

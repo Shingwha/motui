@@ -45,9 +45,9 @@ through the same thumb geometry, a press on the track pages toward it, and
 the release ends the drag.  ``ScrollPanel`` is a
 :class:`~motui.kernel.document.Container`: a visible cell maps to the child
 cell ``(offset + row, x_offset + col)``, and the bars' column and row
-belong to the view.  ``revision`` folds the child's own snapshot (identity
-when it has none) with the knobs and both offsets, so a sealed block around
-a scroll view still repaints when the child changes in place.
+belong to the view.  the widget's ``generation`` covers both offsets and the knobs,
+and a widget child touches its ancestors when it changes, so a sealed
+block around a scroll view still repaints when the child changes in place.
 """
 
 from __future__ import annotations
@@ -260,6 +260,7 @@ class ScrollPanel(Widget):
             return False
         state.offset = target
         state.stick_to_bottom = False
+        self.touch()
         return True
 
     def scroll_up(self, n: int = 1) -> bool:
@@ -290,6 +291,7 @@ class ScrollPanel(Widget):
         if target == self._x.offset:
             return False
         self._x = replace(self._x, offset=target)
+        self.touch()
         return True
 
     def scroll_x(self, delta: int) -> bool:
@@ -319,6 +321,8 @@ class ScrollPanel(Widget):
         """
         moved = self._state.reveal(row)
         self._state.stick_to_bottom = False
+        if moved:
+            self.touch()
         return moved
 
     # -- events -----------------------------------------------------------------
@@ -472,36 +476,6 @@ class ScrollPanel(Widget):
         return self.child, local_row, local_col
 
     # -- rendering --------------------------------------------------------------
-
-    def revision(self) -> object:
-        """The row cache's snapshot: child identity/snapshot plus the knobs.
-
-        A :class:`~motui.kernel.document.Revisioned` child contributes its own
-        snapshot -- the value its block would key on -- so an in-place edit
-        moves this key before any render.  A child without one (or with its
-        memory switched off by a ``None`` snapshot) contributes its
-        identity; like any non-revisioned component it is re-rendered per
-        layout.  Both offsets, ``height``, ``bar``, ``axis`` and the
-        ``theme``/``styles`` chrome sources are the rest of the view's own
-        mutable input.
-        """
-        child = self.child
-        snapshot: object = None
-        revision = getattr(child, "revision", None)
-        if revision is not None:
-            snapshot = revision()
-        child_key: object = snapshot if snapshot is not None else id(child)
-        return (
-            child_key,
-            self._state.offset,
-            self._x.offset,
-            self.height,
-            self.bar,
-            self.glyphs,
-            self.theme,
-            self.styles,
-            self.axis,
-        )
 
     def render(self, c: Constraints) -> Surface:
         """Render the child at the inner width and paint the visible window.

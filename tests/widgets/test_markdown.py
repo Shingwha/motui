@@ -213,16 +213,19 @@ def test_the_fence_delimiters_stay_single_row_in_every_code_wrap():
     assert rows[0].endswith("…") and len(rows[0]) == 20
 
 
-def test_code_wrap_is_part_of_the_revision_and_the_render_answer():
+def test_code_wrap_is_part_of_the_generation_and_the_render_answer():
     text = "```\n" + "x" * 80 + "\n```"
     assert Markdown(text).code_wrap is WrapMode.WORD
-    assert Markdown(text).revision() != Markdown(text, code_wrap=WrapMode.CLIP).revision()
     md = Markdown(text)
     assert len(texts(md, 20)) > 3
+    before = md.generation
     md.code_wrap = WrapMode.ELLIPSIS
     assert md.code_wrap is WrapMode.ELLIPSIS
+    assert md.generation > before
     assert len(texts(md, 20)) == 3
-    assert md.revision() == Markdown(text, code_wrap=WrapMode.ELLIPSIS).revision()
+    assert list(md.render(Constraints(width=20))) == list(
+        Markdown(text, code_wrap=WrapMode.ELLIPSIS).render(Constraints(width=20))
+    )
 
 
 def test_a_custom_block_rule_interrupts_a_paragraph():

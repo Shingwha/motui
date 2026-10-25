@@ -96,9 +96,6 @@ class Echo:
             return Surface(width=c.width, rows=())
         return self._line.render(c)
 
-    def revision(self) -> object:
-        return self._line.text
-
     def __repr__(self) -> str:
         return f"Echo({self.label!r}, text={self._line.text!r})"
 

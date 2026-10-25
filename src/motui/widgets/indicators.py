@@ -90,25 +90,7 @@ class ProgressBar(Widget):
     @fraction.setter
     def fraction(self, value: float) -> None:
         self._fraction = min(1.0, max(0.0, value))
-
-    def revision(self) -> object:
-        """The row cache's snapshot: every input ``render`` reads.
-
-        The fraction (the filled share), the label prefix, the pinned track
-        width (``None``: follow the painting width), the glyphs and the
-        theme/styles pair the two bands resolve from.  This component has no
-        hover or focus state, so those are absent by design -- there is
-        nothing else a row can depend on.  The snapshot is plain values, far
-        cheaper than a render.
-        """
-        return (
-            self._fraction,
-            self.label,
-            self.width_chars,
-            self.glyphs,
-            self.theme,
-            self.styles,
-        )
+        self.touch()
 
     def render(self, c: Constraints) -> Surface:
         """The label-plus-track row, under the render constraints.
@@ -240,6 +222,7 @@ class Slider(Widget):
     def minimum(self, value: int) -> None:
         self._minimum = value
         self._value = self._align(self._value)
+        self.touch()
 
     @property
     def maximum(self) -> int:
@@ -250,6 +233,7 @@ class Slider(Widget):
     def maximum(self, value: int) -> None:
         self._maximum = value
         self._value = self._align(self._value)
+        self.touch()
 
     @property
     def step(self) -> int:
@@ -260,6 +244,7 @@ class Slider(Widget):
     def step(self, value: int) -> None:
         self._step = value
         self._value = self._align(self._value)
+        self.touch()
 
     def _align(self, value: int) -> int:
         """Clamp ``value`` into range and snap it onto the ``step`` grid."""
@@ -282,6 +267,7 @@ class Slider(Widget):
     @value.setter
     def value(self, value: int) -> None:
         self._value = self._align(value)
+        self.touch()
 
     def move(self, delta: int) -> bool:
         """Step the value ``delta`` whole ``step``s, clamped; ``True`` when it moved.
@@ -297,6 +283,7 @@ class Slider(Widget):
         if moved:
             self._value = target
             self._pending = None
+            self.touch()
         return moved
 
     def on_key(self, e: KeyEvent) -> bool:
@@ -358,6 +345,7 @@ class Slider(Widget):
                 self.minimum + fraction * (self.maximum - self.minimum)
             )
         self._pending = None
+        self.touch()
         return True
 
     def take(self) -> int | None:
@@ -378,7 +366,9 @@ class Slider(Widget):
         """
         target = pos is not None and pos.y == 0
         changed = target != self._marked
-        self._marked = target
+        if changed:
+            self._marked = target
+            self.touch()
         return changed
 
     # -- the track -------------------------------------------------------------
@@ -398,31 +388,6 @@ class Slider(Widget):
             return 0
         fraction = (self._value - self.minimum) / span
         return min(track, max(0, int(fraction * track + 0.5)))
-
-    def revision(self) -> object:
-        """The row cache's snapshot: every input ``render`` reads.
-
-        The value (the suffix and the filled share), the three range fields
-        (the span ``_filled`` divides by), the row mark (``_marked``), the
-        ``focused``/``disabled`` flags, the glyphs and the theme/styles pair
-        the bands resolve from.  The block-level ``hover`` flag paints
-        nothing -- the row emphasis lives in ``_marked`` -- and the pending
-        result / ``_last_width`` are not row inputs, so they are
-        deliberately out.  The snapshot is plain values, far cheaper than a
-        render.
-        """
-        return (
-            self._value,
-            self._minimum,
-            self._maximum,
-            self._step,
-            self._marked,
-            self.focused,
-            self.disabled,
-            self.glyphs,
-            self.theme,
-            self.styles,
-        )
 
     def render(self, c: Constraints) -> Surface:
         """The track row, under the render constraints.
@@ -492,9 +457,9 @@ class Spinner(Widget):
     so ``tui.add(Spinner(...))`` paints it.  ``advance`` steps the cycle;
     the pump's clock decides when.  The frame and text carry
     ``content.accent``, resolved at render time from ``styles`` (when given)
-    or the theme, and :meth:`revision` snapshots the
-    frame, the text, the theme and the styles, so a block's row cache
-    follows an advanced frame or a retheme.
+    or the theme.  :meth:`advance` touches the widget, so a block's row
+    cache follows an advanced frame; assigning ``text`` or ``theme`` touches
+    through :class:`~motui.widgets.base.Widget`.
     """
 
     __slots__ = ("_frame", "frames", "glyphs", "text")
@@ -525,10 +490,7 @@ class Spinner(Widget):
         """Step to the next frame, wrapping around at the end of the cycle."""
         if self.frames:
             self._frame = (self._frame + 1) % len(self.frames)
-
-    def revision(self) -> object:
-        """The row cache's snapshot: the frame, the text, theme and styles."""
-        return (self.frame, self.text, self.theme, self.styles)
+            self.touch()
 
     def render(self, c: Constraints) -> Surface:
         """One fitted row: the current frame followed by the label.

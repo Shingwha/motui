@@ -81,7 +81,6 @@ class Canvas(Widget):
         "_row_counts",
         "_row_rep",
         "_segments",
-        "_serial",
         "_spares",
         "_surface",
         "_width",
@@ -140,8 +139,6 @@ class Canvas(Widget):
         self._dirty: set[int] = set(range(self._height))
         self._lines: list[Line | None] = [None] * self._height
         self._surface: Surface | None = None
-        #: Monotone mutation count for the Section row cache.
-        self._serial = 0
 
     # -- geometry ----------------------------------------------------------
 
@@ -211,7 +208,7 @@ class Canvas(Widget):
         self._lines = [None] * height
         self._dirty = set(range(height))
         self._surface = None
-        self._serial += 1
+        self.touch()
 
     def _ensure_grid(self) -> None:
         if len(self._cells) != self._height or (
@@ -234,7 +231,7 @@ class Canvas(Widget):
         ]
         self._dirty = set(range(self._height))
         self._surface = None
-        self._serial += 1
+        self.touch()
 
     def put(self, x: int, y: int, char: str, style: Style = NONE) -> None:
         """Write one character (or cluster) at ``(x, y)``.
@@ -445,10 +442,6 @@ class Canvas(Widget):
             return image
         return Surface.clipped(image.rows[:height], c.width)
 
-    def revision(self) -> object:
-        """The row cache's snapshot: the mutation count."""
-        return self._serial
-
     # -- internals ---------------------------------------------------------
 
     def _write(self, x: int, y: int, char: str, width: int, style: Style) -> None:
@@ -516,7 +509,7 @@ class Canvas(Widget):
     def _touch(self, row: int) -> None:
         self._dirty.add(row)
         self._surface = None
-        self._serial += 1
+        self.touch()
 
     def _mark_half(self, x: int, y: int, top: bool, style: Style) -> None:
         if not 0 <= x < self._width or not 0 <= y < self._height:
@@ -617,10 +610,6 @@ class Sparkline:
         self.marker = marker
         self.style = style
         self.glyphs = glyphs
-
-    def revision(self) -> object:
-        """The row cache's snapshot: the values and the drawing knobs."""
-        return (tuple(self.values), self.marker, self.style, self.glyphs)
 
     def render(self, c: Constraints) -> Surface:
         """Plot the values into a canvas at the constraint's size."""

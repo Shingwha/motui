@@ -65,8 +65,10 @@ class LabelStrip(Widget):
 
     The class is a skeleton, not a component: subclasses provide
     :attr:`_entries` (their label sequence) and :meth:`_layout` (the fitted
-    row plus its span table), keep their ``revision()``, and set the storage
-    documented below.  Styles are read through :meth:`Widget.group` at
+    row plus its span table), keep their own state, and set the storage
+    documented below.  Every state change touches the widget, so a block's
+    row cache follows a moved selection or a hovered label.  Styles are read
+    through :meth:`Widget.group` at
     layout time and stored nowhere; the base supplies ``theme``, ``styles``,
     ``focused`` and ``hover``.  The shared half is the cursor, the
     hit geometry of the last render -- the span table
@@ -142,6 +144,8 @@ class LabelStrip(Widget):
         cursor = self._cursor()
         changed = cursor.select(index)
         self._index = cursor.index
+        if changed:
+            self.touch()
         return changed
 
     def move(self, delta: int) -> bool:
@@ -160,8 +164,11 @@ class LabelStrip(Widget):
         # A stale cursor (a host replaced the entries in place) is clamped
         # like any other request, and the clamping itself is a move.
         cursor.index = cursor.clamp(cursor.index)
+        moved = cursor.index != before
         self._index = cursor.index
-        return cursor.index != before
+        if moved:
+            self.touch()
+        return moved
 
     def on_click(self, pos: Pos) -> bool:
         """Select the label cell ``(pos.y, pos.x)`` covers; True on a hit.
@@ -195,7 +202,9 @@ class LabelStrip(Widget):
         """
         target = None if pos is None else self._hit(pos.y, pos.x)
         changed = target != self._hover_index
-        self._hover_index = target
+        if changed:
+            self._hover_index = target
+            self.touch()
         return changed
 
     def _hit(self, row: int, col: int) -> int | None:

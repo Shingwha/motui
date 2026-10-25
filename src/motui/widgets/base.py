@@ -58,9 +58,9 @@ class Widget:
 
     ``theme is None`` means "inherit the App theme"; ``styles`` overrides
     whole role groups and leaves every ``None`` field to the theme.  Both
-    stay readable and writable so the runtime can retheme a mounted widget,
-    and :meth:`revision` implementations must include them in their value
-    snapshot so a block's row cache sees the change.
+    stay readable and writable so the runtime can retheme a mounted widget;
+    assigning either is a public attribute write, so it touches the
+    generation a block's row cache keys on.
 
     **The tree.**  ``parent`` points at the widget that owns this one and
     ``children`` lists the widgets this one owns.  The pointers are a plain
@@ -280,10 +280,6 @@ class Widget:
 
     def take(self) -> object | None:
         """Read the one-shot result; a widget without one answers ``None``."""
-        return None
-
-    def revision(self) -> object | None:
-        """The row cache's change token; ``None`` disables caching."""
         return None
 
 

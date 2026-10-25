@@ -604,12 +604,15 @@ def test_the_editor_default_wrap_still_wraps_within_the_width():
     assert all(row.width <= 80 for row in surface)
 
 
-def test_editor_wrap_is_part_of_the_revision():
-    assert Editor("abc").revision() != Editor("abc", wrap=WrapMode.CLIP).revision()
-    editor = Editor("abc", wrap=WrapMode.WORD)
+def test_editor_wrap_is_part_of_the_generation_and_touches():
+    editor = Editor("x" * 40, wrap=WrapMode.WORD)
+    editor.render(Constraints(width=10))
+    start = editor.generation
     editor.wrap = WrapMode.CLIP
     assert editor.wrap is WrapMode.CLIP
-    assert editor.revision() == Editor("abc", wrap=WrapMode.CLIP).revision()
+    assert editor.generation > start
+    # The row memory answers afresh after the touch (the same grid here).
+    assert len(editor.render(Constraints(width=10))) == 4
 
 
 def test_input_defaults_to_the_overflow_single_line_guard():
@@ -704,7 +707,11 @@ def test_an_input_can_opt_back_into_the_shared_wrap_guard():
     field.wrap = WrapMode.ELLIPSIS
     assert field.wrap is WrapMode.ELLIPSIS
     assert field.render(Constraints(width=1))[0].text == "\u2026"
-    assert Input("abc").revision() != Input("abc", wrap=WrapMode.CLIP).revision()
+    field = Input("abc")
+    before = field.generation
+    field.wrap = WrapMode.CLIP
+    assert field.wrap is WrapMode.CLIP
+    assert field.generation > before
 
 
 # -- the 2.0 typed hooks ------------------------------------------------------

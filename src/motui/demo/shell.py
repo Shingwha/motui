@@ -101,9 +101,6 @@ class Header(Component):
             return self.menu, row, col
         return None
 
-    def revision(self) -> object:
-        return (self.menu.revision(), self.label, self.theme)
-
     def __repr__(self) -> str:
         return f"Header(menu={self.menu!r}, label={self.label!r})"
 

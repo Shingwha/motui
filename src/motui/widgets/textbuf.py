@@ -68,6 +68,8 @@ from __future__ import annotations
 from collections import deque
 from typing import NamedTuple
 
+from collections.abc import Callable
+
 from ..kernel.events import Event, KeyEvent, PasteEvent
 from ..kernel.cell import Segment
 from ..kernel.style import Style
@@ -122,10 +124,10 @@ class TextBuffer:
     state -- the host drives them through :meth:`undo`/:meth:`redo`, which
     the default keymaps bind to ``c-z``/``c-y``.
 
-    :attr:`version` is the buffer's revision token: a monotonic counter a
-    shell keys its row memory on (the shells' ``revision()`` includes it),
-    so any write -- a keystroke, a paste, an undo -- invalidates whatever a
-    cursor-only move must not.  The visual geometry's wrap memory is
+    :attr:`version` is the buffer's content counter: a monotonic count a
+    shell can key its own memory on, and the write hook ``on_change`` fires
+    on it, so any write -- a keystroke, a paste, an undo -- invalidates
+    whatever a cursor-only move must not.  The visual geometry's wrap memory is
     private (see the module docstring); both follow the same rule: they are
     invalidated by what they actually describe.
     """
@@ -147,6 +149,7 @@ class TextBuffer:
         "keymap",
         "last_width",
         "lines",
+        "on_change",
         "read_only",
     )
 
@@ -165,6 +168,10 @@ class TextBuffer:
         #: buffer.  Direct editing methods are programmatic writes and stay
         #: available (see :meth:`handle`).
         self.read_only = read_only
+        #: Called after every content change (the version moved).  A shell
+        #: wires this to its own ``touch`` so a row cache outside the
+        #: buffer follows an edit; cursor-only moves do not fire it.
+        self.on_change: Callable[[], None] | None = None
         self._row = 0
         self._col = 0
         self.last_width = DEFAULT_WIDTH
@@ -179,7 +186,7 @@ class TextBuffer:
         # True while the last recorded change was a single-character insert
         # and nothing happened since: the next one merges into its step.
         self._chain = False
-        # The revision token: ``0`` at construction, +1 per content change
+        # The content counter: ``0`` at construction, +1 per content change
         # (never on a cursor move or a selection change -- the cursor is not
         # content).  The shells' row memory keys on it, and so does this
         # module's own assembled-geometry memory.
@@ -246,9 +253,8 @@ class TextBuffer:
         Bumped by every method that changes ``lines`` -- ``insert``,
         ``backspace``, ``delete``, ``newline``, ``clear``, undo/redo, and
         the selection delete that runs before a write -- and by nothing
-        else: a move or a selection change is not content, so a shell's
-        ``revision()`` (which carries the cursor separately) can tell the
-        two apart.  The counter never wraps, resets or renumbers; only
+        else: a move or a selection change is not content, so the shell can
+        tell the two apart (it touches in its cursor/selection methods).  The counter never wraps, resets or renumbers; only
         equality between two reads is promised.
         """
         return self._version
@@ -595,6 +601,8 @@ class TextBuffer:
         self._version += 1
         if structural:
             self._wrap.clear()
+        if self.on_change is not None:
+            self.on_change()
 
     def _record(self) -> None:
         """Snapshot the state before a write point; drop the redo tail.

@@ -308,6 +308,8 @@ class NavList(Widget):
         cursor = self._cursor()
         changed = cursor.select(index)
         self._index = cursor.index
+        if changed:
+            self.touch()
         return changed
 
     def move(self, delta: int) -> bool:
@@ -326,8 +328,11 @@ class NavList(Widget):
         # A stale cursor (a host replaced the items in place) is clamped
         # like any other request, and the clamping itself is a move.
         cursor.index = cursor.clamp(cursor.index)
+        moved = cursor.index != before
         self._index = cursor.index
-        return cursor.index != before
+        if moved:
+            self.touch()
+        return moved
 
     @property
     def bar_space(self) -> str:
@@ -368,38 +373,10 @@ class NavList(Widget):
         """
         target = None if pos is None else self._item_at(pos.y)
         changed = target != self._hover_index
-        self._hover_index = target
+        if changed:
+            self._hover_index = target
+            self.touch()
         return changed
-
-    def revision(self) -> object:
-        """The row cache's snapshot: every input the list's rows read.
-
-        In order: the items (a tuple copy, so an in-place edit of the host's
-        list moves it), the latched group rows, the index, the disabled item
-        set, the whole-control disabled flag, the item under the pointer,
-        ``focused``, the bar and the derived gutter string, the theme and
-        the ``styles`` overrides (the label, bar and band roles resolve from
-        them at render time).  The block-level ``hover`` flag
-        paints nothing -- the row emphasis lives in ``_hover_index`` -- so it
-        is deliberately out.
-
-        The snapshot is plain immutable values and costs far less than a
-        render; it is what lets a **sealed** rail's hover, focus flip or
-        selection reach the screen (D4).
-        """
-        return (
-            tuple(self.items),
-            self._groups,
-            self._index,
-            self._disabled_items,
-            self.disabled,
-            self._hover_index,
-            self.focused,
-            self.glyphs,
-            self._bar_space,
-            self.theme,
-            self.styles,
-        )
 
     def render(self, c: Constraints) -> Surface:
         """One row per item **and group row** (``[]`` for an empty list), each on its band.

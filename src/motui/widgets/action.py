@@ -148,26 +148,6 @@ class Button(Widget):
         self._pending = None
         return value
 
-    def revision(self) -> object:
-        """The row's value snapshot: label, flags, state, theme and styles.
-
-        One row, plain values -- cheaper than any render could be.  The
-        snapshot exists so a cached block's button stays live where it
-        always was: the row cache on the block keys on this value, so a
-        ``hover = True`` (or ``focused``, a relabelled ``label``, a toggled
-        ``disabled``) misses and the band reaches the screen.  ``theme`` and
-        ``styles`` are row inputs now that the groups resolve at render
-        time, so they are part of the snapshot too.
-        """
-        return (
-            self.label,
-            self.hover,
-            self.focused,
-            self.disabled,
-            self.theme,
-            self.styles,
-        )
-
     def render(self, c: Constraints) -> Surface:
         """The one fitted row, under the render constraints.
 
@@ -282,28 +262,6 @@ class Checkbox(Widget):
         self._pending = None
         return value
 
-    def revision(self) -> object:
-        """The row's value snapshot: label, state, flags, theme and styles.
-
-        The checkbox's twin of :meth:`Button.revision`: the mark
-        (``checked`` and ``mark_pair``), the label, the hover/focus/disabled
-        flags, and the ``theme`` / ``styles`` the groups resolve against are
-        every row input, so a cached block's toggle, hover or retheme still
-        reaches the screen through the block's ``(width, revision)`` cache
-        key.  The pending result is deliberately out: no row reads it.
-        """
-        return (
-            self.label,
-            self.checked,
-            self.glyphs.check_on,
-            self.glyphs.check_off,
-            self.hover,
-            self.focused,
-            self.disabled,
-            self.theme,
-            self.styles,
-        )
-
     def render(self, c: Constraints) -> Surface:
         """The mark-plus-label row, under the render constraints.
 
@@ -416,24 +374,6 @@ class Link(Widget):
         value = self._pending
         self._pending = None
         return value
-
-    def revision(self) -> object:
-        """The row's value snapshot: text, flags, theme and styles.
-
-        What the row is made of, as plain values -- the block's
-        ``(width, revision)`` cache key consults it, so a hover (or a
-        streamed ``text =`` assignment) on a cached block's link still
-        repaints.  ``theme`` and ``styles`` are row inputs now that the
-        groups resolve at render time.
-        """
-        return (
-            self.text,
-            self.hover,
-            self.focused,
-            self.disabled,
-            self.theme,
-            self.styles,
-        )
 
     def render(self, c: Constraints) -> Surface:
         """The fitted row, under the render constraints.

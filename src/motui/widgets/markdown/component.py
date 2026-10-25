@@ -640,12 +640,11 @@ class Markdown(Widget):
     per-frame cost that does not grow with what already landed.  The stamped
     rows and the span index are remembered with the render they describe, so
     a hit frame rebuilds neither (:func:`_stamp_tasks` / :func:`_span_index`).
-    ``revision()`` publishes every render input -- text, ``max_width``,
-    ``glyphs``, the gap/divider cap and the hovered span -- which is
-    what a :class:`~motui.kernel.document.Revisioned` host keys its row cache
-    on; a sealed block's content is frozen but its snapshot still moves, so
-    a max-width change, a task-mark change or a hover on a sealed document
-    reaches the screen.
+    Every mutable input touches the widget -- ``text``/``max_width`` and the
+    rest through ``Widget.__setattr__``, ``code_wrap`` and ``hover_at``
+    explicitly -- so a block's
+    row cache follows a max-width change, a task-mark change or a hover on
+    a sealed document.
     ``block_rules`` / ``inline_rules`` replace the built-in registries
     (:data:`BLOCK_RULES` / :data:`INLINE_RULES` are immutable tuples; the
     defaults are copied per component, and the block registry must end with
@@ -670,8 +669,8 @@ class Markdown(Widget):
     default, so a long code line wraps instead of losing its tail;
     ``ELLIPSIS`` / ``CLIP`` keep one row, ``OVERFLOW`` leaves the natural
     width to the container).  It is a plain mutable attribute: a write
-    replaces the context's mode and drops the stream cache, and the mode is
-    part of :meth:`revision` so a sealed document repaints too.
+    replaces the context's mode and drops the stream cache, and the setter touches the
+    widget so a sealed document repaints too.
     ``max_width`` caps the document's **own** wrap width (``None`` by
     default, no cap) -- the sibling of ``divider_max_width``, and Textual's
     ``max-width``: the rows are wrapped at ``min(width, max_width)`` and come
@@ -834,7 +833,7 @@ class Markdown(Widget):
         fully readable; ``ELLIPSIS`` / ``CLIP`` keep one row (marked / hard
         cut) and ``OVERFLOW`` hands the natural-width row to the container.
         A write replaces the context's mode, drops the stream cache and the
-        stamp key, and bumps :meth:`revision`; the fence delimiter lines are
+        stamp key, and touches the widget; the fence delimiter lines are
         single-row labels and stay ellipsized in every mode.
         """
         return self._ctx.code_wrap
@@ -846,6 +845,7 @@ class Markdown(Widget):
         self._ctx = replace(self._ctx, code_wrap=value)
         self._cache = _StreamCache()
         self._stamp_key = None
+        self.touch()
 
     def _effective_theme(self) -> Theme:
         """The theme the rules see: every non-``None`` ``styles`` group merged.
@@ -970,37 +970,6 @@ class Markdown(Widget):
             return Surface.of(rows, content_width, pad=False)
         return Surface.clipped(rows, c.width)
 
-    def revision(self) -> object:
-        """The :class:`~motui.kernel.document.Revisioned` snapshot for the rows.
-
-        Every mutable input ``render(c)`` reads besides the width: the
-        text, ``max_width`` (the P0 this wave fixed -- the clamp runs before
-        the cache, so a moved cap must move the snapshot), the ``glyphs``
-        vocabulary the task boxes, bullets and quote bar are drawn from, the
-        gap and the divider cap, the theme/styles pair the effective theme
-        (and so every rule's bands) derives from,
-        and the span under the pointer (the hovered row is what a hovered
-        render answers).  The registries and the highlighter
-        are fixed at construction; the row memories are keyed on this
-        snapshot already, so two calls answering the same snapshot cannot
-        answer different rows at one width -- the promise a
-        :meth:`~motui.kernel.document.Section.rows` cache relies on.  It is also
-        what makes a **sealed** block's hover reach the screen: sealing
-        freezes the content, not the snapshot.  The pending result is out:
-        no row reads it.
-        """
-        return (
-            self.text,
-            self.max_width,
-            self._ctx.glyphs,
-            self._ctx.divider_max_width,
-            self._ctx.code_wrap,
-            self._gap,
-            self._hover_span,
-            self.theme,
-            self.styles,
-        )
-
     def fences(self) -> list[tuple[str, str]]:
         """The document's top-level fences as ``(lang, code)`` pairs.
 
@@ -1041,7 +1010,9 @@ class Markdown(Widget):
         hit = None if pos is None else self._hit(pos.y, pos.x)
         span = None if hit is None else (pos.y, hit[1], hit[2])
         changed = span != self._hover_span
-        self._hover_span = span
+        if changed:
+            self._hover_span = span
+            self.touch()
         return changed
 
     def on_click(self, pos: Pos) -> bool:

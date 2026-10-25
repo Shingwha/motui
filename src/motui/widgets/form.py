@@ -63,15 +63,6 @@ class Field:
     error: str | None = None
 
 
-def _child_key(component: Component) -> object:
-    """A field component's revision when it has one, else its identity."""
-    revision = getattr(component, "revision", None)
-    if revision is not None:
-        snapshot = revision()
-        if snapshot is not None:
-            return ("revision", snapshot)
-    return id(component)
-
 
 class Form(Widget):
     """A vertical stack of fields with focus, validation and a submit result.
@@ -163,6 +154,7 @@ class Form(Widget):
             return False
         self._index = position
         self._sync_focus()
+        self.touch()
         return True
 
     def move(self, delta: int) -> bool:
@@ -174,6 +166,7 @@ class Form(Widget):
             return False
         self._index = target
         self._sync_focus()
+        self.touch()
         return True
 
     # -- events -----------------------------------------------------------------
@@ -281,6 +274,7 @@ class Form(Widget):
             field.error = error
             if error is not None:
                 failed = True
+        self.touch()  # the errors are row inputs; the fields are not widgets
         if failed:
             return False
         self._pending = values
@@ -381,26 +375,6 @@ class Form(Widget):
         if hook is not None:
             hook(Pos(y=local, x=pos.x))
         return True
-
-    def revision(self) -> object:
-        """The row cache's snapshot: field identity, label, error and child state.
-
-        Each field contributes its name, label, current error and the
-        child's own snapshot (identity when it has none); the gap, the
-        focused index and the theme/``Styles`` complete the inputs the rows
-        read.
-        """
-        fields = tuple(
-            (
-                field.name,
-                field.label,
-                field.error,
-                field.value,
-                _child_key(field.component),
-            )
-            for field in self._fields
-        )
-        return (fields, self._gap, self._index, self.theme, self.styles)
 
     def __repr__(self) -> str:
         return (

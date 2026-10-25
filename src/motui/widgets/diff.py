@@ -375,7 +375,7 @@ class Diff(Widget):
     and ``styles`` are
     read-write: each text/row setter recomputes the rows on
     assignment (and drops the render cache), so a host that streams a new
-    revision into the component renders the revision it assigned, never a
+    assignment into the component renders it, never a
     stale frame.  A negative ``context`` is rejected before any state moves,
     and a theme or styles assigned later re-resolves the bands on the next
     render.  The reads are the ordinary ones.
@@ -565,30 +565,6 @@ class Diff(Widget):
                         (_INS, f"{self.glyphs.diff_add}{text}", _gutter(a_line, gutter_width))
                     )
         return rows
-
-    def revision(self) -> object:
-        """The row cache's snapshot: every input ``render`` reads.
-
-        The two texts (``before`` / ``after``), ``context``, ``numbers``,
-        ``glyphs`` and ``wrap`` determine the built rows; ``theme`` and
-        ``styles`` determine how those rows paint.  There is no cursor,
-        hover or focus state in this component -- every change it has is an
-        assignment to one of the public inputs -- so these eight values are
-        the complete snapshot.  Equal snapshots therefore mean equal rows at
-        one width, which is what makes a **sealed** block's next assignment
-        reach the screen: the class's "never a stale frame" promise is
-        exactly this key moving.
-        """
-        return (
-            self._before,
-            self._after,
-            self._context,
-            self._numbers,
-            self._glyphs,
-            self.wrap,
-            self.theme,
-            self.styles,
-        )
 
     def render(self, c: Constraints) -> Surface:
         """The diff rows, each reflowed to the width under ``wrap``.

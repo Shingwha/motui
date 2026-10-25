@@ -119,22 +119,22 @@ class _TextField(Widget):
     **The memory.**  Rendering walks the buffer's whole visual geometry --
     a 3000-line buffer wraps every line to show twenty -- and a host
     repaints the same field frame after frame (every mouse move repaints),
-    so :meth:`render` remembers its last answer: while the width and
-    :meth:`revision` are unchanged, the remembered rows come back as a
-    list copy.  The snapshot is the buffer's :attr:`~motui.widgets.textbuf.TextBuffer.version`
-    plus the cursor, the selection anchor, the flags, the placeholder, the
-    mask, the styles and the shell's own policy values
-    (:meth:`_policy_revision`); the wrap geometry underneath is remembered
+    so :meth:`render` remembers its last answer: while the width and the
+    widget's ``generation`` are unchanged, the remembered rows come back as
+    a list copy.  Every row input touches: a content write fires the
+    buffer's ``on_change`` hook (wired to :meth:`~motui.widgets.base.Widget.touch`),
+    a cursor or selection move touches in the hooks and editing methods,
+    and the public fields touch through ``Widget.__setattr__``.  The wrap
+    geometry underneath is remembered
     by the buffer itself, per line, so a keystroke in a 3000-line editor
-    re-wraps one line and a move re-wraps none.  :meth:`revision` is the
-    :class:`~motui.kernel.document.Revisioned` door, which is how a sealed
-    field's caret still reaches the screen (D4).
+    re-wraps one line and a move re-wraps none -- and a sealed field's caret
+    still reaches the screen (D4).
     """
 
     __slots__ = (
         "_buf",
         "_mask",
-        "_memo_revision",
+        "_memo_generation",
         "_memo_rows",
         "_memo_width",
         "_wrap",
@@ -168,6 +168,10 @@ class _TextField(Widget):
         # 2.0 ``field.keymap["c-j"] = "newline"``) must never write through
         # to the module-level default table.
         self._buf = TextBuffer(text, keymap=dict(keymap), read_only=read_only)
+        # A content write moves the buffer's version; this is the shell's
+        # half of the invalidation contract (a cursor move is touched by the
+        # hooks below, which do not bump the version).
+        self._buf.on_change = self.touch
         # The display mask: the first character stands in for every rendered
         # character (see ``_mask_row``); ``""`` renders the text itself.
         self._mask = mask
@@ -177,13 +181,13 @@ class _TextField(Widget):
         # scrolls horizontally (OVERFLOW, its own ``_rows_for``), the Editor
         # re-wraps (WORD).
         self._wrap = wrap
-        # The memory: the rows of the last render while ``_memo_revision``
+        # The memory: the rows of the last render while ``_memo_generation``
         # and ``_memo_width`` still describe the field.  ``None`` rows mean
-        # "nothing remembered" -- the revision never answers ``None`` here,
-        # so the empty marker cannot be confused with a snapshot value.
+        # "nothing remembered" -- the generation is always an int here, so the
+        # empty marker cannot be confused with a valid key.
         self._memo_rows: list[Line] | None = None
         self._memo_width: int | None = None
-        self._memo_revision: object = None
+        self._memo_generation: object = None
 
     # -- buffer views -----------------------------------------------------------
 
@@ -260,10 +264,14 @@ class _TextField(Widget):
     def clear_selection(self) -> None:
         """Drop the selection; the cursor stays where it is."""
         self._buf.clear_selection()
+        self.touch()
 
     def select_all(self) -> bool:
         """Select the whole buffer; ``False`` for an empty one."""
-        return self._buf.select_all()
+        selected = self._buf.select_all()
+        if selected:
+            self.touch()
+        return selected
 
     # -- editing --------------------------------------------------------------
 
@@ -276,7 +284,12 @@ class _TextField(Widget):
         """
         if self.read_only:
             return False
-        return self._buf.handle(event)
+        consumed = self._buf.handle(event)
+        if consumed:
+            # Cursor and selection moves are row inputs too; a content
+            # write has already touched through ``on_change``.
+            self.touch()
+        return consumed
 
     def on_key(self, e: KeyEvent) -> bool:
         """Consume one key through the buffer's keymap; ``False`` to decline."""
@@ -306,6 +319,7 @@ class _TextField(Widget):
         if not callable(method):
             return False
         method()
+        self.touch()
         return True
 
     def insert(self, text: str) -> None:
@@ -340,50 +354,56 @@ class _TextField(Widget):
         return self._buf.redo()
 
     def move_left(self) -> bool:
-        return self._buf.move_left()
+        return self._moved(self._buf.move_left())
 
     def move_right(self) -> bool:
-        return self._buf.move_right()
+        return self._moved(self._buf.move_right())
 
     def home(self) -> bool:
         """Move to the start of the cursor's logical line."""
-        return self._buf.home()
+        return self._moved(self._buf.home())
 
     def end(self) -> bool:
         """Move to the end of the cursor's logical line (before its "\\n")."""
-        return self._buf.end()
+        return self._moved(self._buf.end())
 
     def move_up(self) -> bool:
         """Move to the previous visual row, keeping the inner column."""
-        return self._buf.move_up()
+        return self._moved(self._buf.move_up())
 
     def move_down(self) -> bool:
         """Move to the next visual row, keeping the inner column."""
-        return self._buf.move_down()
+        return self._moved(self._buf.move_down())
 
     def select_left(self) -> bool:
         """Extend the selection one character left (or from the cursor)."""
-        return self._buf.select_left()
+        return self._moved(self._buf.select_left())
 
     def select_right(self) -> bool:
         """Extend the selection one character right (or from the cursor)."""
-        return self._buf.select_right()
+        return self._moved(self._buf.select_right())
 
     def select_home(self) -> bool:
         """Extend the selection to the start of the cursor's logical line."""
-        return self._buf.select_home()
+        return self._moved(self._buf.select_home())
 
     def select_end(self) -> bool:
         """Extend the selection to the end of the cursor's logical line."""
-        return self._buf.select_end()
+        return self._moved(self._buf.select_end())
 
     def select_up(self) -> bool:
         """Extend the selection one visual row up, keeping the inner column."""
-        return self._buf.select_up()
+        return self._moved(self._buf.select_up())
 
     def select_down(self) -> bool:
         """Extend the selection one visual row down, keeping the inner column."""
-        return self._buf.select_down()
+        return self._moved(self._buf.select_down())
+
+    def _moved(self, moved: bool) -> bool:
+        """Touch when a cursor/selection move changed the rendered rows."""
+        if moved:
+            self.touch()
+        return moved
 
     def on_click(self, pos: Pos) -> bool:
         """Dock the block cursor at this field's own rendered cell; True on a hit.
@@ -412,7 +432,10 @@ class _TextField(Widget):
         start, count = self._window(rows, self._buf.locate(rows)[0])
         if not 0 <= pos.y < count:
             return False
-        return self._buf.place(start + pos.y, pos.x)
+        hit = self._buf.place(start + pos.y, pos.x)
+        if hit:
+            self.touch()
+        return hit
 
     # -- visual geometry -------------------------------------------------------
 
@@ -501,70 +524,11 @@ class _TextField(Widget):
         band = None if selection is None else (starts[selection[0]], starts[selection[1]])
         return "".join(pieces), caret, band
 
-    def _policy_revision(self) -> object:
-        """The shell's own row inputs, read through the hooks the render reads.
-
-        Everything the shared trunk renders comes from the buffer, the flags
-        or the four policy hooks -- and the indent is already in the shared
-        tuple.  The remaining two are asked here exactly as :meth:`render`
-        asks them: the row cap (an :class:`Editor`'s ``max_rows`` window;
-        ``None`` for no cap) and the **first row's prefix** (the prompt an
-        :class:`Input` leads with; ``None`` for a shell without one).  They
-        are *derived* values, not live state: two answers compare equal
-        exactly while the fields behind them do, which is all the protocol's
-        promise needs -- and a shell the hooks cannot express (a policy of
-        its own) overrides this method with its fields instead.
-        """
-        indent = self._indent()
-        return (self._row_cap(), self._row_prefix(0, indent))
-
-    def _revision(self) -> object:
-        """The value snapshot of everything the rendered rows are made of.
-
-        The buffer's :attr:`~motui.widgets.textbuf.TextBuffer.version` and
-        cursor (``row``/``col``), the selection anchor, the focus and hover
-        flags, the placeholder, the mask, the theme/``Styles`` the render
-        resolves and the shell's own policy values -- every one a plain
-        value, so the snapshot is a copy by construction.  The geometry
-        itself is deliberately **not** in here: the wrapped spans are a
-        function of the buffer's text and the width (the buffer's own
-        memory), and the cursor's cell is a function of the version, the
-        cursor and the width, so equal snapshots at one width render equal
-        rows -- the protocol's promise.
-        """
-        buf = self._buf
-        return (
-            buf.version,
-            buf.row,
-            buf.col,
-            buf.anchor,
-            self.focused,
-            self.hover,
-            self.placeholder,
-            self._mask,
-            self._wrap,
-            self.theme,
-            self.styles,
-            self._indent(),
-            self._policy_revision(),
-        )
-
-    def revision(self) -> object:
-        """The :class:`~motui.kernel.document.Revisioned` snapshot.
-
-        The protocol's door to :meth:`_revision`: a block holding this
-        component keys its own row cache on the same value, so a keystroke,
-        a moved cursor or a hover invalidates the block's copy and this
-        component's memory in one move -- and a *sealed* field's caret
-        still reaches the screen.
-        """
-        return self._revision()
-
     def render(self, c: Constraints) -> Surface:
-        """The rendered rows at the constrained width, remembered while the snapshot holds.
+        """The rendered rows at the constrained width, remembered while the generation holds.
 
-        While the width and
-        :meth:`_revision` are unchanged, the remembered rows of the last
+        While the width and the
+        widget's ``generation`` are unchanged, the remembered rows of the last
         render come back as a list copy -- no re-walk over the buffer's
         visual geometry, no row bodies rebuilt (the component's memory).  A
         keystroke bumps the buffer's version and a move changes the cursor,
@@ -584,15 +548,15 @@ class _TextField(Widget):
         """
         width = c.width
         self._buf.last_width = width
-        revision = self._revision()
+        generation = self.generation
         rows = self._memo_rows
         if (
             rows is None
             or self._memo_width != width
-            or self._memo_revision != revision
+            or self._memo_generation != generation
         ):
             rows = self._rows_for(width)
-            self._memo_revision = revision
+            self._memo_generation = generation
             self._memo_width = width
             self._memo_rows = rows
         out = list(rows)
@@ -769,6 +733,7 @@ class Input(_TextField):
     def prompt(self, value: str) -> None:
         self._prompt = value
         self._buf.indent = visible_width(value)
+        self.touch()
 
     @property
     def wrap(self) -> WrapMode:
@@ -776,8 +741,8 @@ class Input(_TextField):
 
         ``OVERFLOW`` (the default) renders one horizontally sliding row;
         any other mode delegates to the shared shell's row guard.  A write
-        drops the row memory in addition to moving :meth:`_revision`, so
-        the very next render answers under the new policy.
+        drops the row memory and touches the widget, so the very next render
+        answers under the new policy.
         """
         return self._wrap
 
@@ -787,7 +752,8 @@ class Input(_TextField):
             return
         self._wrap = value
         self._memo_rows = None
-        self._memo_revision = None
+        self._memo_generation = None
+        self.touch()
 
     @property
     def cursor(self) -> tuple[int, int]:
@@ -1026,15 +992,17 @@ class Editor(_TextField):
     def wrap(self) -> WrapMode:
         """How a row wider than the field responds to ``render``'s width.
 
-        A write only changes this policy: the row memory keys on
-        :meth:`_revision`, which includes it, so the next render rebuilds
-        the guard while the buffer geometry stays put.
+        A write only changes this policy: it touches the widget, so the next
+        render rebuilds the guard while the buffer geometry stays put.
         """
         return self._wrap
 
     @wrap.setter
     def wrap(self, value: WrapMode) -> None:
+        if value is self._wrap:
+            return
         self._wrap = value
+        self.touch()
 
     # -- the logical-line view (OVERFLOW) --------------------------------------
 
@@ -1059,6 +1027,7 @@ class Editor(_TextField):
         offset = line.start + index_bounds_at_columns(line.text, pos.x)[0]
         self._buf._drop_selection()
         self._buf._set_offset(offset)
+        self.touch()
         return True
 
     def move_up(self) -> bool:
@@ -1109,7 +1078,10 @@ class Editor(_TextField):
         offset = sum(len(line) + 1 for line in buf.lines[:row]) + min(
             buf.col, len(buf.lines[row])
         )
-        return buf._set_offset(offset)
+        moved = buf._set_offset(offset)
+        if moved:
+            self.touch()
+        return moved
 
     def cursor_position(self, width: int) -> tuple[int, int]:
         """The cursor cell as ``(logical row, content column)`` in ``OVERFLOW``.
