@@ -44,9 +44,12 @@ _SEED = 20261025
 
 _CLIP = WrapMode.CLIP
 
-_BODY = "\u2588"
-_HEAD = "\u25cf"
-_FOOD = "\u25c6"
+#: A terminal cell is about twice as tall as it is wide, so one logical game
+#: cell is drawn as a half block: two logical rows share one screen row, and
+#: every square is the same shape whether the snake runs across or down.
+_HALF_TOP = "\u2580"
+_HALF_BOTTOM = "\u2584"
+_FULL = "\u2588"
 
 
 class SnakeScene:
@@ -69,7 +72,7 @@ class SnakeScene:
         self._width = _MAX_WIDTH
         self._height = _MAX_HEIGHT - 2
         self._iw = _MAX_WIDTH - 2
-        self._ih = _MAX_HEIGHT - 4
+        self._ih = 2 * (_MAX_HEIGHT - 4)
         # The public game state (see the module docstring).
         self.score = 0
         self.alive = True
@@ -92,7 +95,8 @@ class SnakeScene:
         self._width = block_w
         self._height = max(1, block_h - 2)
         self._iw = max(1, block_w - 2)
-        self._ih = max(1, self._height - 2)
+        # Two logical rows per screen row: each square is a half block.
+        self._ih = max(2, 2 * max(1, self._height - 2))
         if any(
             x >= self._iw or y >= self._ih for x, y in self.snake
         ) or self.food[0] >= self._iw or self.food[1] >= self._ih:
@@ -244,15 +248,41 @@ class SnakeScene:
             canvas.box(0, 0, width, height, style=self.theme.borders.base)
 
         food_style = self.theme.status.warning.merge(Style(bold=True))
-        if self.food[0] >= 0:
-            canvas.put(1 + self.food[0], 1 + self.food[1], _FOOD, food_style)
-
         head_style = self.theme.content.accent.merge(Style(bold=True))
         body_style = self.theme.status.success
+        # Two logical rows per terminal row: a logical cell owns the top or
+        # bottom half of the screen cell.  Composing halves is what keeps a
+        # vertical run gap-free while every block stays square-ish.
+        tops: dict[tuple[int, int], Style] = {}
+        bottoms: dict[tuple[int, int], Style] = {}
+
+        def mark(x: int, y: int, style: Style) -> None:
+            key = (x, y // 2)
+            (tops if y % 2 == 0 else bottoms)[key] = style
+
+        if self.food[0] >= 0:
+            mark(self.food[0], self.food[1], food_style)
         for index, (x, y) in enumerate(self.snake):
-            style = head_style if index == 0 else body_style
-            glyph = _HEAD if index == 0 else _BODY
-            canvas.put(1 + x, 1 + y, glyph, style)
+            mark(x, y, head_style if index == 0 else body_style)
+
+        for key in sorted(set(tops) | set(bottoms)):
+            tx, ty = key
+            has_top = key in tops
+            has_bottom = key in bottoms
+            if has_top and has_bottom:
+                style = (
+                    head_style
+                    if head_style in (tops[key], bottoms[key])
+                    else food_style
+                    if food_style in (tops[key], bottoms[key])
+                    else body_style
+                )
+                glyph = _FULL
+            elif has_top:
+                glyph, style = _HALF_TOP, tops[key]
+            else:
+                glyph, style = _HALF_BOTTOM, bottoms[key]
+            canvas.put(1 + tx, 1 + ty, glyph, style)
 
         rows = list(canvas.surface())
         if not self.alive:

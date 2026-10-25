@@ -83,7 +83,7 @@ def test_snake_renders_deterministically():
     second = render_scene("snake", width=80, height=24, phase=40)
     assert first == second
     assert "snake" in first and "score" in first
-    assert "\u2588" in first and "\u25cf" in first
+    assert "▀" in first or "▄" in first or "█" in first
 
 
 def test_snake_returns_to_the_menu():
@@ -158,7 +158,9 @@ def test_gallery_click_focuses_the_clicked_widget():
 
 def test_the_page_phase_has_content_in_the_game_and_the_dashboard():
     snake = render_scene("snake", phase=PAGE_PHASE)
-    assert "score" in snake and "\u2588" in snake
+    assert "score" in snake and (
+        "▀" in snake or "▄" in snake or "█" in snake
+    )
     dashboard = render_scene("dashboard", phase=PAGE_PHASE)
     assert f"tick {PAGE_PHASE:04d}" in dashboard
     assert "t00018" in dashboard  # a streamed log line, not the seed window

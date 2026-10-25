@@ -68,7 +68,9 @@ def test_snake_replays_headless(capsys):
     assert main(["--scene", "snake", "--frames", "30", "--headless"]) == 0
     out = capsys.readouterr().out
     assert "snake" in out and "score" in out
-    assert "\u2588" in out and "\u25cf" in out  # body and head
+    assert (
+        "▀" in out or "▄" in out or "█" in out
+    )  # a square half/full block
     assert "arrows/wasd" in out
 
 
