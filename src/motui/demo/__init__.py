@@ -1,8 +1,9 @@
 """The showcase: ``python -m motui`` is one interactive page, not a tour.
 
-Three scenes share one widget: a splash animates in, the menu offers the
-demos, and the gallery shows the 2.0 components side by side.  The package
-owns the three entry modes:
+Five scenes share one widget: a splash animates in, the menu offers the
+demos, breakout is playable, the dashboard streams samples, and the gallery
+shows the 2.0 components side by side.  The package owns the three entry
+modes:
 
 * a real terminal runs the showcase live (alt screen, mouse, 30 Hz ticks);
 * a piped run -- or ``--headless`` -- prints the menu's frame and exits 0;
@@ -29,8 +30,10 @@ from .showcase import SCENES, Showcase
 
 __all__ = ["SCENES", "main", "render_scene", "scene_output"]
 
-#: The fixed phase ``--pages`` and the semantic snapshots share.
-PAGE_PHASE = 8
+#: The fixed phase ``--pages`` and the semantic snapshots share.  Twenty
+#: ticks show motion in every scene: the splash's sweep is mid-word, the
+#: breakout ball is in play, and the dashboard window has streamed.
+PAGE_PHASE = 20
 
 #: The live showcase's tick rate (the splash auto-advances after 60 ticks).
 TICK_HZ = 30

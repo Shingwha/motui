@@ -7,7 +7,7 @@ and the determinism a headless replay relies on.
 
 from __future__ import annotations
 
-from motui.demo import render_scene
+from motui.demo import PAGE_PHASE, render_scene
 from motui.demo.showcase import BreakoutScene, DashboardScene
 from motui.kernel.events import KeyEvent
 from motui.kernel.layout import Constraints
@@ -117,3 +117,11 @@ def test_dashboard_clock_is_derived_from_phase():
 def test_dashboard_returns_to_the_menu():
     assert _dashboard().on_key(KeyEvent("escape")) == "menu"
     assert _dashboard().on_key(KeyEvent("q")) == "menu"
+
+
+def test_the_page_phase_has_content_in_the_game_and_the_dashboard():
+    breakout = render_scene("breakout", phase=PAGE_PHASE)
+    assert "score" in breakout and "\u2584" in breakout
+    dashboard = render_scene("dashboard", phase=PAGE_PHASE)
+    assert f"tick {PAGE_PHASE:04d}" in dashboard
+    assert "t00018" in dashboard  # a streamed log line, not the seed window

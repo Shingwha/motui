@@ -1,11 +1,11 @@
 # Semantic golden frames
 
 `semantic/<scene>.txt` records one showcase scene from the terminal's side.
-The scene (`splash`, `menu`, `gallery`) is painted by
-`motui.demo.scene_output` — a fresh headless runtime, `fill(Showcase)` and
-one `paint` at a fixed phase, with no event pump and no clock — and the
-recorded bytes are fed to `motui.testing.Emulator`, which rebuilds the cell
-grid. Each file is:
+The scene (`splash`, `menu`, `breakout`, `dashboard`, `gallery`) is painted
+by `motui.demo.scene_output` — a fresh headless runtime, `fill(Showcase)`
+and one `paint` at `PAGE_PHASE` (20 ticks), with no event pump and no
+clock — and the recorded bytes are fed to `motui.testing.Emulator`, which
+rebuilds the cell grid. Each file is:
 
 ```
 # <scene> <width>x<height> cursor=<x>,<y>
@@ -24,9 +24,10 @@ run. The header's cursor is the emulator's zero-based final position, so a
 moved focus/anchor shows up even when no glyph does.
 
 The byte golden (`tools/golden.py`, `topics/*.txt`) was deleted in C4a
-together with the 57-topic tour. The showcase has three scenes, so the
-semantic set has three files; there is no second byte-for-byte set to keep
-in step.
+together with the 57-topic tour. The showcase has five scenes, so the
+semantic set has five files; there is no second byte-for-byte set to keep
+in step. Phase 20 is the shared stable frame: the splash sweep is mid-word,
+the breakout ball is in play, and the dashboard has a streamed window.
 
 **Re-recording.** `uv run python tools/semantic.py --update` rewrites the
 whole set; `--check` (the CI step) compares it byte for byte and fails on a
