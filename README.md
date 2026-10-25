@@ -12,7 +12,7 @@ the terminal's alternate screen. It ships parts, not an application: a
 component library, a default interaction policy, and the runtime beneath
 them.
 
-- **Values first.** Geometry, rows, surfaces, styles, scroll state and
+- **Values first.** Geometry, rows, surfaces, styles, scroll values and
   selection are frozen values in `motui.kernel`, with no terminal I/O.
 - **One render method.** Every component answers
   `render(Constraints) -> Surface`; nothing else is promised, so a pure
@@ -36,44 +36,29 @@ The wheel carries its own demo, so `python -m motui` works right away.
 
 ## Quickstart
 
-A small interactive app: a field, keyboard focus and a bound key.
+The smallest app: a `Text` row and an `Input`, painted once headless. The
+runnable copy is `examples/quickstart.py`.
 
 ```python
 from motui import App, Input, Text
-from motui.terminal import TerminalOptions
+from motui.terminal import HeadlessScreen, TerminalOptions
 
-
-class Greeting(App):
-    def __init__(self) -> None:
-        super().__init__(terminal=TerminalOptions())
-        self.field = Input(placeholder="your name")
-
-    def on_start(self) -> None:
-        self.add(Text("What should I call you?"))
-        self.add(self.field)
-        self.focus(self.field)
-        self.bind("enter", self.greet)
-        self.bind("c-c", self.quit)
-
-    def greet(self) -> None:
-        self.add(Text(f"Hello, {self.field.text or 'world'}!"))
-        self.field.clear()
-
-
-if __name__ == "__main__":
-    Greeting().run()
+app = App(terminal=TerminalOptions(screen=HeadlessScreen(60, 6)), auto=False)
+app.add(Text("Hello, motui."))
+app.add(Input("type here"))
+app.paint_now()
+for row in app.workspace.rows[:3]:
+    print(row.text)
 ```
-
-<!-- The exercised copy of this block is examples/quickstart.py (W5b). -->
 
 What each piece did:
 
 | Piece | Job |
 |---|---|
-| `App` | the runtime plus the default interaction policy; `run()` owns the loop |
-| `TerminalOptions` | the one terminal configuration: input source, mouse mode, paste, focus events, color mode and sync |
-| `on_start` | called once before the first frame; where a host builds its UI |
+| `App` | composes the runtime, the workspace and the terminal; `run()` owns the loop |
+| `TerminalOptions` | the one terminal configuration: stream, input, mouse mode, paste, focus events, color mode, sync and the headless `screen` |
 | `app.add(component)` | append a section and answer the `Section` the caller keeps |
+| `app.workspace.rows` | the painted rows; `app.workspace` owns the frame and its content |
 | `app.focus(target)` | focus a section id or a mounted component; `tab` cycles the tree-derived ring |
 | `app.bind(key, callback)` | run a callback after the focused control and the default tiers decline the key |
 | `render(Constraints) -> Surface` | a component's only rendering obligation |
@@ -81,14 +66,19 @@ What each piece did:
 
 ## Capability matrix
 
-| Goal | What ships | Executable example |
+| Goal | What ships | Where it runs |
 |---|---|---|
-| Game loop | `Canvas` cell grid, `Sizing.FILL`, `app.every`, `app.bind` | `examples/snake.py` |
-| Dashboard | `Sparkline`, `App.every`/`invalidate`, `Runtime.advance` for replay | `examples/dashboard.py` |
+| Playable game | `Canvas` cell grid, `Sizing.FILL`, `app.every`, `app.bind` | `python -m motui --scene breakout` |
+| Live dashboard | `Sparkline`, `ProgressBar`, `Table`, `App.every`/`invalidate` | `python -m motui --scene dashboard` |
 | Wide table | `Table(cell_wrap=WrapMode.OVERFLOW)` inside `ScrollPanel(axis="x")` | `examples/wide_table.py` |
-| Streaming document | `Markdown.text += chunk`, section row cache, `ScrollPanel` | below |
+| Two-axis code view | `WrapMode.OVERFLOW` inside `ScrollPanel(axis="both")` | `examples/code.py` |
+| Streaming document | `Markdown.text += chunk`, section generation cache, `ScrollPanel` | below |
 | Split IDE | `split(Axis.X)`, `dock(placement=Placement.BOTTOM)`, `Panel`, `StatusLine` | [ARCHITECTURE](docs/ARCHITECTURE.md) |
 | Forms and dialogs | `Form`/`Field`, `Input`/`Editor`, `Dialog` through `App.open_modal` | [WIDGETS](docs/WIDGETS.md) |
+
+The three shipped examples are `quickstart`, `code` and `wide_table`. The
+interactive demo is one page with five scenes: splash, menu, Breakout,
+Dashboard and a component Gallery.
 
 Wide content is the one horizontal-scroll case: `ScrollPanel(axis="x"` or
 `"both")` windows a component that may render wider than its constraints
@@ -193,22 +183,22 @@ from motui.terminal import MouseMode, TerminalOptions
 app = App(terminal=TerminalOptions(mouse=MouseMode.DRAG, paste=True))
 ```
 
-`App` still accepts the 1.x `mouse=`/`hover=`/`color_mode=`/`screen=`/
-`keys=` arguments; they are folded into an equivalent `TerminalOptions`.
-New code should pass `terminal=`.
+There are no separate `mouse=`, `hover=`, `screen=` or `keys=` arguments on
+`App`; every switch lives in `TerminalOptions`.
 
 ## The 60-second pipeline
 
 ```
-terminal bytes --KeyDecoder--> Event --App.dispatch--> palette / modal / find /
-                                                        toasts / controllers /
-                                                        wheel / mouse /
-                                                        focused widget / bindings /
-                                                        host hooks
+terminal bytes --KeyDecoder--> Event --Router (DEFAULT_HANDLERS)--> palette /
+                                                      modal / find / toasts /
+                                                      controllers / wheel /
+                                                      drag / mouse / focus /
+                                                      page keys / bindings /
+                                                      host hooks
                                                             |
                          Component.render(Constraints) -> Surface
                                                             |
-                              Section.rows (keyed cache) -> Viewport.layout
+                              Section.rows (generation cache) -> Viewport.layout
                                                             |
                                                ScreenLayout (rows + ownership)
                                                             |
@@ -256,22 +246,25 @@ Widgets resolve their role groups when they render, so assigning
 ## Runtime and controllers
 
 `App` composes `Runtime`, `Workspace` and `Terminal` and owns the default
-interaction policy. `Runtime` owns the pump, timers, screen, frame and
-session lifecycle; `Workspace` is the document/frame/hit/selection facade.
-With `auto=False`, `App` mounts no controllers and the caller drives the
-runtime directly.
+interaction policy. `Runtime` owns the session: terminal, pump, timers,
+painter and run lifecycle. `Workspace` owns what is on screen: document,
+frame, panes, docks, hit testing and selection. With `auto=False`, `App`
+mounts no controllers and the caller drives the runtime directly.
 
-The dispatch order is public and first-claim-wins:
+The dispatch order is public and first-claim-wins; `App.handlers` is
+`DEFAULT_HANDLERS` (in `motui/app/router.py`) unless the host passes its own
+tuple:
 
 ```
 palette -> modal -> find -> toasts -> mounted controllers
-        -> wheel -> mouse (drag, gesture, pointer, pane focus)
-        -> focused widget -> page keys -> bind -> tab -> host hooks
+        -> wheel -> drag -> mouse (gesture, pointer, pane focus)
+        -> focused widget -> page keys -> bindings -> host hooks
 ```
 
 Controllers are ordinary objects: `FocusManager`, `Pointer`,
 `SelectionGesture`, `Scrollbar`, `Toasts`, `Tooltip`, `Stats`, `Find`,
-`Modal` and `CommandPalette`. A host controller joins through
+`Modal` and `CommandPalette`. A controller is hosted on the workspace (it
+owns the frame and the hit test); a host controller joins through
 `app.mount(controller)`.
 
 ```python
@@ -281,7 +274,7 @@ from motui.app import Scrollbar
 
 class Shell(App):
     def on_start(self) -> None:
-        self.mount(Scrollbar(self.runtime))
+        self.mount(Scrollbar(self.workspace))
         self.bind("c-k", self.ask)
 
     def ask(self) -> None:
@@ -327,8 +320,9 @@ class EditorApp(App):
         self.add(Editor("hello"), pane=right)
 ```
 
-Streaming Markdown is a plain attribute assignment; the section cache sees
-the new revision and only the changed rows repaint:
+Streaming Markdown is a plain attribute assignment; the assignment calls
+`touch()`, the section cache sees the new `generation`, and only the changed
+rows repaint:
 
 ```python
 from motui import Markdown
@@ -422,18 +416,21 @@ There is no per-widget result callback; see ADR-023.
 
 ## Testing
 
-`headless_tui` returns a real `Runtime` over a recording screen and a
-scripted event source. `snapshot` renders the document as structured plain
-text. `Emulator` rebuilds the cell grid the painter wrote, so assertions can
-be on what a terminal would show rather than on escape spelling.
+`headless_tui` returns a `Harness`: one flat test driver over a real
+`Runtime` (recording screen, scripted event source) and its `Workspace`.
+Content members resolve to the workspace, session members to the runtime;
+`tui.runtime` and `tui.workspace` reach the two objects directly. `snapshot`
+renders the document as structured plain text. `Emulator` rebuilds the cell
+grid the painter wrote, so assertions can be on what a terminal would show
+rather than on escape spelling.
 
 ```python
 from motui import Text, headless_tui
 from motui.testing import Emulator
 
-tui = headless_tui(40, 10)
-tui.add(Text("hello"))
-tui.paint()
+tui = headless_tui(40, 10)          # a Harness
+tui.add(Text("hello"))              # workspace.add
+tui.paint()                         # runtime.paint
 
 assert "hello" in "\n".join(row.text for row in tui.rows)
 
@@ -448,18 +445,23 @@ deadlines rather than accumulating drift.
 
 ## The demo
 
-`python -m motui` starts the component browser that ships in the wheel:
-no network, no model.
+`python -m motui` starts the five-scene showcase that ships in the wheel:
+splash, menu, Breakout, Dashboard and Component Gallery. No network, no
+model, no assets beyond the package.
 
 ```bash
-python -m motui              # a real terminal: the full screen
-python -m motui < /dev/null  # piped: replay headless, dump the final screen
-python -m motui --pages      # every topic as plain text, no terminal needed
+python -m motui                          # a real terminal: the splash and menu
+python -m motui --scene gallery          # start on one scene
+python -m motui --headless --frames 60   # deterministic text frame, no TTY
+python -m motui < /dev/null              # piped: print the menu frame, exit 0
+python -m motui --pages                  # all five scenes as plain text
 ```
 
-Controls: `c-1`..`c-6` switch sections, `c-n`/`c-p` step topics, `/` or
-`c-k` opens the palette, `c-f` opens find, `tab` cycles focus, arrows and
-`enter` drive the focused component, `c-t` cycles themes, `q` quits.
+In the live menu, arrows and `enter` (or a click) pick Breakout, Dashboard,
+Gallery or Quit; `esc` returns to the splash. Breakout plays with the left
+and right arrows, `space` launches/pauses, `q` or `esc` returns to the menu.
+The Gallery keeps a real `Tree`, `Table`, `ProgressBar`, `Slider` and
+`Input` side by side; `tab` cycles their focus.
 
 ## Docs
 

@@ -15,8 +15,9 @@ capabilities, hooks and the `take()` result. The normative rules are in
 
 - Every themed widget accepts `theme: Theme | None = None`. Components that
   resolve role groups also accept `styles: Styles | None = None`. A `styles`
-  field replaces that whole role group; `None` inherits the theme. `Text`
-  is the exception: it takes one explicit `style=` instead of `styles`.
+  field replaces that whole role group; `None` inherits the theme, resolved
+  through `Theme.group(name)`. `Text` is the exception: it takes one
+  explicit `style=` instead of `styles`.
 - Glyph-carrying widgets take `glyphs: Glyphs = GLYPHS`; `Panel`, `Dialog`
   and `Table` also take a `Border`. Glyphs are content, not style; `""`
   turns a mark off and collapses its seat.
@@ -160,15 +161,13 @@ app.add(view)
 - Horizontal overflow is legal: an `OVERFLOW` child may render wider than
   the panel. The panel hard-cuts columns (no ellipsis) because the removed
   columns are scrollable.
-- State: `.offset`, `.x_offset`, `.total_rows`, `.total_columns`;
-  methods `scroll_to`, `scroll_up/down`, `scroll_by`, `scroll_to_x`,
-  `scroll_x`, `scroll_x_to_end`, `scroll_x_by`.
+- State: `.offset`, `.x_offset`, `.total_rows`, `.total_columns`; the
+  immutable `.scroll -> Scroll` value behind them; methods `scroll_to`,
+  `scroll_up/down`, `scroll_by`, `scroll_to_x`, `scroll_x`,
+  `scroll_x_to_end`, `scroll_x_by`.
 - The default keymap binds arrows, page keys and home/end; wheel
   `wheel_left`/`wheel_right` move one column. The panel is focusable and
   clickable (bar drag), not hoverable or activatable.
-- `scroll_state` still exposes the mutable `ScrollState` geometry used by
-  the pane chrome; the immutable `Scroll`/`ScrollAxis` values are the 2.0
-  model.
 
 ## Canvas and plots
 
@@ -262,8 +261,9 @@ Rules of thumb:
 
 1. Render into `Surface.clipped(rows, c.width)` and honor `max_height`.
 2. Declare only the capabilities you implement.
-3. Read styles at render time through `self.group(name)`; put `theme` and
-   `styles` in your `revision()` snapshot when you answer one.
+3. Read styles at render time through `self.group(name)`; the section cache
+   keys on `generation`, so an attribute assignment (automatic `touch()`)
+   or an explicit `touch()` after in-place mutation is the invalidation.
 4. Return `False` for declined input and let routing continue.
 5. Collect one-shot results with `take()`, not callbacks; add the widget to
    `children` if it owns another widget.
