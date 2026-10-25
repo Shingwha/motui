@@ -41,7 +41,7 @@ def test_block_rows_follow_the_component_and_the_width():
     block = Section("b", Text("hello world"))
     assert [row.text for row in block.rows(Constraints(width=20))] == ["hello world"]
     assert [row.text for row in block.rows(Constraints(width=5))] == ["hello", "world"]
-    block.component.text = "changed"
+    block.widget.text = "changed"
     assert [row.text for row in block.rows(Constraints(width=20))] == ["changed"]
 
 
@@ -58,7 +58,7 @@ def test_block_rows_view_borrows_the_same_list_on_a_hit():
     second = block.rows_view(Constraints(width=20))
     assert first is second  # the cache list itself: borrowed, not copied
     assert [row.text for row in first] == ["hello world"]
-    block.component.text = "changed"
+    block.widget.text = "changed"
     assert [row.text for row in block.rows_view(Constraints(width=20))] == ["changed"]
 
 
@@ -137,17 +137,17 @@ def test_document_mutation_increases_monotonically():
     assert doc.mutation == 3
 
 
-def test_pin_is_validated_and_exposed():
+def test_placement_is_validated_and_exposed():
     doc = Document()
-    assert doc.add(Rows(), pin="top").pin == "top"
-    assert doc.add(Rows()).pin is None
-    assert doc.add(Rows(), pin="bottom").pin == "bottom"
+    assert doc.add(Rows(), placement=Placement.TOP).placement is Placement.TOP
+    assert doc.add(Rows()).placement is Placement.FLOW
+    assert doc.add(Rows(), placement=Placement.BOTTOM).placement is Placement.BOTTOM
     with pytest.raises(ValueError):
-        doc.add(Rows(), pin="sideways")
+        doc.add(Rows(), placement="sideways")  # type: ignore[arg-type]
     with pytest.raises(ValueError):
-        Section("x", Rows(), pin="middle")
-    with pytest.raises(AttributeError):
-        Section("x", Rows()).pin = "bottom"  # type: ignore[misc]
+        Section("x", Rows(), placement="middle")  # type: ignore[arg-type]
+    block = Section("x", Rows())
+    assert not hasattr(block, "pin") and not hasattr(block, "component")
 
 
 # -- the Constraints seam ----------------------------------------------------
@@ -189,23 +189,23 @@ def test_section_render_stays_a_list_convenience_door():
 # -- placement, sizing and fill ---------------------------------------------
 
 
-def test_placement_replaces_pin_and_keeps_it_readable():
+def test_placement_is_exposed_and_flow_is_the_default():
     doc = Document()
     flow = doc.add(Rows("body"))
-    top = doc.add(Rows("head"), pin="top")
+    top = doc.add(Rows("head"), placement=Placement.TOP)
     bottom = doc.add(Rows("foot"), placement=Placement.BOTTOM)
-    assert flow.placement is Placement.FLOW and flow.pin is None
-    assert top.placement is Placement.TOP and top.pin == "top"
-    assert bottom.placement is Placement.BOTTOM and bottom.pin == "bottom"
-    assert top.widget is top.component
+    assert flow.placement is Placement.FLOW
+    assert top.placement is Placement.TOP
+    assert bottom.placement is Placement.BOTTOM
+    assert isinstance(top.widget, Rows)
 
 
-def test_pin_and_placement_are_exclusive():
+def test_document_add_rejects_a_non_enum_placement():
     doc = Document()
     with pytest.raises(ValueError):
-        doc.add(Rows(), pin="top", placement=Placement.BOTTOM)
+        doc.add(Rows(), placement="top")  # type: ignore[arg-type]
     with pytest.raises(ValueError):
-        Section("x", Rows(), pin="top", placement=Placement.TOP)
+        doc.add(Rows(), placement=None)  # type: ignore[arg-type]
 
 
 def test_section_rejects_non_enum_placement_and_sizing():
@@ -214,7 +214,7 @@ def test_section_rejects_non_enum_placement_and_sizing():
     with pytest.raises(ValueError):
         Section("x", Rows(), sizing="fill")  # type: ignore[arg-type]
     with pytest.raises(ValueError):
-        Section("x", Rows(), pin="middle")
+        Section("x", Rows(), placement="middle")
 
 
 def test_a_fill_section_owns_the_rule_and_is_found_by_the_document():
@@ -222,7 +222,7 @@ def test_a_fill_section_owns_the_rule_and_is_found_by_the_document():
     doc.add(Rows("head"))
     fill = doc.add(Rows("game"), sizing=Sizing.FILL)
     assert fill.sizing is Sizing.FILL and fill.placement is Placement.FLOW
-    assert fill.widget is fill.component
+    assert isinstance(fill.widget, Rows)
     assert doc.fill() is fill
     assert doc.fills() == (fill,)
     assert doc.add(Rows("top"), placement=Placement.TOP).placement is Placement.TOP
@@ -243,14 +243,14 @@ def test_no_flow_section_may_follow_a_fill():
     with pytest.raises(ValueError):
         doc.add(Rows(), sizing=Sizing.NATURAL)
     # Pinned sections live outside the flow and stay legal.
-    assert doc.add(Rows("foot"), pin="bottom").pin == "bottom"
-    assert doc.add(Rows("head"), pin="top").pin == "top"
+    assert doc.add(Rows("foot"), placement=Placement.BOTTOM).placement is Placement.BOTTOM
+    assert doc.add(Rows("head"), placement=Placement.TOP).placement is Placement.TOP
 
 
 def test_a_fill_section_must_be_in_the_flow():
     doc = Document()
     with pytest.raises(ValueError):
-        doc.add(Rows(), pin="top", sizing=Sizing.FILL)
+        doc.add(Rows(), placement=Placement.TOP, sizing=Sizing.FILL)
     with pytest.raises(ValueError):
         doc.add(Rows(), placement=Placement.BOTTOM, sizing=Sizing.FILL)
     with pytest.raises(ValueError):

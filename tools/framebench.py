@@ -289,7 +289,7 @@ def _tui(split: bool) -> tuple[Runtime, Markdown | None]:
 
 def stream_workload(split: bool, frames: int) -> float:
     tui, stream = _tui(split)
-    source = tui.document.get("b0").component
+    source = tui.document.get("b0").widget
     t0 = time.perf_counter()
     for i in range(frames):
         if stream is not None:

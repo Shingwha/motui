@@ -214,7 +214,7 @@ class Pointer:
         row = col = -1
         hit = self._tui.hit(x, y)
         if hit is not None:
-            target, row, col = descend(hit.block.component, hit.row, hit.col)
+            target, row, col = descend(hit.block.widget, hit.row, hit.col)
         return self._set_hovered(target, row, col)
 
     def _set_hovered(self, target: Component | None, row: int, col: int) -> bool:
@@ -271,7 +271,7 @@ class Pointer:
             return False
         if self._ring is not None:
             return self._ring.click(hit)
-        component, row, col = descend(hit.block.component, hit.row, hit.col)
+        component, row, col = descend(hit.block.widget, hit.row, hit.col)
         if not bool(getattr(component, "clickable", False)):
             return False
         on_click = getattr(component, "on_click", None)

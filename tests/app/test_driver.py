@@ -38,8 +38,8 @@ from tests.testing import (
 def test_add_get_remove_and_system_address_blocks():
     tui = headless_tui()
     first = tui.add(Text("one"))
-    pinned_id = tui.add(Text("footer"), pin="bottom")
-    assert first == "b0" and tui.document.get(pinned_id).pin == "bottom"
+    pinned_id = tui.add(Text("footer"), placement=Placement.BOTTOM)
+    assert first == "b0" and tui.document.get(pinned_id).placement is Placement.BOTTOM
     assert tui.get("b0").text == "one"
 
     system_id = tui.system("hello")
@@ -139,7 +139,7 @@ def test_block_ids_are_allocated_across_the_whole_frame():
     assert block == "b1"
     assert tui.pane(right.id) is right
     component = tui.get(block)
-    assert component is right.document.get(block).component
+    assert component is right.document.get(block).widget
     assert tui.remove(block) is component
     assert [held.id for held in right.document.blocks()] == ["b0"]
 
@@ -274,7 +274,7 @@ def test_reveal_answers_false_and_clamps_rows_and_fixed_regions():
     tui = headless_tui(40, 10)
     assert tui.reveal("head", 0) is False  # no composition yet
     _three_blocks(tui)
-    tui.add(Rows("status"), id="status", pin="bottom")
+    tui.add(Rows("status"), id="status", placement=Placement.BOTTOM)
     tui.paint()
     assert tui.viewport.offset == 21
 
@@ -556,7 +556,7 @@ async def test_a_non_live_dump_degrades_on_a_stream_that_cannot_carry_the_frame(
 def test_snapshot_renders_one_stanza_per_block():
     tui = headless_tui(80, 24)
     tui.add(Text("first\nsecond"))
-    tui.add(Text("foot"), pin="bottom")
+    tui.add(Text("foot"), placement=Placement.BOTTOM)
     text = snapshot(tui)
     assert text.startswith("[b0]\n  |first\n  |second\n")
     assert "[b1 | bottom]" in text
@@ -659,7 +659,7 @@ def test_the_pump_paints_on_the_throttle_and_runs_scheduled_callbacks():
 
     def grow() -> None:
         calls.append(1)
-        block.component.text += "x"
+        block.widget.text += "x"
         tui.refresh()
 
     handle = tui.every(0.010, grow)

@@ -278,9 +278,9 @@ class Scrollbar:
         unique answer.
         """
         found = [
-            block.component
+            block.widget
             for block in pane.document.blocks()
-            if isinstance(block.component, ScrollPanel)
+            if isinstance(block.widget, ScrollPanel)
         ]
         if len(found) != 1:
             raise ValueError(

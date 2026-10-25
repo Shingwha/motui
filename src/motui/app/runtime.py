@@ -223,7 +223,7 @@ def _body_address(viewport: Viewport, block: Section, row: int, width: int) -> i
     for held in viewport.document.blocks():
         if held is block:
             break
-        if held.pin is None:
+        if held.placement is Placement.FLOW:
             address += held.row_count(Constraints(width=width))
     count = block.row_count(Constraints(width=width))
     row = max(0, min(row, count - 1)) if count else 0
@@ -452,8 +452,7 @@ class Runtime:
         component: Component,
         *,
         id: str | None = None,
-        pin: str | None = None,
-        placement=None,
+        placement: Placement = Placement.FLOW,
         sizing: Sizing = Sizing.NATURAL,
         pane: Pane | str | None = None,
     ) -> str:
@@ -464,8 +463,7 @@ class Runtime:
         content pane in paint order) is the target.  Focus routes input, not
         content ownership, so a click on another pane never changes where a
         producer's blocks land; pass ``pane=tui.frame.focused_pane`` when a
-        focused-pane write is really what is meant.  ``pin`` is the 1.x
-        placement spelling; ``placement``/``sizing`` are the 2.0 ones and
+        focused-pane write is really what is meant.  ``placement``/``sizing``
         forward to :meth:`~motui.kernel.document.Document.add` (which owns
         the fill rules).  Section ids are unique across the whole frame: an
         automatic id is the first free ``bN`` over every pane's document,
@@ -479,9 +477,8 @@ class Runtime:
             id = self._next_block_id()
         elif self._panes_holding(id):
             raise ValueError(f"duplicate block id: {id!r}")
-        options = {"placement": placement} if placement is not None else {}
         target.viewport.document.add(
-            component, id=id, pin=pin, sizing=sizing, **options
+            component, id=id, placement=placement, sizing=sizing
         )
         self.refresh()
         return id
@@ -522,7 +519,7 @@ class Runtime:
         is not silently resolved to the first: it raises ``ValueError`` and
         names the panes, because frame-wide uniqueness is the contract.
         """
-        return self._holder(id).viewport.document.get(id).component
+        return self._holder(id).viewport.document.get(id).widget
 
     def remove(self, id: str) -> Component:
         """Detach the block with ``id`` and answer its component.
@@ -530,7 +527,7 @@ class Runtime:
         The same frame-wide resolution :meth:`get` performs; an ambiguous id
         raises ``ValueError`` listing the panes instead of picking one.
         """
-        component = self._holder(id).viewport.document.remove(id).component
+        component = self._holder(id).viewport.document.remove(id).widget
         self.refresh()
         return component
 
@@ -645,8 +642,8 @@ class Runtime:
             return False  # an unknown address reveals nothing
         viewport = pane.viewport
         block = viewport.document.get(bid)
-        if block.pin is not None:
-            return True  # a fixed-region block is always on screen (D3's pin)
+        if block.placement is not Placement.FLOW:
+            return True  # a fixed-region block is always on screen
         layout = self._frame.pane_layout(pane.id)
         placement = self._frame.region(pane.id)
         if layout is None or placement is None or not layout.body_rows:
@@ -1141,7 +1138,7 @@ class Runtime:
             return None  # removed since the last layout
         row = span.row_in_block
         col = x - placement.x
-        chain = descend_chain(block.component, row, col)
+        chain = descend_chain(block.widget, row, col)
         return Hit(pane, block, row, col, chain)
 
     def hit_leaf(self, x: int, y: int) -> tuple[Component, int, int] | None:

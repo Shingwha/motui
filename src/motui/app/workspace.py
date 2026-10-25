@@ -102,8 +102,7 @@ class Workspace:
         component: Component,
         *,
         id: str | None = None,
-        pin: str | None = None,
-        placement=None,
+        placement: Placement = Placement.FLOW,
         sizing: Sizing = Sizing.NATURAL,
         pane: Pane | str | None = None,
     ) -> Section:
@@ -118,7 +117,6 @@ class Workspace:
         block_id = self._runtime.add(
             component,
             id=id,
-            pin=pin,
             placement=placement,
             sizing=sizing,
             pane=pane,

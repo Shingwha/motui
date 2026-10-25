@@ -302,8 +302,7 @@ class App:
         component: Component,
         *,
         id: str | None = None,
-        pin: str | None = None,
-        placement: Placement | None = None,
+        placement: Placement = Placement.FLOW,
         sizing: Sizing = Sizing.NATURAL,
         pane: Any = None,
     ) -> Section:
@@ -315,12 +314,11 @@ class App:
         in the main (primary) document, never the focused pane.  The section
         carries :meth:`~motui.app.runtime.Runtime.add`'s id -- unique across
         the frame -- and the mounted component.
-        ``placement``/``sizing`` are the 2.0 document spellings.
+        ``placement``/``sizing`` are the document's own spellings.
         """
         section = self.workspace.add(
             component,
             id=id,
-            pin=pin,
             placement=placement,
             sizing=sizing,
             pane=pane,
@@ -510,7 +508,7 @@ class App:
         pane = self.workspace.undock(placement)
         if pane is not None:
             for block in pane.document.blocks():
-                self._forget(block.component)
+                self._forget(block.widget)
         return pane
 
     def toast(self, text: str, *, style: Style | None = None) -> None:

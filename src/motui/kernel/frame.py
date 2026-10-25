@@ -381,18 +381,17 @@ class Pane:
         component,
         *,
         id: str | None = None,
-        pin: str | None = None,
-        placement: Placement | None = None,
+        placement: Placement = Placement.FLOW,
         sizing: Sizing = Sizing.NATURAL,
     ) -> Section:
         """Append a block to this pane's document (``Document.add``'s arguments).
 
-        ``placement``/``sizing`` are the 2.0 spellings and forward unchanged;
-        ``pin`` stays for 1.x callers and the two placement spellings are
-        mutually exclusive (``Document.add`` rejects them together).
+        ``placement``/``sizing`` forward unchanged; ``FLOW`` is the body and
+        ``TOP``/``BOTTOM`` the fixed bands.
         """
-        options = {"placement": placement} if placement is not None else {}
-        return self.document.add(component, id=id, pin=pin, sizing=sizing, **options)
+        return self.document.add(
+            component, id=id, placement=placement, sizing=sizing
+        )
 
     def fill(self, component) -> Section:
         """Make ``component`` this pane's fill, owning the remaining height.

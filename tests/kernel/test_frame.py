@@ -15,7 +15,7 @@ from dataclasses import replace
 import pytest
 
 from motui.kernel.cell import Line, cut_line, slice_line
-from motui.kernel.document import Document
+from motui.kernel.document import Document, Placement
 from motui.kernel.geom import Axis
 from motui.kernel.frame import (
     Chrome,
@@ -719,8 +719,8 @@ def test_a_body_scope_refuses_an_edge_that_owns_its_rows():
 def _windowed_pane() -> tuple[Pane, Chrome]:
     """A 6x4 pane with a one-row pinned header and footer: a 2-row window."""
     pane = _pane("primary", Rect(x=0, y=0, width=6, height=4), "a", "b")
-    pane.document.add(Rows("head"), id="head", pin="top")
-    pane.document.add(Rows("foot"), id="foot", pin="bottom")
+    pane.document.add(Rows("head"), id="head", placement=Placement.TOP)
+    pane.document.add(Rows("foot"), id="foot", placement=Placement.BOTTOM)
     chrome = Chrome(
         "right",
         1,
@@ -747,8 +747,8 @@ def test_a_body_band_paints_the_window_and_its_length_is_the_window_height():
         return [Line.from_text("-")] * length
 
     pane = _pane("primary", Rect(x=0, y=0, width=6, height=4), "a", "b")
-    pane.document.add(Rows("head"), id="head", pin="top")
-    pane.document.add(Rows("foot"), id="foot", pin="bottom")
+    pane.document.add(Rows("head"), id="head", placement=Placement.TOP)
+    pane.document.add(Rows("foot"), id="foot", placement=Placement.BOTTOM)
     pane.add_chrome(Chrome("right", 1, paint, scope="body"))
     layout = Frame([pane]).compose(6, 4)
     assert seen == [2]

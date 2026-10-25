@@ -339,7 +339,7 @@ class FocusManager:
         on a form's background never submits it.
         """
         chain = hit.chain or descend_chain(
-            hit.block.component, hit.row, hit.col
+            hit.block.widget, hit.row, hit.col
         )
         if not chain:
             return False

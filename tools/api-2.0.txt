@@ -93,7 +93,7 @@ motui.kernel	RowRange	class	(first: 'int', last: 'int') -> None
 motui.kernel	ScreenLayout	class	(rows: 'tuple[Line, ...]', body_rows: 'tuple[Line, ...]', row_blocks: 'tuple[tuple[str, int] | None, ...]' = <factory>, block_order: 'tuple[str, ...]' = (), offset: 'int' = 0, total_rows: 'int' = 0, width: 'int' = 0, height: 'int' = 0, viewport_start: 'int' = 0) -> None
 motui.kernel	Scroll	class	(*, x: 'ScrollAxis' = ScrollAxis(offset=0, content=0, viewport=0, sticky=False), y: 'ScrollAxis' = <factory>) -> None
 motui.kernel	ScrollAxis	class	(*, offset: 'int' = 0, content: 'int' = 0, viewport: 'int' = 0, sticky: 'bool' = False) -> None
-motui.kernel	Section	class	(id: 'str', component: 'Component', *, pin: 'str | None' = None, placement: 'Placement | None' = None, sizing: 'Sizing' = <Sizing.NATURAL: 'natural'>) -> 'None'
+motui.kernel	Section	class	(id: 'str', widget: 'Component', *, placement: 'Placement' = <Placement.FLOW: 'flow'>, sizing: 'Sizing' = <Sizing.NATURAL: 'natural'>) -> 'None'
 motui.kernel	Segment	class	(text: 'str', style: 'Style' = Style(fg=None, bg=None, bold=False, dim=False, italic=False, underline=False, reverse=False, strike=False), link: 'str | None' = None, action: 'str | None' = None) -> None
 motui.kernel	Selection	class	(anchor: 'SelectionAnchor', head: 'SelectionAnchor') -> 'None'
 motui.kernel	Separator	class	(host: '_ChromeHost', before_id: 'str', after_id: 'str', edge: 'str') -> 'None'

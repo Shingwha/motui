@@ -15,7 +15,7 @@ from tests.testing import Rows, headless_tui, many
 def test_hit_resolves_a_cell_to_its_block_row_and_column():
     tui = headless_tui(80, 6)
     body = tui.add(Rows(*many(10)))
-    foot = tui.add(Rows("foot"), pin="bottom")
+    foot = tui.add(Rows("foot"), placement=Placement.BOTTOM)
     tui.paint()
     hit = tui.hit(2, 0)
     assert hit is not None and hit.block.id == body and hit.row == 5 and hit.col == 2

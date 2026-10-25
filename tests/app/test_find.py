@@ -6,6 +6,7 @@ from dataclasses import replace
 
 from motui import DEFAULT_THEME, Style
 from motui.app import Find
+from motui.kernel.document import Placement
 from motui.kernel.events import KeyEvent
 from tests.testing import Rows, headless_tui, key
 
@@ -159,7 +160,7 @@ def test_the_query_row_lands_on_the_bottom_row_with_the_counter():
 
 def test_a_pinned_block_answers_reveal_without_scrolling():
     tui = headless_tui(40, 6)
-    tui.add(Rows("pinned needle"), id="head", pin="top")
+    tui.add(Rows("pinned needle"), id="head", placement=Placement.TOP)
     tui.add(Rows(*(f"r{i}" for i in range(20))), id="body")
     tui.paint()
     assert tui.viewport.offset == 15
