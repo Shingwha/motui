@@ -29,6 +29,8 @@ values.
 
 from __future__ import annotations
 
+from ..kernel.cell import Line
+from ..kernel.layout import ScreenLayout
 from .ansi import (
     CLEAR_LINE,
     begin_sync_update,
@@ -36,10 +38,8 @@ from .ansi import (
     cursor_position,
     end_sync_update,
 )
-from ..kernel.cell import Line
 from .render import styled_line
 from .screen import Screen
-from ..kernel.layout import ScreenLayout
 
 __all__ = ["Painter"]
 

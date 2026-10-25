@@ -54,10 +54,10 @@ class Overlay(Protocol):
     controller that owns them, never in the kernel.
     """
 
-    def paint(self, frame: "Frame") -> ScreenLayout: ...
+    def paint(self, frame: Frame) -> ScreenLayout: ...
 
 
-def apply_overlays(frame: "Frame", layout: ScreenLayout) -> ScreenLayout:
+def apply_overlays(frame: Frame, layout: ScreenLayout) -> ScreenLayout:
     """Run ``frame``'s overlay registry over ``layout``, back to front by layer.
 
     Each overlay paints over the composed frame and hands back the layout to

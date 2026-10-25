@@ -11,7 +11,6 @@ from __future__ import annotations
 
 import pytest
 
-from motui.kernel.document import Document
 from motui.kernel.cell import (
     Line,
     Segment,
@@ -23,11 +22,12 @@ from motui.kernel.cell import (
     slice_line,
     wrap_line,
 )
+from motui.kernel.document import Document
+from motui.kernel.layout import Viewport
+from motui.kernel.style import NONE, RESET, Style
 from motui.terminal.paint import Painter
 from motui.terminal.render import styled_line
 from motui.terminal.screen import HeadlessScreen
-from motui.kernel.style import NONE, RESET, Style
-from motui.kernel.layout import Viewport
 from tests.testing import Rows
 
 ACCENT = Style(fg="#58a6ff", bold=True)

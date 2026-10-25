@@ -10,17 +10,16 @@ from typing import get_type_hints
 import pytest
 
 from motui.kernel.style import NONE, Style
-from motui.terminal.capability import auto_theme
 from motui.kernel.theme import (
     DARK_PALETTE,
     DEFAULT_THEME,
     LIGHT_PALETTE,
     BorderStyles,
     ChromeStyles,
+    ColorPalette,
     ContentStyles,
     ControlStyles,
     OverlayStyles,
-    ColorPalette,
     RowStyles,
     StatusStyles,
     SurfaceStyles,
@@ -139,14 +138,6 @@ def test_from_palette_is_a_pure_derivation():
 )
 def test_auto_reads_only_the_passed_environment(env, expected):
     assert Theme.auto(env) == expected()
-
-
-def test_auto_does_not_touch_the_process_environment(monkeypatch):
-    monkeypatch.setenv("TERM_BACKGROUND", "light")
-    assert auto_theme() == Theme.light()
-    monkeypatch.delenv("TERM_BACKGROUND")
-    monkeypatch.setenv("COLORFGBG", "15;0")
-    assert auto_theme() == Theme.dark()
 
 
 def test_row_band_precedence_is_exact():

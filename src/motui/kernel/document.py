@@ -10,7 +10,8 @@ otherwise.
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Protocol, Sequence, runtime_checkable
+from collections.abc import Sequence
+from typing import TYPE_CHECKING, Protocol, cast, runtime_checkable
 
 from .cell import Line
 
@@ -19,7 +20,6 @@ if TYPE_CHECKING:  # the protocol names the event model; no runtime import neede
 
 __all__ = [
     "Activable",
-    "Section",
     "Clickable",
     "Component",
     "Container",
@@ -29,6 +29,7 @@ __all__ = [
     "Hoverable",
     "Resultful",
     "Revisioned",
+    "Section",
     "descend",
     "descend_chain",
 ]
@@ -156,7 +157,7 @@ class Controller(Protocol):
     Optional: a pure renderer has no ``handle``.
     """
 
-    def handle(self, event: "Event") -> bool:
+    def handle(self, event: Event) -> bool:
         ...
 
 
@@ -229,7 +230,7 @@ _DESCEND_LIMIT = 64
 
 def descend_chain(
     component: Component, row: int, col: int
-) -> "tuple[tuple[Component, int, int], ...]":
+) -> tuple[tuple[Component, int, int], ...]:
     """Every component owning a cell, outermost first, with its own coords.
 
     Walks ``Container.child_at`` from ``component`` down, recording each
@@ -255,7 +256,7 @@ def descend_chain(
     return tuple(chain)
 
 
-def descend(component: Component, row: int, col: int) -> "tuple[Component, int, int]":
+def descend(component: Component, row: int, col: int) -> tuple[Component, int, int]:
     """The deepest component owning a cell, with that component's own coords.
 
     Walks ``Container.child_at`` until a component is not a container or
@@ -339,7 +340,7 @@ class Section:
         cache off.
         """
         if self._cacheable:
-            return self._component.revision()
+            return cast("Revisioned", self._component).revision()
         return None
 
     def render(self, width: int) -> list[Line]:
@@ -421,7 +422,7 @@ class Section:
         """
         if not self._cacheable:
             return list(self._component.render(width))  # no snapshot: never cached
-        revision = self._component.revision()
+        revision = cast("Revisioned", self._component).revision()
         if revision is None:
             # A component with the protocol switched its memory off (``None``
             # is "no snapshot"): the block must not cache what it cannot

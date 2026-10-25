@@ -27,10 +27,10 @@ from __future__ import annotations
 from collections.abc import Sequence
 from dataclasses import replace
 
-from .document import Document
 from .cell import Line, cut_line
-from .style import Style
+from .document import Document
 from .layout import ScreenLayout
+from .style import Style
 
 __all__ = ["Selection", "SelectionAnchor", "extract", "highlight"]
 #: One cell address: the block id, the row within that block, the column.
@@ -58,7 +58,7 @@ class Selection:
         object.__setattr__(self, "_head", head)
 
     @classmethod
-    def between(cls, anchor: SelectionAnchor, head: SelectionAnchor) -> "Selection":
+    def between(cls, anchor: SelectionAnchor, head: SelectionAnchor) -> Selection:
         """The range from ``anchor`` to ``head`` (direction normalized at use)."""
         return cls(anchor, head)
 
@@ -134,7 +134,7 @@ class _ResolvedRange:
     @classmethod
     def over(
         cls, selection: Selection, order: Sequence[str]
-    ) -> "_ResolvedRange | None":
+    ) -> _ResolvedRange | None:
         """The selection resolved against ``order``, or ``None``.
 
         ``None`` when an endpoint's block is not in the walk: a removed
@@ -231,7 +231,9 @@ def highlight(
     if resolved is None:
         return layout
     rows: list[Line] | None = None
-    for index, (row, owner) in enumerate(zip(layout.rows, layout.row_blocks)):
+    for index, (row, owner) in enumerate(
+        zip(layout.rows, layout.row_blocks, strict=False)
+    ):
         if owner is None:
             continue
         span = resolved.row_range(owner[0], owner[1])

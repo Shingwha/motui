@@ -260,10 +260,9 @@ def _cell_spans(text: str) -> Iterator[tuple[int, int, int]]:
             or ord(text[cell_end]) in _VARIATION_SUPPLEMENT
         ):
             cell_end += 1  # variation selectors widen the base cell
-        if cell_end == i + 1:
-            cell_width = width  # the common cell: the base alone, no slice
-        else:
-            cell_width = _char_width(text[i:cell_end])
+        cell_width = (
+            width if cell_end == i + 1 else _char_width(text[i:cell_end])
+        )  # the common cell is the base alone, no slice
         end = cell_end
         while end < n:  # every continuation character of the cluster adds 0
             nxt = text[end]
@@ -344,7 +343,8 @@ def index_pair_at_columns(text: str, first: int, second: int) -> tuple[int, int]
     rule is written once there: a boundary inside a multi-column cluster
     resolves down to the cluster's start, whatever boundary reads it.
     """
-    return index_bounds_at_columns(text, first, second)
+    start_at, end_at = index_bounds_at_columns(text, first, second)
+    return start_at, end_at
 
 
 def _ascii_run_end(text: str, at: int) -> int:

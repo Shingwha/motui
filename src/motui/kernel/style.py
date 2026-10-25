@@ -84,8 +84,8 @@ class Color:
     :data:`FG_CODES` name is a construction error.
     """
 
-    value: "str | tuple[int, int, int]"
-    ansi: "str | None" = None
+    value: str | tuple[int, int, int]
+    ansi: str | None = None
 
     def __post_init__(self) -> None:
         if self.ansi is not None and self.ansi not in FG_CODES:
@@ -112,7 +112,7 @@ def _color_name(color: Color) -> str | None:
 
 
 def _native_color_code(
-    color: "Color | str | tuple[int, int, int]", *, background: bool
+    color: Color | str | tuple[int, int, int], *, background: bool
 ) -> str:
     """The truecolor-mode SGR parameter for one color.
 
@@ -135,7 +135,7 @@ def _native_color_code(
     return str(FG_CODES[color] + offset)
 
 
-def _sgr_codes(style: "Style") -> list[str]:
+def _sgr_codes(style: Style) -> list[str]:
     """Ordered SGR parameter list for ``style`` (attributes, then fg, then bg).
 
     A color is a :class:`Color`, a name from :data:`FG_CODES` (unknown names
@@ -176,8 +176,8 @@ class Style:
     instance without observable mutation.
     """
 
-    fg: "Color | str | tuple[int, int, int] | None" = None
-    bg: "Color | str | tuple[int, int, int] | None" = None
+    fg: Color | str | tuple[int, int, int] | None = None
+    bg: Color | str | tuple[int, int, int] | None = None
     bold: bool = False
     dim: bool = False
     italic: bool = False
@@ -198,14 +198,14 @@ class Style:
         even the unstyled default -- the commonest path of all -- never
         rebuilds its SGR parameters.
         """
-        if self._prefix is None:
+        prefix = self._prefix
+        if prefix is None:
             codes = _sgr_codes(self)
-            object.__setattr__(
-                self, "_prefix", "\x1b[" + ";".join(codes) + "m" if codes else ""
-            )
-        return self._prefix
+            prefix = "\x1b[" + ";".join(codes) + "m" if codes else ""
+            object.__setattr__(self, "_prefix", prefix)
+        return prefix
 
-    def merge(self, other: "Style") -> "Style":
+    def merge(self, other: Style) -> Style:
         """Return a new style with ``other`` applied on top of ``self``.
 
         ``None`` fields of ``other`` pass through; boolean attributes are
@@ -280,7 +280,7 @@ _XTERM16_RGB: tuple[tuple[int, int, int], ...] = (
 
 def _distance(rgb: tuple[int, int, int], other: tuple[int, int, int]) -> int:
     """Squared euclidean distance between two RGB triples."""
-    return sum((a - b) ** 2 for a, b in zip(rgb, other))
+    return sum((a - b) ** 2 for a, b in zip(rgb, other, strict=True))
 
 
 def _nearest_cube(rgb: tuple[int, int, int]) -> tuple[int, tuple[int, int, int]]:
@@ -331,7 +331,7 @@ def quantize(rgb: tuple[int, int, int], mode: ColorMode = "256") -> int:
 
 
 def _mode_color_code(
-    color: "Color | str | tuple[int, int, int] | None",
+    color: Color | str | tuple[int, int, int] | None,
     mode: ColorMode,
     *,
     background: bool,
@@ -364,7 +364,10 @@ def _mode_color_code(
     if isinstance(color, tuple):
         rgb = color
     elif _HEX_RE.match(color):
-        rgb = _hex_rgb(color)  # type: ignore[assignment]
+        parsed = _hex_rgb(color)
+        if parsed is None:  # _HEX_RE matched, so this cannot happen
+            raise ValueError(f"invalid hex color {color!r}")
+        rgb = parsed
     else:
         return str(FG_CODES[color] + offset)
     index = quantize(rgb, mode)
@@ -373,7 +376,7 @@ def _mode_color_code(
     return f"{48 if background else 38};5;{index}"
 
 
-def _mode_codes(style: "Style", mode: ColorMode) -> list[str]:
+def _mode_codes(style: Style, mode: ColorMode) -> list[str]:
     """Ordered SGR parameters for ``style`` under a downgraded ``mode``.
 
     The same order :func:`_sgr_codes` emits -- attributes, then fg, then bg
@@ -401,7 +404,7 @@ def _mode_codes(style: "Style", mode: ColorMode) -> list[str]:
     return codes
 
 
-def sgr_prefix(style: "Style", mode: ColorMode = "truecolor") -> str:
+def sgr_prefix(style: Style, mode: ColorMode = "truecolor") -> str:
     """SGR prefix that switches a terminal of capability ``mode`` into ``style``.
 
     ``"truecolor"`` returns :meth:`Style.prefix` -- the instance cache, so

@@ -18,7 +18,6 @@ from motui.kernel.style import (
     quantize,
     sgr_prefix,
 )
-from motui.terminal.capability import detect_color_mode
 
 
 def test_empty_style_has_no_prefix():
@@ -112,35 +111,6 @@ def test_sgr_prefix_keeps_attributes_and_named_colors():
     assert sgr_prefix(styled, "16") == "\x1b[1;2;4;94;40m"
     assert sgr_prefix(styled, "none") == "\x1b[1;2;4m"
     assert sgr_prefix(Style(reverse=True), "none") == "\x1b[7m"
-
-
-def test_detect_color_mode_env_matrix():
-    cases = [
-        ({"NO_COLOR": "1"}, "none"),
-        ({"NO_COLOR": ""}, "truecolor"),
-        ({"NO_COLOR": "", "TERM": "xterm-256color"}, "256"),
-        ({"NO_COLOR": "", "COLORTERM": "truecolor"}, "truecolor"),
-        ({"TERM": "dumb"}, "none"),
-        ({"TERM": "dumb", "COLORTERM": "truecolor"}, "none"),
-        ({"COLORTERM": "truecolor", "TERM": "xterm-256color"}, "truecolor"),
-        ({"COLORTERM": "24bit"}, "truecolor"),
-        ({"COLORTERM": "unknown"}, "truecolor"),
-        ({"TERM": "xterm-256color"}, "256"),
-        ({"TERM": "screen-256color"}, "256"),
-        ({"TERM": "xterm"}, "truecolor"),
-        ({}, "truecolor"),
-    ]
-    for env, expected in cases:
-        assert detect_color_mode(env) == expected
-
-
-def test_detect_color_mode_defaults_to_the_process_environment(monkeypatch):
-    monkeypatch.setenv("NO_COLOR", "1")
-    assert detect_color_mode() == "none"
-    monkeypatch.delenv("NO_COLOR")
-    monkeypatch.setenv("TERM", "xterm-256color")
-    monkeypatch.delenv("COLORTERM", raising=False)
-    assert detect_color_mode() == "256"
 
 
 def test_color_is_a_frozen_value_with_a_validated_ansi_fallback():

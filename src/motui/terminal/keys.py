@@ -20,6 +20,7 @@ console path polls a closed flag between short sleeps.
 from __future__ import annotations
 
 import asyncio
+import contextlib
 import ctypes
 import os
 import queue
@@ -30,18 +31,18 @@ import time
 from concurrent.futures import ThreadPoolExecutor
 
 from ..kernel.events import Event
+from .decoder import KeyDecoder
 from .win32 import (
-    _console_record_events,
-    _console_record_fields,
     _FOCUS_EVENT,
-    _InputRecord,
     _KEY_EVENT,
     _MOUSE_EVENT,
     _WINDOW_BUFFER_SIZE_EVENT,
+    _console_record_events,
+    _console_record_fields,
+    _InputRecord,
     _kernel32,
     windows_input_mode,
 )
-from .decoder import KeyDecoder
 
 # ---------------------------------------------------------------------------
 # Key sources
@@ -100,7 +101,7 @@ class RawTerminalKeys:
 
     def __init__(self, fd: int | None = None, *, hover: bool = False) -> None:
         self._fd = _stdin_fd() if fd is None else fd
-        self._queue: "queue.SimpleQueue[Event | None]" = queue.SimpleQueue()
+        self._queue: queue.SimpleQueue[Event | None] = queue.SimpleQueue()
         self._decoder = KeyDecoder()
         self._hover = hover
         self._thread: threading.Thread | None = None
@@ -166,10 +167,8 @@ class RawTerminalKeys:
         self._started = False
         self._queue.put(None)  # wake every pending read()
         if self._wake_w is not None:
-            try:
+            with contextlib.suppress(OSError):
                 os.write(self._wake_w, b"x")  # POSIX: wake the select()
-            except OSError:
-                pass
         if os.name == "nt":
             self._restore_windows()
         else:
@@ -238,19 +237,15 @@ class RawTerminalKeys:
             return
         import termios
 
-        try:
+        with contextlib.suppress(termios.error):
             termios.tcsetattr(self._fd, termios.TCSADRAIN, self._saved_attrs)
-        except termios.error:
-            pass  # the fd went away; nothing to restore
 
     def _restore_windows(self) -> None:
         if self._saved_mode is None:
             return
         handle, mode = self._saved_mode
-        try:
+        with contextlib.suppress(Exception):
             _kernel32().SetConsoleMode(handle, mode)
-        except Exception:
-            pass  # the console went away; nothing to restore
 
     # -- reader thread --------------------------------------------------------
 

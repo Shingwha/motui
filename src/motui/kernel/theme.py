@@ -39,7 +39,7 @@ from __future__ import annotations
 from collections.abc import Mapping
 from dataclasses import dataclass, field, replace
 
-from .style import Color, NONE, Style
+from .style import NONE, Color, Style
 
 __all__ = [
     "DARK_PALETTE",
@@ -53,8 +53,8 @@ __all__ = [
     "OverlayStyles",
     "RowStyles",
     "StatusStyles",
-    "SurfaceStyles",
     "Styles",
+    "SurfaceStyles",
     "SyntaxStyles",
     "TextStyles",
     "Theme",
@@ -364,17 +364,17 @@ class Theme:
     # -- constructors ------------------------------------------------------
 
     @classmethod
-    def dark(cls) -> "Theme":
+    def dark(cls) -> Theme:
         """The shipped dark theme, derived from :data:`DARK_PALETTE`."""
         return cls.from_palette(DARK_PALETTE)
 
     @classmethod
-    def light(cls) -> "Theme":
+    def light(cls) -> Theme:
         """The shipped light theme, derived from :data:`LIGHT_PALETTE`."""
         return cls.from_palette(LIGHT_PALETTE)
 
     @classmethod
-    def flat(cls) -> "Theme":
+    def flat(cls) -> Theme:
         """The dark theme with every surface flattened.
 
         No background surfaces: position reads through attributes instead
@@ -407,7 +407,7 @@ class Theme:
         )
 
     @classmethod
-    def auto(cls, env: Mapping[str, str]) -> "Theme":
+    def auto(cls, env: Mapping[str, str]) -> Theme:
         """Pick light or dark from ``env``; unknown falls back to dark.
 
         ``TERM_BACKGROUND`` (``light``/``white`` or ``dark``/``black``) wins;
@@ -431,7 +431,7 @@ class Theme:
         return cls.dark()
 
     @classmethod
-    def from_palette(cls, palette: ColorPalette) -> "Theme":
+    def from_palette(cls, palette: ColorPalette) -> Theme:
         """Derive every role token from ``palette`` (a pure function)."""
         heading = palette.heading
         return cls(

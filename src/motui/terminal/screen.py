@@ -16,6 +16,7 @@ import sys
 from abc import ABC, abstractmethod
 from typing import Literal
 
+from ..kernel.style import ColorMode
 from .ansi import (
     copy_clipboard,
     disable_bracketed_paste,
@@ -30,7 +31,6 @@ from .ansi import (
     leave_alt_screen,
     show_cursor,
 )
-from ..kernel.style import ColorMode
 from .capability import detect_color_mode, terminal_size
 
 __all__ = ["HeadlessScreen", "Screen", "TerminalScreen"]
@@ -155,7 +155,7 @@ class TerminalScreen(Screen):
         paste: bool = True,
         hover: bool = False,
         focus_events: bool = False,
-        color_mode: "ColorMode | Literal['auto']" = "auto",
+        color_mode: ColorMode | Literal['auto'] = "auto",
     ) -> None:
         self._stream = sys.stdout if stream is None else stream
         self._live = bool(self._stream.isatty()) and enable_vt()

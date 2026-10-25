@@ -13,9 +13,9 @@ from dataclasses import replace
 
 import pytest
 
-from motui.widgets.text import Text
 from motui.kernel.cell import Line, Segment
 from motui.kernel.style import Style
+from motui.widgets.text import Text
 
 ACCENT = Style(fg="#58a6ff", bold=True)
 DIM = Style(dim=True)

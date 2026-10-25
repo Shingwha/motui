@@ -41,13 +41,13 @@ import ctypes
 from collections.abc import Iterable
 from dataclasses import replace
 
-from .ansi import ESC
 from ..kernel.events import (
     Event,
     FocusEvent,
     KeyEvent,
     ResizeEvent,
 )
+from .ansi import ESC
 from .decoder import KeyDecoder
 
 # Windows console input mode bits (wincon.h).
@@ -230,7 +230,7 @@ class _InputRecord(ctypes.Structure):
     ]
 
 
-def _kernel32() -> "ctypes.WinDLL":
+def _kernel32() -> ctypes.WinDLL:
     """kernel32 with the console-mode and console-input prototypes set."""
     api = ctypes.WinDLL("kernel32", use_last_error=True)
     api.GetConsoleMode.restype = ctypes.c_int
@@ -373,7 +373,7 @@ def _sgr_report(code: int, x: int, y: int, final: str = "M") -> bytes:
     through the report unchanged.  UTF-8, like every other byte the console
     path hands the decoder.
     """
-    return f"{ESC}[<{code};{x + 1};{y + 1}{final}".encode("utf-8")
+    return f"{ESC}[<{code};{x + 1};{y + 1}{final}".encode()
 
 
 def _wheel_delta(state: int) -> int:

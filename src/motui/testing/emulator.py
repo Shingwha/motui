@@ -46,8 +46,8 @@ from dataclasses import dataclass, replace
 
 from wcwidth import wcwidth
 
-from ..kernel.style import FG_CODES, Style
 from ..kernel import Pos
+from ..kernel.style import FG_CODES, Style
 
 __all__ = ["Emulator"]
 

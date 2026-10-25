@@ -5,8 +5,8 @@ from __future__ import annotations
 
 import pytest
 
-from motui.kernel.document import Section, Document
 from motui.kernel.cell import Line
+from motui.kernel.document import Document, Section
 from motui.widgets.text import Text
 from tests.testing import Rows
 

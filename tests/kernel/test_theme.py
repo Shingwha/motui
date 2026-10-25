@@ -12,7 +12,7 @@ from dataclasses import FrozenInstanceError, replace
 
 import pytest
 
-from motui import DEFAULT_THEME, Button, Input, List, Markdown, Text, Theme
+from motui import DEFAULT_THEME, Button, Input, List, Markdown, Theme
 from motui.kernel.style import NONE, Style
 from motui.kernel.theme import DARK_PALETTE, Styles
 from motui.widgets import Divider
@@ -107,7 +107,7 @@ def test_components_take_their_styles_from_the_theme():
 
 
 def test_the_default_theme_is_the_dark_visual():
-    assert DEFAULT_THEME == Theme.dark()
+    assert Theme.dark() == DEFAULT_THEME
     assert DEFAULT_THEME.text.inverse == Style(fg="#0d1117")
     assert DEFAULT_THEME.overlays.toast == DARK_PALETTE.surface_raised
     head = Markdown("# Title").render(40)[0].segments[0].style

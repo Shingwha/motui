@@ -51,11 +51,11 @@ from .text import index_bounds_at_columns
 from .theme import Theme
 
 __all__ = [
+    "LAYERS",
     "Chrome",
     "Frame",
     "FrameSpan",
     "FrameTable",
-    "LAYERS",
     "Overlay",
     "Pane",
     "Rect",
@@ -186,7 +186,7 @@ def _ratio_sizes(span: int, ratios: Sequence[float], min_size: int) -> list[int]
     :meth:`Split.rects` applies to a size that overruns what remains).
     """
     total = sum(ratios)
-    sizes = [span * ratio // total for ratio in ratios]
+    sizes = [int(span * ratio // total) for ratio in ratios]
     remainder = span - sum(sizes)
     if remainder:
         sizes[-1] += remainder
@@ -345,13 +345,13 @@ class Pane:
     rect: Rect
     viewport: Viewport
     chrome: tuple = ()
-    division: "Split | None" = None
-    children: tuple["Pane", ...] = ()
-    _frame: "Frame | None" = field(default=None, compare=False, repr=False)
+    division: Split | None = None
+    children: tuple[Pane, ...] = ()
+    _frame: Frame | None = field(default=None, compare=False, repr=False)
     #: Derived cache: the pane's chrome negotiation over one ``(rect, chrome)``
     #: pair -- both immutable values of the pane, so a retile or a registration
     #: invalidates the memo by construction.  Invisible to eq/hash/repr.
-    _negotiation: "tuple[Rect, tuple, Rect, tuple] | None" = field(
+    _negotiation: tuple[Rect, tuple, Rect, tuple] | None = field(
         default=None, compare=False, repr=False
     )
 
@@ -509,7 +509,7 @@ class Pane:
         *,
         ratios: tuple[float, ...] = (1, 1),
         min_size: int = 1,
-    ) -> tuple["Pane", ...]:
+    ) -> tuple[Pane, ...]:
         """Divide this pane into one child per ratio; return the children.
 
         The same code path :meth:`~motui.app.TUI.split` calls: the
@@ -667,7 +667,9 @@ class Pane:
             )
             parent.division = trimmed
             parent.children = survivors
-            for child, rect in zip(survivors, trimmed.rects(parent.rect)):
+            for child, rect in zip(
+                survivors, trimmed.rects(parent.rect), strict=True
+            ):
                 child._place(rect)
             fallback = survivors[min(index, len(survivors) - 1)]
         else:
@@ -690,7 +692,9 @@ class Pane:
                     parent.division = survivor.division
                     parent.children = survivor.children
                     for child, rect in zip(
-                        survivor.children, survivor.division.rects(parent.rect)
+                        survivor.children,
+                        survivor.division.rects(parent.rect),
+                        strict=True,
                     ):
                         child._place(rect)
             fallback = parent
@@ -714,7 +718,9 @@ class Pane:
         self.rect = rect
         division = self.division
         if division is not None:
-            for child, child_rect in zip(self.children, division.rects(rect)):
+            for child, child_rect in zip(
+                self.children, division.rects(rect), strict=True
+            ):
                 child._place(child_rect)
 
     def focus(self) -> None:
@@ -1557,12 +1563,14 @@ class Frame:
         placement for it (:meth:`region`), which the rewrite splices back
         through.
         """
-        for pane, layout in zip(self._region_order, self._pane_layouts):
+        for pane, layout in zip(
+            self._region_order, self._pane_layouts, strict=True
+        ):
             if pane.id == pane_id:
                 return layout
         return None
 
-    def with_pane_rows(self, pane_id: str, rows: Sequence[Line]) -> ScreenLayout:
+    def with_pane_rows(self, pane_id: str, rows: Sequence[Line]) -> ScreenLayout | None:
         """The layout being painted, with one pane's rows replaced in place.
 
         The write half of a pane-relative overlay: ``rows`` -- an overlay's
@@ -1629,7 +1637,7 @@ class Separator:
     instead (``split(separator=False)``, then ``pane.add_chrome(...)``).
     """
 
-    __slots__ = ("_after_id", "_before_id", "chrome", "_strip_cache", "_host")
+    __slots__ = ("_after_id", "_before_id", "_host", "_strip_cache", "chrome")
 
     def __init__(
         self, host: _ChromeHost, before_id: str, after_id: str, edge: str

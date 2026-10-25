@@ -9,7 +9,6 @@ import pytest
 from motui.kernel.cell import Cell, Line, Segment, Style, Surface
 from motui.kernel.geom import Size
 
-
 # -- the content door -------------------------------------------------------
 
 

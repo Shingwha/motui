@@ -47,8 +47,8 @@ from .text import (
 )
 
 __all__ = [
-    "Cell",
     "ELLIPSIS",
+    "Cell",
     "Line",
     "Segment",
     "Style",
@@ -164,17 +164,21 @@ class Segment:
     _width: int = field(init=False, compare=False, repr=False, default=-1)
 
     def __post_init__(self) -> None:
-        """The content door: ``text`` and ``link`` are cells only.
+        """The content door: ``text``, ``link`` and ``action`` are cells only.
 
         Runs before any measurement, so the lazy ``_width`` cache and every
         width a reader sees are computed from the sanitized run -- the door
         and the measure can never disagree.  A link that sanitizes to the
         empty string becomes ``None``: an empty OSC 8 target has no meaning,
-        and plain text is what it would paint anyway.
+        and plain text is what it would paint anyway.  ``action`` passes the
+        same door as :class:`Cell`'s payload, so a control character can
+        never ride an action name into a host's dispatch.
         """
         object.__setattr__(self, "text", _cells_only(self.text))
         if self.link is not None:
             object.__setattr__(self, "link", _cells_only(self.link) or None)
+        if self.action is not None:
+            object.__setattr__(self, "action", _cells_only(self.action) or None)
 
     @property
     def width(self) -> int:
@@ -183,7 +187,7 @@ class Segment:
             object.__setattr__(self, "_width", visible_width(self.text))
         return self._width
 
-    def with_style(self, style: Style) -> "Segment":
+    def with_style(self, style: Style) -> Segment:
         """A copy of this run in ``style``: text and payloads ride along.
 
         The one rebuild a restyling site uses (a selection highlight, a
@@ -218,7 +222,7 @@ class Line:
     # -- construction ------------------------------------------------------
 
     @classmethod
-    def from_text(cls, text: str, style: Style | None = None) -> "Line":
+    def from_text(cls, text: str, style: Style | None = None) -> Line:
         """A line holding ``text`` in a single segment (``""`` -> empty line)."""
         if text == "":
             return cls()
@@ -233,25 +237,25 @@ class Line:
     @property
     def text(self) -> str:
         """Plain-text view (styles dropped)."""
-        if self._text is None:
-            object.__setattr__(
-                self, "_text", "".join(seg.text for seg in self._segments)
-            )
-        return self._text
+        cached = self._text
+        if cached is None:
+            cached = "".join(seg.text for seg in self._segments)
+            object.__setattr__(self, "_text", cached)
+        return cached
 
     @property
     def width(self) -> int:
         """Display width in columns, via :class:`Segment.width` (which measures
         through :func:`motui.kernel.text.visible_width`)."""
-        if self._width is None:
-            object.__setattr__(
-                self, "_width", sum(seg.width for seg in self._segments)
-            )
-        return self._width
+        cached = self._width
+        if cached is None:
+            cached = sum(seg.width for seg in self._segments)
+            object.__setattr__(self, "_width", cached)
+        return cached
 
     # -- sizing ------------------------------------------------------------
 
-    def fit(self, width: int) -> "Line":
+    def fit(self, width: int) -> Line:
         """Truncate *this* row to ``width`` columns, marking the cut with ``…``.
 
         Over-wide lines lose their tail; the marker takes one column and
@@ -298,7 +302,7 @@ class Line:
             kept.append(Segment(ELLIPSIS, marker_style))
         return Line(kept)
 
-    def fill(self, width: int, style: Style = NONE) -> "Line":
+    def fill(self, width: int, style: Style = NONE) -> Line:
         """Grow *this* row to ``width`` columns, ``style`` laid underneath.
 
         The sizing family's growing member -- ``fit`` trims, ``fill``
@@ -334,7 +338,7 @@ class Line:
         return Line(segments)
 
     @classmethod
-    def filled(cls, width: int, style: Style = NONE) -> "Line":
+    def filled(cls, width: int, style: Style = NONE) -> Line:
         """A fresh row of ``width`` spaces in one segment: the band primitive.
 
         The blank-row constructor a component that renders solid
@@ -349,12 +353,12 @@ class Line:
 
     # -- combination -------------------------------------------------------
 
-    def __add__(self, other: object) -> "Line":
+    def __add__(self, other: object) -> Line:
         if not isinstance(other, Line):
             return NotImplemented
         return Line(self._segments + other._segments)
 
-    def merge_span(self, start: int, end: int, style: Style) -> "Line":
+    def merge_span(self, start: int, end: int, style: Style) -> Line:
         """``style`` merged over the cells ``[start, end)``: a new row.
 
         The inline-hover post-transform: a component keeps a hover-free base
@@ -384,7 +388,7 @@ class Line:
 
     # -- the 2.0 width vocabulary -----------------------------------------
 
-    def clip(self, width: int) -> "Line":
+    def clip(self, width: int) -> Line:
         """A prefix of this row no wider than ``width`` columns.
 
         A cut never splits a cell: a double-width character that would
@@ -414,7 +418,7 @@ class Line:
             break
         return Line(kept)
 
-    def pad(self, width: int) -> "Line":
+    def pad(self, width: int) -> Line:
         """This row widened with spaces to ``width`` columns.
 
         Padding never truncates; a row already at least ``width`` wide is
@@ -642,7 +646,7 @@ class Surface:
         return len(self.rows)
 
     @classmethod
-    def blank(cls, size: Size) -> "Surface":
+    def blank(cls, size: Size) -> Surface:
         """An empty surface of ``size``: ``height`` empty rows."""
         if size.width < 0 or size.height < 0:
             raise ValueError(
@@ -651,7 +655,7 @@ class Surface:
         return cls(width=size.width, rows=tuple(Line() for _ in range(size.height)))
 
     @classmethod
-    def of(cls, rows: Sequence[Line], width: int) -> "Surface":
+    def of(cls, rows: Sequence[Line], width: int) -> Surface:
         """A surface of ``rows`` normalized to exactly ``width`` columns.
 
         A short row is padded with spaces and an overwide row is clipped at a

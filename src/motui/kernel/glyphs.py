@@ -68,12 +68,12 @@ class Border:
     bottom_right: str = "\u2518"
 
     @classmethod
-    def square(cls) -> "Border":
+    def square(cls) -> Border:
         """The square corners and light lines of :class:`Border`'s defaults."""
         return cls()
 
     @classmethod
-    def rounded(cls) -> "Border":
+    def rounded(cls) -> Border:
         """Square lines with rounded corners (``╭ ╮ ╰ ╯``)."""
         return cls(
             top_left="\u256d",
@@ -83,7 +83,7 @@ class Border:
         )
 
     @classmethod
-    def heavy(cls) -> "Border":
+    def heavy(cls) -> Border:
         """Heavy box-drawing lines (``┏ ━ ┳ ┓`` ...)."""
         return cls(
             top_left="\u250f",
@@ -103,7 +103,7 @@ class Border:
         )
 
     @classmethod
-    def double(cls) -> "Border":
+    def double(cls) -> Border:
         """Double box-drawing lines (``╔ ═ ╦ ╗`` ...)."""
         return cls(
             top_left="\u2554",
@@ -123,7 +123,7 @@ class Border:
         )
 
     @classmethod
-    def ascii(cls) -> "Border":
+    def ascii(cls) -> Border:
         """Plain ASCII (``+ - |``), for terminals without box drawing."""
         return cls(
             top_left="+",
@@ -143,7 +143,7 @@ class Border:
         )
 
     @classmethod
-    def none(cls) -> "Border":
+    def none(cls) -> Border:
         """No visible border: spaces keep the reserved geometry."""
         return cls(**{name: " " for name in cls.__dataclass_fields__})
 
