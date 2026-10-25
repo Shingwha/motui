@@ -56,7 +56,12 @@ from ..kernel.events import Event, PasteEvent
 from ..kernel.glyphs import GLYPHS, Glyphs, seat
 from ..kernel.cell import Line, Segment, Surface
 from ..kernel.layout import Constraints
-from ..kernel.text import WrapMode, index_pair_at_columns, visible_width
+from ..kernel.text import (
+    WrapMode,
+    index_bounds_at_columns,
+    index_pair_at_columns,
+    visible_width,
+)
 from ..kernel.theme import Styles, Theme
 from ..widgets.base import Widget
 from ..kernel.keymap import (
@@ -535,8 +540,11 @@ class _TextField(Widget):
         The memo keys on the width alone (never on ``max_height``): a
         smaller budget truncates the returned rows without repainting the
         buffer, so the remembered table stays whole for the next call.  The
-        surface is :meth:`~motui.kernel.cell.Surface.clipped`, not padded --
-        the painted bytes are the rows the 1.x list answer produced.
+        surface width is :meth:`_surface_width`'s answer -- ``c.width`` for
+        every shell but an Editor in ``OVERFLOW`` mode, whose rows keep
+        their natural width for a horizontal scroll container -- and the
+        builder is :meth:`~motui.kernel.cell.Surface.of` with ``pad=False``,
+        which is byte-for-byte ``Surface.clipped`` at ``c.width``.
         """
         width = c.width
         self._buf.last_width = width
@@ -552,9 +560,20 @@ class _TextField(Widget):
             self._memo_width = width
             self._memo_rows = rows
         out = list(rows)
+        surface_width = self._surface_width(out, c.width)
         if c.max_height is not None:
             out = out[: c.max_height]
-        return Surface.clipped(out, c.width)
+        return Surface.of(out, surface_width, pad=False)
+
+    def _surface_width(self, rows: list[Line], width: int) -> int:
+        """The width the surface carries: the constraint's, unless a policy widens it.
+
+        The shared shells answer ``width``, so their surfaces keep the 1.x
+        bytes exactly.  :class:`Editor` overrides this in ``OVERFLOW`` mode,
+        whose logical rows keep their natural width (``max(width, widest
+        row)``) because a container owns the visible columns.
+        """
+        return width
 
     def _rows_for(self, width: int) -> list[Line]:
         """The freshly built rows at ``width``: :meth:`render`'s miss path."""
@@ -916,10 +935,16 @@ class Editor(_TextField):
 
     ``wrap`` (``WrapMode.WORD``, the current behavior) is the final row
     guard: ``WORD`` / ``CHAR`` reflow a row wider than the field, the
-    single-row modes truncate it (``ELLIPSIS`` marks, ``CLIP`` cuts hard,
-    ``OVERFLOW`` leaves it for the host -- W2.5b).  The buffer's own
-    word-aware geometry does not move, so the cursor always reads the rows
-    the editor paints.
+    single-row modes truncate it (``ELLIPSIS`` marks, ``CLIP`` cuts hard),
+    while ``OVERFLOW`` turns the field into a **logical-line view**: every
+    ``"\\n"``-separated buffer line is one rendered row at its natural width
+    (no wrapping), the cursor's ``(row, col)`` index those rows directly,
+    and the surface carries the widest row so a horizontal scroll container
+    can window it.  Up/down (and their selection variants) then step logical
+    lines instead of wrapped visual rows, and a click resolves through the
+    same logical geometry.  The buffer's word-aware geometry is untouched
+    for every other mode, so the default cursor always reads the rows the
+    editor paints.
     """
 
     __slots__ = ("max_rows",)
@@ -965,6 +990,187 @@ class Editor(_TextField):
     @wrap.setter
     def wrap(self, value: WrapMode) -> None:
         self._wrap = value
+
+    # -- the logical-line view (OVERFLOW) --------------------------------------
+
+    def click(self, row: int, col: int) -> bool:
+        """Dock the cursor on a logical-line cell in ``OVERFLOW`` mode.
+
+        The OVERFLOW render has one row per logical line, so the shared
+        shell's wrapped-row walk would answer the wrong line.  ``row`` is a
+        row of :meth:`render`'s ``max_rows`` window and ``col`` a display
+        column of the line; the cell resolves through the kernel's boundary
+        resolver and the buffer's flat-offset setter, the same pair
+        :meth:`TextBuffer.place` uses.  Every other mode keeps the shared
+        implementation.
+        """
+        if self._wrap is not WrapMode.OVERFLOW:
+            return super().click(row, col)
+        rows = self._logical_rows()
+        start, count = self._window(rows, self._buf.row)
+        if not 0 <= row < count:
+            return False
+        line = rows[start + row]
+        offset = line.start + index_bounds_at_columns(line.text, col)[0]
+        self._buf._drop_selection()
+        self._buf._set_offset(offset)
+        return True
+
+    def move_up(self) -> bool:
+        """Move one logical line up in ``OVERFLOW``; the shared visual row otherwise."""
+        if self._wrap is not WrapMode.OVERFLOW:
+            return super().move_up()
+        return self._step_logical(-1, extend=False)
+
+    def move_down(self) -> bool:
+        """Move one logical line down in ``OVERFLOW``; the shared visual row otherwise."""
+        if self._wrap is not WrapMode.OVERFLOW:
+            return super().move_down()
+        return self._step_logical(1, extend=False)
+
+    def select_up(self) -> bool:
+        """Extend one logical line up in ``OVERFLOW``; the shared visual row otherwise."""
+        if self._wrap is not WrapMode.OVERFLOW:
+            return super().select_up()
+        return self._step_logical(-1, extend=True)
+
+    def select_down(self) -> bool:
+        """Extend one logical line down in ``OVERFLOW``; the shared visual row otherwise."""
+        if self._wrap is not WrapMode.OVERFLOW:
+            return super().select_down()
+        return self._step_logical(1, extend=True)
+
+    def _step_logical(self, delta: int, *, extend: bool) -> bool:
+        """Walk ``delta`` logical lines, keeping the character column.
+
+        The one cursor write of the OVERFLOW navigation.  A step past the
+        buffer's ends moves nowhere (``False``), exactly the buffer's own
+        edge rule; a plain step drops the selection, while an extending one
+        anchors at the starting offset the first time -- the two rules
+        :meth:`~motui.widgets.textbuf.TextBuffer.move_up` and
+        ``select_up`` apply.  The column clamps to the target line's
+        length, so a short line between long ones costs no position.
+        """
+        buf = self._buf
+        if not extend:
+            buf._drop_selection()  # a plain move drops the selection even at an edge
+        row = buf.row + delta
+        if not 0 <= row < len(buf.lines):
+            return False
+        if extend:
+            if buf.anchor is None:
+                buf._anchor = buf.offset
+            buf._chain = False
+        offset = sum(len(line) + 1 for line in buf.lines[:row]) + min(
+            buf.col, len(buf.lines[row])
+        )
+        return buf._set_offset(offset)
+
+    def cursor_position(self, width: int) -> tuple[int, int]:
+        """The cursor cell as ``(logical row, content column)`` in ``OVERFLOW``.
+
+        The row indexes the rendered ``max_rows`` window; the column is the
+        display width of the logical line's prefix, so it may reach past
+        ``width`` -- the surface's own width is the content width and the
+        container maps the cell into the visible columns.  Every other mode
+        keeps the shared wrapped answer.
+        """
+        if self._wrap is not WrapMode.OVERFLOW:
+            return super().cursor_position(width)
+        rows = self._logical_rows()
+        index = self._buf.row
+        start, _count = self._window(rows, index)
+        return index - start, visible_width(rows[index].text[: self._buf.col])
+
+    def _logical_rows(self) -> list[_VisualRow]:
+        """One natural-width row per logical buffer line.
+
+        The OVERFLOW geometry.  Every line is tab-normalized exactly as
+        :meth:`TextBuffer.visual_rows` normalizes it (a tab becomes one
+        space), so character offsets and the cursor's column stay valid;
+        the flat offsets address the joined text.  The visual row index
+        equals the logical line index by construction.
+        """
+        rows: list[_VisualRow] = []
+        base = 0
+        for line in self._buf.lines:
+            normalized = line.replace("\t", " ")
+            rows.append(
+                _VisualRow(
+                    base,
+                    base + len(normalized),
+                    normalized,
+                    base,
+                    base + len(normalized),
+                )
+            )
+            base += len(normalized) + 1
+        return rows
+
+    def _surface_width(self, rows: list[Line], width: int) -> int:
+        """The natural width in ``OVERFLOW``; the constraint's width otherwise."""
+        if self._wrap is not WrapMode.OVERFLOW:
+            return width
+        return max(width, max((row.width for row in rows), default=0))
+
+    def _rows_for(self, width: int) -> list[Line]:
+        """The logical-line rows in ``OVERFLOW``; the shared wrapped rows otherwise.
+
+        Every logical line is drawn whole: the base run keeps its trailing
+        spaces, the block cursor rides the character under ``_buf.col`` (or
+        a reverse-video space at the line's end, which the ``inner``
+        argument always leaves room for), the selection band and the mask
+        reuse the buffer's row-body builder, and the ``max_rows`` window
+        still slides around the cursor.  ``width`` is deliberately unused:
+        the natural width is the answer, and :meth:`_surface_width` hands it
+        to the container.
+        """
+        if self._wrap is not WrapMode.OVERFLOW:
+            return super()._rows_for(width)
+        text_styles = self.group("text")
+        surface_styles = self.group("surfaces")
+        rows = self._logical_rows()
+        cursor_index, cursor_column = self._buf.row, self._buf.col
+        start, count = self._window(rows, cursor_index)
+        shown = rows[start : start + count]
+        selection = self._buf.selection_range()
+        placeholder = self.placeholder if self._buf.empty and self.focused else ""
+        out: list[Line] = []
+        for offset, row in enumerate(shown):
+            index = start + offset
+            if placeholder:
+                body = [Segment(placeholder, text_styles.faint)]
+            else:
+                cursor_here = self.focused and index == cursor_index
+                local = self._buf.selected_local(row, selection)
+                text, column = row.text, cursor_column
+                if self._mask:
+                    text, column, local = self._mask_row(text, column, local)
+                marked = (
+                    cursor_here
+                    and selection is not None
+                    and selection[0] <= self._buf.offset < selection[1]
+                )
+                body = self._buf.row_body(
+                    text,
+                    column,
+                    visible_width(row.text) + 1,
+                    text_styles.base,
+                    text_styles.caret,
+                    selection=local,
+                    selection_style=text_styles.selection,
+                    show_cursor=cursor_here,
+                    cursor_marked=marked,
+                )
+            line = Line(body)
+            if self.hover:
+                # The block-level hover band covers the cursor cell too.
+                band = surface_styles.hover
+                line = Line(
+                    seg.with_style(seg.style.merge(band)) for seg in line.segments
+                )
+            out.append(line)
+        return out
 
     # -- visual geometry -------------------------------------------------------
 

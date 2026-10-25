@@ -543,10 +543,64 @@ def test_editor_wrap_selects_the_final_row_guard():
     assert (
         Editor("\u65e5", wrap=WrapMode.CLIP).render(Constraints(width=1))[0].text == ""
     )
-    # OVERFLOW is constructible this wave; the surface guard still clips.
+    # OVERFLOW keeps the logical row whole and hands its natural width out.
     overflow = Editor("abc", wrap=WrapMode.OVERFLOW)
     assert overflow.wrap is WrapMode.OVERFLOW
-    assert all(row.width <= 2 for row in overflow.render(Constraints(width=2)))
+    surface = overflow.render(Constraints(width=2))
+    assert surface.width == 3 and surface[0].text == "abc"
+
+
+def test_editor_overflow_renders_logical_lines_at_their_natural_width():
+    long_line = "value=" + "x" * 200
+    editor = Editor(long_line + "\nsecond", wrap=WrapMode.OVERFLOW)
+    surface = editor.render(Constraints(width=80))
+    assert surface.width == len(long_line)
+    assert [row.text for row in surface] == [long_line, "second"]
+    assert all(row.width <= surface.width for row in surface)
+    # The cursor stays on the logical line: at its end the block is the
+    # reverse-video space, one cell past the text.
+    editor.end()
+    surface = editor.render(Constraints(width=80))
+    assert surface[0].text == long_line + " "
+    assert editor.cursor_position(80) == (0, len(long_line))
+
+
+def test_editor_overflow_moves_between_logical_lines():
+    editor = Editor("abc\nlong line\nz", wrap=WrapMode.OVERFLOW)
+    assert editor.move_down() is True and editor.cursor == (1, 0)
+    editor.end()
+    assert editor.cursor == (1, 9)
+    assert editor.move_down() is True
+    assert editor.cursor == (2, 1)  # clamped to the shorter line's end
+    assert editor.move_up() is True and editor.cursor == (1, 1)
+    assert editor.select_up() is True and editor.selected_text == "bc\nl"
+    assert editor.move_up() is False and editor.selected_text == ""
+
+
+def test_editor_overflow_click_maps_logical_rows_and_columns():
+    editor = Editor("abc\ndefgh", wrap=WrapMode.OVERFLOW)
+    assert editor.click(1, 3) is True
+    assert editor.cursor == (1, 3)
+    assert editor.click(2, 0) is False
+
+
+def test_editor_overflow_keeps_the_mask_and_selection_on_logical_rows():
+    editor = Editor("secret\nmore", mask="\u2022", wrap=WrapMode.OVERFLOW)
+    assert editor.select_all() is True
+    surface = editor.render(Constraints(width=4))
+    assert surface.width == 6
+    # The cursor blocks the end of the selected last line, so its text is
+    # one reverse-video cell longer than the masked content.
+    assert [row.text for row in surface] == ["\u2022" * 6, "\u2022" * 4 + " "]
+    assert "s" not in "".join(row.text for row in surface)
+
+
+def test_the_editor_default_wrap_still_wraps_within_the_width():
+    editor = Editor("x" * 200)
+    surface = editor.render(Constraints(width=80))
+    assert surface.width == 80
+    assert surface.height > 1
+    assert all(row.width <= 80 for row in surface)
 
 
 def test_editor_wrap_is_part_of_the_revision():
