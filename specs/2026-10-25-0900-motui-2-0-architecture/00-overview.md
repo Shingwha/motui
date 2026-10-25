@@ -128,7 +128,7 @@ uv run python tools/growth.py
 | W1 | ✅ 2026-10-25 @ `2.0/w1-kernel`（1019 passed / core 删除 / hash 不变） |
 | W2a | ✅ 2026-10-25 @ `2.0/w2a-surface`（1045 passed / golden 不变） |
 | W2b1/W2b2 | ✅ 2026-10-25 @ `2.0/w2b1-views` + `2.0/w2b2-content`（1078 passed / golden 不变） |
-| W2c1 | ⏳ |
+| W2c1 | ✅ 2026-10-25 @ `2.0/w2c1-canvas`（1115 passed / Canvas 0.5ms / golden 不变） |
 | W2.5 | ⏳ |
 | W2.6 | ⏳ |
 | W3a | ⏳ |
