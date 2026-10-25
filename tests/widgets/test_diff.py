@@ -112,10 +112,17 @@ def test_wrap_selects_how_a_long_diff_line_fits():
     )
     assert len(wrapped) > 2 and all(len(row) <= 12 for row in wrapped)
 
-    # CONTRACT ONLY: OVERFLOW keeps the line whole through reflow; the
-    # surface guard clips it until W2.6 connects a scroll container.
+    # OVERFLOW keeps every row whole and hands its natural width out for a
+    # horizontal scroll container to window.
     overflow = Diff(before, after, context=0, wrap=WrapMode.OVERFLOW)
-    assert all(row.width <= 20 for row in overflow.render(Constraints(width=20)))
+    surface = overflow.render(Constraints(width=20))
+    assert surface.width == 31  # "+" + the 30-character insertion
+    assert surface[-1].text == "+" + "y" * 30
+    assert all(row.width <= surface.width for row in surface)
+    # The height budget still truncates the natural-width surface.
+    budgeted = overflow.render(Constraints(width=20, max_height=1))
+    assert budgeted.width == 31 and budgeted.height == 1
+    assert list(budgeted)[0].text.startswith("@@")
 
 
 def test_wrap_is_part_of_the_revision_and_render_key():
