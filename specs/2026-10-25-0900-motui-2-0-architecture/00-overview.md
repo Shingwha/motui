@@ -141,5 +141,35 @@ uv run python tools/growth.py
 | W4a1 | ✅ 2026-10-25 @ `2.0/w4a1-terminal`（1568 passed / TerminalOptions / Timer） |
 | W4a2 | ✅ 2026-10-25 @ `2.0/w4a2-runtime`（1576 passed / TUI 删除 / Workspace facade） |
 | W4b | ✅ 2026-10-25 @ `2.0/w4b-api`（1592 passed / Section/Axis/Command） |
-| W4b | ⏳ |
-| W5 | ⏳ |
+| W5a | ✅ 2026-10-25 @ `2.0/w5a-docs`（README/ARCHITECTURE/CONTRACT/WIDGETS/MIGRATION + 23 ADR + 2.0.0） |
+| W5b | ✅ 2026-10-25 @ `2.0/w5b-release`（quickstart + CI 四示例 + showcase 文案 + golden 重录） |
+
+
+## 11. 终验（2026-10-25，main）
+
+| 门禁 | 结果 |
+|---|---|
+| `uv run pytest -q -p no:cacheprovider` | **1592 passed** |
+| `tools/golden.py --check` | 57 topics match |
+| `tools/semantic.py --check` | 57 topics match |
+| `tools/framebench.py` | render-hash `e7ca544b…986da`；无 >10% 劣化 |
+| `python -m motui < /dev/null` | exit 0，70 行 |
+| `python -m motui --pages` | exit 0，4059 行 |
+| `examples/{quickstart,snake,dashboard,wide_table}.py --headless` | 全部 exit 0 |
+| `ruff check .` | 0 |
+| `pyright` | 0 errors |
+| `lint-imports` | 4 kept / 0 broken |
+| `tools/api.py --check` | 184 names match |
+| `tools/growth.py`（full） | pytest/golden/api 全 pass |
+| `motui.__version__` | **2.0.0** |
+| docs | 4 份 2.0 文档 + 23 ADR；主文档无旧名 |
+
+### 已知偏差（如实登记，不阻塞 2.0.0 使用）
+
+1. `runtime.py` 1617 行、`application.py` 891 行、`workspace.py` 285 行：未达 spec 的 Runtime ≤450 / App ≤250；W4a2 交付的是 Runtime + Workspace facade，方法体拆分与 Router 仍未完成。
+2. `split("vertical")`/`dock(edge=)` 字符串入口、`pin=`、`App.open_palette(list)`、`App` 旧构造参数仍保留为兼容层；新 API（Axis/Placement/TerminalOptions/registry）已可用。
+3. `isinstance` 总数 125（事件/值判别），能力探测 0；spec 的“总数 <10”未达。
+4. `Fill` 以 `Document.add(sizing=Sizing.FILL)` 落地，未引入 `PaneContent = Document | Fill` 联合。
+5. 旧字节 golden 保留为额外门禁；`tools/golden.py` 未删除（spec 计划 W5 删除）。
+6. `Router`/`DEFAULT_HANDLERS` 未拆分，`App.dispatch` 仍是 if 链；定时器/终端/焦点已按新对象工作。
+7. `Theme.style()` 未实现，组件用 `group(name)`；`RowSpan` 未落地（`RowRange` 仍在）。
