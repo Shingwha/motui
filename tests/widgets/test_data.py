@@ -5,7 +5,8 @@ from dataclasses import replace
 import pytest
 
 from motui.kernel.glyphs import GLYPHS
-from motui.kernel.cell import Segment
+from motui.kernel.cell import Segment, Surface
+from motui.kernel.layout import Constraints
 from motui.kernel.style import Style
 from motui.kernel.theme import DEFAULT_THEME, Styles
 from motui.widgets import List, Table, TreeNode, Tree
@@ -62,7 +63,7 @@ def test_index_clamps_and_an_empty_list_is_inert():
     assert lst.index == 0
     empty = List()
     empty.index = 5
-    assert empty.index == 0 and empty.render(20) == []
+    assert empty.index == 0 and list(empty.render(20)) == []
     assert empty.move(1) is False and empty.activate() is False
     assert empty.home() is False and empty.end() is False
 
@@ -167,6 +168,16 @@ def test_a_disabled_list_refuses_every_gesture_but_still_renders():
 def test_rows_are_fitted_to_the_painting_width():
     lst = List(["a very long item text", "b"], window=2)
     assert all(row.width <= 10 for row in lst.render(10))
+
+
+def test_list_answers_a_surface_and_honours_the_height_budget():
+    lst = List(["a", "b", "c"], window=3)
+    surface = lst.render(Constraints(width=10, max_height=2))
+    assert isinstance(surface, Surface)
+    assert [row.text for row in surface] == ["\u2192 a", "  b"]
+    assert surface.width == 10 and surface.height == 2
+    # The 1.x int spelling still answers the whole window.
+    assert [row.text for row in lst.render(10)] == ["\u2192 a", "  b", "  c"]
 
 
 # -- Table --------------------------------------------------------------------
@@ -438,6 +449,26 @@ def test_disabled_rows_and_tables_refuse_their_gestures():
     assert dead.move(1) is False and dead.click(3, 0) is False
 
 
+def test_table_answers_a_surface_and_honours_the_height_budget():
+    table = Table(["A"], [["1"], ["2"], ["3"]], wrap=False)
+    surface = table.render(Constraints(width=9, max_height=5))
+    assert isinstance(surface, Surface)
+    assert [row.text for row in surface] == [
+        "\u250c\u2500\u2500\u2500\u2510",
+        "\u2502 A \u2502",
+        "\u251c\u2500\u2500\u2500\u2524",
+        "\u2502 1 \u2502",
+        "\u251c\u2500\u2500\u2500\u2524",
+    ]
+    assert surface.width == 9 and surface.height == 5
+    # The 1.x int spelling still answers the whole grid; the budget did not
+    # enter the memory's key, so the memo serves both answers.
+    full = table.render(9)
+    assert len(full) == 9
+    again = table.render(Constraints(width=9, max_height=5))
+    assert [row.text for row in again] == [row.text for row in surface]
+
+
 # -- Tree ---------------------------------------------------------------------
 
 
@@ -508,7 +539,7 @@ def test_a_leaf_and_an_empty_tree_decline_activation():
     assert leaf.activate() is False and texts(leaf, 20) == ["  solo"]
     empty = Tree([])
     assert empty.activate() is False and empty.move(1) is False
-    assert empty.selected is None and empty.render(10) == []
+    assert empty.selected is None and list(empty.render(10)) == []
 
 
 def test_collapsing_re_clamps_the_cursor_into_the_new_rows():
@@ -539,7 +570,7 @@ def test_filter_prunes_to_the_matches_and_keeps_ancestors_open():
     assert tree.filter("guide") is True
     assert texts(tree, 30) == ["\u25be docs", "    guide"]
     assert tree.filter("nope") is True
-    assert tree.render(30) == [] and tree.selected is None
+    assert list(tree.render(30)) == [] and tree.selected is None
     assert tree.filter(None) is True
     assert tree.filter(None) is False
 
@@ -601,3 +632,18 @@ def test_disabled_nodes_are_skipped_and_refused():
     dead = Tree([sample()], disabled=True)
     assert dead.move(1) is False and dead.click(0, 0) is False
     assert dead.activate() is False
+
+
+def test_tree_answers_a_surface_and_honours_the_height_budget():
+    tree = Tree([sample()])
+    tree.activate()
+    surface = tree.render(Constraints(width=30, max_height=2))
+    assert isinstance(surface, Surface)
+    assert [row.text for row in surface] == ["\u25be src", "    app.py"]
+    assert surface.width == 30 and surface.height == 2
+    # The 1.x int spelling still answers every visible row.
+    assert [row.text for row in tree.render(30)] == [
+        "\u25be src",
+        "    app.py",
+        "  \u25b8 lib",
+    ]

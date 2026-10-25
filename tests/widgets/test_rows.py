@@ -99,3 +99,20 @@ def test_text_honours_the_height_budget():
     assert [row.text for row in surface] == ["one", "two"]
     assert surface.height == 2
     assert [row.text for row in component.render(10)] == ["one", "two", "three"]
+
+
+@pytest.mark.parametrize(
+    "component",
+    [
+        StatusLine(left=["l"], right=["r"]),
+        ShortcutBar([("k", "v")]),
+        Notice("n"),
+    ],
+)
+def test_the_row_furniture_honours_the_height_budget(component):
+    surface = component.render(Constraints(width=20))
+    assert isinstance(surface, Surface)
+    assert surface.width == 20 and surface.height == 1
+    assert all(row.width <= 20 for row in surface)
+    truncated = component.render(Constraints(width=20, max_height=0))
+    assert isinstance(truncated, Surface) and truncated.height == 0

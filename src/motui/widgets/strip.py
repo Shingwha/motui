@@ -15,7 +15,8 @@ from __future__ import annotations
 from typing import Sequence
 
 from ..widgets.cursor import Cursor
-from ..kernel.cell import Line
+from ..kernel.cell import Line, Surface
+from ..kernel.layout import Constraints, as_constraints
 from ..kernel.text import visible_width
 from ..widgets.base import Widget
 
@@ -210,17 +211,25 @@ class LabelStrip(ClampedCursor, Widget):
             x += span
         return tuple(spans)
 
-    def render(self, width: int) -> list[Line]:
+    def render(self, c: Constraints | int) -> Surface:
         """The strip's one row (or one empty row for an empty strip), ``fit``.
 
-        The subclass's :meth:`_layout` supplies the row and its span table;
-        the render records both for the hits.  ``_last_width`` is the
-        geometry :meth:`click` maps a column against.
+        A bare ``int`` is the 1.x spelling and is normalized through
+        :func:`motui.kernel.layout.as_constraints`; the subclass's
+        :meth:`_layout` supplies the row and its span table, and the render
+        records both for the hits.  A ``max_height`` of zero paints no row
+        at all (the strip's height budget is its one row), while
+        ``_last_width`` still records the width the cells were measured
+        against.  The surface is :meth:`Surface.clipped`, not padded.
         """
-        self._last_width = width  # the geometry ``click`` maps a column against
-        line, spans = self._layout(width)
+        c = as_constraints(c)
+        self._last_width = c.width  # the geometry ``click`` maps a column against
+        line, spans = self._layout(c.width)
         self._spans = spans
-        return [line]
+        rows = [line]
+        if c.max_height is not None:
+            rows = rows[: c.max_height]
+        return Surface.clipped(rows, c.width)
 
     def _layout(self, width: int) -> tuple[Line, tuple[tuple[int, int, int], ...]]:
         """The strip's fitted row and the label span table, in one build."""

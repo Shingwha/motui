@@ -91,7 +91,8 @@ from typing import Iterable, Sequence
 
 from ..widgets.cursor import Cursor
 from ..kernel.glyphs import GLYPHS, Glyphs, seat_width
-from ..kernel.cell import Line, Segment, rest
+from ..kernel.cell import Line, Segment, Surface, rest
+from ..kernel.layout import Constraints, as_constraints
 from ..kernel.style import Style
 from ..kernel.text import visible_width
 from ..kernel.theme import Styles, Theme
@@ -301,7 +302,7 @@ class NavList(ClampedCursor, Widget):
             self.styles,
         )
 
-    def render(self, width: int) -> list[Line]:
+    def render(self, c: Constraints | int) -> Surface:
         """One row per item **and group row** (``[]`` for an empty list), each on its band.
 
         An item row is ``bar + separator + label`` on the selected item --
@@ -319,11 +320,14 @@ class NavList(ClampedCursor, Widget):
         collapses the seat with it (the blank column is zero wide and the
         separator defaults to ``""``), so every row renders the label alone
         and the state is carried by the foreground alone.  Every row is
-        ``fit`` to ``width`` with its band resting underneath
-        (:func:`~motui.kernel.cell.rest`).
+        ``fit`` to ``c.width`` with its band resting underneath
+        (:func:`~motui.kernel.cell.rest`); the surface is
+        :meth:`Surface.clipped` and a ``max_height`` budget truncates the
+        leading rows.
         """
+        c = as_constraints(c)
         if not self.items:
-            return []
+            return Surface.clipped([], c.width)
         # The roles resolve once per render; the focus rule drops the active
         # bar from accent to muted -- the label is never dimmed (D3).
         text = self.group("text")
@@ -340,7 +344,7 @@ class NavList(ClampedCursor, Widget):
                             Segment(self._bar_seat, text.muted),
                             Segment(f"{self._separator}{payload}", text.muted),
                         )),
-                        width,
+                        c.width,
                         self._band(False, False),
                     )
                 )
@@ -365,11 +369,13 @@ class NavList(ClampedCursor, Widget):
                             f"{self._separator}{self.items[index]}", label_style
                         ),
                     )),
-                    width,
+                    c.width,
                     self._band(index == self._index, index == self._hover_index),
                 )
             )
-        return rows
+        if c.max_height is not None:
+            rows = rows[: c.max_height]
+        return Surface.clipped(rows, c.width)
 
     # -- the row plan ------------------------------------------------------------
 

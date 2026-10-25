@@ -42,8 +42,8 @@ from __future__ import annotations
 from ..kernel.document import Component, Revisioned
 from ..kernel.events import Event, KeyEvent, MouseEvent
 from ..kernel.glyphs import GLYPHS, Glyphs
-from ..kernel.cell import Line, Segment
-from ..kernel.layout import ScrollState
+from ..kernel.cell import Line, Segment, Surface
+from ..kernel.layout import Constraints, ScrollState, as_constraints
 from ..kernel.theme import Styles, Theme
 from ..widgets.base import Widget
 
@@ -329,14 +329,29 @@ class ScrollView(Widget):
             self.styles,
         )
 
-    def render(self, width: int) -> list[Line]:
-        """Render the child at the inner width and paint the visible window."""
+    def render(self, c: Constraints | int) -> Surface:
+        """Render the child at the inner width and paint the visible window.
+
+        A bare ``int`` is the 1.x spelling and is normalized through
+        :func:`motui.kernel.layout.as_constraints`.  The window height is
+        the explicit ``height`` when the view has one -- the host's slot
+        wins outright -- and the child's natural row count otherwise, capped
+        by ``c.max_height`` when the constraint carries a budget.  The
+        child still renders through the 1.x ``render(width)`` door; every
+        painted row is clipped into the surface.
+        """
+        c = as_constraints(c)
+        width = c.width
         bar_width = 1 if self.bar and width > 0 else 0
         inner = max(0, width - bar_width)
         child_rows = list(self.child.render(inner))
         state = self._state
         state.content_height = len(child_rows)
         height = self.viewport_height
+        # The explicit height is the host's slot and wins over the budget;
+        # a natural-height view fills the budget it was offered.
+        if self.height is None and c.max_height is not None:
+            height = min(height, c.max_height)
         state.viewport_height = height
         state.clamp()
         start = state.offset
@@ -360,7 +375,7 @@ class ScrollView(Widget):
                     glyph, style = self.glyphs.bar_empty, chrome.scrollbar
                 line = Line((*line.segments, Segment(glyph, style)))
             out.append(line.fit(width))
-        return out
+        return Surface.clipped(out, c.width)
 
     def __repr__(self) -> str:
         return (

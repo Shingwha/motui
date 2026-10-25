@@ -81,7 +81,8 @@ from typing import Sequence
 
 from ..widgets.cursor import Cursor
 from ..kernel.glyphs import GLYPHS, Glyphs, pair_seat, seat, seat_width
-from ..kernel.cell import Line, Segment, rest
+from ..kernel.cell import Line, Segment, Surface, rest
+from ..kernel.layout import Constraints, as_constraints
 from ..widgets.mark import MarkSet
 from ..kernel.style import Style
 from ..kernel.text import visible_width
@@ -92,6 +93,40 @@ __all__ = ["CheckboxGroup", "MultiSelect", "Option", "RadioGroup", "Select"]
 
 #: Columns between the widest label and its description's column.
 GAP = 2
+
+
+class _SelectSurface(Surface):
+    """A select surface that still speaks the 1.x row-list dialect.
+
+    The 2.0 return value is a :class:`~motui.kernel.cell.Surface`, but two
+    call sites this wave may not edit still consume it as a row list:
+    ``app/command_palette.py`` concatenates
+    ``input.render(width) + autocomplete.render(width)`` and
+    ``tests/widgets/test_autocomplete.py`` compares an empty render to
+    ``[]`` (the Autocomplete subclass lives in the other worker's file).
+    Concatenation and list equality keep those 1.x spellings working;
+    ``as_constraints``/``Surface`` callers see a plain Surface.  W2c
+    migrates ``app/`` and removes this bridge.
+    """
+
+    __slots__ = ()
+
+    def __add__(self, other: Iterable[Line]) -> list[Line]:
+        return [*self.rows, *other]
+
+    def __radd__(self, other: Iterable[Line]) -> list[Line]:
+        return [*other, *self.rows]
+
+    def __eq__(self, other: object) -> bool:
+        # A legacy ``render(...) == []`` / ``== rows`` comparison reads the
+        # row sequence; every other comparison stays the Surface value one.
+        if isinstance(other, (list, tuple)):
+            return list(self.rows) == list(other)
+        if not isinstance(other, Surface):
+            return NotImplemented
+        return self.width == other.width and self.rows == other.rows
+
+    __hash__ = Surface.__hash__
 
 
 @dataclass(frozen=True)
@@ -628,17 +663,23 @@ class Select(Widget):
         """
         return self._revision()
 
-    def render(self, width: int) -> list[Line]:
+    def render(self, c: Constraints | int) -> Surface:
         """The window's rows, the title and the counter, each on its band.
 
-        Every row goes through the row-band contract
+        A bare ``int`` is the 1.x spelling and is normalized through
+        :func:`motui.kernel.layout.as_constraints`; a ``max_height`` budget
+        truncates the leading rows (the title row included when it is the
+        only row offered).  Every row goes through the row-band contract
         (:func:`~motui.kernel.cell.rest`): the item rows, the title row and
-        the ``(i/n)`` counter row alike are ``fit`` to ``width`` and rest on
-        their resolved band -- ``rows.base``, or ``rows.active`` /
+        the ``(i/n)`` counter row alike are ``fit`` to ``c.width`` and rest
+        on their resolved band -- ``rows.base``, or ``rows.active`` /
         ``rows.inactive`` on the focused / unfocused cursor row and
         ``rows.hover`` on the hovered one (D3).  The styles are read off the
-        theme/``Styles`` on every call, so a rethemed list repaints.
+        theme/``Styles`` on every call, so a rethemed list repaints.  The
+        surface is :meth:`Surface.clipped`, not padded: short rows keep
+        their natural width, so the bytes a layout paints do not change.
         """
+        c = as_constraints(c)
         text = self.group("text")
         rows = self._rows()
         start, stop = self._visible_range()
@@ -648,7 +689,7 @@ class Select(Widget):
             out.append(
                 rest(
                     Line.from_text(self.title, text.base),
-                    width,
+                    c.width,
                     self._band(False, False),
                 )
             )
@@ -665,7 +706,7 @@ class Select(Widget):
                         i in self.marked if self._multi else False,
                         self._is_disabled(i),
                     ),
-                    width,
+                    c.width,
                     self._band(current, hovered),
                 )
             )
@@ -674,11 +715,13 @@ class Select(Widget):
             out.append(
                 rest(
                     Line.from_text(counter, text.muted),
-                    width,
+                    c.width,
                     self._band(False, False),
                 )
             )
-        return out
+        if c.max_height is not None:
+            out = out[: c.max_height]
+        return _SelectSurface.clipped(out, c.width)
 
     def _band(self, current: bool, hovered: bool, disabled: bool = False) -> Style:
         """The surface one row rests on: :meth:`RowStyles.band`, by precedence."""

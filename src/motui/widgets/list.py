@@ -89,7 +89,8 @@ from collections.abc import Iterable, Sequence
 from ..widgets.cursor import Cursor
 from ..kernel.events import Event, KeyEvent
 from ..kernel.glyphs import GLYPHS, Glyphs, pair_seat, seat, seat_width
-from ..kernel.cell import Line, Segment, rest
+from ..kernel.cell import Line, Segment, Surface, rest
+from ..kernel.layout import Constraints, as_constraints
 from ..widgets.mark import MarkSet
 from ..kernel.style import Style
 from ..kernel.theme import Styles, Theme
@@ -508,19 +509,24 @@ class List(Widget):
             self.styles,
         )
 
-    def render(self, width: int) -> list[Line]:
-        """The window of item rows and the counter rows, fitted to ``width``.
+    def render(self, c: Constraints | int) -> Surface:
+        """The window of item rows and the counter rows, fitted to the width.
 
-        Every row goes through the row-band contract
+        A bare ``int`` is the 1.x spelling and is normalized through
+        :func:`motui.kernel.layout.as_constraints`; a ``max_height`` budget
+        truncates the leading rows (the window never grows past the height
+        it was offered).  Every row goes through the row-band contract
         (:func:`~motui.kernel.cell.rest`): the
-        item rows and the counter rows alike are ``fit`` to ``width`` and
+        item rows and the counter rows alike are ``fit`` to ``c.width`` and
         rest on their resolved band -- the ground, the active band on the
         engaged row, the hover band on the pointer's row and the disabled
-        band on a disabled item.
+        band on a disabled item.  The surface is :meth:`Surface.clipped`,
+        not padded, so the bytes a layout paints are the 1.x rows.
         """
+        c = as_constraints(c)
         count = len(self.items)
         if count == 0:
-            return []
+            return Surface.clipped([], c.width)
         start, stop = self._visible_range()
         rows: list[Line] = []
         for entry in self._layout():
@@ -529,7 +535,7 @@ class List(Widget):
                 rows.append(
                     rest(
                         self._row(entry, item_disabled),
-                        width,
+                        c.width,
                         self._band(
                             entry == self._index, entry == self._hover_row, item_disabled
                         ),
@@ -542,7 +548,7 @@ class List(Widget):
                             f"{seat(self.glyphs.more_up)}{start} more",
                             self.group("text").muted,
                         ),
-                        width,
+                        c.width,
                         self._band(False, False),
                     )
                 )
@@ -553,11 +559,13 @@ class List(Widget):
                             f"{seat(self.glyphs.more_down)}{count - stop} more",
                             self.group("text").muted,
                         ),
-                        width,
+                        c.width,
                         self._band(False, False),
                     )
                 )
-        return rows
+        if c.max_height is not None:
+            rows = rows[: c.max_height]
+        return Surface.clipped(rows, c.width)
 
     def __repr__(self) -> str:
         return f"List({len(self.items)} items, index={self._index}, window={self.window})"

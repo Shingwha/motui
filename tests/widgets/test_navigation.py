@@ -5,6 +5,8 @@ from dataclasses import replace
 import pytest
 
 from motui.kernel.glyphs import GLYPHS
+from motui.kernel.cell import Surface
+from motui.kernel.layout import Constraints
 from motui.kernel.style import Style
 from motui.kernel.theme import DEFAULT_THEME, Styles
 from motui.widgets import NavList, Tabs
@@ -112,6 +114,17 @@ def test_an_empty_strip_renders_one_empty_row_and_misses_every_cell():
     assert empty.index == 0
 
 
+def test_tabs_answers_a_surface_and_honours_the_height_budget():
+    tabs = Tabs(["a", "b"])
+    surface = tabs.render(Constraints(width=20, max_height=1))
+    assert isinstance(surface, Surface)
+    assert [row.text for row in surface] == [" a \u2502 b "]
+    assert surface.width == 20 and surface.height == 1
+    # A zero height budget paints no row; the width still feeds the hits.
+    assert tabs.render(Constraints(width=20, max_height=0)).height == 0
+    assert tabs.click(0, 1) is True and tabs.index == 0
+
+
 # -- NavList ------------------------------------------------------------------
 
 
@@ -201,9 +214,19 @@ def test_an_empty_rail_glyph_collapses_the_gutter():
 
 def test_an_empty_navlist_renders_zero_rows():
     nav = NavList([])
-    assert nav.render(20) == []
+    assert list(nav.render(20)) == []
     assert nav.click(0, 0) is False
     assert nav.move(1) is False
+
+
+def test_navlist_answers_a_surface_and_honours_the_height_budget():
+    nav = NavList(["a", "b", "c"])
+    surface = nav.render(Constraints(width=20, max_height=2))
+    assert isinstance(surface, Surface)
+    assert [row.text for row in surface] == ["\u258c a", "  b"]
+    assert surface.width == 20 and surface.height == 2
+    # The 1.x int spelling still answers the whole rail.
+    assert [row.text for row in nav.render(20)] == ["\u258c a", "  b", "  c"]
 
 
 def test_a_disabled_navlist_refuses_every_gesture_but_still_renders():

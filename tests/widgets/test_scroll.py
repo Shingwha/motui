@@ -1,6 +1,8 @@
 """ScrollView: a fixed-height window over a child's rows."""
 
+from motui.kernel.cell import Surface
 from motui.kernel.glyphs import GLYPHS
+from motui.kernel.layout import Constraints
 from motui.widgets import ScrollView
 
 from tests.testing import Rows, key, many, texts, wheel
@@ -135,3 +137,24 @@ def test_a_child_that_shrinks_pulls_the_offset_back_in_range():
     child.texts = ["only"]
     assert texts(scroll, 10) == ["only", "", ""]
     assert scroll.offset == 0
+
+
+# -- the 2.0 render contract -------------------------------------------------
+
+
+def test_a_natural_height_view_honours_the_height_budget():
+    scroll = ScrollView(Rows(*many(5)))
+    surface = scroll.render(Constraints(width=10, max_height=2))
+    assert isinstance(surface, Surface)
+    assert [row.text for row in surface] == ["r0", "r1"]
+    assert surface.width == 10 and surface.height == 2
+    # The 1.x int spelling still shows every child row.
+    assert [row.text for row in scroll.render(10)] == ["r0", "r1", "r2", "r3", "r4"]
+
+
+def test_an_explicit_height_wins_over_the_height_budget():
+    scroll = view(10, 3)
+    surface = scroll.render(Constraints(width=10, max_height=1))
+    assert isinstance(surface, Surface)
+    assert [row.text for row in surface] == ["r0", "r1", "r2"]
+    assert surface.height == 3
