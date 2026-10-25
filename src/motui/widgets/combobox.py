@@ -24,7 +24,7 @@ from __future__ import annotations
 from collections.abc import Sequence
 
 from ..kernel.document import Component
-from ..kernel.events import Event, KeyEvent, MouseEvent
+from ..kernel.events import Event, KeyEvent, MouseEvent, PasteEvent
 from ..kernel.geom import Pos
 from ..kernel.glyphs import GLYPHS, Glyphs
 from ..kernel.cell import Surface
@@ -83,14 +83,14 @@ class ComboBox(Widget):
 
     #: The combo routes the field's keys through its own ``on_key``; the
     #: App registers the combo, not the internal Input/Autocomplete, as the
-    #: target.
-    owns_focus = True
+    #: target -- focus routing stays inside its subtree.
     #: The combo takes the focus ring, a pointer click (which docks the
     #: field's caret), and the activation verb (which takes the highlighted
     #: option while the dropdown is open).
     focusable = True
     clickable = True
     activatable = True
+    focus_scope = True
 
     __slots__ = (
         "_last_count",
@@ -227,12 +227,16 @@ class ComboBox(Widget):
             return True
         return False
 
-    #: The 1.x spelling; W3b3 removes it.
-    handle = on_key
+    def on_paste(self, event: PasteEvent) -> bool:
+        """Feed one paste to the field; a consumed paste re-filters the list."""
+        if self.input.on_paste(event):
+            self.list.set_query(self.input.text)
+            return True
+        return False
 
     def _take(self) -> None:
         """The ``enter``: the highlighted option's value, its label back in the field."""
-        if not self.list.activate():
+        if not self.list.on_action("activate"):
             self._pending = None  # nothing matched: the empty pick
             self.close()
             return
@@ -253,15 +257,11 @@ class ComboBox(Widget):
         self._pending = None
         return value
 
-    def take_result(self) -> object | None:
-        """The 1.x alias of :meth:`take`."""
-        return self.take()
-
     # -- the container surface ---------------------------------------------------
 
     @property
     def focused(self) -> bool:
-        """The focus flag, delegated to the field (``Focusable``)."""
+        """The focus flag, delegated to the field ."""
         return self.input.focused
 
     @focused.setter
@@ -270,11 +270,7 @@ class ComboBox(Widget):
 
     def on_click(self, pos: Pos) -> bool:
         """Place the field's caret at a rendered cell (the click door)."""
-        return self.input.click(pos.y, pos.x)
-
-    def click(self, row: int, col: int) -> bool:
-        """The 1.x cell spelling of :meth:`on_click`."""
-        return self.on_click(Pos(y=row, x=col))
+        return self.input.on_click(pos)
 
     def on_action(self, name: str) -> bool:
         """Run one action: ``"activate"`` takes the highlighted option.

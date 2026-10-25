@@ -22,8 +22,8 @@ def drop_texts(combo: ComboBox) -> list[str]:
 def test_a_field_change_re_filters_the_list():
     combo = ComboBox(OPTIONS)
     assert combo.input.text == "" and not combo.is_open
-    assert combo.handle(key("A", "A")) is True
-    assert combo.handle(key("u", "u")) is True
+    assert combo.on_key(key("A", "A")) is True
+    assert combo.on_key(key("u", "u")) is True
     assert combo.input.text == "Au"
     assert drop_texts(combo) == ["\u2192 Autocomplete"]
 
@@ -41,9 +41,9 @@ def test_enter_takes_the_value_and_writes_the_label_into_the_field():
     combo = ComboBox(OPTIONS, text="Dia")
     combo.open()
     assert combo.list.selected.label == "Dialog"
-    assert combo.handle(key("enter")) is True
-    assert combo.take_result() == "dialog"
-    assert combo.take_result() is None
+    assert combo.on_key(key("enter")) is True
+    assert combo.take() == "dialog"
+    assert combo.take() is None
     assert combo.input.text == "Dialog"
     assert not combo.is_open
 
@@ -51,35 +51,35 @@ def test_enter_takes_the_value_and_writes_the_label_into_the_field():
 def test_escape_closes_with_nothing_pending():
     combo = ComboBox(OPTIONS)
     combo.open()
-    assert combo.handle(key("escape")) is True
-    assert combo.take_result() is None and not combo.is_open
+    assert combo.on_key(key("escape")) is True
+    assert combo.take() is None and not combo.is_open
 
 
 def test_the_consumption_boundary_follows_the_open_state():
     combo = ComboBox(OPTIONS)
-    assert combo.handle(key("escape")) is False
-    assert combo.handle(key("enter")) is False
-    assert combo.handle(paste("Table")) is True
+    assert combo.on_key(key("escape")) is False
+    assert combo.on_key(key("enter")) is False
+    assert combo.on_paste(paste("Table")) is True
     assert combo.input.text == "Table"
     combo.input.clear()
     combo.open()
-    assert combo.handle(key("down")) is True and combo.list.index == 1
-    assert combo.handle(key("up")) is True and combo.list.index == 0
-    assert combo.handle(key("enter")) is True and combo.take_result() == "autocomplete"
+    assert combo.on_key(key("down")) is True and combo.list.index == 1
+    assert combo.on_key(key("up")) is True and combo.list.index == 0
+    assert combo.on_key(key("enter")) is True and combo.take() == "autocomplete"
     assert not combo.is_open
 
 
 def test_a_paste_while_open_reaches_the_field_and_keeps_the_dropdown():
     combo = ComboBox(OPTIONS)
     combo.open()
-    assert combo.handle(paste("Dialog")) is True
+    assert combo.on_paste(paste("Dialog")) is True
     assert combo.input.text == "Dialog" and combo.is_open
-    assert combo.take_result() is None
+    assert combo.take() is None
 
 
 def test_pointer_reports_are_declined_so_the_host_owns_the_mouse():
     combo = ComboBox(OPTIONS, text="Dialog")
-    assert combo.handle(press(0, 0)) is False
+    assert combo.on_mouse(press(0, 0)) is False
     assert combo.input.text == "Dialog"
 
 
@@ -97,7 +97,7 @@ def test_focus_and_click_delegate_to_the_field():
     combo.render(Constraints(width=40))
     combo.focused = False
     assert combo.input.focused is False
-    assert combo.click(0, 3) is True
+    assert combo.on_click(Pos(x=3, y=0)) is True
     assert combo.input.cursor == (0, 1)
 
 
@@ -105,9 +105,9 @@ def test_enter_with_no_match_closes_and_leaves_nothing_pending():
     combo = ComboBox(OPTIONS)
     combo.open()
     for char in "zzz":
-        assert combo.handle(key(char, char)) is True
-    assert combo.handle(key("enter")) is True
-    assert combo.take_result() is None and not combo.is_open
+        assert combo.on_key(key(char, char)) is True
+    assert combo.on_key(key("enter")) is True
+    assert combo.take() is None and not combo.is_open
 
 
 # -- the 2.0 render contract -------------------------------------------------
@@ -134,17 +134,17 @@ def test_the_combo_owns_its_field_and_dropdown_in_the_tree():
         True,
         True,
     )
+    assert combo.focus_scope is True
     assert combo.children == [combo.input, combo.list]
     assert combo.input.parent is combo and combo.list.parent is combo
     assert list(combo.walk()) == [combo, combo.input, combo.list]
 
 
-def test_on_key_is_the_typed_spelling_of_handle():
-    typed, legacy = ComboBox(OPTIONS), ComboBox(OPTIONS)
+def test_on_key_routes_the_key_to_the_field():
+    combo = ComboBox(OPTIONS)
 
-    assert typed.on_key(key("D", "D")) is True
-    assert legacy.handle(key("D", "D")) is True
-    assert typed.input.text == legacy.input.text == "D"
+    assert combo.on_key(key("D", "D")) is True
+    assert combo.input.text == "D"
 
 
 def test_on_click_docks_the_field_caret():
@@ -169,13 +169,13 @@ def test_on_action_activates_the_open_dropdown_only():
     assert combo.input.cursor == (0, 11)
 
 
-def test_take_is_the_result_door_and_the_alias_agrees():
+def test_take_reads_the_result_once():
     combo = ComboBox(OPTIONS)
 
     combo.open()
-    assert combo.handle(key("enter")) is True
+    assert combo.on_key(key("enter")) is True
     assert combo.take() == "autocomplete"
 
     combo.open()
-    assert combo.handle(key("enter")) is True
-    assert combo.take_result() == "autocomplete"
+    assert combo.on_key(key("enter")) is True
+    assert combo.take() == "autocomplete"

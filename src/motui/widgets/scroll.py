@@ -56,7 +56,8 @@ from dataclasses import replace
 
 from ..kernel.cell import Line, Segment, Surface, cut_line
 from ..kernel.document import Component, Revisioned
-from ..kernel.events import Event, KeyEvent, MouseEvent
+from ..kernel.geom import Pos
+from ..kernel.events import KeyEvent, MouseEvent
 from ..kernel.glyphs import GLYPHS, Glyphs
 from ..kernel.layout import Constraints, ScrollAxis, ScrollState
 from ..kernel.text import WrapMode
@@ -149,6 +150,9 @@ class ScrollPanel(Widget):
             raise ValueError(f"axis must be 'y', 'x' or 'both', got {axis!r}")
         self.axis = axis
         self.child = child
+        # The explicit tree: the window's one child is mounted below it, so
+        # walk(), theme/focus propagation and resize broadcasts reach it.
+        self.children = [child]
         self.glyphs = glyphs
         self.height = None if height is None else max(0, height)
         self.bar = bool(bar)
@@ -381,45 +385,38 @@ class ScrollPanel(Widget):
             return self.on_action("scroll_next")
         return False
 
-    def _dispatch(self, event: Event) -> bool:
-        """Send one 1.x event to the typed hook for its kind."""
-        if isinstance(event, MouseEvent):
-            return self.on_mouse(event)
-        return self.on_key(event)
-
-    #: The 1.x routing door stays until W3b3 removes it.
-    handle = _dispatch
-
-    def drag(self, row: int, col: int, kind: str) -> bool:
+    def on_drag(self, pos: Pos, phase: str) -> bool:
         """Advance one step of a bar drag; ``True`` when the view took it.
 
-        Only the vertical bar's column (``col == self._last_inner``, inside
-        the painted content rows) can start a drag: a press on the thumb
-        records the grab -- its bar row and the offset it was taken at --
-        while a press on the track pages one viewport toward the pointer's
-        side.  A motion while grabbed maps the row delta through the thumb
-        geometry anchored at the grab (the same ``(start, length)``
-        :meth:`ScrollState.thumb` paints), so the thumb never jumps; a
-        release ends the drag and answers whether there was a grab to end.
-        A view without a vertical bar, a content that fits the window (no
-        thumb to map) and a press outside the bar column all decline.
+        Only the vertical bar's column (``pos.x == self._last_inner``,
+        inside the painted content rows) can start a drag: a press on the
+        thumb records the grab -- its bar row and the offset it was taken
+        at -- while a press on the track pages one viewport toward the
+        pointer's side.  A motion while grabbed maps the row delta through
+        the thumb geometry anchored at the grab (the same ``(start,
+        length)`` :meth:`ScrollState.thumb` paints), so the thumb never
+        jumps; a release ends the drag and answers whether there was a grab
+        to end.  A view without a vertical bar, a content that fits the
+        window (no thumb to map) and a press outside the bar column all
+        decline.
         """
-        if kind == "release":
+        row, col = pos.y, pos.x
+        if phase == "release":
             grabbed = self._grab is not None
             self._grab = None
             return grabbed
-        if not self._bar_vertical or kind not in ("press", "motion"):
+        if not self._bar_vertical or phase not in ("press", "motion"):
             return False
-        if kind == "press" and (col != self._last_inner or row >= self._last_height):
+        if phase == "press" and (col != self._last_inner or row >= self._last_height):
             return False
-        if kind == "motion" and self._grab is None:
+        if phase == "motion" and self._grab is None:
             return False
         state = self._state
         thumb = state.thumb(self._last_height)
         if thumb is None:
             return False
         start, length = thumb
-        if kind == "press":
+        if phase == "press":
             if start <= row < start + length:
                 self._grab = (row, state.offset)
             else:
@@ -432,7 +429,7 @@ class ScrollPanel(Widget):
         self.scroll_to(grab_offset + round((row - grab_row) * span / track))
         return True
 
-    def click(self, row: int, col: int) -> bool:
+    def on_click(self, pos: Pos) -> bool:
         """Take a click on a bar cell as a press-and-release drag.
 
         A click on the content columns is declined so the focus ring's
@@ -444,11 +441,11 @@ class ScrollPanel(Widget):
         """
         if not self.bar or not self._rendered:
             return False
-        if self._last_bar_x and row == self._last_height:
+        if self._last_bar_x and pos.y == self._last_height:
             return True
-        if self._last_bar_y and col == self._last_inner:
-            self.drag(row, col, "press")
-            self.drag(row, col, "release")
+        if self._last_bar_y and pos.x == self._last_inner:
+            self.on_drag(pos, "press")
+            self.on_drag(pos, "release")
             return True
         return False
 
