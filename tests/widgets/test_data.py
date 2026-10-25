@@ -597,6 +597,59 @@ def test_table_answers_a_surface_and_honours_the_height_budget():
     assert [row.text for row in again] == [row.text for row in surface]
 
 
+def test_the_table_keymap_routes_its_keys_through_named_actions():
+    table = Table(["A"], [["0"], ["1"], ["2"]])
+    assert table.on_key(key("down")) is True and table.index == 0
+    assert table.on_key(key("down")) is True and table.index == 1
+    assert table.on_key(key("up")) is True and table.index == 0
+    assert table.on_key(key("up")) is False  # clamped at the first data row
+    assert table.on_key(key("end")) is False  # unbound: home/end stay the host's
+    assert table.on_key(key("enter")) is True and table.take() == 0
+    assert table.on_action("toggle") is True and list(table.marked) == [0]
+    assert table.on_action("nope") is False
+    assert Table.handle is Table.on_key
+    assert Table.keymap["down"] == "next" and Table.keymap["enter"] == "activate"
+
+
+def test_an_instance_table_keymap_rebind_is_private_to_the_instance():
+    table = Table(["A"], [["0"], ["1"]])
+    other = Table(["A"], [["0"], ["1"]])
+    table.keymap["j"] = "next"
+    assert "j" not in Table.keymap
+    assert "j" not in other.keymap
+    assert table.handle(key("j", "j")) is True and table.index == 0
+    assert other.handle(key("j", "j")) is False and other.index is None
+
+
+def test_the_table_typed_hooks_forward_to_click_and_hover():
+    table = Table(["A"], [["0"], ["1"]])
+    table.render(Constraints(width=9))
+    assert table.on_click(Pos(y=5, x=99)) is True and table.index == 1
+    assert table.on_hover(Pos(y=5, x=0)) is True
+    assert table.on_hover(Pos(y=5, x=0)) is False
+    assert table.on_hover(None) is True
+    assert table.on_click(Pos(y=0, x=0)) is False  # the top rule
+
+
+def test_take_is_the_table_result_door_and_the_alias_answers_the_same():
+    table = Table(["A"], [["0"]])
+    table.index = 0
+    assert table.take() is None
+    assert table.activate() is True and table.take() == 0
+    table.activate()
+    assert table.take_result() == 0
+
+
+def test_the_table_declares_its_capabilities():
+    table = Table(["A"], [["0"]])
+    assert (table.focusable, table.clickable, table.hoverable, table.activatable) == (
+        True,
+        True,
+        True,
+        True,
+    )
+
+
 # -- Tree ---------------------------------------------------------------------
 
 
