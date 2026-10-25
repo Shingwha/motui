@@ -186,8 +186,9 @@ def test_split_weights_divide_the_cells_proportionally():
 
 
 def test_split_rejects_a_legacy_string():
+    legacy = "vertical"
     with pytest.raises(ValueError, match="split axis"):
-        headless_tui(40, 6).split("vertical")  # type: ignore[arg-type]
+        headless_tui(40, 6).split(legacy)  # type: ignore[arg-type]
 
 
 def test_split_takes_an_explicit_pane_and_moves_no_focus():
@@ -431,9 +432,11 @@ def test_the_runtime_takes_the_terminal_as_its_only_endpoint():
     assert tui.screen is chosen
     assert tui.keys is source
     with pytest.raises(TypeError):
-        Runtime(screen=chosen)  # type: ignore[call-arg]
+        Runtime(**{"screen": chosen})  # type: ignore[arg-type]
     with pytest.raises(TypeError):
-        Runtime(Terminal(TerminalOptions(screen=chosen)), keys=source)  # type: ignore[call-arg]
+        Runtime(
+            Terminal(TerminalOptions(screen=chosen)), **{"keys": source}  # type: ignore[arg-type]
+        )
 
 
 def test_a_terminal_driver_copies_through_the_terminal_clipboard():

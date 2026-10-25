@@ -16,7 +16,6 @@ import pytest
 
 from motui.kernel.cell import Line, cut_line, slice_line
 from motui.kernel.document import Document, Placement
-from motui.kernel.geom import Axis
 from motui.kernel.frame import (
     Chrome,
     Frame,
@@ -26,6 +25,7 @@ from motui.kernel.frame import (
     Split,
     splice_row,
 )
+from motui.kernel.geom import Axis
 from motui.kernel.layout import ScreenLayout, Viewport
 from motui.kernel.text import index_bounds_at_columns
 from motui.widgets.text import Text

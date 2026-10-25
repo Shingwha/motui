@@ -446,9 +446,9 @@ def test_terminal_options_win_over_the_legacy_arguments():
     assert app.terminal.screen is chosen
     assert app.runtime.screen is chosen
     with pytest.raises(TypeError):
-        App(screen=legacy)  # type: ignore[call-arg]
+        App(**{"screen": legacy})  # type: ignore[arg-type]
     with pytest.raises(TypeError):
-        App(keys=ScriptedEvents(()))  # type: ignore[call-arg]
+        App(**{"keys": ScriptedEvents(())})  # type: ignore[arg-type]
 
 
 def test_the_app_builds_its_terminal_from_the_options():

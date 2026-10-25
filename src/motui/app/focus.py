@@ -178,8 +178,9 @@ class FocusManager:
 
     **Out of scope, deliberately**: no hover of its own (the manager reads no
     motion report and flips no hover flag: hover is the
-    :mod:`motui.app.pointer` tier's, with ``Runtime(hover=True)`` opening
-    DECSET 1003); no hotkey beyond ``tab`` (the manager
+    :mod:`motui.app.pointer` tier's, with
+    ``TerminalOptions(mouse=MouseMode.MOVE)`` opening DECSET 1003); no
+    hotkey beyond ``tab`` (the manager
     binds nothing; the host routes ``tab`` to :meth:`focus_next`); no mouse
     drag (press-motion-release is :class:`~motui.app.gesture.SelectionGesture`'s);
     no pane or window focus (that is the frame's -- :class:`~motui.kernel.frame.Frame`
