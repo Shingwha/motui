@@ -25,7 +25,8 @@ coalesce.
 
 An inline payload rides on the segment: ``link`` is the target of a real
 terminal hyperlink (OSC 8, wrapped around the segment's text by
-:meth:`Line.styled`) and ``action`` is the application-side name of what a
+:func:`motui.terminal.render.styled_line`) and ``action`` is the
+application-side name of what a
 click on the segment means.  :func:`action_at` resolves the payload of the
 column a click landed on; the components that answer clicks (``Text``,
 ``Markdown``) read their own last render's row table through it, never the
@@ -44,8 +45,7 @@ import re
 from collections.abc import Iterable
 from dataclasses import dataclass, field
 
-from ..terminal.ansi import hyperlink_close, hyperlink_open
-from .style import NONE, RESET, ColorMode, Style, sgr_prefix
+from .style import NONE, Style
 from .theme import Theme, Themed
 from .text import (
     ELLIPSIS,
@@ -68,7 +68,6 @@ __all__ = [
     "overlay",
     "rest",
     "slice_line",
-    "styled_with",
     "wrap_line",
 ]
 
@@ -127,8 +126,8 @@ class Segment:
 
     The two payload slots beside ``text``/``style`` are the row model's only
     inline addresses (the kernel constitution): ``link`` is an url the
-    terminal should treat as a real hyperlink -- :meth:`Line.styled` wraps
-    the segment's text in the OSC 8 pair -- and ``action`` is the name the
+    terminal should treat as a real hyperlink -- :func:`motui.terminal.render.styled_line`
+    wraps the segment's text in the OSC 8 pair -- and ``action`` is the name the
     *application* gives to a click on that run (``"open:<url>"``, a task
     list's ``"todo:3"``, ...), which :func:`action_at` hands back for the
     column a click landed on.  ``link`` participates in equality (a changed
@@ -180,36 +179,18 @@ class Segment:
         return Segment(self.text, style, link=self.link, action=self.action)
 
 
-def _segment_bytes(seg: Segment, prefix: str) -> str:
-    """One segment's rendered bytes: its style prefix, its text and its link.
-
-    A segment with a ``link`` has its text wrapped in the OSC 8 pair --
-    ``prefix open text close`` -- so the terminal paints a real hyperlink
-    over exactly the run the segment owns; the pair sits inside the SGR
-    prefix's scope and is closed before the next segment's RESET, never
-    leaking the link over a neighbour.  A segment without one renders
-    ``prefix + text``, byte-for-byte what it always did: the one byte path
-    the painter's truecolor mode takes is unchanged for every row that does
-    not carry a link.
-    """
-    if seg.link is None:
-        return prefix + seg.text
-    return prefix + hyperlink_open(seg.link) + seg.text + hyperlink_close()
-
-
 class Line:
     """One immutable visual row made of styled :class:`Segment` values."""
 
-    __slots__ = ("_segments", "_text", "_width", "_styled")
+    __slots__ = ("_segments", "_text", "_width")
 
     def __init__(self, segments: Iterable[Segment] = ()) -> None:
         object.__setattr__(self, "_segments", tuple(segments))
-        # Derived caches: a line is a value, so its plain text, its width and
-        # its SGR rendering are pure functions of the segments -- computed at
-        # most once each (the Style._prefix pattern), invisible to eq/hash.
+        # Derived caches: a line is a value, so its plain text and its width
+        # are pure functions of the segments -- computed at most once each
+        # (the Style._prefix pattern), invisible to eq/hash.
         object.__setattr__(self, "_text", None)
         object.__setattr__(self, "_width", None)
-        object.__setattr__(self, "_styled", None)
 
     # -- immutability ------------------------------------------------------
 
@@ -252,36 +233,6 @@ class Line:
                 self, "_width", sum(seg.width for seg in self._segments)
             )
         return self._width
-
-    def styled(self) -> str:
-        """SGR-escaped rendering: prefix+text per segment, one trailing RESET.
-
-        Every segment after the first non-empty one is preceded by a RESET,
-        because SGR is a state machine: a prefix only *adds* attributes, so
-        without the reset the first segment's color and attributes would
-        persist into the second -- a scrollbar's ``dim`` reaching the pane
-        beside it, a band's background reaching the text painted over it.
-        A segment is therefore a clean slate: its rendering is a pure
-        function of its own style, which is what this docstring has always
-        claimed.  A zero-width segment paints nothing and opens no reset.
-        A segment carrying a ``link`` additionally wraps its own text in the
-        OSC 8 pair (see :func:`action_at`'s sibling payloads); the pair is
-        closed inside the segment, so no hyperlink crosses a boundary.  The
-        rendering is cached: a line is a value, and the painter re-styles
-        the same row frame after frame.
-        """
-        if self._styled is None:
-            parts: list[str] = []
-            for seg in self._segments:
-                if not seg.text:
-                    continue  # a zero-width segment paints nothing at all
-                if parts:
-                    parts.append(RESET)  # a clean slate: no attribute crosses a boundary
-                parts.append(_segment_bytes(seg, seg.style.prefix()))
-            object.__setattr__(
-                self, "_styled", "".join(parts) + RESET if parts else ""
-            )
-        return self._styled
 
     # -- sizing ------------------------------------------------------------
 
@@ -441,30 +392,6 @@ def rest(row: Line, width: int, band: Style) -> Line:
     """
     fitted = row.fit(width)
     return fitted if band == NONE else fitted.fill(fitted.width, band)
-
-
-def styled_with(line: Line, mode: ColorMode) -> str:
-    """SGR-escaped rendering of ``line`` for a terminal of capability ``mode``.
-
-    The very assembly :meth:`Line.styled` performs -- a RESET before every
-    segment after the first non-empty one, one trailing RESET, a zero-width
-    segment painting nothing, an OSC 8 pair around a segment that carries a
-    link (a hyperlink is not a color: it survives every mode) -- with each
-    segment's prefix resolved through
-    :func:`~motui.core.style.sgr_prefix` instead of the segment's own
-    cached one.  Because the answer depends on the terminal, it is
-    deliberately **not** cached: :meth:`Line.styled`'s cache stays
-    capability-free (the kernel constitution), and the painter takes this
-    path only for the non-truecolor modes.
-    """
-    parts: list[str] = []
-    for seg in line.segments:
-        if not seg.text:
-            continue  # a zero-width segment paints nothing at all
-        if parts:
-            parts.append(RESET)  # a clean slate: no attribute crosses a boundary
-        parts.append(_segment_bytes(seg, sgr_prefix(seg.style, mode)))
-    return "".join(parts) + RESET if parts else ""
 
 
 def action_at(line: Line, col: int) -> tuple[str, int, int] | None:

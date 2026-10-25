@@ -19,6 +19,7 @@ from motui.terminal.ansi import (
 from motui.core.block import Document
 from motui.core.lines import Line, Segment
 from motui.terminal.paint import Painter
+from motui.terminal.render import styled_line
 from motui.core.style import RESET, Style
 from motui.core.viewport import ScreenLayout, Viewport
 from tests.testing import RecordingScreen, Rows, many
@@ -62,7 +63,7 @@ def test_sync_false_emits_the_unbracketed_bytes():
     frame = screen.delta()
     assert begin_sync_update() not in frame and end_sync_update() not in frame
     assert frame == clear_screen() + "".join(
-        cursor_position(i + 1, 1) + CLEAR_LINE + row.styled()
+        cursor_position(i + 1, 1) + CLEAR_LINE + styled_line(row)
         for i, row in enumerate(painter.rows)
     )
     assert len(screen.writes) == 1 and screen.flushes == 1
@@ -96,7 +97,7 @@ def test_a_single_changed_row_is_rewritten():
     delta = screen.delta()
     assert clear_screen() not in delta
     assert delta.count(";1H") == 1
-    assert Line.from_text("X").styled() in delta
+    assert styled_line(Line.from_text("X")) in delta
 
 
 def test_a_row_becoming_empty_is_still_cleared():

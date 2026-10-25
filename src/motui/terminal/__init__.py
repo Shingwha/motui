@@ -16,6 +16,7 @@ from .clipboard import Clipboard, MemoryClipboard, ScreenClipboard
 from .decoder import KeyDecoder
 from .keys import RawTerminalKeys
 from .paint import Painter
+from .render import styled_line
 from .screen import HeadlessScreen, Screen, TerminalScreen
 
 __all__ = [
@@ -30,5 +31,6 @@ __all__ = [
     "TerminalScreen",
     "auto_theme",
     "detect_color_mode",
+    "styled_line",
     "terminal_size",
 ]

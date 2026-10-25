@@ -21,10 +21,10 @@ from motui.core.lines import (
     overlay,
     rest,
     slice_line,
-    styled_with,
     wrap_line,
 )
 from motui.terminal.paint import Painter
+from motui.terminal.render import styled_line
 from motui.terminal.screen import HeadlessScreen
 from motui.core.style import NONE, RESET, Style
 from motui.core.viewport import Viewport
@@ -49,7 +49,7 @@ NASTY = [
 def test_an_empty_line_has_no_segments_or_width():
     line = Line()
     assert line.segments == ()
-    assert line.text == "" and line.width == 0 and line.styled() == ""
+    assert line.text == "" and line.width == 0 and styled_line(line) == ""
 
 
 def test_line_views_report_text_and_display_width():
@@ -61,24 +61,24 @@ def test_line_views_report_text_and_display_width():
 
 def test_styled_puts_a_reset_before_every_segment():
     line = Line((Segment("a", ACCENT), Segment("b", MUTED)))
-    assert line.styled() == (
+    assert styled_line(line) == (
         ACCENT.prefix() + "a" + RESET + MUTED.prefix() + "b" + RESET
     )
 
 
 def test_zero_width_segments_paint_nothing():
-    assert Line((Segment("", ACCENT), Segment("a", Style()))).styled() == "a" + RESET
-    assert Line((Segment("", ACCENT),)).styled() == ""
+    assert styled_line(Line((Segment("", ACCENT), Segment("a", Style())))) == "a" + RESET
+    assert styled_line(Line((Segment("", ACCENT),))) == ""
 
 
 def test_styled_with_resolves_each_segment_for_the_mode():
     blue = Style(fg="#58a6ff")
     row = Line([Segment("", Style(dim=True)), Segment("x", Style()), Segment("y", blue)])
-    assert styled_with(row, "256") == "x" + RESET + "\x1b[38;5;75my" + RESET
-    assert styled_with(row, "16") == "x" + RESET + "\x1b[94my" + RESET
-    assert styled_with(row, "none") == "x" + RESET + "y" + RESET
-    assert styled_with(row, "truecolor") == row.styled()
-    assert styled_with(Line(), "none") == ""
+    assert styled_line(row, "256") == "x" + RESET + "\x1b[38;5;75my" + RESET
+    assert styled_line(row, "16") == "x" + RESET + "\x1b[94my" + RESET
+    assert styled_line(row, "none") == "x" + RESET + "y" + RESET
+    assert styled_line(row, "truecolor") == styled_line(row)
+    assert styled_line(Line(), "none") == ""
 
 
 def test_line_is_immutable():
@@ -118,13 +118,13 @@ def test_styled_wraps_a_link_segment_in_the_osc8_pair():
         ]
     )
     link = ACCENT.prefix() + "\x1b]8;;https://example.invalid\x1b\\docs\x1b]8;;\x1b\\"
-    assert row.styled() == "see " + RESET + link + RESET + " now" + RESET
+    assert styled_line(row) == "see " + RESET + link + RESET + " now" + RESET
     assert row.text == "see docs now" and row.width == 12
     plain_link = "\x1b]8;;https://example.invalid\x1b\\docs\x1b]8;;\x1b\\"
-    assert styled_with(row, "none") == (
+    assert styled_line(row, "none") == (
         "see " + RESET + "\x1b[1m" + plain_link + RESET + " now" + RESET
     )
-    assert styled_with(row, "truecolor") == row.styled()
+    assert styled_line(row, "truecolor") == styled_line(row)
 
 
 def test_slice_line_keeps_styles_and_payloads():
@@ -211,7 +211,7 @@ def test_fit_truncates_with_the_marker():
 def test_fit_marker_inherits_the_kept_run_style():
     fitted = Line((Segment("abcdef", ACCENT),)).fit(4)
     assert fitted.segments == (Segment("abc\u2026", ACCENT),)
-    assert fitted.styled() == ACCENT.prefix() + "abc\u2026" + RESET
+    assert styled_line(fitted) == ACCENT.prefix() + "abc\u2026" + RESET
 
 
 def test_fit_postcondition_holds_for_nasty_rows():
@@ -256,7 +256,7 @@ def test_fill_and_filled_degenerate_widths():
     assert Line.filled(0) == Line() and Line.filled(-4) == Line()
     band = Line.filled(3, SUCCESS)
     assert band.segments == (Segment("   ", SUCCESS),)
-    assert band.styled() == SUCCESS.prefix() + "   " + RESET
+    assert styled_line(band) == SUCCESS.prefix() + "   " + RESET
 
 
 def test_add_concatenates_lines_and_keeps_styles():
@@ -358,7 +358,7 @@ def test_segment_strips_injected_control_sequences():
     row = Line.from_text(
         "OUT: \x1b[?1000l\x1b[?1006l\x1b]52;c;base64\x07\x1b]0;title\x07"
     )
-    painted = row.styled()
+    painted = styled_line(row)
     for injected in ("\x1b[?1000l", "\x1b[?1006l", "\x1b]52;", "\x1b]0;"):
         assert injected not in painted, injected
     # Idempotent: the rebuild a restyle makes passes the door again, unchanged.
@@ -370,7 +370,7 @@ def test_segment_normalizes_a_tab_to_one_space():
     # at the door too, so a segment built off the wrap path follows it as
     # well -- a tab counts one column, like the space that replaces it.
     assert Segment("a\tb").text == "a b" and Segment("a\tb").width == 3
-    assert Line.from_text("a\tb").styled() == "a b" + RESET
+    assert styled_line(Line.from_text("a\tb")) == "a b" + RESET
 
 
 def test_segment_sanitizes_the_link_payload():

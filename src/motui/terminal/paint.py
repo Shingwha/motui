@@ -21,10 +21,10 @@ zero-byte contract: an empty payload writes nothing at all.
 
 Rows are rendered for the capability the screen declares
 (``screen.color_mode``, ``"truecolor"`` for a screen that declares none): the
-truecolor path is :meth:`Line.styled`'s cached rendering -- the bytes the
-painter has always emitted -- and a downgraded mode renders fresh through
-:func:`~motui.core.lines.styled_with`, so no cache ever depends on the
-terminal.
+bytes come from :func:`~motui.terminal.render.styled_line`, the terminal
+layer's cached SGR/OSC 8 rendering for a row and a mode.  No cache ever
+depends on the terminal: the renderer is keyed on ``(line, mode)``, both
+values.
 """
 
 from __future__ import annotations
@@ -36,7 +36,8 @@ from .ansi import (
     cursor_position,
     end_sync_update,
 )
-from ..core.lines import Line, styled_with
+from ..core.lines import Line
+from .render import styled_line
 from .screen import Screen
 from ..core.viewport import ScreenLayout
 
@@ -46,14 +47,11 @@ __all__ = ["Painter"]
 def _styled_row(row: Line, mode: str) -> str:
     """The row's SGR bytes under ``mode``.
 
-    ``"truecolor"`` -- and any screen that declares no mode at all -- takes
-    the row's own cached rendering, the bytes the painter has always
-    emitted.  A downgraded mode renders fresh through
-    :func:`~motui.core.lines.styled_with`, because the cached bytes
-    must never depend on the terminal's capability (the kernel
-    constitution).
+    The one byte path for a row: :func:`~motui.terminal.render.styled_line`
+    caches on ``(line, mode)``, so a repeated frame costs one lookup and the
+    capability is part of the key rather than hidden inside a row.
     """
-    return row.styled() if mode == "truecolor" else styled_with(row, mode)
+    return styled_line(row, mode)  # type: ignore[arg-type]
 
 
 def _row_write(index: int, styled: str) -> str:

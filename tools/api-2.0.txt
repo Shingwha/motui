@@ -95,7 +95,7 @@ motui.core	RawTerminalKeys	class	(fd: 'int | None' = None, *, hover: 'bool' = Fa
 motui.core	Rect	class	(x: 'int', y: 'int', width: 'int', height: 'int') -> None
 motui.core	ResizeEvent	class	(width: 'int', height: 'int') -> None
 motui.core	RowRange	class	(first: 'int', last: 'int') -> None
-motui.core	Screen	class	(*args, **kwargs)
+motui.core	Screen	class	()
 motui.core	ScreenClipboard	class	(screen: 'Screen') -> 'None'
 motui.core	ScreenLayout	class	(rows: 'tuple[Line, ...]', body_rows: 'tuple[Line, ...]', row_blocks: 'tuple[tuple[str, int] | None, ...]' = <factory>, block_order: 'tuple[str, ...]' = (), offset: 'int' = 0, total_rows: 'int' = 0, width: 'int' = 0, height: 'int' = 0, viewport_start: 'int' = 0) -> None
 motui.core	ScrollState	class	(offset: 'int' = 0, content_height: 'int' = 0, viewport_height: 'int' = 0, stick_to_bottom: 'bool' = False, _extent: 'int | None' = None) -> None

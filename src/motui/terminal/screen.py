@@ -1,19 +1,20 @@
 """Screen surfaces: the alternate-screen terminal and the in-memory recorder.
 
 Everything the toolkit paints reaches a sink through the :class:`Screen`
-protocol.  :class:`TerminalScreen` owns the alternate-screen enter/leave byte
-pair for a real stream; :class:`HeadlessScreen` records every written byte in
-memory so tests and piped runs can inspect the exact output.  Neither screen
-interprets escape sequences: all escape bytes are constructed in
-:mod:`motui.terminal.ansi`, and the headless screen in particular is a recorder,
-not a terminal emulator.
+abstract base.  :class:`TerminalScreen` owns the alternate-screen enter/leave
+byte pair for a real stream; :class:`HeadlessScreen` records every written
+byte in memory so tests and piped runs can inspect the exact output.  Neither
+screen interprets escape sequences: all escape bytes are constructed in
+:mod:`motui.terminal.ansi`, and the headless screen in particular is a
+recorder, not a terminal emulator.
 """
 
 from __future__ import annotations
 
 import io
 import sys
-from typing import Literal, Protocol, runtime_checkable
+from abc import ABC, abstractmethod
+from typing import Literal
 
 from .ansi import (
     copy_clipboard,
@@ -35,8 +36,7 @@ from .capability import detect_color_mode, terminal_size
 __all__ = ["HeadlessScreen", "Screen", "TerminalScreen"]
 
 
-@runtime_checkable
-class Screen(Protocol):
+class Screen(ABC):
     """A writable screen surface with a known size.
 
     ``width``/``height`` are the current column/row counts, kept fresh by
@@ -44,64 +44,81 @@ class Screen(Protocol):
     says whether written bytes reach a real terminal: on a pipe or a file the
     painter stays silent instead of scattering escapes.  ``enter``/``leave``
     bracket a full-screen session, ``write`` appends sink bytes, and ``flush``
-    pushes them out.  :meth:`copy_to_clipboard` puts ``text`` on the terminal's clipboard
-    (OSC 52) and reports whether it wrote -- see D6.  A screen **may** also
-    carry a ``color_mode`` attribute (a
-    :data:`~motui.core.style.ColorMode`): the capability the painter
-    renders rows for.  It is optional on the protocol -- a screen that
-    declares none is painted truecolor -- and both shipped screens set it.
+    pushes them out.  :meth:`copy_to_clipboard` puts ``text`` on the terminal's
+    clipboard (OSC 52) and reports whether it wrote; its default declines, so
+    a custom screen only implements it when it owns the write.  ``color_mode``
+    is the capability the painter renders rows for: a screen that declares
+    none is painted truecolor.
+
+    The class is an ABC, not a protocol: a host subclasses it and the
+    inherited members answer for it (third-party subclasses that implemented
+    the 1.x protocol members keep working unchanged).  The library never
+    tests a screen with ``isinstance``; the type is an annotation and the
+    painter calls the members directly.
     """
 
+    #: The color capability the painter renders this screen's rows for.
+    color_mode: ColorMode
+
     @property
+    @abstractmethod
     def width(self) -> int:
-        ...
+        """The current column count."""
 
     @property
+    @abstractmethod
     def height(self) -> int:
-        ...
+        """The current row count."""
 
     @property
+    @abstractmethod
     def live(self) -> bool:
-        ...
+        """Whether written bytes reach a real terminal."""
 
     @property
+    @abstractmethod
     def size(self) -> tuple[int, int]:
         """The current ``(width, height)`` in cells."""
-        ...
 
     @property
-    def color_mode(self) -> ColorMode:
-        """The capability the painter renders rows for."""
-        ...
-
-    @property
+    @abstractmethod
     def encoding(self) -> str | None:
         """The stream's text encoding, or ``None`` when it does not say."""
-        ...
 
+    @abstractmethod
     def enter(self) -> None:
-        ...
+        """Enter the full-screen session."""
 
+    @abstractmethod
     def leave(self) -> None:
-        ...
+        """Leave the full-screen session."""
 
+    @abstractmethod
     def write(self, s: str) -> None:
-        ...
+        """Append ``s`` to the sink."""
 
     def copy_to_clipboard(self, text: str) -> bool:
-        ...
+        """Put ``text`` on the terminal's clipboard; report whether it wrote.
 
+        The default declines: a screen that cannot write OSC 52 says so, and
+        a caller treats the clipboard as best-effort either way.
+        """
+        return False
+
+    @abstractmethod
     def flush(self) -> None:
-        ...
+        """Push accumulated bytes out."""
 
+    @abstractmethod
     def refresh_size(self) -> None:
-        ...
+        """Re-sample the terminal size."""
 
+    @abstractmethod
     def close(self) -> None:
-        ...
+        """Release whatever the screen owns (never the caller's stream)."""
 
 
-class TerminalScreen:
+class TerminalScreen(Screen):
     """A screen backed by a real stream (``sys.stdout`` by default).
 
     Liveness is decided once, at construction: ``stream.isatty()`` *and* a
@@ -246,7 +263,7 @@ class TerminalScreen:
         return f"TerminalScreen(live={self._live}, {self._width}x{self._height})"
 
 
-class HeadlessScreen:
+class HeadlessScreen(Screen):
     """An in-memory screen that records every byte written to it.
 
     ``live`` is always ``True``: the headless screen is what tests and piped
