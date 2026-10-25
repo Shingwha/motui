@@ -6,7 +6,7 @@ from __future__ import annotations
 import pytest
 
 from motui.kernel.cell import Line, Surface
-from motui.kernel.document import Document, Section
+from motui.kernel.document import Document, Fill, Placement, Section, Sizing
 from motui.kernel.layout import Constraints
 from motui.widgets.text import Text
 from tests.testing import Rows
@@ -184,3 +184,82 @@ def test_section_render_stays_a_list_convenience_door():
     assert isinstance(rendered, list)
     assert rendered == [Line.from_text("hello")]
     assert block.render(10) == rendered
+
+
+# -- placement, sizing and fill ---------------------------------------------
+
+
+def test_placement_replaces_pin_and_keeps_it_readable():
+    doc = Document()
+    flow = doc.add(Rows("body"))
+    top = doc.add(Rows("head"), pin="top")
+    bottom = doc.add(Rows("foot"), placement=Placement.BOTTOM)
+    assert flow.placement is Placement.FLOW and flow.pin is None
+    assert top.placement is Placement.TOP and top.pin == "top"
+    assert bottom.placement is Placement.BOTTOM and bottom.pin == "bottom"
+    assert top.widget is top.component
+
+
+def test_pin_and_placement_are_exclusive():
+    doc = Document()
+    with pytest.raises(ValueError):
+        doc.add(Rows(), pin="top", placement=Placement.BOTTOM)
+    with pytest.raises(ValueError):
+        Section("x", Rows(), pin="top", placement=Placement.TOP)
+
+
+def test_section_rejects_non_enum_placement_and_sizing():
+    with pytest.raises(ValueError):
+        Section("x", Rows(), placement="top")  # type: ignore[arg-type]
+    with pytest.raises(ValueError):
+        Section("x", Rows(), sizing="fill")  # type: ignore[arg-type]
+    with pytest.raises(ValueError):
+        Section("x", Rows(), pin="middle")
+
+
+def test_a_fill_section_owns_the_rule_and_is_found_by_the_document():
+    doc = Document()
+    doc.add(Rows("head"))
+    fill = doc.add(Rows("game"), sizing=Sizing.FILL)
+    assert fill.sizing is Sizing.FILL and fill.placement is Placement.FLOW
+    assert fill.widget is fill.component
+    assert doc.fill() is fill
+    assert doc.fills() == (fill,)
+    assert doc.add(Rows("top"), placement=Placement.TOP).placement is Placement.TOP
+
+
+def test_a_document_holds_at_most_one_fill():
+    doc = Document()
+    doc.add(Rows(), sizing=Sizing.FILL)
+    with pytest.raises(ValueError):
+        doc.add(Rows(), sizing=Sizing.FILL)
+
+
+def test_no_flow_section_may_follow_a_fill():
+    doc = Document()
+    doc.add(Rows(), sizing=Sizing.FILL)
+    with pytest.raises(ValueError):
+        doc.add(Rows())
+    with pytest.raises(ValueError):
+        doc.add(Rows(), sizing=Sizing.NATURAL)
+    # Pinned sections live outside the flow and stay legal.
+    assert doc.add(Rows("foot"), pin="bottom").pin == "bottom"
+    assert doc.add(Rows("head"), pin="top").pin == "top"
+
+
+def test_a_fill_section_must_be_in_the_flow():
+    doc = Document()
+    with pytest.raises(ValueError):
+        doc.add(Rows(), pin="top", sizing=Sizing.FILL)
+    with pytest.raises(ValueError):
+        doc.add(Rows(), placement=Placement.BOTTOM, sizing=Sizing.FILL)
+    with pytest.raises(ValueError):
+        Section("x", Rows(), placement=Placement.TOP, sizing=Sizing.FILL)
+
+
+def test_fill_is_a_frozen_value():
+    component = Rows("body")
+    value = Fill(component)
+    assert value.widget is component
+    with pytest.raises(AttributeError):
+        value.widget = Rows()  # type: ignore[misc]

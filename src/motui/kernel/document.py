@@ -12,6 +12,8 @@ from __future__ import annotations
 
 import inspect
 from collections.abc import Sequence
+from dataclasses import dataclass
+from enum import Enum
 from typing import TYPE_CHECKING, Protocol, cast, runtime_checkable
 
 from .cell import Line, Surface
@@ -27,14 +29,57 @@ __all__ = [
     "Container",
     "Controller",
     "Document",
+    "Fill",
     "Focusable",
     "Hoverable",
+    "Placement",
     "Resultful",
     "Revisioned",
     "Section",
+    "Sizing",
     "descend",
     "descend_chain",
 ]
+
+
+class Placement(Enum):
+    """Where a section sits: the scrolling body or a fixed region.
+
+    ``FLOW`` is the document body a viewport scrolls; ``TOP``/``BOTTOM`` are
+    the fixed bands that never scroll away.  The value replaces the 1.x
+    ``pin`` string while :attr:`Section.pin` keeps answering that spelling.
+    """
+
+    FLOW = "flow"
+    TOP = "top"
+    BOTTOM = "bottom"
+
+
+class Sizing(Enum):
+    """How a section consumes height: its content or the pane's remainder.
+
+    ``NATURAL`` sections contribute their rendered rows.  At most one
+    ``FILL`` section -- the last flow section -- takes whatever height the
+    natural content leaves, which is the slot a game canvas or a dashboard
+    fills.
+    """
+
+    NATURAL = "natural"
+    FILL = "fill"
+
+
+@dataclass(frozen=True, slots=True)
+class Fill:
+    """A component that owns a pane's whole remaining height.
+
+    This wave keeps ``Fill`` as the public value behind
+    ``Document.add(..., sizing=Sizing.FILL)``; the W4 ``PaneContent`` union
+    (a document *or* a fill) is not introduced yet.  Frozen: the widget is
+    the value's identity.
+    """
+
+    widget: Component
+
 
 
 @runtime_checkable
@@ -379,18 +424,42 @@ class Section:
         "_component",
         "_id",
         "_pin",
+        "_placement",
         "_rows_cache",
         "_rows_max_height",
         "_rows_revision",
         "_rows_width",
+        "_sizing",
     )
 
-    def __init__(self, id: str, component: Component, *, pin: str | None = None) -> None:
-        if pin not in (None, "top", "bottom"):
+    def __init__(
+        self,
+        id: str,
+        component: Component,
+        *,
+        pin: str | None = None,
+        placement: Placement | None = None,
+        sizing: Sizing = Sizing.NATURAL,
+    ) -> None:
+        if pin is not None and placement is not None:
+            raise ValueError("pass pin or placement, not both")
+        if pin is not None and pin not in ("top", "bottom"):
             raise ValueError(f"pin must be 'top', 'bottom' or None, got {pin!r}")
+        if placement is None:
+            placement = Placement.FLOW if pin is None else Placement(pin)
+        elif not isinstance(placement, Placement):
+            raise ValueError(f"placement must be a Placement, got {placement!r}")
+        if not isinstance(sizing, Sizing):
+            raise ValueError(f"sizing must be a Sizing, got {sizing!r}")
+        if sizing is Sizing.FILL and placement is not Placement.FLOW:
+            raise ValueError("a FILL section must be placed in the flow")
         self._id = id
         self._component = component
-        self._pin = pin
+        self._placement = placement
+        # The 1.x spelling stays readable: a non-flow placement answers its
+        # pin string, a flow one answers None (the body had no pin).
+        self._pin = None if placement is Placement.FLOW else placement.value
+        self._sizing = sizing
         # The component's protocol membership never changes (it is fixed by
         # the type), so it is decided once here: a per-frame isinstance on
         # every block would cost more than the cache saves.
@@ -412,6 +481,21 @@ class Section:
     @property
     def component(self) -> Component:
         return self._component
+
+    @property
+    def widget(self) -> Component:
+        """The 2.0 name of :attr:`component` (the same object)."""
+        return self._component
+
+    @property
+    def placement(self) -> Placement:
+        """Where the block sits: the body or a fixed top/bottom region."""
+        return self._placement
+
+    @property
+    def sizing(self) -> Sizing:
+        """Whether the block takes its natural height or the remaining one."""
+        return self._sizing
 
     @property
     def pin(self) -> str | None:
@@ -581,22 +665,65 @@ class Document:
         *,
         id: str | None = None,
         pin: str | None = None,
+        placement: Placement = Placement.FLOW,
+        sizing: Sizing = Sizing.NATURAL,
     ) -> Section:
-        """Append a block; auto id ``b{n}`` when ``id`` is None. Duplicate ids raise.
+        """Append a block; auto id ``b{n}`` when ``id`` is None.
 
-        ``pin`` places the block in a fixed region -- ``"top"`` or
-        ``"bottom"`` -- or leaves it in the scrollable body (``None``, the
-        default).  Anything else raises ``ValueError``.
+        ``pin`` is the 1.x spelling of ``placement`` and the two are exclusive
+        (``None``/``FLOW`` is the body).  Duplicate ids raise ``ValueError``.
+
+        The fill rules are checked here, at the one door a block enters the
+        document through: at most one ``FILL`` section, it takes only the flow
+        placement, and no flow section may follow it (a fill owns the remainder
+        below every natural row, so content appended after it could never be
+        laid out).  Pinned sections are natural-height by definition and
+        therefore reject ``FILL``.
         """
+        if pin is not None:
+            if placement is not Placement.FLOW:
+                raise ValueError("pass pin or placement, not both")
+            if pin not in ("top", "bottom"):
+                raise ValueError(f"pin must be 'top', 'bottom' or None, got {pin!r}")
+            placement = Placement(pin)
+        elif not isinstance(placement, Placement):
+            raise ValueError(f"placement must be a Placement, got {placement!r}")
+        if not isinstance(sizing, Sizing):
+            raise ValueError(f"sizing must be a Sizing, got {sizing!r}")
+        if sizing is Sizing.FILL:
+            if placement is not Placement.FLOW:
+                raise ValueError("a FILL section must be placed in the flow")
+            if any(block.sizing is Sizing.FILL for block in self._blocks):
+                raise ValueError("a document holds at most one FILL section")
+        elif placement is Placement.FLOW and any(
+            block.sizing is Sizing.FILL for block in self._blocks
+        ):
+            raise ValueError("a flow section cannot follow a FILL section")
         if id is None:
             id = self._next_auto_id()
         elif id in self._by_id:
             raise ValueError(f"duplicate block id: {id!r}")
-        block = Section(id, component, pin=pin)
+        block = Section(id, component, placement=placement, sizing=sizing)
         self._blocks.append(block)
         self._by_id[id] = block
         self._mutation += 1
         return block
+
+    def fills(self) -> tuple[Section, ...]:
+        """Every ``FILL`` section in document order (zero or one by contract)."""
+        return tuple(block for block in self._blocks if block.sizing is Sizing.FILL)
+
+    def fill(self) -> Section | None:
+        """The document's ``FILL`` section, or ``None``.
+
+        The one-lookup form the viewport's fill path takes; the invariant
+        ``add`` enforces means there is never more than one.
+        """
+        for block in self._blocks:
+            if block.sizing is Sizing.FILL:
+                return block
+        return None
+
 
     @property
     def mutation(self) -> int:
