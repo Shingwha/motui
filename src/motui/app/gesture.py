@@ -583,18 +583,18 @@ class SelectionGesture:
         moved = pane.viewport.offset - before
         if moved == 0:
             return  # pinned at the document end: nothing moved under the pointer
-        self._head = self._walk(self._head, moved, pane)
+        self._head = self._advance_head(self._head, moved, pane)
         self._tui.set_selection(
             Selection.between(self._anchor, self._head), pane=pane
         )
 
-    def _walk(
+    def _advance_head(
         self, anchor: SelectionAnchor, rows: int, pane: Pane
     ) -> SelectionAnchor:
         """Move ``anchor`` ``rows`` rows through ``pane``'s document (signed).
 
         The document-space half of the identity: a document row lives inside
-        some block, so the walk consumes rows block by block -- crossing a
+        some block, so the advance consumes rows block by block -- crossing a
         boundary by entering the next block's row 0 (or the previous block's
         last row) -- and clamps at the document's first and last row.  An
         address whose block left the document resolves to itself (D8:

@@ -3,8 +3,7 @@
 This module is the assembly tier (D3) -- the peer of
 :mod:`motui.app.gesture`, :mod:`motui.app.focus` and the driver:
 it imports kernel and app, and it is where every pointer *behavior* lands.  The
-kernel stays pure (the :class:`~motui.kernel.document.Hoverable` protocol, the
-:class:`~motui.kernel.document.Container` coordinate route, the
+kernel stays pure (the ``child_at`` coordinate route, the
 :func:`~motui.kernel.document.descend` walk and the DECSET 1003 bytes), the
 focus tier keeps its click policy (:class:`~motui.app.focus.FocusManager`), and
 the driver exposes the minimal imperative surface the pointer reads:
@@ -15,7 +14,7 @@ through the frame's ownership table.
 is the *observe* half of the mouse pair the host routes: the selection gesture
 owns press/motion/release for drags, the pointer watches the same reports --
 flipping the ``hover`` flag of the leaf under the pointer, moving row-level
-hover where a component implements ``hover_at``, and completing a stationary
+hover where a component implements ``on_hover``, and completing a stationary
 click through the mounted :class:`~motui.app.focus.FocusManager` (or dispatching
 the deepest clickable leaf itself when there is none).  A host mounts it
 explicitly, the same rule the gesture and the ring follow, and opens 1003 with
@@ -33,8 +32,9 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
-from ..kernel.document import Clickable, Component, Hoverable, descend
+from ..kernel.document import Component, descend
 from ..kernel.events import Event, MouseEvent
+from ..kernel.geom import Pos
 from ..kernel.hit import Hit
 from .focus import FocusManager
 
@@ -57,7 +57,7 @@ class Pointer:
     click is handed to :meth:`FocusManager.click <motui.app.focus.FocusManager.click>`,
     which descends to the leaf, dispatches, focuses and activates; without a
     ring the pointer descends the hit itself and dispatches the deepest
-    :class:`~motui.kernel.document.Clickable` leaf directly (a mouse-only
+    ``clickable`` leaf directly (a mouse-only
     page needs no ring).  ``hover=False`` builds a click-only pointer: it
     never touches a ``hover`` flag, for a host that keeps its screen in the
     smaller 1002 mode.
@@ -187,7 +187,7 @@ class Pointer:
         The pane the pointer was over may have left the frame (a close) or
         been re-laid out under it (a resize, a reflow), so the recorded cell
         no longer means what it did: the hovered component takes
-        ``hover = False`` and ``hover_at(-1, -1)``, and the position and the
+        ``hover = False`` and ``on_hover(None)``, and the position and the
         pending press go with them.  Best-effort by design: the
         pointer is not handed window events itself -- the host calls this
         where it notices one.
@@ -220,36 +220,47 @@ class Pointer:
     def _set_hovered(self, target: Component | None, row: int, col: int) -> bool:
         """Point the hover at ``target``'s cell; answer whether render changes.
 
-        The same component again: a component implementing ``hover_at`` is
-        told the new cell (the pointer may have crossed rows of one list)
-        and its answer is the change; one without it is told nothing and
-        nothing changed.  A different component: the old one -- if any --
-        takes ``hover = False`` and ``hover_at(-1, -1)``, the new one
-        ``hover = True`` (when it is :class:`~motui.kernel.document.Hoverable`)
-        and ``hover_at(row, col)`` (when it implements it), and the answer
-        says whether any of that changes what a component paints.
+        The same component again: a ``hoverable`` component is told the new
+        cell through ``on_hover(pos)`` (the pointer may have crossed rows of
+        one list) and its answer is the change; one without the flag is told
+        nothing and nothing changed.  A different component: the old one --
+        if any -- takes ``hover = False`` and, when hoverable,
+        ``on_hover(None)``; the new one takes ``hover = True`` (any component
+        carrying the flag, so a non-painting container still reports the
+        pointer cue) and, when hoverable, ``on_hover(pos)``.  The answer says
+        whether any of that changes what a component paints.
         """
         old = self._hovered
         if target is old:
             if target is None:
                 return False
-            hover_at = getattr(target, "hover_at", None)
-            return bool(hover_at(row, col)) if hover_at is not None else False
+            if not bool(getattr(target, "hoverable", False)):
+                return False
+            on_hover = getattr(target, "on_hover", None)
+            return bool(on_hover(Pos(x=col, y=row))) if on_hover is not None else False
         changed = False
         if old is not None:
-            if isinstance(old, Hoverable) and old.hover:
+            if hasattr(old, "hover") and old.hover:
                 old.hover = False
                 changed = True
-            hover_at = getattr(old, "hover_at", None)
-            if hover_at is not None and hover_at(-1, -1):
+            on_hover = getattr(old, "on_hover", None)
+            if (
+                bool(getattr(old, "hoverable", False))
+                and on_hover is not None
+                and on_hover(None)
+            ):
                 changed = True
         self._hovered = target
         if target is not None:
-            if isinstance(target, Hoverable) and not target.hover:
+            if hasattr(target, "hover") and not target.hover:
                 target.hover = True
                 changed = True
-            hover_at = getattr(target, "hover_at", None)
-            if hover_at is not None and hover_at(row, col):
+            on_hover = getattr(target, "on_hover", None)
+            if (
+                bool(getattr(target, "hoverable", False))
+                and on_hover is not None
+                and on_hover(Pos(x=col, y=row))
+            ):
                 changed = True
         return changed
 
@@ -261,7 +272,10 @@ class Pointer:
         if self._ring is not None:
             return self._ring.click(hit)
         component, row, col = descend(hit.block.component, hit.row, hit.col)
-        return isinstance(component, Clickable) and component.click(row, col)
+        if not bool(getattr(component, "clickable", False)):
+            return False
+        on_click = getattr(component, "on_click", None)
+        return bool(on_click(Pos(x=col, y=row))) if on_click is not None else False
 
     def __repr__(self) -> str:
         return (
