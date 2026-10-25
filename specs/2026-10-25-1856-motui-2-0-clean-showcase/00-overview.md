@@ -67,8 +67,11 @@ uv run python tools/growth.py
 
 | 波 | 状态 |
 |---|---|
-| C1 | ⏳ |
-| C2 | ⏳ |
-| C3 | ⏳ |
-| C4 | ⏳ |
-| C5 | ⏳ |
+| C1 | ✅ 已合并 |
+| C2 | ✅ 已合并（C2a + C2b） |
+| C3 | ✅ 已合并（C3a） |
+| C4 | ✅ 已合并（C4a + C4b） |
+| C5 | ✅ 本分支完成（`2.0-clean/c5-close`），待 lead 合并 |
+
+C5 终验：1633 passed / semantic 5 / pages 5 / examples 3 / version 2.0.0；
+终验明细见 `handoff/C5-final.md`。
