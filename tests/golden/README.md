@@ -26,7 +26,7 @@ moved focus/anchor shows up even when no glyph does.
 The byte golden (`tools/golden.py`, `topics/*.txt`) was deleted in C4a
 together with the 57-topic tour. The showcase has five scenes, so the
 semantic set has five files; there is no second byte-for-byte set to keep
-in step. Phase 20 is the shared stable frame: the splash sweep is mid-word,
+in step. Phase 20 is the shared stable frame: the splash is mid-style,
 the snake has taken its first steps, and the dashboard has a streamed window.
 
 **Re-recording.** `uv run python tools/semantic.py --update` rewrites the

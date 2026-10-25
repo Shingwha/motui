@@ -8,7 +8,13 @@ click-through to its widgets, and the determinism a headless replay relies on.
 from __future__ import annotations
 
 from motui.demo import PAGE_PHASE, render_scene
-from motui.demo.showcase import DashboardScene, GalleryScene, SnakeScene
+from motui.demo.showcase import (
+    SPLASH_ROTATE_TICKS,
+    DashboardScene,
+    GalleryScene,
+    SnakeScene,
+    SplashScene,
+)
 from motui.kernel.events import KeyEvent
 from motui.kernel.geom import Pos
 from motui.kernel.layout import Constraints
@@ -21,6 +27,22 @@ def _snake() -> SnakeScene:
     scene = SnakeScene(Theme.dark())
     scene.render(FRAME, 0)
     return scene
+
+
+def test_the_splash_waits_for_a_key_and_never_times_out():
+    scene = SplashScene(Theme.dark(), seed=0)
+    assert scene.tick(10_000) is None
+    assert scene.on_key(KeyEvent("x")) == "menu"
+    assert scene.on_click(Pos(x=0, y=0)) == "menu"
+
+
+def test_the_splash_cycles_styles_and_shapes():
+    scene = SplashScene(Theme.dark(), seed=0)
+    assert scene.style_name(0) != scene.style_name(SPLASH_ROTATE_TICKS * 2)
+    one = render_scene("splash", width=80, height=24, phase=0)
+    two = render_scene("splash", width=80, height=24, phase=SPLASH_ROTATE_TICKS)
+    assert one != two
+    assert "press any key" in one and "press any key" in two
 
 
 def test_the_snake_takes_one_step_every_four_ticks():

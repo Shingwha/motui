@@ -55,7 +55,8 @@ def test_scene_flag_renders_that_scene(capsys):
 def test_frames_advance_the_scene_machine(capsys):
     assert main(["--scene", "splash", "--frames", "60", "--headless"]) == 0
     out = capsys.readouterr().out
-    assert "Snake" in out  # the splash handed over to the menu
+    assert "press any key" in out  # the splash waits for the user, it never times out
+    assert "Snake" not in out
 
 
 def test_gallery_scene_is_reachable_headless(capsys):

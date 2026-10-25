@@ -77,8 +77,9 @@ What each piece did:
 | Forms and dialogs | `Form`/`Field`, `Input`/`Editor`, `Dialog` through `App.open_modal` | [WIDGETS](docs/WIDGETS.md) |
 
 The three shipped examples are `quickstart`, `code` and `wide_table`. The
-interactive demo is one page with five scenes: splash, menu, Snake,
-Dashboard and a component Gallery.
+interactive demo is one page with five scenes: a splash that cycles Neon,
+Plasma, Retro CRT and Starfield until a key, a menu, Snake, Dashboard and a
+component Gallery.
 
 Wide content is the one horizontal-scroll case: `ScrollPanel(axis="x"` or
 `"both")` windows a component that may render wider than its constraints
@@ -446,8 +447,9 @@ deadlines rather than accumulating drift.
 ## The demo
 
 `python -m motui` starts the five-scene showcase that ships in the wheel:
-splash, menu, Snake, Dashboard and Component Gallery. No network, no
-model, no assets beyond the package.
+a persistent MOTUI splash (Neon / Plasma / Retro CRT / Starfield, until any key), menu, Snake,
+Dashboard and Component Gallery. No network, no model, no assets beyond the
+package.
 
 ```bash
 python -m motui                          # a real terminal: the splash and menu

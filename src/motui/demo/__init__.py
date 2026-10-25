@@ -68,9 +68,10 @@ def render_scene(
     width: int = 100,
     height: int = 30,
     phase: int = PAGE_PHASE,
+    seed: int = 0,
 ) -> str:
     """One scene as its plain-text frame at ``width`` x ``height``, phase fixed."""
-    showcase = Showcase(scene=name)
+    showcase = Showcase(scene=name, seed=seed)
     showcase.phase = phase
     return _scene_text(showcase, width, height)
 
@@ -81,19 +82,21 @@ def scene_output(
     width: int = 100,
     height: int = 30,
     phase: int = PAGE_PHASE,
+    seed: int = 0,
 ) -> str:
     """One scene's painted bytes, recorded from a fresh headless runtime.
 
     The path the semantic golden feeds to the emulator: a headless screen,
     a non-interactive runtime, ``fill(Showcase)`` and one ``paint`` -- no
-    event pump, no clock, no terminal.
+    event pump, no clock, no terminal.  ``seed`` pins the splash's style
+    order for a reproducible snapshot.
     """
     screen = HeadlessScreen(width, height)
     runtime = Runtime(
         Terminal(TerminalOptions(screen=screen)),
         interactive=False,
     )
-    showcase = Showcase(scene=name)
+    showcase = Showcase(scene=name, seed=seed)
     showcase.phase = phase
     runtime.workspace.fill(showcase)
     runtime.paint()
@@ -117,7 +120,8 @@ def _tick(app: App, showcase: Showcase) -> None:
 def _interactive(scene: str) -> None:
     """Run the showcase on a real terminal until the scene asks to quit."""
     app = App(terminal=TerminalOptions(mouse=MouseMode.MOVE), title="motui showcase")
-    showcase = Showcase(scene=scene)
+    # A live launch starts on a random splash pack; headless snapshots pin 0.
+    showcase = Showcase(scene=scene, seed=None)
     showcase.on_quit = app.quit
     app.fill(showcase)
     app.focus(showcase)
@@ -135,6 +139,7 @@ class _Options:
     frames: int = 0
     width: int = 100
     height: int = 30
+    scene_set: bool = False
 
 
 def _parse(args: Sequence[str]) -> _Options | None:
@@ -142,6 +147,7 @@ def _parse(args: Sequence[str]) -> _Options | None:
     pages = False
     headless = False
     scene = "menu"
+    scene_set = False
     frames = 0
     width = 100
     height = 30
@@ -164,6 +170,7 @@ def _parse(args: Sequence[str]) -> _Options | None:
             value = args[index + 1]
             if arg == "--scene":
                 scene = value
+                scene_set = True
             elif not value.isdigit():
                 print(_USAGE)
                 return None
@@ -180,7 +187,7 @@ def _parse(args: Sequence[str]) -> _Options | None:
     if scene not in SCENES:
         print(_USAGE)
         return None
-    return _Options(pages, headless, scene, frames, width, height)
+    return _Options(pages, headless, scene, frames, width, height, scene_set)
 
 
 def main(argv: Sequence[str] | None = None) -> int:
@@ -196,14 +203,17 @@ def main(argv: Sequence[str] | None = None) -> int:
         sys.stdin.isatty() and sys.stdout.isatty()
     )
     if headless:
-        showcase = Showcase(scene=options.scene)
+        # A piped run has no screen to wait on: keep the menu frame unless the
+        # caller asked for a specific scene.  The live launch opens on splash.
+        scene = options.scene if options.scene_set else "menu"
+        showcase = Showcase(scene=scene)
         for _ in range(options.frames):
             showcase.tick()
         sys.stdout.write(
             _scene_text(showcase, options.width, options.height) + "\n"
         )
         return 0
-    _interactive(options.scene)
+    _interactive(options.scene if options.scene_set else "splash")
     return 0
 
 

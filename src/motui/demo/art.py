@@ -12,7 +12,7 @@ headless snapshot and by a live frame through one code path.
 
 from __future__ import annotations
 
-from collections.abc import Sequence
+from collections.abc import Callable, Sequence
 
 from ..kernel.cell import Line, Segment
 from ..kernel.style import NONE, Style
@@ -62,6 +62,51 @@ FONT_5X7: dict[str, tuple[str, ...]] = {
         "00100",
         "00000",
         "01100",
+        "00100",
+        "00100",
+        "00100",
+        "01110",
+    ),
+    "M": (
+        "10001",
+        "11011",
+        "10101",
+        "10101",
+        "10001",
+        "10001",
+        "10001",
+    ),
+    "O": (
+        "01110",
+        "10001",
+        "10001",
+        "10001",
+        "10001",
+        "10001",
+        "01110",
+    ),
+    "T": (
+        "11111",
+        "00100",
+        "00100",
+        "00100",
+        "00100",
+        "00100",
+        "00100",
+    ),
+    "U": (
+        "10001",
+        "10001",
+        "10001",
+        "10001",
+        "10001",
+        "10011",
+        "01101",
+    ),
+    "I": (
+        "01110",
+        "00100",
+        "00100",
         "00100",
         "00100",
         "00100",
@@ -130,15 +175,19 @@ def big_text(
     gap: int = 1,
     highlight: int | None = None,
     highlight_style: Style = NONE,
+    style_at: Callable[[int, int], Style] | None = None,
 ) -> list[Line]:
     """``text`` in the 5x7 font, one :class:`Line` per glyph row.
 
     ``styles`` is a horizontal ramp: column ``x`` uses ``styles[x % len]``
     (one style paints the whole logo, an empty sequence paints plain).  A
     filled cell at column ``highlight`` takes ``highlight_style`` instead --
-    the sweep the splash rides across the word.  ``gap`` blank columns
-    separate the glyphs; the width is ``5 * len(text) + gap * (len - 1)``.
-    A character the font lacks is skipped.
+    the sweep the splash rides across the word.  ``style_at``, when given,
+    overrides both: it receives the cell's column and glyph row and answers
+    the style for every filled cell (the plasma/glitch packs use it).  ``gap``
+    blank columns separate the glyphs; the width is
+    ``5 * len(text) + gap * (len - 1)``.  A character the font lacks is
+    skipped.
     """
     if not text:
         return []
@@ -158,11 +207,14 @@ def big_text(
                     column += 1
             for bit in glyph[row_index]:
                 if bit == "1":
-                    style = (
-                        highlight_style
-                        if column == highlight
-                        else (styles[column % len(styles)] if styles else NONE)
-                    )
+                    if style_at is not None:
+                        style = style_at(column, row_index)
+                    else:
+                        style = (
+                            highlight_style
+                            if column == highlight
+                            else (styles[column % len(styles)] if styles else NONE)
+                        )
                     _push(segments, pixel, style)
                 else:
                     _push(segments, " ", NONE)
