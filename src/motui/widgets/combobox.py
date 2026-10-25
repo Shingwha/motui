@@ -56,7 +56,7 @@ class ComboBox(Widget):
     doors).  A :class:`~motui.kernel.events.PasteEvent` is never read as a
     key: the open dropdown hands it straight to the field (the P0 this wave
     fixed).  The result is read once through :meth:`take_result`.
-    ``render(width)`` is the field's rows; the dropdown paints through a
+    ``render(c)`` is the field's rows; the dropdown paints through a
     host-mounted :class:`~motui.app.modal.Modal` -- a widget lays
     out rows, the modal owns the screen:
 

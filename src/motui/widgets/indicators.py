@@ -456,7 +456,7 @@ class Slider(Widget):
 class Spinner(Widget):
     """A frame-cycling activity indicator with an optional label.
 
-    ``render(width)`` is the current ``frame`` followed by ``text``, ``fit``
+    ``render(c)`` is the current ``frame`` followed by ``text``, ``fit``
     to the painting width -- the spinner is a component like every other,
     so ``tui.add(Spinner(...))`` paints it.  ``advance`` steps the cycle;
     the pump's clock decides when.  The frame and text carry

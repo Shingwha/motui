@@ -4,7 +4,7 @@ The matrix is the shipped component surface.  For each component and each
 width the three properties are the contract:
 
 * **bounded** -- no row is wider than the width it was rendered for;
-* **idempotent** -- a second ``render(width)`` answers the same rows;
+* **idempotent** -- a second ``render(c)`` answers the same rows;
 * **drift-free** -- rendering at another width in between does not change
   what ``width`` renders.
 

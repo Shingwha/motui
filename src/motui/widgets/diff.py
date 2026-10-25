@@ -358,7 +358,7 @@ class Diff(Widget):
     the context, ``-`` and ``+``
     rows all read weight-neutral, and bold stays what it is everywhere else
     in the toolkit -- the markdown ``**...**`` syntax (the rule
-    ``kernel/style.py``'s palette note spells out).  ``render(width)`` fits
+    ``kernel/style.py``'s palette note spells out).  ``render(c)`` fits
     every row to the width, so a long line is truncated with ``\u2026`` like
     anywhere else, and caches the fitted rows for that width: a repaint
     answers from the cache, a resize rebuilds it.

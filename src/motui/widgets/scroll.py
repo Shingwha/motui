@@ -4,7 +4,7 @@ A :class:`ScrollPanel` renders its child at the width it can give it and
 shows a fixed-height slice of the result.  It is the composition-layer
 answer to "this content is taller than its slot": charts, long forms, a
 panel's body, a markdown document -- any component works unchanged,
-because the child keeps rendering through the one ``render(width)``
+because the child keeps rendering through the one ``render(c)``
 protocol.
 
 Three knobs decide the window:

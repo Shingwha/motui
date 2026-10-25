@@ -14,7 +14,7 @@ controller methods, no callbacks)::
       Body line two
 
 The body is any component (:class:`~motui.widgets.decor.Panel`'s child
-protocol): it renders through the same ``render(width)`` -- at
+protocol): it renders through the same ``render(c)`` -- at
 ``width`` minus the marker's columns, the width the inset leaves it -- so a
 nested ``Panel``, a field or a layout works unchanged.  The component is a
 :class:`~motui.kernel.document.Container`: a title-row cell answers ``None``

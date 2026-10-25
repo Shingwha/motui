@@ -1,7 +1,7 @@
 """Component library: renderers over the kernel.
 
 Every component renders through the frozen protocol
-``render(width) -> list[Line]`` and depends only on the kernel
+``render(c: Constraints) -> Surface`` and depends only on the kernel
 (``block``/``lines``/``style``/``text``): no screen, painter, keys or app
 imports.  Pure renderers hold to that one method; the interactive ones add
 the controller vocabulary of the naming charter beside it -- ``Input`` /

@@ -11,7 +11,7 @@ that renders rows: the :class:`~motui.app.command_palette.CommandPalette`'s own
 query-over-list panel, a ComboBox dropdown, a context menu.
 
 The panel is a structural duck, not a class: anything with
-``render(width) -> list[Line]``, a ``click(row, col) -> bool`` over its own
+``render(c) -> Surface``, a ``click(row, col) -> bool`` over its own
 rendered cells, a ``handle(event) -> bool`` for the keyboard and the
 library's one-shot result (``take_result()`` -- a decision is a take, so a
 ``None``-valued button is a decision too; a panel that can decide ``None``

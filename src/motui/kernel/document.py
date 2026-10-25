@@ -228,7 +228,7 @@ class Revisioned(Protocol):
 
     ``revision()`` answers *everything the component's rows depend on*, as a
     value: while two calls answer **equal** snapshots the component promises
-    that ``render(width)`` answers equal rows at any one width -- so a cache
+    that ``render(c)`` answers equal rows at any one width -- so a cache
     keyed on the pair ``(width, revision())`` may hand the older rows back.
     The row cache on :meth:`Section.rows` is exactly that cache, and the
     promise is what makes it safe to keep a block's rows between frames: a
@@ -247,7 +247,7 @@ class Revisioned(Protocol):
     all: it would freeze under a cache instead of merely being re-rendered.
 
     The snapshot must **cost much less than the render it guards** -- the
-    design bound is at most a few percent of one ``render(width)``, because
+    design bound is at most a few percent of one ``render(c)``, because
     every cached frame pays the snapshot again while only a miss pays the
     render; a snapshot that re-wraps the text it guards has moved the cost,
     not removed it.

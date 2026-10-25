@@ -393,7 +393,7 @@ class _TextField(Widget):
         return start, count
 
     def cursor_position(self, width: int) -> tuple[int, int]:
-        """The cursor cell as ``(visual_row, col)`` of a ``render(width)``.
+        """The cursor cell as ``(visual_row, col)`` of a ``render(c)``.
 
         The geometry is the one ``render`` uses, so the reported cell is
         exactly the cell the render paints as the block cursor: the

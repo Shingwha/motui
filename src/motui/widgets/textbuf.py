@@ -76,7 +76,7 @@ from ..kernel.keymap import Keymap
 
 __all__ = ["UNDO_LIMIT", "TextBuffer"]
 
-#: Width the visual geometry uses before the first ``render(width)`` seeds
+#: Width the visual geometry uses before the first ``render(c)`` seeds
 #: it (matches the kernel's terminal fallback).
 DEFAULT_WIDTH = 80
 
@@ -108,7 +108,7 @@ class TextBuffer:
     exactly as it always did.
 
     ``last_width`` is the width the visual geometry wraps against: a
-    ``render(width)`` seeds it and until the first render it is
+    ``render(c)`` seeds it and until the first render it is
     :data:`DEFAULT_WIDTH` (80), so ``move_up``/``move_down`` have a sane
     geometry before anything is painted.  ``indent`` is the columns every
     visual row is inset by -- the shell supplies the prompt's width for

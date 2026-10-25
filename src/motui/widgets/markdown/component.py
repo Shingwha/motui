@@ -581,7 +581,7 @@ class Markdown(Widget):
     """A Markdown document rendered as rows, rule-registry driven.
 
     ``text`` is a mutable attribute (streaming text assigns to it);
-    ``render(width)`` is a pure function of ``text`` and ``width`` and never
+    ``render(c)`` is a pure function of ``text`` and ``c.width`` and never
     returns a row wider than ``width``.  The last answer lives in one
     :class:`_StreamCache` entry keyed on the ``(text, width)`` pair, so a
     document re-rendered every frame (the viewport re-renders an open block
@@ -883,7 +883,7 @@ class Markdown(Widget):
     def revision(self) -> object:
         """The :class:`~motui.kernel.document.Revisioned` snapshot for the rows.
 
-        Every mutable input ``render(width)`` reads besides the width: the
+        Every mutable input ``render(c)`` reads besides the width: the
         text, ``max_width`` (the P0 this wave fixed -- the clamp runs before
         the cache, so a moved cap must move the snapshot), the ``glyphs``
         vocabulary the task boxes, bullets and quote bar are drawn from, the
