@@ -6,6 +6,7 @@ import pytest
 
 from motui.kernel.glyphs import GLYPHS
 from motui.kernel.cell import Segment, Surface
+from motui.kernel.geom import Pos
 from motui.kernel.layout import Constraints
 from motui.kernel.style import Style
 from motui.kernel.text import WrapMode
@@ -105,6 +106,63 @@ def test_handle_consumes_its_own_keys_and_declines_the_hosts():
     assert lst.handle(key("home")) is True and lst.index == 0
     for event in (key("enter"), key("tab"), key("c-n"), key("space", " "), paste("text")):
         assert lst.handle(event) is False
+
+
+def test_the_list_keymap_routes_its_keys_through_named_actions():
+    lst = List(["a", "b", "c"], window=2)
+    assert lst.on_action("next") is True and lst.index == 1
+    assert lst.on_action("prev") is True and lst.index == 0
+    assert lst.on_action("last") is True and lst.index == 2
+    assert lst.on_action("first") is True and lst.index == 0
+    # A movement action is consumed even at an edge, the old handle's rule.
+    assert lst.on_action("prev") is True and lst.index == 0
+    assert lst.on_action("activate") is True and lst.take() == "a"
+    assert lst.on_action("toggle") is True and list(lst.marked) == [0]
+    assert lst.on_action("nope") is False and list(lst.marked) == [0]
+    assert List.handle is List.on_key
+    assert List.keymap["down"] == "next"
+
+
+def test_an_instance_keymap_rebind_never_writes_through_the_class_table():
+    lst = List(["a", "b", "c"])
+    other = List(["a", "b", "c"])
+    lst.keymap["j"] = "next"
+    assert "j" not in List.keymap
+    assert "j" not in other.keymap
+    assert lst.handle(key("j", "j")) is True and lst.index == 1
+    # The unbound list still falls through to its printable prefix jump.
+    assert other.handle(key("j", "j")) is True and other.index == 0
+    del lst.keymap["j"]
+    assert lst.handle(key("j", "j")) is True and lst.index == 1
+
+
+def test_the_typed_hooks_forward_to_the_1x_click_and_hover_verbs():
+    lst = List(many(100), window=4)
+    lst.index = 50
+    assert lst.on_click(Pos(y=2, x=99)) is True
+    assert lst.index == 49 and lst.take() == "r49"
+    assert lst.on_hover(Pos(y=2, x=0)) is True
+    assert lst.on_hover(Pos(y=2, x=0)) is False
+    assert lst.on_hover(None) is True
+    assert lst.on_click(Pos(y=0, x=0)) is False  # the counter row
+
+
+def test_take_is_the_result_door_and_the_alias_answers_the_same():
+    lst = List(["a"])
+    assert lst.take() is None
+    assert lst.activate() is True and lst.take() == "a"
+    assert lst.take() is None
+    assert lst.activate() is True and lst.take_result() == "a"
+
+
+def test_the_list_declares_its_capabilities():
+    lst = List(["a"])
+    assert (lst.focusable, lst.clickable, lst.hoverable, lst.activatable) == (
+        True,
+        True,
+        True,
+        True,
+    )
 
 
 def test_the_list_window_must_hold_at_least_one_row():

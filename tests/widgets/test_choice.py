@@ -6,12 +6,13 @@ import pytest
 
 from motui.kernel.glyphs import GLYPHS
 from motui.kernel.cell import Surface
+from motui.kernel.geom import Pos
 from motui.kernel.layout import Constraints
 from motui.kernel.style import Style
 from motui.kernel.theme import DEFAULT_THEME, Styles
 from motui.widgets import CheckboxGroup, MultiSelect, Option, RadioGroup, Select
 
-from tests.testing import texts
+from tests.testing import key, texts
 
 THREE = [Option("one"), Option("two"), Option("three")]
 
@@ -380,3 +381,75 @@ def test_select_answers_a_surface_and_honours_the_height_budget():
         "  two",
         "  three",
     ]
+
+
+# -- the 2.0 keymap and action surface ----------------------------------------
+
+
+def test_the_choice_keymap_routes_its_keys_through_named_actions():
+    menu = Select(THREE)
+    assert menu.on_action("next") is True and menu.index == 1
+    assert menu.on_action("prev") is True and menu.index == 0
+    assert menu.on_action("last") is True and menu.index == 2
+    assert menu.on_action("first") is True and menu.index == 0
+    assert menu.on_action("toggle") is False  # a plain Select has no marks
+    assert menu.on_action("nope") is False
+    assert menu.on_key(key("right")) is True and menu.index == 1
+    assert menu.on_key(key("enter")) is True and menu.take() == THREE[1]
+    assert Select.handle is Select.on_key
+    assert Select.keymap["down"] == "next" and Select.keymap["enter"] == "activate"
+
+
+def test_a_non_wrapping_choice_action_reports_an_edge_as_unhandled():
+    menu = Select(THREE, wrap=False)
+    assert menu.on_action("prev") is False
+    assert menu.on_action("next") is True and menu.index == 1
+
+
+def test_an_instance_keymap_rebind_is_private_to_the_instance():
+    menu = Select(THREE)
+    other = Select(THREE)
+    menu.keymap["j"] = "next"
+    assert "j" not in Select.keymap
+    assert "j" not in other.keymap
+    assert menu.handle(key("j", "j")) is True and menu.index == 1
+    assert other.handle(key("j", "j")) is False and other.index == 0
+
+
+def test_the_typed_hooks_forward_to_click_and_hover():
+    menu = Select([Option("one"), Option("two")], title="pick")
+    assert menu.on_click(Pos(y=1, x=3)) is True and menu.index == 0
+    assert menu.on_hover(Pos(y=1, x=0)) is True
+    assert menu.on_hover(Pos(y=1, x=0)) is False
+    assert menu.on_hover(None) is True
+    assert menu.on_click(Pos(y=0, x=0)) is False  # the title row
+
+
+def test_take_is_the_result_door_and_the_alias_answers_the_same():
+    menu = Select(THREE)
+    assert menu.take() is None
+    assert menu.activate() is True and menu.take() == Option("one")
+    assert menu.take() is None
+    assert menu.activate() is True and menu.take_result() == Option("one")
+
+
+def test_a_multi_select_binds_activate_to_its_toggle():
+    menu = MultiSelect(THREE)
+    assert menu.on_action("activate") is True
+    assert menu.take() == ["one"]
+    assert menu.on_action("activate") is True
+    assert menu.take() is None
+
+
+def test_the_choice_family_declares_its_capabilities():
+    for widget in (
+        Select(THREE),
+        MultiSelect(THREE),
+        RadioGroup(["a"]),
+        CheckboxGroup(["a"]),
+    ):
+        assert widget.focusable is True
+        assert widget.clickable is True
+        assert widget.hoverable is True
+        assert widget.activatable is True
+        assert "up" in widget.keymap
