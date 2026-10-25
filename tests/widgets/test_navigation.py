@@ -114,6 +114,17 @@ def test_an_empty_strip_renders_one_empty_row_and_misses_every_cell():
     assert empty.index == 0
 
 
+def test_tabs_answers_a_surface_and_honours_the_height_budget():
+    tabs = Tabs(["a", "b"])
+    surface = tabs.render(Constraints(width=20, max_height=1))
+    assert isinstance(surface, Surface)
+    assert [row.text for row in surface] == [" a \u2502 b "]
+    assert surface.width == 20 and surface.height == 1
+    # A zero height budget paints no row; the width still feeds the hits.
+    assert tabs.render(Constraints(width=20, max_height=0)).height == 0
+    assert tabs.click(0, 1) is True and tabs.index == 0
+
+
 # -- NavList ------------------------------------------------------------------
 
 

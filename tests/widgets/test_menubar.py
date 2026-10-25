@@ -2,6 +2,8 @@
 
 from dataclasses import replace
 
+from motui.kernel.cell import Surface
+from motui.kernel.layout import Constraints
 from motui.kernel.style import Style
 from motui.kernel.theme import DEFAULT_THEME
 from motui.widgets import ContextMenu, MenuBar, Option, Select
@@ -18,6 +20,17 @@ def test_menubar_renders_one_row_with_dividers_and_padding():
     assert rows[0].segments[1].style.underline is False
     assert rows[0].segments[3].text == "Edit"
     assert MenuBar([]).render(40)[0].text == ""
+
+
+def test_menubar_answers_a_surface_and_honours_the_height_budget():
+    bar = MenuBar(["File", "Edit"])
+    surface = bar.render(Constraints(width=40, max_height=1))
+    assert isinstance(surface, Surface)
+    assert [row.text for row in surface] == [" File \u2502 Edit "]
+    assert surface.width == 40 and surface.height == 1
+    # A zero height budget paints no row; the width still feeds the hits.
+    assert bar.render(Constraints(width=40, max_height=0)).height == 0
+    assert bar.click(0, 1) is True and bar.index == 0
 
 
 def test_an_over_wide_bar_truncates_and_the_cut_label_carries_no_span():
