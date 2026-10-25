@@ -949,32 +949,18 @@ class ScrollState:
     def thumb(self, track_height: int, min_length: int = 1) -> tuple[int, int] | None:
         """The thumb's ``(start, length)`` over ``track_height`` cells.
 
-        ``None`` when there is nothing to map -- the content fits the window
-        (an empty document included) or ``min_length`` shaved the thumb away
-        -- which a scrollbar paints as its plain track.  Otherwise::
-
-            length = min(track, max(min_length, round(viewport * track / content)))
-            travel = max(1, track - length)
-            span   = max(1, content - viewport)
-            start  = min(travel, max(0, round(offset * travel / span)))
-
-        ``round`` is the builtin, so a half goes to the even integer and the
-        geometry is reproducible rather than merely approximate.  This is the
-        only thumb formula: the pane scrollbar and the scroll view's bar both
-        call it.
+        The mutable face of :meth:`ScrollAxis.thumb`: the immutable value
+        carries the one formula (including the builtin ``round`` half-to-even
+        rule), and this method only supplies the live extent, so the pane
+        scrollbar and the scroll view's bar can never drift apart.  ``None``
+        when there is nothing to map -- the content fits the window (an empty
+        document included) or ``min_length`` shaved the thumb away.
         """
-        if track_height <= 0 or self.content_height <= self.viewport_height:
-            return None
-        length = min(
-            track_height,
-            max(min_length, round(self.viewport_height * track_height / self.content_height)),
-        )
-        if length <= 0:
-            return None
-        travel = max(1, track_height - length)
-        span = max(1, self.content_height - self.viewport_height)
-        start = min(travel, max(0, round(self.offset * travel / span)))
-        return start, length
+        return ScrollAxis(
+            offset=self.offset,
+            content=self.content_height,
+            viewport=self.viewport_height,
+        ).thumb(track_height, min_length)
 
 
 @runtime_checkable
