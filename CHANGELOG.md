@@ -51,7 +51,7 @@ migration table and recipes are in [`docs/MIGRATION.md`](docs/MIGRATION.md).
 - `Canvas` (cell/half/braille markers) and `Sparkline`.
 - `ScrollPanel(axis="x" | "both")` for wide, non-wrapping content.
 - `Section` row caching keyed by width, height budget and revision
-  snapshot; `MOTUI_NO_CACHE=1` disables it.
+  snapshot; a component without a snapshot re-renders per layout.
 - `HasResult`/`take()` as the one-shot result door.
 - `Command.group`, `CommandRegistry.bind`, `Timer`, and
   `Runtime.advance(dt)` for deterministic replay.
