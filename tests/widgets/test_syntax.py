@@ -4,6 +4,7 @@ from dataclasses import replace
 
 import pytest
 
+from motui.kernel.cell import Line
 from motui.kernel.style import Style
 from motui.kernel.theme import DEFAULT_THEME
 from motui.widgets import Markdown
@@ -88,3 +89,15 @@ def test_the_shared_default_highlighter_is_one_instance():
     assert default_highlighter() is default_highlighter()
     assert isinstance(default_highlighter(), Highlighter)
     assert [row.text for row in default_highlighter().highlight("x = 1", "python")] == ["x = 1"]
+
+
+# -- the 2.0 render contract -------------------------------------------------
+
+
+def test_the_highlighter_is_a_row_source_not_a_component():
+    # syntax.py has no render of its own: the engine hands Lines to the block
+    # rules, and the only constrained component in the chain is Markdown
+    # (covered by tests/widgets/test_markdown.py).
+    engine = default_highlighter()
+    assert not hasattr(engine, "render")
+    assert all(isinstance(row, Line) for row in engine.highlight("x = 1", "python"))
