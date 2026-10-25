@@ -5,6 +5,7 @@ from dataclasses import replace
 import pytest
 
 from motui.kernel.cell import Surface
+from motui.kernel.geom import Pos
 from motui.kernel.glyphs import GLYPHS
 from motui.kernel.layout import Constraints
 from motui.kernel.style import Style
@@ -202,3 +203,46 @@ def test_the_action_primitives_honour_the_height_budget():
         assert isinstance(surface, Surface)
         assert surface.height == 1
         assert all(row.width <= 20 for row in surface)
+
+
+# -- the 2.0 hooks and capabilities -------------------------------------------
+
+
+def test_the_action_family_declares_focus_click_hover_and_activation():
+    for control in (Button("Run"), Checkbox("Bold"), Link("docs")):
+        assert control.focusable is True
+        assert control.clickable is True
+        assert control.hoverable is True
+        assert control.activatable is True
+
+
+def test_on_action_runs_activate_and_declines_unknown_names():
+    for control in (Button("Run"), Checkbox("Bold"), Link("docs")):
+        assert control.on_action("toggle") is False
+        assert control.take() is None
+        assert control.on_action("activate") is True
+        assert control.take() is True
+        assert control.take() is None
+
+
+def test_on_click_is_the_positional_door_and_take_clears():
+    button = Button("Run")
+    assert button.on_click(Pos(y=9, x=40)) is True
+    assert button.take() is True
+    assert button.take() is None
+
+    # The 1.x cell spelling still lands the same operation.
+    assert button.click(0, 0) is True
+    assert button.take_result() is True
+    assert button.take_result() is None
+
+
+def test_disabled_controls_refuse_the_typed_hooks():
+    for control in (
+        Button("Run", disabled=True),
+        Checkbox("Bold", disabled=True),
+        Link("docs", disabled=True),
+    ):
+        assert control.on_click(Pos(y=0, x=0)) is False
+        assert control.on_action("activate") is False
+        assert control.take() is None

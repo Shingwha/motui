@@ -179,7 +179,9 @@ class Panel(Widget):
     ``styles`` override, else its theme).  The container
     implements ``Container.child_at`` over the geometry of its last render:
     only the content cells map to the child -- the border rows and the
-    border/padding columns belong to the ``Panel`` itself.
+    border/padding columns belong to the ``Panel`` itself.  The child is
+    also the panel's one ``children`` entry, so ``walk()`` sees it and a
+    widget child's ``parent`` points back at the panel.
 
     **``frame=False`` drops the box and keeps the panel.**  The child
     renders at ``width - 2`` -- the same one padding column per side, with
@@ -239,6 +241,10 @@ class Panel(Widget):
     ) -> None:
         super().__init__(theme, styles)
         self.child = child
+        # The explicit tree: the child is this panel's child; assigning the
+        # list points a widget child's ``parent`` back at the panel (a pure
+        # ``Component`` child has no ``parent`` and is left alone).
+        self.children = [child]
         self.title = title
         self.frame = frame
         self._glyphs = glyphs

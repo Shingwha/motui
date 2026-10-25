@@ -25,6 +25,7 @@ from collections.abc import Sequence
 
 from ..kernel.document import Component
 from ..kernel.events import Event, KeyEvent, MouseEvent
+from ..kernel.geom import Pos
 from ..kernel.glyphs import GLYPHS, Glyphs
 from ..kernel.cell import Surface
 from ..kernel.layout import Constraints
@@ -45,7 +46,7 @@ class ComboBox(Widget):
     :class:`~motui.widgets.textfield.Input` (``.input``), and while the
     dropdown is open the ``Autocomplete`` of the field's text (``.list``) is
     painted under the field's row.  ``open()``/``close()``/``is_open`` drive
-    it; :meth:`handle` routes: ``down``/``up`` step the list (consumed, the
+    it; :meth:`on_key` routes: ``down``/``up`` step the list (consumed, the
     cursor wraps like every menu), ``enter`` takes the highlighted option's
     value as the one-shot result, closes and writes the option's label back
     into the field, ``escape`` closes with nothing pending; every
@@ -55,7 +56,7 @@ class ComboBox(Widget):
     sibling of ``KeyEvent``, never one, so its button names are not editing
     doors).  A :class:`~motui.kernel.events.PasteEvent` is never read as a
     key: the open dropdown hands it straight to the field (the P0 this wave
-    fixed).  The result is read once through :meth:`take_result`.
+    fixed).  The result is read once through :meth:`take`.
     ``render(c)`` is the field's rows; the dropdown paints through a
     host-mounted :class:`~motui.app.modal.Modal` -- a widget lays
     out rows, the modal owns the screen:
@@ -63,7 +64,7 @@ class ComboBox(Widget):
     1. the host mounts it once -- ``drop = Modal(tui, combo.list,
        anchor=(field_row + 1, field_col))`` -- the anchor put one row under
        the field, so the dropdown hangs where a combobox's list belongs;
-    2. the host routes ``combo.handle(event)`` **before** ``drop.handle``
+    2. the host routes ``combo.on_key(event)`` **before** ``drop.handle``
        (the combo takes the keyboard while open, the modal keeps everything
        it declines: the mouse, the scrim, the dismissal);
     3. opening and closing stay in step -- the host calls ``drop.open()``
@@ -80,9 +81,16 @@ class ComboBox(Widget):
     the list opens on the matches of it.
     """
 
-    #: The combo routes the field's keys through its own ``handle``; the App
-    #: registers the combo, not the internal Input/Autocomplete, as the target.
+    #: The combo routes the field's keys through its own ``on_key``; the
+    #: App registers the combo, not the internal Input/Autocomplete, as the
+    #: target.
     owns_focus = True
+    #: The combo takes the focus ring, a pointer click (which docks the
+    #: field's caret), and the activation verb (which takes the highlighted
+    #: option while the dropdown is open).
+    focusable = True
+    clickable = True
+    activatable = True
 
     __slots__ = (
         "_last_count",
@@ -123,6 +131,9 @@ class ComboBox(Widget):
         # ``Widget.__init__`` writes ``focused`` through this class's
         # delegating property, so the field must exist before it runs.
         super().__init__(theme, styles)
+        # The explicit tree: the field and the dropdown are this wrapper's
+        # children, so ``walk()`` covers the editable and the menu half.
+        self.children = [self.input, self.list]
         # The old constructor default: the field starts focused.
         self.focused = True
         # The skin last forwarded to the children; a later assignment to
@@ -133,7 +144,7 @@ class ComboBox(Widget):
             self.input.insert(text)
         self.list.set_query(self.input.text)
         #: The pending pick: the taken option's value, read once through
-        #: :meth:`take_result`.
+        #: :meth:`take`.
         self._pending: object | None = None
         #: Whether the dropdown is showing (the host's modal mirrors it).
         self.is_open = False
@@ -178,7 +189,7 @@ class ComboBox(Widget):
 
     # -- the event contract -----------------------------------------------------
 
-    def handle(self, event: Event) -> bool:
+    def on_key(self, event: Event) -> bool:
         """Route one event; ``True`` when it was consumed.
 
         Open, the dropdown's four keys come first: ``down``/``up`` step the
@@ -211,10 +222,13 @@ class ComboBox(Widget):
                 self._pending = None
                 self.close()
                 return True
-        if self.input.handle(event):
+        if self.input.on_key(event):
             self.list.set_query(self.input.text)
             return True
         return False
+
+    #: The 1.x spelling; W3b3 removes it.
+    handle = on_key
 
     def _take(self) -> None:
         """The ``enter``: the highlighted option's value, its label back in the field."""
@@ -222,7 +236,7 @@ class ComboBox(Widget):
             self._pending = None  # nothing matched: the empty pick
             self.close()
             return
-        option = self.list.take_result()  # the menu's one-shot pick is the combo's to carry
+        option = self.list.take()  # the menu's one-shot pick is the combo's to carry
         if not isinstance(option, Option):
             self._pending = None
             self.close()
@@ -233,11 +247,15 @@ class ComboBox(Widget):
         self.list.set_query(self.input.text)  # the filter follows the field's new text
         self.close()
 
-    def take_result(self) -> object | None:
-        """Read the pending pick once and clear it (the ``Resultful`` door)."""
+    def take(self) -> object | None:
+        """Read the pending pick once and clear it."""
         value = self._pending
         self._pending = None
         return value
+
+    def take_result(self) -> object | None:
+        """The 1.x alias of :meth:`take`."""
+        return self.take()
 
     # -- the container surface ---------------------------------------------------
 
@@ -250,9 +268,28 @@ class ComboBox(Widget):
     def focused(self, value: bool) -> None:
         self.input.focused = value
 
+    def on_click(self, pos: Pos) -> bool:
+        """Place the field's caret at a rendered cell (the click door)."""
+        return self.input.click(pos.y, pos.x)
+
     def click(self, row: int, col: int) -> bool:
-        """Place the field's caret at a rendered cell (``Clickable``)."""
-        return self.input.click(row, col)
+        """The 1.x cell spelling of :meth:`on_click`."""
+        return self.on_click(Pos(y=row, x=col))
+
+    def on_action(self, name: str) -> bool:
+        """Run one action: ``"activate"`` takes the highlighted option.
+
+        While the dropdown is open, activation is exactly the ``enter`` key
+        (:meth:`_take`); closed, there is nothing to take and the action
+        declines.  Any other name is an editing action and belongs to the
+        field.
+        """
+        if name == "activate":
+            if not self.is_open:
+                return False
+            self._take()
+            return True
+        return self.input.on_action(name)
 
     def child_at(self, row: int, col: int) -> tuple[Component, int, int] | None:
         """Map one of the combo's own cells to the input row it belongs to.

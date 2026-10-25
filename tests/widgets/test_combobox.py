@@ -1,6 +1,7 @@
 """ComboBox: the editable field over a filtered dropdown it owns the state of."""
 
 from motui.kernel.cell import Surface
+from motui.kernel.geom import Pos
 from motui.kernel.layout import Constraints
 from motui.widgets import ComboBox, Option
 
@@ -120,3 +121,61 @@ def test_a_combo_takes_constraints_and_honours_the_height_budget():
     assert combo.render(Constraints(width=40, max_height=1)).height == 1
     # The child geometry is the untruncated field render's.
     assert combo.child_at(0, 0) == (combo.input, 0, 0)
+
+
+# -- the 2.0 tree and typed hooks ---------------------------------------------
+
+
+def test_the_combo_owns_its_field_and_dropdown_in_the_tree():
+    combo = ComboBox(OPTIONS, text="Dialog")
+
+    assert (combo.focusable, combo.clickable, combo.activatable) == (
+        True,
+        True,
+        True,
+    )
+    assert combo.children == [combo.input, combo.list]
+    assert combo.input.parent is combo and combo.list.parent is combo
+    assert list(combo.walk()) == [combo, combo.input, combo.list]
+
+
+def test_on_key_is_the_typed_spelling_of_handle():
+    typed, legacy = ComboBox(OPTIONS), ComboBox(OPTIONS)
+
+    assert typed.on_key(key("D", "D")) is True
+    assert legacy.handle(key("D", "D")) is True
+    assert typed.input.text == legacy.input.text == "D"
+
+
+def test_on_click_docks_the_field_caret():
+    combo = ComboBox(OPTIONS, text="Dialog")
+    combo.render(Constraints(width=40))
+
+    assert combo.on_click(Pos(y=0, x=3)) is True
+    assert combo.input.cursor == (0, 1)
+
+
+def test_on_action_activates_the_open_dropdown_only():
+    combo = ComboBox(OPTIONS)
+
+    assert combo.on_action("activate") is False
+    combo.open()
+    assert combo.on_action("activate") is True
+    assert combo.take() == "autocomplete"
+    assert combo.is_open is False and combo.input.text == "Autocomplete"
+
+    # Other names are editing actions and belong to the field.
+    assert combo.on_action("move_left") is True
+    assert combo.input.cursor == (0, 11)
+
+
+def test_take_is_the_result_door_and_the_alias_agrees():
+    combo = ComboBox(OPTIONS)
+
+    combo.open()
+    assert combo.handle(key("enter")) is True
+    assert combo.take() == "autocomplete"
+
+    combo.open()
+    assert combo.handle(key("enter")) is True
+    assert combo.take_result() == "autocomplete"

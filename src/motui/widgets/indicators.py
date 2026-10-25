@@ -11,10 +11,10 @@ Three components that show a value, one family file:
 * :class:`Slider` -- the numeric control: ``[━━━━●───] 4``, a bracketed
   track whose length follows the painting width, the value printed after the
   closing bracket.  The value lives on the ``step`` grid the constructor
-  defines; :meth:`Slider.move`, :meth:`Slider.click` (mapped against the
+  defines; :meth:`Slider.move`, :meth:`Slider.on_click` (mapped against the
   track of the last render) and :meth:`Slider.activate` are its controller
   doors, and activation leaves the current value pending for
-  :meth:`Slider.take_result`.
+  :meth:`Slider.take`.
 * :class:`Spinner` -- the activity indicator: a frame index cycling around a
   label.  :meth:`Spinner.advance` steps the cycle (wrapping around) and
   :meth:`Spinner.render` paints the current ``frame`` followed by ``text``
@@ -30,7 +30,9 @@ theme field > :data:`~motui.kernel.theme.DEFAULT_THEME`.
 from __future__ import annotations
 
 from ..kernel.glyphs import GLYPHS, Glyphs
+from ..kernel.events import KeyEvent
 from ..kernel.cell import Line, Segment, Surface
+from ..kernel.geom import Pos
 from ..kernel.layout import Constraints
 from ..kernel.style import NONE
 from ..kernel.theme import Styles, Theme
@@ -155,9 +157,9 @@ class Slider(Widget):
     ``step`` are property setters too: assigning any of them re-clamps and
     re-snaps the current value, so the invariant survives a range change.
     :meth:`move` steps ``delta`` whole ``step``s (clamped at the ends; a
-    step that moved clears a stale pending value), :meth:`click` maps a
+    step that moved clears a stale pending value), :meth:`on_click` maps a
     column of the track onto the grid, and :meth:`activate` leaves the
-    current value pending for :meth:`take_result`.  A disabled slider
+    current value pending for :meth:`take`.  A disabled slider
     refuses all three doors and merges ``text.faint`` over every segment.
 
     The track's length follows the painting width: ``[`` and ``]`` plus one
@@ -188,6 +190,13 @@ class Slider(Widget):
         "glyphs",
     )
 
+    #: A slider is a focus target, takes pointer clicks (the track maps the
+    #: value), paints a hover band and confirms its value on activation.
+    focusable = True
+    clickable = True
+    hoverable = True
+    activatable = True
+
     def __init__(
         self,
         value: int = 0,
@@ -215,7 +224,7 @@ class Slider(Widget):
         # every render refreshes it.
         self._last_width = DEFAULT_WIDTH
         #: The pending confirmation: written by ``activate`` (the current
-        #: value), read once through :meth:`take_result`, cleared by a move
+        #: value), read once through :meth:`take`, cleared by a move
         #: or a click.
         self._pending: int | None = None
         self._value = self._align(value)
@@ -290,11 +299,42 @@ class Slider(Widget):
             self._pending = None
         return moved
 
-    def click(self, row: int, col: int) -> bool:
-        """Position the value by the clicked column; ``True`` on a hit.
+    def on_key(self, e: KeyEvent) -> bool:
+        """Route one key: the arrows step the value, ``enter`` confirms it.
 
-        The slider paints one row, so any other ``row`` answers ``False``.
-        ``col`` is a 0-based cell of this component's own render, resolved
+        ``left``/``up`` step back and ``right``/``down`` step on, exactly
+        the 1.x focus tier's mapping; a step at the end of the range answers
+        ``False`` (nothing moved), so the host keeps the key.  Every other
+        key declines.
+        """
+        if e.key in ("left", "up"):
+            return self.move(-1)
+        if e.key in ("right", "down"):
+            return self.move(1)
+        if e.key == "enter":
+            return self.activate()
+        return False
+
+    def on_action(self, name: str) -> bool:
+        """Run one named action: activation or a one-step move.
+
+        ``"activate"`` confirms the value; ``"prev"`` / ``"next"`` (and the
+        arrow spellings) step the value one ``step``.  Unknown names
+        decline.
+        """
+        if name == "activate":
+            return self.activate()
+        if name in ("prev", "left", "up", "move_left", "move_up"):
+            return self.move(-1)
+        if name in ("next", "right", "down", "move_right", "move_down"):
+            return self.move(1)
+        return False
+
+    def on_click(self, pos: Pos) -> bool:
+        """Position the value by the clicked cell; ``True`` on a hit.
+
+        The slider paints one row, so any other ``pos.y`` answers ``False``.
+        ``pos.x`` is a 0-based cell of this component's own render, resolved
         against the track of the **last render** (``_last_width``): the
         cell's position over the track's columns becomes the fraction of
         the range, and the value lands on the nearest grid point -- a cell
@@ -304,25 +344,29 @@ class Slider(Widget):
         value did not move (a click is a hit whether or not it changed
         anything).
         """
-        if row != 0:
+        if pos.y != 0:
             return False
         if self.disabled:
             return False
         track = self._track(self._last_width)
         if track > 0:
-            fraction = min(max((col - 1) / track, 0.0), 1.0)
+            fraction = min(max((pos.x - 1) / track, 0.0), 1.0)
             self._value = self._align(
                 self.minimum + fraction * (self.maximum - self.minimum)
             )
         self._pending = None
         return True
 
+    def click(self, row: int, col: int) -> bool:
+        """The 1.x cell spelling of :meth:`on_click`."""
+        return self.on_click(Pos(y=row, x=col))
+
     def activate(self) -> bool:
         """Confirm the current value into the pending result; ``False`` when disabled.
 
         The slider's :class:`~motui.kernel.document.Activable` verb: a host
         routes the return key here, then reads the value once through
-        :meth:`take_result` -- a non-disabled slider always has a value to
+        :meth:`take` -- a non-disabled slider always has a value to
         confirm.
         """
         if self.disabled:
@@ -330,11 +374,15 @@ class Slider(Widget):
         self._pending = self._value
         return True
 
-    def take_result(self) -> int | None:
+    def take(self) -> int | None:
         """Read the pending confirmation once and clear it."""
         value = self._pending
         self._pending = None
         return value
+
+    def take_result(self) -> int | None:
+        """The 1.x alias of :meth:`take`."""
+        return self.take()
 
     def hover_at(self, row: int, col: int) -> bool:
         """Mark the row under a cell; ``True`` when the marking changed.

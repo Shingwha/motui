@@ -5,12 +5,13 @@ from dataclasses import replace
 import pytest
 
 from motui.kernel.cell import Surface
+from motui.kernel.geom import Pos
 from motui.kernel.layout import Constraints
 from motui.kernel.style import Style
 from motui.kernel.theme import DEFAULT_THEME, Styles
 from motui.widgets import ProgressBar, Slider, Spinner
 
-from tests.testing import texts
+from tests.testing import key, texts
 
 
 @pytest.mark.parametrize(
@@ -135,3 +136,59 @@ def test_a_zero_height_slider_render_still_seeds_the_click_geometry():
 def test_an_unbounded_progress_bar_still_follows_the_constrained_width():
     surface = ProgressBar(1.0).render(Constraints(width=10))
     assert [row.text for row in surface] == ["[" + "\u2588" * 8 + "]"]
+
+
+# -- the 2.0 capabilities and hooks -------------------------------------------
+
+
+def test_only_the_slider_declares_interactive_capabilities():
+    slider = Slider(5)
+    assert (slider.focusable, slider.clickable, slider.hoverable, slider.activatable) == (
+        True,
+        True,
+        True,
+        True,
+    )
+    for quiet in (ProgressBar(0.5), Spinner("x")):
+        assert quiet.focusable is False
+        assert quiet.clickable is False
+        assert quiet.hoverable is False
+        assert quiet.activatable is False
+
+
+def test_slider_on_key_steps_and_confirms():
+    slider = Slider(5, maximum=10)
+
+    assert slider.on_key(key("left")) is True and slider.value == 4
+    assert slider.on_key(key("down")) is True and slider.value == 5
+    assert slider.on_key(key("enter")) is True
+    assert slider.take() == 5
+    assert slider.on_key(key("x", "x")) is False
+
+
+def test_slider_on_key_declines_at_the_range_end_and_when_disabled():
+    at_end = Slider(10, maximum=10)
+    assert at_end.on_key(key("right")) is False
+
+    dead = Slider(5, disabled=True)
+    assert dead.on_key(key("left")) is False
+    assert dead.on_key(key("enter")) is False
+
+
+def test_slider_on_click_maps_the_track():
+    slider = Slider(0, maximum=10)
+    slider.render(Constraints(width=14))
+
+    assert slider.on_click(Pos(y=0, x=11)) is True and slider.value == 10
+    assert slider.on_click(Pos(y=1, x=1)) is False
+
+
+def test_slider_on_action_activates_and_moves():
+    slider = Slider(5, maximum=10)
+
+    assert slider.on_action("activate") is True
+    assert slider.take() == 5
+    assert slider.on_action("next") is True and slider.value == 6
+    assert slider.on_action("unknown") is False
+    # The move cleared the pending value instead of leaving a stale one.
+    assert slider.take_result() is None

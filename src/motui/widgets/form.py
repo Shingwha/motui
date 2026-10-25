@@ -6,7 +6,7 @@ hooks: ``validate(value) -> str | None`` for the submit check and
 ``value() -> object`` for a custom extractor.  Without an extractor the
 value comes from the component's own state by duck typing -- the first of
 ``value``, ``text``, ``checked``, ``selected`` or ``marked`` that the
-component exposes (a callable attribute is called).  ``take_result()`` is
+component exposes (a callable attribute is called).  ``take()`` is
 never touched: reading a field must not consume its pending result.
 
 Rendering is one vertical stack per field -- an optional label row, the
@@ -18,12 +18,13 @@ the painting width, and the geometry of the last render feeds
 Focus is the form's own: :meth:`Form.focus` and :meth:`Form.move` track
 ``index`` and mirror it onto every :class:`~motui.kernel.document.Focusable`
 field (the new one ``True``, all others ``False``).  The keyboard routes
-the focused field first -- its own ``handle`` wins over navigation -- then
+the focused field first -- its own typed hook wins over navigation -- then
 ``tab``/``down`` step forward, ``s-tab``/``up`` step back and ``enter``
 runs :meth:`Form.activate`: validate every field, write each error back to
 its :class:`Field`, and on success leave ``{name: value}`` pending for
-:meth:`Form.take_result` and call ``on_submit`` once.  Navigation answers
+:meth:`Form.take` and call ``on_submit`` once.  Navigation answers
 ``True`` only when the index moved, so a host keeps Tab at the ends.
+``focus_scope`` says the form routes its subtree's focus itself.
 """
 
 from __future__ import annotations
@@ -31,9 +32,10 @@ from __future__ import annotations
 from collections.abc import Callable, Sequence
 from dataclasses import dataclass
 
-from ..kernel.document import Component, Controller, Focusable, Revisioned
-from ..kernel.events import Event, KeyEvent
+from ..kernel.document import Component, Focusable, Revisioned
+from ..kernel.events import Event, KeyEvent, MouseEvent, PasteEvent
 from ..kernel.cell import Line, Surface
+from ..kernel.geom import Pos
 from ..kernel.layout import Constraints
 from ..kernel.theme import Styles, Theme
 from ..kernel.text import WrapMode
@@ -92,8 +94,11 @@ class Form(Widget):
     )
 
     #: The form owns its fields' focus: App registers the form, not each
-    #: field, and every field's keys route through :meth:`handle`.
+    #: field, and every field's keys route through :meth:`on_key`.
     owns_focus = True
+    #: The 2.0 spelling of :attr:`owns_focus`: focus routing stays inside
+    #: this widget's subtree (the 1.x name stays until W3b3).
+    focus_scope = True
 
     def __init__(
         self,
@@ -107,6 +112,9 @@ class Form(Widget):
     ) -> None:
         super().__init__(theme, styles)
         self._fields = tuple(fields)
+        # The explicit tree: each field's component is this form's child, so
+        # ``walk()`` covers the fields without guessing ``_fields``.
+        self.children = [field.component for field in self._fields]
         self._gap = max(0, gap)
         self._index = max(0, min(index, len(self._fields) - 1)) if self._fields else 0
         self._on_submit = on_submit
@@ -172,12 +180,32 @@ class Form(Widget):
 
     # -- events -----------------------------------------------------------------
 
-    def handle(self, event: Event) -> bool:
+    @staticmethod
+    def _event_handler(component: Component, event: Event):
+        """The typed hook one child answers ``event`` with, or its 1.x verb.
+
+        The tree routes by event kind: a key goes to ``on_key``, a paste to
+        ``on_paste`` and a mouse report to ``on_mouse``; a component outside
+        the widget tree (or one that predates the hooks) falls back to its
+        ``handle`` verb.  ``None`` means the component takes no events.
+        """
+        hook = None
+        if isinstance(event, KeyEvent):
+            hook = getattr(component, "on_key", None)
+        elif isinstance(event, PasteEvent):
+            hook = getattr(component, "on_paste", None)
+        elif isinstance(event, MouseEvent):
+            hook = getattr(component, "on_mouse", None)
+        if not callable(hook):
+            hook = getattr(component, "handle", None)
+        return hook if callable(hook) else None
+
+    def on_key(self, event: Event) -> bool:
         """Route one event; ``True`` when the form consumed it.
 
-        The focused field's own ``handle`` goes first (a controller keeps
-        its keys -- including a ``PasteEvent``, which the field's own
-        handle consumes).  Then the form's navigation: ``tab``/``down``
+        The focused field's own typed hook goes first (a controller keeps
+        its keys -- including a ``PasteEvent``, which the field's own paste
+        hook consumes).  Then the form's navigation: ``tab``/``down``
         and ``s-tab``/``up`` move the field cursor and answer ``True`` only
         on a real move, so the ends hand Tab back to the host; ``enter``
         activates the form and is always consumed (a validation failure is
@@ -186,7 +214,8 @@ class Form(Widget):
         if not self._fields:
             return False
         component = self._fields[self._index].component
-        if isinstance(component, Controller) and component.handle(event):
+        handler = self._event_handler(component, event)
+        if handler is not None and handler(event):
             return True
         if not isinstance(event, KeyEvent) or event.kind == "release":
             return False
@@ -200,6 +229,26 @@ class Form(Widget):
             return True
         return False
 
+    #: The 1.x spelling; W3b3 removes it.
+    handle = on_key
+
+    def on_focus(self, gained: bool) -> None:
+        """Take or lose the form focus, mirroring it onto the fields.
+
+        Gaining re-applies the cursor's field ``focused`` flag (the flags
+        can have been cleared while the form was out of the ring); losing
+        clears every field's flag, so no field keeps a stale caret after
+        the form left the ring.
+        """
+        self.focused = gained
+        if gained:
+            self._sync_focus()
+            return
+        for field in self._fields:
+            component = field.component
+            if isinstance(component, Focusable):
+                component.focused = False
+
     # -- values and submission ----------------------------------------------------
 
     @staticmethod
@@ -209,7 +258,7 @@ class Form(Widget):
         The attribute fallback is the read-only duck-typing order
         ``value``, ``text``, ``checked``, ``selected``, ``marked``; a
         callable attribute is called.  A field with none of them answers
-        ``None``.  ``take_result()`` is deliberately not consulted.
+        ``None``.  ``take()`` is deliberately not consulted.
         """
         if field.value is not None:
             return field.value()
@@ -245,11 +294,15 @@ class Form(Widget):
             self._on_submit(values)
         return True
 
-    def take_result(self) -> dict[str, object] | None:
+    def take(self) -> dict[str, object] | None:
         """Read the submitted mapping once and clear it."""
         result = self._pending
         self._pending = None
         return result
+
+    def take_result(self) -> dict[str, object] | None:
+        """The 1.x alias of :meth:`take`."""
+        return self.take()
 
     # -- rendering ----------------------------------------------------------------
 
@@ -321,7 +374,7 @@ class Form(Widget):
             self._sync_focus()
         return True
 
-    def click(self, row: int, col: int) -> bool:
+    def on_click(self, pos: Pos) -> bool:
         """Focus the field under a rendered cell and forward the click to it.
 
         A direct host click keeps its one-gesture meaning: move the field
@@ -329,15 +382,19 @@ class Form(Widget):
         ``click``.  The focus tier uses :meth:`focus_at` beside the leaf's
         own click instead, so the action is never applied twice.
         """
-        hit = self._field_at(row, col)
+        hit = self._field_at(pos.y, pos.x)
         if hit is None:
             return False
         position, local = hit
-        self.focus_at(row, col)
+        self.focus_at(pos.y, pos.x)
         click = getattr(self._fields[position].component, "click", None)
         if click is not None:
-            click(local, col)
+            click(local, pos.x)
         return True
+
+    def click(self, row: int, col: int) -> bool:
+        """The 1.x cell spelling of :meth:`on_click`."""
+        return self.on_click(Pos(y=row, x=col))
 
     def revision(self) -> object:
         """The row cache's snapshot: field identity, label, error and child state.

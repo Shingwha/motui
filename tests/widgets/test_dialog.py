@@ -1,6 +1,7 @@
 """Dialog, confirm_dialog and prompt_dialog: the box, its buttons and results."""
 
 from motui.kernel.cell import Surface
+from motui.kernel.geom import Pos
 from motui.kernel.layout import Constraints
 from motui.widgets import Button, ButtonSpec, Dialog, confirm_dialog, prompt_dialog
 
@@ -130,3 +131,46 @@ def test_a_squeezed_dialog_never_exceeds_the_constraint_width():
     surface = dialog.render(Constraints(width=7))
     assert all(row.width <= 7 for row in surface)
     assert surface.height == len(dialog.render(Constraints(width=7)))
+
+
+# -- the 2.0 tree and typed hooks ---------------------------------------------
+
+
+def test_a_dialog_is_a_focus_scope_with_body_and_buttons_as_children():
+    dialog = confirm_dialog("Continue?")
+
+    assert dialog.focus_scope is True
+    body, *buttons = dialog.children
+    assert body is dialog.body
+    assert len(buttons) == 2 and all(isinstance(button, Button) for button in buttons)
+    assert body.parent is dialog
+    assert all(button.parent is dialog for button in buttons)
+    assert list(dialog.walk()) == [dialog, body, *buttons]
+
+
+def test_on_key_is_the_typed_spelling_of_handle():
+    dialog = confirm_dialog("Continue?")
+
+    assert dialog.on_key(key("tab")) is True and dialog.index == 1
+    assert dialog.handle(key("s-tab")) is True and dialog.index == 0
+    assert dialog.on_key(key("x", "x")) is False
+
+
+def test_on_click_is_the_positional_door():
+    dialog = confirm_dialog("Continue?")
+    row = button_row(dialog)
+    col = dialog.render(Constraints(width=40))[row].text.index("Yes")
+
+    assert dialog.on_click(Pos(y=row, x=col)) is True
+    assert dialog.index == 0
+    assert dialog.take() is True
+    assert dialog.take() is None
+
+
+def test_take_is_the_result_door_and_the_alias_agrees():
+    dialog = confirm_dialog("Continue?")
+
+    assert dialog.on_key(key("escape")) is True
+    assert dialog.take() is None
+    assert dialog.on_key(key("enter")) is True
+    assert dialog.take_result() is True

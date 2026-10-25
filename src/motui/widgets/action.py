@@ -4,9 +4,9 @@ The three smallest interactive units the toolkit ships, one family file:
 ``Button`` renders its label as ``" label "``, ``Checkbox`` a ``[x] label`` /
 ``[ ] label`` toggle beside it, and ``Link`` a one-row text in the theme's
 ``link`` band that only the mouse and an activation follow.  Each holds state
-and answers controller methods like every component (D1): ``click`` and
+and answers controller methods like every component (D1): ``on_click`` and
 ``activate`` land the operation in a one-shot result the host reads through
-``take_result()`` -- there is no callback, no event bus and no public
+``take()`` -- there is no callback, no event bus and no public
 ``chosen``.
 
 ``hover`` and ``focused`` are the flags the pointer and focus tiers write
@@ -27,8 +27,8 @@ or ``styles`` assignment therefore repaints a mounted control instead of
 requiring a reconstruction, and the four per-token style parameters the
 1.x constructors took are gone.
 
-Every action carries ``disabled``: a disabled control refuses ``click`` and
-``activate`` (both answer ``False``) and renders the theme's faint text band
+Every action carries ``disabled``: a disabled control refuses clicks and
+activations (both answer ``False``) and renders the theme's faint text band
 (``text.faint``, or the ``styles.text`` override) instead of the
 interactive bands.
 """
@@ -37,6 +37,7 @@ from __future__ import annotations
 
 from ..kernel.glyphs import GLYPHS, Glyphs
 from ..kernel.cell import Line, Segment, Surface
+from ..kernel.geom import Pos
 from ..kernel.layout import Constraints
 from ..kernel.style import NONE, Style
 from ..kernel.theme import Styles, Theme
@@ -83,10 +84,10 @@ class Button(Widget):
     apart overrides the groups).  The groups resolve on every render, as
     ``styles`` override > theme group > :data:`DEFAULT_THEME`.
 
-    :meth:`click` and :meth:`activate` are the two doors to the same
+    :meth:`on_click` and :meth:`activate` are the two doors to the same
     operation -- a button always has a main one, so neither ever answers
     ``False`` while enabled -- and both write the pending result for the
-    host to read once through :meth:`take_result`.  A disabled button
+    host to read once through :meth:`take`.  A disabled button
     refuses both doors and renders the faint text band.
     """
 
@@ -96,6 +97,13 @@ class Button(Widget):
         "hint",
         "label",
     )
+
+    #: The action family's capability set: a button takes the focus ring,
+    #: pointer clicks and the activation verb, and paints a hover band.
+    focusable = True
+    clickable = True
+    hoverable = True
+    activatable = True
 
     def __init__(
         self,
@@ -112,19 +120,23 @@ class Button(Widget):
         #: The tooltip's protocol: the leaf's one-line hint, painted by
         #: ``chrome.Tooltip`` while the pointer rests on it.  ``""``: none.
         self.hint = ""
-        #: The pending operation: written by ``click`` / ``activate``, read
-        #: once by :meth:`take_result`.
+        #: The pending operation: written by ``on_click`` / ``activate``,
+        #: read once by :meth:`take`.
         self._pending: bool | None = None
 
-    def click(self, row: int, col: int) -> bool:
+    def on_click(self, pos: Pos) -> bool:
         """Take a click on any of the button's cells; ``False`` when disabled.
 
         The button is one small cell group -- ``" label "`` -- and every
-        cell of it is the whole control, so ``row``/``col`` are ignored and
-        the click always lands while the button is enabled: a button has no
-        dead cells and no miss.
+        cell of it is the whole control, so ``pos`` is ignored and the click
+        always lands while the button is enabled: a button has no dead cells
+        and no miss.
         """
         return self.activate()
+
+    def click(self, row: int, col: int) -> bool:
+        """The 1.x cell spelling of :meth:`on_click`."""
+        return self.on_click(Pos(y=row, x=col))
 
     def activate(self) -> bool:
         """Take the activation (the Activable verb); ``False`` when disabled."""
@@ -133,11 +145,21 @@ class Button(Widget):
         self._pending = True
         return True
 
-    def take_result(self) -> bool | None:
+    def on_action(self, name: str) -> bool:
+        """Run the button's one action (``"activate"``); others decline."""
+        if name == "activate":
+            return self.activate()
+        return False
+
+    def take(self) -> bool | None:
         """Read the pending activation once and clear it."""
         value = self._pending
         self._pending = None
         return value
+
+    def take_result(self) -> bool | None:
+        """The 1.x alias of :meth:`take`."""
+        return self.take()
 
     def revision(self) -> object:
         """The row's value snapshot: label, flags, state, theme and styles.
@@ -194,10 +216,9 @@ class Checkbox(Widget):
     """A one-row checked/unchecked toggle with a ``[x]`` / ``[ ]`` mark.
 
     ``checked`` starts ``False`` (or at the constructor's value) and is
-    flipped by :meth:`activate` and :meth:`click` -- both are the same
+    flipped by :meth:`activate` and :meth:`on_click` -- both are the same
     operation and always land ``True`` while enabled (a checkbox always has
-    a main one) -- which leaves the new state pending for
-    :meth:`take_result`.  The row renders ``"{mark} label"`` with the
+    a main one) -- which leaves the new state pending for :meth:`take`.  The row renders ``"{mark} label"`` with the
     checkbox's styling: the mark in ``styles.content.accent`` and the label
     in ``styles.text.base``, the hover band merged while the pointer tier
     holds :attr:`hover`, the focus band merged while the focus tier holds
@@ -219,6 +240,13 @@ class Checkbox(Widget):
         "label",
     )
 
+    #: A checkbox is a focus-ring target, takes pointer clicks and the
+    #: activation verb, and paints a hover band.
+    focusable = True
+    clickable = True
+    hoverable = True
+    activatable = True
+
     def __init__(
         self,
         label: str,
@@ -239,17 +267,21 @@ class Checkbox(Widget):
         #: The tooltip's protocol: the leaf's one-line hint, painted by
         #: ``chrome.Tooltip`` while the pointer rests on it.  ``""``: none.
         self.hint = ""
-        #: The pending toggle: written by ``click`` / ``activate`` (the new
-        #: ``checked`` value), read once by :meth:`take_result`.
+        #: The pending toggle: written by ``on_click`` / ``activate`` (the
+        #: new ``checked`` value), read once by :meth:`take`.
         self._pending: bool | None = None
 
-    def click(self, row: int, col: int) -> bool:
+    def on_click(self, pos: Pos) -> bool:
         """Flip the toggle on any of the checkbox's cells.
 
-        ``row``/``col`` are ignored: the whole one-row control is the
-        toggle, mark and label alike.  ``False`` when disabled.
+        ``pos`` is ignored: the whole one-row control is the toggle, mark
+        and label alike.  ``False`` when disabled.
         """
         return self.activate()
+
+    def click(self, row: int, col: int) -> bool:
+        """The 1.x cell spelling of :meth:`on_click`."""
+        return self.on_click(Pos(y=row, x=col))
 
     def activate(self) -> bool:
         """Flip :attr:`checked` and leave the new state pending; ``False`` when disabled."""
@@ -259,11 +291,21 @@ class Checkbox(Widget):
         self._pending = self.checked
         return True
 
-    def take_result(self) -> bool | None:
+    def on_action(self, name: str) -> bool:
+        """Run the checkbox's one action (``"activate"``); others decline."""
+        if name == "activate":
+            return self.activate()
+        return False
+
+    def take(self) -> bool | None:
         """Read the pending toggle (the new ``checked`` value) once and clear it."""
         value = self._pending
         self._pending = None
         return value
+
+    def take_result(self) -> bool | None:
+        """The 1.x alias of :meth:`take`."""
+        return self.take()
 
     def revision(self) -> object:
         """The row's value snapshot: label, state, flags, theme and styles.
@@ -336,7 +378,7 @@ class Link(Widget):
     merges ``styles.surfaces.hover``, and while :attr:`focused` (the focus
     tier's flag, writable by contract) it merges ``styles.controls.focus``.
     A click anywhere on the row or an :meth:`activate` leaves ``True``
-    pending for :meth:`take_result`; a disabled link refuses both doors and
+    pending for :meth:`take`; a disabled link refuses both doors and
     renders the faint text band.  :attr:`hint` is the tooltip's protocol --
     the ``chrome.Tooltip`` overlay reads it off the leaf under the pointer,
     and the empty default means no hint -- and the groups resolve on every
@@ -349,6 +391,13 @@ class Link(Widget):
         "hint",
         "text",
     )
+
+    #: A link is a focus-ring target, takes pointer clicks and the
+    #: activation verb, and paints a hover band.
+    focusable = True
+    clickable = True
+    hoverable = True
+    activatable = True
 
     def __init__(
         self,
@@ -365,18 +414,22 @@ class Link(Widget):
         #: The tooltip's protocol: the leaf's one-line hint, painted by
         #: ``chrome.Tooltip`` while the pointer rests on it.  ``""``: none.
         self.hint = ""
-        #: The pending follow: written by ``click`` / ``activate``, read
-        #: once by :meth:`take_result`.
+        #: The pending follow: written by ``on_click`` / ``activate``, read
+        #: once by :meth:`take`.
         self._pending: bool | None = None
 
-    def click(self, row: int, col: int) -> bool:
+    def on_click(self, pos: Pos) -> bool:
         """Follow the link on any of its cells; ``False`` when disabled.
 
-        ``row``/``col`` are ignored -- the whole one-row text is the link --
-        and the answer is always ``True`` while enabled; what the host does
-        with the pending result is its own policy.
+        ``pos`` is ignored -- the whole one-row text is the link -- and the
+        answer is always ``True`` while enabled; what the host does with the
+        pending result is its own policy.
         """
         return self.activate()
+
+    def click(self, row: int, col: int) -> bool:
+        """The 1.x cell spelling of :meth:`on_click`."""
+        return self.on_click(Pos(y=row, x=col))
 
     def activate(self) -> bool:
         """Take the link's activation; ``False`` when disabled."""
@@ -385,11 +438,21 @@ class Link(Widget):
         self._pending = True
         return True
 
-    def take_result(self) -> bool | None:
+    def on_action(self, name: str) -> bool:
+        """Run the link's one action (``"activate"``); others decline."""
+        if name == "activate":
+            return self.activate()
+        return False
+
+    def take(self) -> bool | None:
         """Read the pending follow once and clear it."""
         value = self._pending
         self._pending = None
         return value
+
+    def take_result(self) -> bool | None:
+        """The 1.x alias of :meth:`take`."""
+        return self.take()
 
     def revision(self) -> object:
         """The row's value snapshot: text, flags, theme and styles.

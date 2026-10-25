@@ -6,10 +6,12 @@ import pytest
 
 from motui.widgets.text import Text
 from motui.kernel.cell import Line, Surface
+from motui.kernel.geom import Pos
 from motui.kernel.layout import Constraints
 from motui.kernel.style import Style
 from motui.kernel.theme import DEFAULT_THEME, Styles
 from motui.widgets import Collapsible, Column, Divider, Padding, Panel, Row, Spacer
+from motui.widgets.base import Container, Widget
 
 from tests.testing import Rows, texts
 
@@ -281,3 +283,80 @@ def test_a_panel_takes_constraints_and_honours_the_height_budget():
         "\u2502 body   \u2502",
     ]
     assert [row.text for row in panel.render(Constraints(width=10))][-1] == "\u2514" + "\u2500" * 8 + "\u2518"
+
+
+# -- the 2.0 tree -------------------------------------------------------------
+
+
+def test_the_layout_containers_are_widgets_with_adopted_children():
+    first, second = Text("a"), Text("b")
+    row = Row([first, second], widths=[2, None], gap=1)
+
+    assert isinstance(row, Container) and isinstance(row, Widget)
+    assert row.children == [first, second]
+    assert first.parent is row and second.parent is row
+    assert list(row.walk()) == [row, first, second]
+
+    child = Text("c")
+    column = Column([child], gap=1)
+    assert isinstance(column, Container) and isinstance(column, Widget)
+    assert column.children == [child] and child.parent is column
+    assert list(column.walk()) == [column, child]
+
+
+def test_panel_and_padding_expose_their_single_child_in_the_tree():
+    framed = Text("x")
+    panel = Panel(framed, title="T")
+    assert panel.children == [framed] and framed.parent is panel
+    assert list(panel.walk()) == [panel, framed]
+
+    padded_child = Text("y")
+    padded = Padding(padded_child, left=1)
+    assert padded.children == [padded_child] and padded_child.parent is padded
+    assert list(padded.walk()) == [padded, padded_child]
+
+
+def test_a_spacer_is_a_childless_widget_and_not_a_container():
+    spacer = Spacer(2)
+
+    assert isinstance(spacer, Widget)
+    assert not isinstance(spacer, Container)
+    assert spacer.children == [] and list(spacer.walk()) == [spacer]
+    assert list(Spacer(0).render(Constraints(width=10))) == []
+
+
+def test_a_divider_is_a_childless_widget():
+    divider = Divider(char="-")
+
+    assert isinstance(divider, Widget)
+    assert divider.children == [] and list(divider.walk()) == [divider]
+
+
+def test_walk_visits_a_shared_child_once():
+    shared = Text("shared")
+    row = Row([shared, shared], widths=[6, 6], gap=1)
+
+    assert list(row.walk()) == [row, shared]
+    assert shared.parent is row
+
+
+def test_a_collapsible_adopts_its_body_and_answers_the_toggle_action():
+    body = Text("body")
+    section = Collapsible("options", body)
+
+    assert section.children == [body] and body.parent is section
+    assert list(section.walk()) == [section, body]
+    assert (
+        section.focusable,
+        section.clickable,
+        section.hoverable,
+        section.activatable,
+    ) == (True, True, True, True)
+
+    assert section.on_action("unknown") is False
+    assert section.on_action("toggle") is True
+    assert (section.open, section.take()) == (False, False)
+    assert section.on_click(Pos(y=0, x=40)) is True
+    assert (section.open, section.take_result()) == (True, True)
+    assert section.on_click(Pos(y=1, x=0)) is False
+    assert section.take() is None

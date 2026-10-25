@@ -18,11 +18,12 @@ The two public fields are one component twice:
 * :class:`Editor` spans the full width and slides an optional ``max_rows``
   window around the cursor.
 
-No key is read here: the host feeds events to ``handle``, which routes them
-through the component's ``keymap``
+No key is read here: the host feeds events to the typed hooks
+(``on_key`` / ``on_paste`` / ``on_mouse``), which route them through the
+component's ``keymap``
 (:data:`~motui.kernel.keymap.DEFAULT_INPUT_KEYMAP` /
 :data:`~motui.kernel.keymap.DEFAULT_EDITOR_KEYMAP` unless overridden) and
-returns ``False`` for every key it leaves to the host's own routing.  The
+return ``False`` for every key it leaves to the host's own routing.  The
 wrap geometry comes from the width of the last ``render`` call (80 before
 the first render), so up/down cursor movement follows the wrapped rows the
 user sees.  A pure ``cursor_position`` reports where the block cursor sits
@@ -52,7 +53,7 @@ from __future__ import annotations
 
 import re
 
-from ..kernel.events import Event, PasteEvent
+from ..kernel.events import Event, KeyEvent, MouseEvent, PasteEvent
 from ..kernel.glyphs import GLYPHS, Glyphs, seat
 from ..kernel.cell import Line, Segment, Surface
 from ..kernel.layout import Constraints
@@ -85,7 +86,8 @@ class _TextField(Widget):
     the row indent (:meth:`_indent`), the row window
     (:meth:`_window_start`, :meth:`_row_cap`) and the row prefix
     (:meth:`_row_prefix`).  Everything else -- the text, the cursor,
-    ``handle``, the editing methods, ``click`` and ``render`` -- is one
+    ``(self)``, the typed hooks (``on_key`` / ``on_paste`` / ``on_mouse``),
+    the editing methods, ``click`` and ``render`` -- is one
     implementation here.
 
     ``focused`` is the flag the focus tier writes
@@ -139,6 +141,13 @@ class _TextField(Widget):
         "placeholder",
     )
 
+    #: A field takes the focus ring, pointer clicks (the caret docks where
+    #: the user clicked) and the block-level hover band.  It has no
+    #: activation of its own: ``enter`` is the host's submit gesture.
+    focusable = True
+    clickable = True
+    hoverable = True
+
     def __init__(
         self,
         text: str = "",
@@ -155,7 +164,10 @@ class _TextField(Widget):
         self.placeholder = placeholder
         #: The old constructor default: a field starts focused.
         self.focused = True
-        self._buf = TextBuffer(text, keymap=keymap, read_only=read_only)
+        # A field keeps its own keymap copy: rebinding an instance key (the
+        # 2.0 ``field.keymap["c-j"] = "newline"``) must never write through
+        # to the module-level default table.
+        self._buf = TextBuffer(text, keymap=dict(keymap), read_only=read_only)
         # The display mask: the first character stands in for every rendered
         # character (see ``_mask_row``); ``""`` renders the text itself.
         self._mask = mask
@@ -177,7 +189,7 @@ class _TextField(Widget):
 
     @property
     def keymap(self) -> Keymap:
-        """The table :meth:`handle` routes through."""
+        """The table :meth:`on_key` routes through."""
         return self._buf.keymap
 
     @keymap.setter
@@ -204,7 +216,7 @@ class _TextField(Widget):
     def read_only(self) -> bool:
         """Whether routed events are refused without touching the buffer.
 
-        ``handle`` answers ``False`` for every event while this is set, so
+        ``on_key`` answers ``False`` for every event while this is set, so
         a host can route keys into a field it has made read-only and the
         text never changes.  The direct editing methods (``insert``,
         ``backspace``, the moves, ``text =``) are programmatic writes and
@@ -255,21 +267,49 @@ class _TextField(Widget):
 
     # -- editing --------------------------------------------------------------
 
-    def handle(self, event: Event) -> bool:
-        """Consume an event via the buffer; see :meth:`TextBuffer.handle`.
+    def _route(self, event: Event) -> bool:
+        """Send one event to the buffer; ``False`` while read-only.
 
-        The buffer's :attr:`~TextBuffer.indent` is the field's row indent,
-        kept in step by a shell that renders a prompt, so this shell only
-        delegates.  ``False`` for an event the buffer does not consume
-        leaves the host free to route it -- the editor's default table
-        binds ``enter``, the input's does not, so a submit gesture reaches
-        the host.  A ``read_only`` field refuses every routed event
-        (``False``) before the buffer sees it; the direct editing methods
-        and the ``text`` setter are programmatic writes and stay available.
+        The one body the typed hooks share.  The buffer applies the keymap
+        (printables, bound actions and paste insertion), so the 1.x routing
+        is preserved verbatim while the hooks become the public doors.
         """
         if self.read_only:
             return False
         return self._buf.handle(event)
+
+    def on_key(self, e: KeyEvent) -> bool:
+        """Consume one key through the buffer's keymap; ``False`` to decline."""
+        return self._route(e)
+
+    def on_mouse(self, e: MouseEvent) -> bool:
+        """Route one mouse report; the buffer declines reports it does not use."""
+        return self._route(e)
+
+    def on_paste(self, e: PasteEvent) -> bool:
+        """Insert one paste payload through the buffer."""
+        return self._route(e)
+
+    #: The 1.x spelling; W3b3 removes it.
+    handle = on_key
+
+    def on_action(self, name: str) -> bool:
+        """Run one keymap action by name, as the buffer's router would.
+
+        Only a name bound in the field's current keymap is an action (the
+        buffer's routing calls the same-named no-argument method); an
+        unbound name -- including ``"activate"``, which a field does not
+        take -- answers ``False`` so a host keeps routing the key.
+        """
+        if name == "activate":
+            return self.activate()
+        if name not in set(self._buf.keymap.values()):
+            return False
+        method = getattr(self, name, None)
+        if not callable(method):
+            return False
+        method()
+        return True
 
     def insert(self, text: str) -> None:
         """Insert ``text`` (may contain newlines) at the cursor."""
@@ -658,9 +698,9 @@ class Input(_TextField):
     ``content.accent`` / ``text.caret`` / ``text.faint`` at render time, and
     a ``Styles`` value overrides those groups.  ``keymap`` (default
     :data:`~motui.kernel.keymap.DEFAULT_INPUT_KEYMAP`) is the table
-    :meth:`handle` routes through; it carries no ``enter`` binding, so
+    :meth:`on_key` routes through; it carries no ``enter`` binding, so
     the return key reaches the host untouched.  A multi-line paste is
-    folded into the single line at :meth:`handle`: a paste fills a field,
+    folded into the single line at :meth:`on_paste`: a paste fills a field,
     and a field whose keymap cannot even bind ``enter`` must not let the
     paste smuggle in a row break.  ``hover`` is the pointer tier's
     block-level band: while it is ``True`` every rendered row (prompt
@@ -759,28 +799,40 @@ class Input(_TextField):
 
         ``col`` is the flat character offset into :attr:`text` -- the
         single-line view of the buffer position.  A paste is folded to one
-        space per newline run at :meth:`handle`, so only an explicit
+        space per newline run at :meth:`on_paste`, so only an explicit
         ``insert("\\n")`` can keep a newline in the buffer.
         """
         return 0, self._buf.offset
 
     # -- routing ----------------------------------------------------------------
 
-    def handle(self, event: Event) -> bool:
-        """Consume an event; a paste's newline runs fold into single spaces.
+    def on_paste(self, e: PasteEvent) -> bool:
+        """Fold every newline run of a paste into one space, then insert it.
 
         The one policy this shell adds over the shared routing: a
         :class:`~motui.kernel.events.PasteEvent` entering a single-line field
         has every run of ``\\r\\n`` / ``\\r`` / ``\\n`` -- consecutive empty
         lines included -- collapsed to one space before the buffer sees it,
         so a multi-line paste is one input row and nothing about it can
-        submit.  Everything else routes through the shared shell; the
-        editor's paste path and an explicit :meth:`insert` keep their
-        newlines.
+        submit.  The editor's paste path and an explicit :meth:`insert`
+        keep their newlines.
+        """
+        return super().on_paste(PasteEvent(_NEWLINE_RUN.sub(" ", e.text)))
+
+    def on_key(self, event: Event) -> bool:
+        """Consume one event; a paste's newline runs fold into single spaces.
+
+        A ``PasteEvent`` routed through the key door folds exactly like
+        :meth:`on_paste`; everything else goes through the shared shell's
+        routing (``False`` when the buffer declines it, so the host keeps
+        its submit gesture).
         """
         if isinstance(event, PasteEvent):
-            event = PasteEvent(_NEWLINE_RUN.sub(" ", event.text))
-        return super().handle(event)
+            return self.on_paste(event)
+        return super().on_key(event)
+
+    #: The 1.x spelling; W3b3 removes it.
+    handle = on_key
 
     # -- rendering ---------------------------------------------------------------
 
