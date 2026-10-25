@@ -9,9 +9,19 @@ alternate screen and the reporting modes their switches enable.
 
 from __future__ import annotations
 
+import dataclasses
+
+import pytest
+
 from motui.terminal import ansi
 from motui.terminal import screen as screen_module
-from motui.terminal.screen import HeadlessScreen, TerminalScreen
+from motui.terminal.screen import (
+    HeadlessScreen,
+    MouseMode,
+    TerminalOptions,
+    TerminalScreen,
+    mouse_switches,
+)
 
 
 class FakeStream:
@@ -186,3 +196,45 @@ def test_color_modes_are_declared_and_auto_resolves_once(monkeypatch):
     screen.refresh_size()
     assert screen.color_mode == "256"
     assert TerminalScreen(stream, color_mode="16").color_mode == "16"
+
+
+# -- terminal options ---------------------------------------------------------
+
+
+def test_mouse_mode_names_the_four_reporting_levels():
+    assert [mode.value for mode in MouseMode] == ["off", "button", "drag", "move"]
+
+
+def test_mouse_modes_map_to_the_screen_mouse_and_hover_switches():
+    assert mouse_switches(MouseMode.OFF) == (False, False)
+    assert mouse_switches(MouseMode.BUTTON) == (True, False)
+    assert mouse_switches(MouseMode.DRAG) == (True, False)
+    assert mouse_switches(MouseMode.MOVE) == (True, True)
+
+
+def test_terminal_options_default_to_the_live_move_configuration():
+    options = TerminalOptions()
+    assert options.stream is None
+    assert options.input is None
+    assert options.mouse is MouseMode.MOVE
+    assert options.paste is True
+    assert options.focus_events is False
+    assert options.color_mode == "auto"
+    assert options.sync is True
+    assert options.screen is None
+
+
+def test_terminal_options_are_frozen_and_keyword_only():
+    options = TerminalOptions(mouse=MouseMode.DRAG, paste=False, sync=False)
+    assert options.mouse is MouseMode.DRAG
+    assert options.paste is False and options.sync is False
+    with pytest.raises(dataclasses.FrozenInstanceError):
+        options.mouse = MouseMode.OFF  # type: ignore[misc]
+    with pytest.raises(TypeError):
+        TerminalOptions(80)  # type: ignore[misc]
+
+
+def test_terminal_options_keep_the_headless_screen_override():
+    screen = HeadlessScreen(21, 7)
+    options = TerminalOptions(screen=screen, mouse=MouseMode.OFF)
+    assert options.screen is screen
