@@ -7,6 +7,7 @@ on ``wcwidth``, and on nothing else in ``motui``.
 
 from __future__ import annotations
 
+from .cell import Cell, Line, Segment, Surface
 from .geom import Axis, Pos, Rect, Size
 
-__all__ = ["Axis", "Pos", "Rect", "Size"]
+__all__ = ["Axis", "Cell", "Line", "Pos", "Rect", "Segment", "Size", "Surface"]
