@@ -42,13 +42,83 @@ closing the top one returns focus to the one below.
 
 from __future__ import annotations
 
-from collections.abc import Callable, Iterable
+from collections.abc import Callable, Iterable, Iterator
+from typing import TYPE_CHECKING
 
 from ..kernel.document import Activable, Component, Container, Focusable, descend_chain
 from ..kernel.events import Event, KeyEvent
 from ..kernel.hit import Hit
 
+if TYPE_CHECKING:
+    from .driver import TUI
+
 __all__ = ["FocusManager"]
+
+
+def _document_roots(tui: "TUI") -> Iterator[Component]:
+    """Every block root of every pane and dock, in paint order.
+
+    The focus ring is derived from what is mounted, so it must see the
+    whole frame: the content panes in tiling order, then the docks (the
+    frame's own paint order).  A dock holds a one-block document like a
+    pane, so the same ``blocks()`` walk serves both.
+    """
+    frame = tui.frame
+    panes = (*frame.panes, *frame.docks.values())
+    for pane in panes:
+        for section in pane.viewport.document.blocks():
+            yield section.widget
+
+
+def iter_widgets(tui: "TUI") -> Iterator[Component]:
+    """Every mounted node once, depth first, in frame order.
+
+    The flat tree walk ``App`` uses for broadcasts (a resize reaches every
+    widget, a focus scope's subtree included).  A root without ``walk`` is
+    yielded alone; a shared node is yielded at its first position only.
+    """
+    seen: set[int] = set()
+    for root in _document_roots(tui):
+        walk = getattr(root, "walk", None)
+        nodes = walk() if callable(walk) else (root,)
+        for node in nodes:
+            if id(node) in seen:
+                continue
+            seen.add(id(node))
+            yield node
+
+
+def focus_targets(tui: "TUI") -> tuple[Component, ...]:
+    """The focus ring: the mounted tree's preorder ``focusable``/scope nodes.
+
+    A ``focus_scope`` node (a ``Form`` routes its own fields) joins the
+    ring itself and stops the descent -- its subtree never becomes separate
+    targets.  Every other node joins when ``focusable`` is set.  Nodes are
+    visited in the frame/document order :func:`_document_roots` yields, and
+    an object appears once even when the tree shares it.
+    """
+    targets: list[Component] = []
+    seen: set[int] = set()
+    for root in _document_roots(tui):
+        stack: list[Component] = [root]
+        while stack:
+            node = stack.pop()
+            if id(node) in seen:
+                continue
+            seen.add(id(node))
+            scope = bool(
+                getattr(node, "focus_scope", False)
+                or getattr(node, "owns_focus", False)
+            )
+            if scope:
+                targets.append(node)
+                continue
+            if bool(getattr(node, "focusable", False)):
+                targets.append(node)
+            children = getattr(node, "children", None)
+            if children:
+                stack.extend(reversed(list(children)))
+    return tuple(targets)
 
 
 class FocusManager:
@@ -146,26 +216,39 @@ class FocusManager:
         """The target holding the focus, or ``None`` for an empty focus."""
         return self._focused
 
-    def add(self, target: Component) -> bool:
-        """Register ``target`` at the end of the cycle; ``True`` when added.
+    def sync(self, targets: Iterable[Component]) -> None:
+        """Replace the target set; keep the focus when it is still a target.
 
-        An object already registered (identity) is left alone and answers
-        ``False``.  Registration never moves the focus: adding to an empty
-        manager leaves it empty until :meth:`focus_next` or :meth:`focus`.
+        The App re-derives ``targets`` from the mounted tree before every
+        focus verb, so mounting or removing a subtree updates the ring with
+        no registration bookkeeping.  A focus that is no longer in the set
+        is cleared -- its flag drops and ``on_change(None)`` fires -- while
+        a focus that survived the edit stays put (the common per-round
+        case: one block was added elsewhere).
+        """
+        held = tuple(targets)
+        if self._focused is not None and any(
+            self._focused is known for known in held
+        ):
+            self._replace(held, self._focused)
+        else:
+            self._replace(held, None)
+
+    def _add(self, target: Component) -> bool:
+        """Append ``target`` to the cycle; ``True`` when added (internal).
+
+        The App no longer registers targets: the ring is re-derived from
+        the tree by :meth:`sync`.  This exists for the one constructor-time
+        path that predates the tree (the residual half of the migration) and
+        answers ``False`` for an already-held object.
         """
         if self._registered(target):
             return False
         self._targets = (*self._targets, target)
         return True
 
-    def remove(self, target: Component) -> bool:
-        """Unregister ``target``; ``True`` when it was registered.
-
-        Removing the current focus clears it -- the target's ``focused``
-        flag is dropped to ``False`` when it is ``Focusable``, and
-        ``on_change(None)`` fires -- so no manager ever points at a target
-        it no longer holds.
-        """
+    def _remove(self, target: Component) -> bool:
+        """Drop ``target`` from the cycle; ``True`` when held (internal)."""
         if not self._registered(target):
             return False
         self._targets = tuple(known for known in self._targets if known is not target)

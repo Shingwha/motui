@@ -84,7 +84,7 @@ from ..widgets.base import Widget
 from .command_palette import CommandPalette
 from .driver import TUI
 from .find import Find
-from .focus import FocusManager
+from .focus import FocusManager, focus_targets
 from .gesture import SelectionGesture
 from .modal import Modal
 from .overlays import Toasts, Tooltip
@@ -408,7 +408,7 @@ class App:
                 and builtins.id(current) not in owned
                 and _looks_interactive(current)
             ):
-                self._focus.add(current)
+                self._focus._add(current)
 
     def get(self, id: str) -> Component:
         """The component with ``id`` (the driver's frame-wide lookup)."""
@@ -428,7 +428,7 @@ class App:
         """Drop ``component`` and its subtree from the focus ring and the theme walk."""
         if self._focus is not None:
             for current in _walk(component):
-                self._focus.remove(current)
+                self._focus._remove(current)
         self._components = [
             held for held in self._components if held is not component
         ]
@@ -440,12 +440,12 @@ class App:
         self._bindings[key] = callback
 
     def focus(self, target: "str | Component") -> bool:
-        """Focus a block id or a component, registering it when needed."""
+        """Focus a block id or a component that is in the tree-derived ring."""
         if isinstance(target, str):
             target = self.tui.get(target)
         if self._focus is None:
             return False
-        self._focus.add(target)
+        self._focus.sync(focus_targets(self.tui))
         moved = self._focus.focus(target)
         self.tui.refresh()
         return moved
@@ -454,6 +454,7 @@ class App:
         """Step the focus ring one target forward (wrapping)."""
         if self._focus is None:
             return False
+        self._focus.sync(focus_targets(self.tui))
         moved = self._focus.focus_next()
         if moved:
             self.tui.refresh()
@@ -463,6 +464,7 @@ class App:
         """Step the focus ring one target back (wrapping)."""
         if self._focus is None:
             return False
+        self._focus.sync(focus_targets(self.tui))
         moved = self._focus.focus_next(-1)
         if moved:
             self.tui.refresh()
@@ -473,10 +475,10 @@ class App:
         if self._focus is None:
             return
         for known in tuple(self._focus.targets):
-            self._focus.remove(known)
+            self._focus._remove(known)
         held = tuple(targets)
         for target in held:
-            self._focus.add(target)
+            self._focus._add(target)
         if held:
             self._focus.focus(held[0])
         self.tui.refresh()

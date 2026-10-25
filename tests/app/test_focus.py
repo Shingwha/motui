@@ -5,13 +5,15 @@ from __future__ import annotations
 import pytest
 
 from motui.app import FocusManager
+from motui.app.focus import focus_targets
 from motui.kernel import Constraints, Document, Pane, Rect, Section, Surface, Viewport
 from motui.kernel.document import Activable, Focusable, descend_chain
 from motui.kernel.events import KeyEvent
 from motui.kernel.hit import Hit
 from motui.kernel.cell import Line
 from motui.kernel.text import WrapMode
-from motui.widgets import Padding
+from motui.testing import headless_tui
+from motui.widgets import Button, Field as FormField, Form, Input, Padding, Row
 from motui.kernel.layout import Constraints
 
 
@@ -184,27 +186,30 @@ def test_focusing_an_unregistered_or_current_target_is_a_false_no_op():
     assert manager.focus(a) is False
 
 
-def test_add_appends_and_refuses_a_duplicate_without_moving_focus():
+def test_sync_replaces_the_targets_and_keeps_a_surviving_focus():
     a, b, c = Cursor(), Cursor(), Cursor()
     manager = FocusManager([a])
-    assert manager.add(b) is True
-    assert manager.add(c) is True
-    assert manager.add(b) is False
+    manager.focus_next()
+    manager.sync([a, b, c])
     assert manager.targets == (a, b, c)
-    assert manager.focused is None
+    assert manager.focused is a and a.focused is True
+    assert (b.focused, c.focused) == (False, False)
+    manager.sync([b, c])
+    assert manager.targets == (b, c)
+    assert manager.focused is None and a.focused is False
 
 
-def test_remove_clears_the_focus_only_when_it_held_it():
+def test_sync_clears_the_focus_only_when_it_left_the_set():
     a, b = Cursor(), Cursor()
     changes: list = []
     manager = FocusManager([a, b], on_change=changes.append)
     manager.focus_next()
-    assert manager.remove(b) is True
-    assert manager.focused is a and changes == [a]
-    assert manager.remove(a) is True
+    manager.sync([b])
     assert manager.focused is None and a.focused is False
     assert changes == [a, None]
-    assert manager.remove(a) is False
+    manager.sync([b, a])
+    manager.sync([b, a])
+    assert manager.focused is None and changes == [a, None]
 
 
 def test_focus_next_walks_and_wraps_both_ways():
@@ -268,6 +273,67 @@ def test_an_empty_trap_holds_no_focus_and_restores_the_previous_one():
 def test_pop_trap_without_a_push_is_an_error():
     with pytest.raises(IndexError):
         FocusManager().pop_trap()
+
+
+# -- the ring derived from the mounted tree ---------------------------------
+
+
+def test_focus_targets_are_the_tree_preorder_with_containers_transparent():
+    tui = headless_tui(40, 8)
+    first = Button("first")
+    second = Button("second")
+    field = Input()
+    tui.add(first)
+    tui.add(Row([second, field]))
+
+    assert focus_targets(tui) == (first, second, field)
+
+
+def test_a_focus_scope_is_a_target_and_its_subtree_is_not():
+    tui = headless_tui(40, 12)
+    form = Form([FormField("name", Input()), FormField("email", Input())])
+    tui.add(form)
+
+    assert focus_targets(tui) == (form,)
+
+
+def test_the_ring_tracks_removed_and_added_subtrees():
+    tui = headless_tui(40, 8)
+    button = Button("go")
+    row = Row([button, Input()])
+    block = tui.add(row)
+    assert focus_targets(tui) == (button, row.children[1])
+
+    tui.remove(block)
+    assert focus_targets(tui) == ()
+
+    other = Button("other")
+    tui.add(other)
+    assert focus_targets(tui) == (other,)
+
+
+def test_docked_blocks_join_the_ring_after_the_content_panes():
+    tui = headless_tui(40, 8)
+    body = Button("body")
+    footer = Button("footer")
+    tui.add(body)
+    tui.dock(footer, edge="bottom")
+
+    assert focus_targets(tui) == (body, footer)
+
+
+def test_focus_next_from_an_empty_focus_selects_the_first_tree_target():
+    tui = headless_tui(40, 8)
+    first, second = Button("a"), Button("b")
+    tui.add(Row([first, second]))
+    manager = FocusManager(focus_targets(tui))
+
+    assert manager.focus_next() is True
+    assert manager.focused is first
+    assert manager.focus_next() is True
+    assert manager.focused is second
+    assert manager.focus_next() is True
+    assert manager.focused is first
 
 
 # -- keyboard routing --------------------------------------------------------
