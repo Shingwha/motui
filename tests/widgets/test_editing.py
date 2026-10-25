@@ -13,6 +13,7 @@ from motui.kernel.keymap import DEFAULT_EDITOR_KEYMAP
 from motui.kernel.cell import Surface
 from motui.kernel.layout import Constraints
 from motui.kernel.style import Style
+from motui.kernel.text import WrapMode
 from motui.kernel.theme import DEFAULT_THEME, Styles
 from motui.widgets import Editor, Input
 from motui.widgets.textbuf import TextBuffer
@@ -520,3 +521,38 @@ def test_a_truncated_editor_render_is_byte_identical_to_the_width_render():
     narrow = editor.render(Constraints(width=20, max_height=2))
     assert narrow.rows == tuple(editor.render(Constraints(width=20)))[:2]
     assert editor.render(Constraints(width=20)) == editor.render(Constraints(width=20))
+
+
+def test_editor_wrap_defaults_to_word_and_keeps_the_current_bytes():
+    text = "the quick brown fox"
+    assert Editor(text).wrap is WrapMode.WORD
+    assert Editor(text).render(Constraints(width=10)) == Editor(
+        text, wrap=WrapMode.WORD
+    ).render(Constraints(width=10))
+    # The default guard trims an over-wide cluster exactly like ELLIPSIS.
+    assert Editor("\u65e5").render(Constraints(width=1)) == Editor(
+        "\u65e5", wrap=WrapMode.ELLIPSIS
+    ).render(Constraints(width=1))
+
+
+def test_editor_wrap_selects_the_final_row_guard():
+    assert Editor("\u65e5").render(Constraints(width=1))[0].text == "\u2026"
+    assert (
+        Editor("\u65e5", wrap=WrapMode.CLIP).render(Constraints(width=1))[0].text == ""
+    )
+    # OVERFLOW is constructible this wave; the surface guard still clips.
+    overflow = Editor("abc", wrap=WrapMode.OVERFLOW)
+    assert overflow.wrap is WrapMode.OVERFLOW
+    assert all(row.width <= 2 for row in overflow.render(Constraints(width=2)))
+
+
+def test_editor_wrap_is_part_of_the_revision():
+    assert Editor("abc").revision() != Editor("abc", wrap=WrapMode.CLIP).revision()
+    editor = Editor("abc", wrap=WrapMode.WORD)
+    editor.wrap = WrapMode.CLIP
+    assert editor.wrap is WrapMode.CLIP
+    assert editor.revision() == Editor("abc", wrap=WrapMode.CLIP).revision()
+
+
+def test_input_keeps_the_ellipsis_guard_this_wave():
+    assert Input("\u65e5", prompt="").render(Constraints(width=1))[0].text == "\u2026"
