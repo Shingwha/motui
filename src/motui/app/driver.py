@@ -77,7 +77,8 @@ from ..kernel.hit import EveryHandle, Hit, RowRange
 from ..kernel.cell import Line
 from ..widgets.text import Text
 from ..terminal.paint import Painter
-from ..terminal.screen import Screen, TerminalScreen
+from ..terminal.screen import MouseMode, Screen, TerminalScreen
+from ..terminal.terminal import Terminal
 from ..kernel.selection import Selection, highlight
 from ..kernel.style import ColorMode
 from ..kernel.theme import DEFAULT_THEME, Theme
@@ -255,6 +256,15 @@ class TUI:
     (and closed) by :meth:`run`; an explicit ``keys=`` source is always used
     as given.
 
+    ``terminal=`` is the 2.0 door: a :class:`~motui.terminal.terminal.Terminal`
+    brings its own screen (with the mouse mode already mapped), input source
+    and clipboard, and the driver enters, leaves and reads through it.  When
+    it is given it wins over ``screen``/``keys`` and every screen-shaped
+    switch (``mouse``/``hover``/``focus_events``/``sync``/``color_mode``);
+    the legacy arguments stay for hosts that hand the driver a screen
+    directly.  Either path paints through the same :class:`Painter` and
+    stays byte-identical on a live screen.
+
     Internally the driver holds one
     :class:`~motui.kernel.frame.Frame` whose primary pane is
     :attr:`document` / :attr:`viewport`: every frame composes through it
@@ -281,23 +291,34 @@ class TUI:
         sync: bool = True,
         color_mode: ColorMode | None = None,
         theme: Theme | None = None,
+        terminal: Terminal | None = None,
     ) -> None:
-        if screen is not None:
-            self._screen = screen
+        if terminal is not None:
+            # The terminal owns the screen's switches and its input; the
+            # legacy screen/keys/mouse/hover arguments are not consulted.
+            self._terminal: Terminal | None = terminal
+            self._screen = terminal.screen
+            keys = terminal.input
+            self._hover = terminal.options.mouse is MouseMode.MOVE
+            sync = terminal.options.sync
         else:
-            # A switch left at its default is not forwarded: the screen's own
-            # default (color_mode="auto" -> the env probe) is the contract.
-            extra = {} if color_mode is None else {"color_mode": color_mode}
-            self._screen = TerminalScreen(
-                mouse=mouse,
-                hover=hover,
-                focus_events=focus_events,
-                **extra,
-            )
-        #: The hover switch :meth:`run` hands the default key source: it
-        #: gates the record path's button-free motion (see the class
-        #: docstring).  An explicit ``keys=`` source is used as given.
-        self._hover = hover
+            self._terminal = None
+            if screen is not None:
+                self._screen = screen
+            else:
+                # A switch left at its default is not forwarded: the screen's own
+                # default (color_mode="auto" -> the env probe) is the contract.
+                extra = {} if color_mode is None else {"color_mode": color_mode}
+                self._screen = TerminalScreen(
+                    mouse=mouse,
+                    hover=hover,
+                    focus_events=focus_events,
+                    **extra,
+                )
+            #: The hover switch :meth:`run` hands the default key source: it
+            #: gates the record path's button-free motion (see the class
+            #: docstring).  An explicit ``keys=`` source is used as given.
+            self._hover = hover
         self._document = Document()
         self._viewport = Viewport(self._document)
         #: The theme the driver's own chrome reads (the split's divider);
@@ -363,10 +384,15 @@ class TUI:
     def copy_to_clipboard(self, text: str) -> bool:
         """Put ``text`` on the terminal's clipboard through the screen (OSC 52).
 
-        A non-live screen answers ``False`` without touching the stream,
-        exactly as :meth:`Screen.copy_to_clipboard
+        A terminal-attached driver goes through the terminal's
+        :class:`~motui.terminal.clipboard.ScreenClipboard`; either path
+        writes the same OSC 52 bytes.  A non-live screen answers ``False``
+        without touching the stream, exactly as
+        :meth:`Screen.copy_to_clipboard
         <motui.terminal.screen.Screen.copy_to_clipboard>` does.
         """
+        if self._terminal is not None:
+            return self._terminal.clipboard.copy(text)
         return self._screen.copy_to_clipboard(text)
 
     @property
@@ -1021,16 +1047,22 @@ class TUI:
         """
         if not self.screen.live:
             return None
-        source = self.keys
-        if source is None:
-            return None
+        if self._terminal is not None:
+            if self._terminal.input is None:
+                return None
+            read = self._terminal.read_event
+        else:
+            source = self.keys
+            if source is None:
+                return None
+            read = source.read
         exit_event = self._exit_event
         if exit_event is None:
             self._exit_event = exit_event = asyncio.Event()
         while True:
             if self._stopped or exit_event.is_set():
                 return None
-            read_task = asyncio.ensure_future(source.read())
+            read_task = asyncio.ensure_future(read())
             exit_task = asyncio.ensure_future(exit_event.wait())
             try:
                 done, _ = await asyncio.wait(
@@ -1353,8 +1385,13 @@ class TUI:
             source.start()
             self.keys = source
             self._owned_source = source
+            if self._terminal is not None:
+                self._terminal.attach(source)
         if self.screen.live:
-            self.screen.enter()
+            if self._terminal is not None:
+                self._terminal.enter()
+            else:
+                self.screen.enter()
         # Every run starts from a blank screen: the alternate screen starts
         # blank, and a non-live run still paints its final frame from scratch.
         self.painter.reset()
@@ -1437,12 +1474,17 @@ class TUI:
             self._owned_source.close()
             if self.keys is self._owned_source:
                 self.keys = None  # the next run attaches a fresh source
+            if self._terminal is not None:
+                self._terminal.attach(None)
             self._owned_source = None
         # The final frame: painted rows before the live screen leaves, a
         # zero-write logical frame (the dump reads it) on a piped one.
         self._paint_at(self.clock())
         if self.screen.live:
-            self.screen.leave()
+            if self._terminal is not None:
+                self._terminal.leave()
+            else:
+                self.screen.leave()
             self.screen.flush()
         else:
             self._dump_final_screen()

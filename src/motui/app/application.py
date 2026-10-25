@@ -75,7 +75,8 @@ from ..kernel.events import Event, KeyEvent, MouseEvent, ResizeEvent
 from ..kernel.geom import Pos
 from ..kernel.hit import Hit
 from ..kernel.layout import Scrollable, ScrollableX
-from ..terminal.screen import Screen
+from ..terminal.screen import MouseMode, Screen, TerminalOptions
+from ..terminal.terminal import Terminal
 from ..kernel.selection import Selection
 from ..kernel.style import ColorMode, Style
 from ..kernel.theme import DEFAULT_THEME, Theme
@@ -107,6 +108,19 @@ SCROLL_KEYS = {
 _BUTTONS = ("left", "middle", "right")
 
 
+def _mouse_mode(mouse: bool, hover: bool) -> MouseMode:
+    """Fold the legacy ``mouse``/``hover`` switches into one :class:`MouseMode`.
+
+    ``mouse=False`` is :attr:`MouseMode.OFF` regardless of ``hover``;
+    otherwise ``hover=True`` asks for all-motion reporting
+    (:attr:`MouseMode.MOVE`, the historical 1003) and ``hover=False`` keeps
+    the button-event tracking (:attr:`MouseMode.DRAG`, the historical 1002).
+    """
+    if not mouse:
+        return MouseMode.OFF
+    return MouseMode.MOVE if hover else MouseMode.DRAG
+
+
 def _nodes(component: Component) -> Iterator[Component]:
     """Every node of ``component``'s explicit tree, depth first.
 
@@ -126,9 +140,16 @@ class App:
 
     ``theme`` is the application theme (``DEFAULT_THEME`` when omitted) --
     handed to the driver's chrome and assigned to mounted widgets that did
-    not take an explicit one.  ``mouse``/``hover``/``color_mode`` are
-    forwarded to the default screen (``screen=`` overrides it).
-    ``title`` is set through the driver's OSC 2 surface when non-empty.
+    not take an explicit one.  ``terminal=`` is the 2.0 configuration: a
+    :class:`~motui.terminal.screen.TerminalOptions` from which the App
+    builds one :class:`~motui.terminal.terminal.Terminal` and hands it to
+    the driver; the legacy ``mouse``/``hover``/``color_mode``/``screen``/
+    ``keys``/``focus_events``/``sync`` arguments are then ignored.  Without
+    ``terminal=`` those arguments are folded into an equivalent
+    ``TerminalOptions`` (the old ``mouse``/``hover`` pair becomes one
+    :class:`~motui.terminal.screen.MouseMode`), so :attr:`terminal` is
+    always the endpoint the driver uses.  ``title`` is set through the
+    driver's OSC 2 surface when non-empty.
     ``auto=True`` mounts the default controllers; ``auto=False`` mounts
     none, leaving ``app.tui`` and the caller's own loop (the ``TUI`` is
     still fully usable).  ``keys=`` is the event source, ``throttle`` the
@@ -142,6 +163,7 @@ class App:
         self,
         *,
         theme: Theme | None = None,
+        terminal: TerminalOptions | None = None,
         mouse: bool = True,
         hover: bool = True,
         color_mode: ColorMode | None = None,
@@ -156,17 +178,24 @@ class App:
         on_selection: Callable[["TUI", Selection], object] | None = None,
     ) -> None:
         self._theme = DEFAULT_THEME if theme is None else theme
+        if terminal is not None:
+            self._terminal = Terminal(terminal)
+        else:
+            self._terminal = Terminal(
+                TerminalOptions(
+                    input=keys,
+                    mouse=_mouse_mode(mouse, hover),
+                    focus_events=focus_events,
+                    color_mode="auto" if color_mode is None else color_mode,
+                    sync=sync,
+                ),
+                screen=screen,
+            )
         self.tui = TUI(
-            screen=screen,
-            keys=keys,
+            terminal=self._terminal,
             throttle=throttle,
-            mouse=mouse,
-            hover=hover,
-            color_mode=color_mode,
             theme=self._theme,
             interactive=interactive,
-            focus_events=focus_events,
-            sync=sync,
         )
         self.auto = auto
         self._components: list[Component] = []
@@ -196,6 +225,16 @@ class App:
             self.tui.set_title(title)
 
     # -- theme ------------------------------------------------------------------
+
+    @property
+    def terminal(self) -> Terminal:
+        """The terminal endpoint the driver enters, leaves and reads through.
+
+        Built from ``terminal=`` when given, otherwise from the legacy
+        screen/input switches; either way it is the same object the TUI
+        holds, so its screen, clipboard and capability describe this app.
+        """
+        return self._terminal
 
     @property
     def theme(self) -> Theme:

@@ -12,8 +12,8 @@ from motui.app.driver import Timer
 from motui.kernel import DEFAULT_THEME, EveryHandle, Rect, RowRange
 from motui.kernel.document import Placement, Sizing
 from motui.widgets.text import Text
-from motui.terminal import HeadlessScreen
-from motui.terminal.ansi import enter_alt_screen, leave_alt_screen
+from motui.terminal import HeadlessScreen, Terminal, TerminalOptions
+from motui.terminal.ansi import copy_clipboard, enter_alt_screen, leave_alt_screen
 from motui.terminal.screen import TerminalScreen
 from tests.testing import (
     Clock,
@@ -328,6 +328,82 @@ async def test_exit_unblocks_a_pending_read_event_immediately():
     tui.exit()
     assert await asyncio.wait_for(pending, 1) is None
     assert not source.closed  # closing the source belongs to teardown
+
+
+# -- terminal wiring ---------------------------------------------------------
+
+
+async def test_a_terminal_driver_reads_through_the_terminal_source():
+    screen = HeadlessScreen(20, 4)
+    source = ScriptedEvents([key("a", "a"), None])
+    terminal = Terminal(TerminalOptions(screen=screen, input=source))
+    tui = TUI(terminal=terminal, interactive=False)
+
+    assert tui.screen is screen
+    assert tui.keys is source
+    assert await tui.read_event() == key("a", "a")
+    assert await tui.read_event() is None
+
+
+def test_a_terminal_driver_on_a_non_live_screen_reads_nothing():
+    terminal = Terminal(
+        TerminalOptions(stream=io.StringIO(), input=ScriptedEvents([key("a", "a")]))
+    )
+    tui = TUI(terminal=terminal, interactive=False)
+    assert asyncio.run(tui.read_event()) is None
+
+
+async def test_a_terminal_run_brackets_the_session_through_the_terminal():
+    screen = HeadlessScreen(20, 3)
+    tui = TUI(
+        terminal=Terminal(TerminalOptions(screen=screen)), interactive=False
+    )
+
+    async def body(app: TUI) -> None:
+        app.add(Text("hi"))
+
+    await tui.run_session(body)
+    output = screen.output
+    assert output.find(enter_alt_screen()) >= 0
+    assert output.find(leave_alt_screen()) > output.find(enter_alt_screen())
+
+
+async def test_a_non_live_terminal_run_stays_silent_and_dumps_plain_text():
+    stream = io.StringIO()
+    tui = TUI(
+        terminal=Terminal(TerminalOptions(stream=stream)), interactive=False
+    )
+    seen: list[str] = []
+
+    async def body(app: TUI) -> None:
+        app.add(Text("hello"))
+        seen.append(stream.getvalue())
+
+    await tui.run_session(body)
+    assert seen == [""]
+    assert stream.getvalue() == "hello\n"
+    assert enter_alt_screen() not in stream.getvalue()
+
+
+def test_the_terminal_wins_over_the_legacy_screen_and_keys():
+    legacy = HeadlessScreen(10, 2)
+    chosen = HeadlessScreen(20, 5)
+    source = ScriptedEvents(())
+    tui = TUI(
+        screen=legacy,
+        keys=ScriptedEvents(()),
+        terminal=Terminal(TerminalOptions(screen=chosen, input=source)),
+        interactive=False,
+    )
+    assert tui.screen is chosen
+    assert tui.keys is source
+
+
+def test_a_terminal_driver_copies_through_the_terminal_clipboard():
+    screen = HeadlessScreen()
+    tui = TUI(terminal=Terminal(TerminalOptions(screen=screen)), interactive=False)
+    assert tui.copy_to_clipboard("copied") is True
+    assert screen.output == copy_clipboard("copied")
 
 
 # -- lifecycle ---------------------------------------------------------------
