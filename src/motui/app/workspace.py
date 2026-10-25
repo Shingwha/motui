@@ -24,8 +24,15 @@ from __future__ import annotations
 from typing import TYPE_CHECKING
 
 from ..kernel.cell import Line
-from ..kernel.document import Component, Document, Section, Sizing
+from ..kernel.document import (
+    Component,
+    Document,
+    Placement,
+    Section,
+    Sizing,
+)
 from ..kernel.frame import Frame, Pane, Rect
+from ..kernel.geom import Axis
 from ..kernel.hit import Hit, RowRange
 from ..kernel.layout import Viewport
 from ..kernel.selection import Selection
@@ -144,16 +151,24 @@ class Workspace:
 
     def split(
         self,
-        orientation: str,
+        axis: Axis | str,
         *,
-        ratios: tuple[float, ...] = (1, 1),
+        weights: tuple[float, ...] | None = None,
+        ratios: tuple[float, ...] | None = None,
         min_size: int = 1,
         separator: bool = True,
         pane: Pane | str | None = None,
     ) -> tuple[Pane, ...]:
-        """Split a pane; return the panes it became, in paint order."""
+        """Split a pane; return the panes it became, in paint order.
+
+        ``axis`` is :class:`~motui.kernel.geom.Axis` (``X`` divides the
+        width, ``Y`` the height) or the 1.x ``"vertical"``/``"horizontal"``
+        string, kept for compatibility until W5.  ``weights`` is the 2.0
+        spelling and wins over ``ratios``.
+        """
         return self._runtime.split(
-            orientation,
+            axis,
+            weights=weights,
             ratios=ratios,
             min_size=min_size,
             separator=separator,
@@ -164,15 +179,26 @@ class Workspace:
         self,
         component: Component,
         *,
+        placement: Placement | None = None,
         edge: str = "bottom",
         size: int | None = None,
     ) -> Pane:
-        """Pin ``component`` against ``edge``; return its pane."""
-        return self._runtime.dock(component, edge=edge, size=size)
+        """Pin ``component`` against a dock placement; return its pane.
 
-    def undock(self, edge: str = "bottom") -> Pane | None:
-        """Release the dock on ``edge``; return its pane (``None`` when empty)."""
-        return self._runtime.undock(edge)
+        ``placement`` is the 2.0 spelling (``TOP``/``BOTTOM``); the legacy
+        ``edge`` string stays until W5.
+        """
+        return self._runtime.dock(
+            component, placement=placement, edge=edge, size=size
+        )
+
+    def undock(
+        self,
+        placement: Placement | str | None = None,
+        edge: str = "bottom",
+    ) -> Pane | None:
+        """Release the dock named by ``placement``; return its pane (or ``None``)."""
+        return self._runtime.undock(placement, edge)
 
     def dock_region(self, edge: str = "bottom") -> Rect | None:
         """The rectangle the last composition laid the dock on ``edge`` in."""

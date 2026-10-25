@@ -68,8 +68,8 @@ import time
 from collections.abc import Awaitable, Callable
 
 from ..terminal.ansi import cursor_shape, set_window_title
-from ..kernel.document import Section, Component, Document, Sizing, descend_chain
-from ..kernel.geom import Pos
+from ..kernel.document import Placement, Section, Component, Document, Sizing, descend_chain
+from ..kernel.geom import Axis, Pos
 from ..kernel.frame import Separator
 from ..kernel.events import Event, EventSource
 from ..kernel.frame import DOCK_EDGES, Frame, Pane, Rect
@@ -145,6 +145,40 @@ def _stdin_isatty() -> bool:
         return stream is not None and bool(stream.isatty())
     except Exception:
         return False
+
+
+#: The 2.0 axis spelling mapped to the 1.x orientation string.  ``Axis.X``
+#: divides width (panes side by side), which the legacy string calls
+#: ``"vertical"`` because of its divider.
+_ORIENTATIONS = {Axis.X: "vertical", Axis.Y: "horizontal"}
+
+
+def _orientation(axis: Axis | str) -> str:
+    """``"vertical"``/``"horizontal"`` for an ``Axis`` or the legacy string."""
+    if isinstance(axis, Axis):
+        return _ORIENTATIONS[axis]
+    if axis in ("vertical", "horizontal"):
+        return axis
+    raise ValueError(
+        f"split axis must be an Axis or 'vertical'/'horizontal', got {axis!r}"
+    )
+
+
+def _dock_edge(placement: Placement | str | None, edge: str) -> str:
+    """Resolve a dock placement or the legacy edge string to an edge name.
+
+    ``Placement.BOTTOM``/``TOP`` name the fixed bands; ``FLOW`` is not a
+    dock and raises.  A string is the 1.x spelling (``"top"``/``"bottom"``)
+    and is passed through so the frame's own edge validation stays the one
+    rejection point.  The string path is removed in W5.
+    """
+    if placement is None:
+        return edge
+    if isinstance(placement, str):
+        return placement
+    if placement is Placement.FLOW:
+        raise ValueError("a dock cannot use Placement.FLOW")
+    return placement.value
 
 
 class _SelectionOverlay:
@@ -724,25 +758,32 @@ class Runtime:
 
     def split(
         self,
-        orientation: str,
+        axis: Axis | str,
         *,
-        ratios: tuple[float, ...] = (1, 1),
+        weights: tuple[float, ...] | None = None,
+        ratios: tuple[float, ...] | None = None,
         min_size: int = 1,
         separator: bool = True,
         pane: Pane | str | None = None,
     ) -> tuple[Pane, ...]:
         """Split a pane; return the panes it became, in paint order.
 
+        ``axis`` is the 2.0 spelling: :attr:`~motui.kernel.geom.Axis.X`
+        divides the width (panes side by side) and
+        :attr:`~motui.kernel.geom.Axis.Y` the height (panes stacked).  The
+        1.x strings are still accepted and mean the same: ``"vertical"``
+        is ``Axis.X`` (the divider runs vertically) and ``"horizontal"`` is
+        ``Axis.Y``; W5 removes the string path.  ``weights`` is the 2.0 name
+        for the children's weights -- ``(2, 1)`` gives the first twice the
+        cells of the second -- and wins over the legacy ``ratios`` when both
+        are passed; ``(1, 1)`` is the default.  ``min_size`` is the floor
+        each child is raised to.
+
         ``pane`` names the target: an explicit pane (or id) wins, and with
-        none named the focused pane splits.  ``"vertical"`` tiles side by
-        side (a vertical divider between them), ``"horizontal"`` stacks them
-        (a horizontal divider); ``ratios`` are the children's weights --
-        ``(2, 1)`` gives the first twice the cells of the second, ``(1, 1)``
-        halves it -- and ``min_size`` the floor each child is raised to.  Two
-        ratios give the ``(left, right)`` or ``(top, bottom)`` pair; more give
-        one pane per ratio.  The same code path
-        :meth:`~motui.kernel.frame.Pane.split` runs, so a pane splits itself
-        identically.
+        none named the focused pane splits.  Two weights give the
+        ``(left, right)`` or ``(top, bottom)`` pair; more give one pane per
+        weight.  The same code path :meth:`~motui.kernel.frame.Pane.split`
+        runs, so a pane splits itself identically.
 
         The first child keeps the split pane's document, so the transcript
         stays put; every child after it opens over a fresh, empty document
@@ -759,6 +800,11 @@ class Runtime:
         overlapping content.  ``False`` leaves the panes abutting, no
         divider and no cell spent on one.
         """
+        orientation = _orientation(axis)
+        if weights is not None:
+            ratios = weights
+        elif ratios is None:
+            ratios = (1, 1)
         target = self._focus_pane(pane)
         children = target.split(orientation, ratios=ratios, min_size=min_size)
         if separator:
@@ -820,10 +866,18 @@ class Runtime:
         self,
         component: Component,
         *,
+        placement: Placement | None = None,
         edge: str = "bottom",
         size: int | None = None,
     ) -> Pane:
-        """Pin ``component`` against ``edge`` (``"top"``/``"bottom"``); return its pane.
+        """Pin ``component`` against a dock edge; return its pane.
+
+        ``placement`` is the 2.0 spelling: :attr:`~motui.kernel.document.
+        Placement.BOTTOM` and ``TOP`` name the fixed bands, while ``FLOW``
+        raises (a dock is never part of the scrolling body).  ``edge`` is
+        the 1.x string (``"top"``/``"bottom"``), still accepted for
+        compatibility and removed in W5; it is ignored when a placement is
+        given.
 
         A dock is a frame-level region outside the pane area, holding its
         own viewport built around the component handed over: the component
@@ -838,6 +892,7 @@ class Runtime:
         dock claims no rows and paints nothing.  One dock per edge; a
         second :meth:`dock` on the same edge raises ``RuntimeError``.
         """
+        edge = _dock_edge(placement, edge)
         if edge not in DOCK_EDGES:
             raise ValueError(f"dock edge must be one of {DOCK_EDGES}, got {edge!r}")
         if self._frame.dock(edge) is not None:
@@ -851,8 +906,18 @@ class Runtime:
         self.refresh()
         return dock
 
-    def undock(self, edge: str = "bottom") -> Pane | None:
-        """Release the dock on ``edge``; return its pane (``None`` when empty)."""
+    def undock(
+        self,
+        placement: Placement | str | None = None,
+        edge: str = "bottom",
+    ) -> Pane | None:
+        """Release the dock named by ``placement`` (or the legacy ``edge``).
+
+        ``Placement.BOTTOM``/``TOP`` select the band; a string is the 1.x
+        edge spelling and is accepted positionally or as ``edge=``.  W5
+        removes the string path.  An empty edge answers ``None``.
+        """
+        edge = _dock_edge(placement, edge)
         pane = self._frame.dock(edge)
         if pane is None:
             return None

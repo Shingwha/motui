@@ -5,7 +5,8 @@ from __future__ import annotations
 from motui.app import App, Runtime, Workspace
 from motui.kernel import Theme
 from motui.kernel.cell import Line, Surface
-from motui.kernel.document import Sizing
+from motui.kernel.document import Placement, Sizing
+from motui.kernel.geom import Axis
 from motui.kernel.layout import Constraints
 from motui.terminal import (
     HeadlessScreen,
@@ -165,6 +166,20 @@ def test_removing_a_parent_drops_its_subtree_from_the_ring():
     assert app.focus_manager.targets == ()
     assert app.focus_manager.focused is None
     assert button.focused is False
+
+
+def test_app_split_dock_and_undock_accept_the_2_0_enums():
+    app = App(screen=HeadlessScreen(40, 8), keys=ScriptedEvents(()))
+    left, right = app.split(Axis.X, weights=(2, 1))
+    assert [pane.id for pane in app.workspace.panes] == ["primary", "pane-1"]
+    assert left.rect.width > right.rect.width
+
+    top = app.dock(Rows("top"), placement=Placement.TOP)
+    bottom = app.dock(Rows("foot"), placement=Placement.BOTTOM, size=1)
+    assert app.workspace.frame.dock("top") is top
+    assert app.workspace.frame.dock("bottom") is bottom
+    assert app.undock(Placement.BOTTOM) is bottom
+    assert app.undock("top") is top  # legacy edge string, removed in W5
 
 
 def test_remove_accepts_the_section_the_demo_keeps():

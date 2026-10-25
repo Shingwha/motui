@@ -11,6 +11,7 @@ from motui.app import Runtime
 from motui.app.runtime import Timer
 from motui.kernel import DEFAULT_THEME, EveryHandle, Rect, RowRange
 from motui.kernel.document import Placement, Sizing
+from motui.kernel.geom import Axis
 from motui.widgets.text import Text
 from motui.terminal import HeadlessScreen, Terminal, TerminalOptions
 from motui.terminal.ansi import copy_clipboard, enter_alt_screen, leave_alt_screen
@@ -164,6 +165,31 @@ def test_split_keeps_the_document_in_the_first_child():
     tui.paint()
     assert rows(tui)[0].startswith("transcript")
     assert left.rect.width == 26 and right.rect.x == 26
+
+
+def test_split_axes_and_the_legacy_strings_are_equivalent():
+    by_axis = headless_tui(40, 6)
+    axis_left, axis_right = by_axis.split(Axis.X, weights=(2, 1))
+    by_string = headless_tui(40, 6)
+    left, right = by_string.split("vertical", ratios=(2, 1))
+    assert (axis_left.rect, axis_right.rect) == (left.rect, right.rect)
+
+    stacked_axis = headless_tui(40, 6)
+    axis_top, axis_bottom = stacked_axis.split(Axis.Y, weights=(1, 2))
+    stacked_string = headless_tui(40, 6)
+    top, bottom = stacked_string.split("horizontal", ratios=(1, 2))
+    assert (axis_top.rect, axis_bottom.rect) == (top.rect, bottom.rect)
+
+
+def test_split_prefers_weights_over_ratios():
+    tui = headless_tui(40, 6)
+    left, right = tui.split(Axis.X, weights=(1, 2), ratios=(3, 1))
+    assert left.rect.width < right.rect.width
+
+
+def test_split_rejects_an_unknown_string():
+    with pytest.raises(ValueError, match="split axis"):
+        headless_tui(40, 6).split("diagonal")
 
 
 def test_split_takes_an_explicit_pane_and_moves_no_focus():
@@ -580,6 +606,21 @@ def test_top_and_bottom_docks_compose_and_an_empty_dock_keeps_no_rows():
     assert empty.rect == Rect(x=0, y=0, width=0, height=0)
     empty_tui.paint()
     assert rows(empty_tui) == ["body"] + [""] * 5
+
+
+def test_dock_and_undock_accept_placements():
+    tui = headless_tui(20, 6)
+    top = tui.dock(Rows("top"), placement=Placement.TOP)
+    bottom = tui.dock(Rows("foot"), placement=Placement.BOTTOM, size=1)
+
+    assert tui.frame.dock("top") is top
+    assert tui.frame.dock("bottom") is bottom
+    assert tui.undock(Placement.BOTTOM) is bottom
+    assert tui.undock(Placement.TOP) is top
+    assert tui.frame.dock("top") is None and tui.frame.dock("bottom") is None
+
+    with pytest.raises(ValueError, match="FLOW"):
+        tui.dock(Rows("nope"), placement=Placement.FLOW)
 
 
 # -- pump --------------------------------------------------------------------

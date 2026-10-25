@@ -72,7 +72,7 @@ from typing import TYPE_CHECKING, Any
 
 from ..kernel.document import Component, Placement, Section, Sizing
 from ..kernel.events import Event, KeyEvent, MouseEvent, ResizeEvent
-from ..kernel.geom import Pos
+from ..kernel.geom import Axis, Pos
 from ..kernel.hit import Hit
 from ..kernel.layout import Scrollable, ScrollableX
 from ..terminal.screen import MouseMode, Screen, TerminalOptions
@@ -456,26 +456,65 @@ class App:
 
     # -- frame surface ------------------------------------------------------------
 
-    def split(self, orientation: str, **kwargs: Any) -> Any:
-        """Split a pane (the workspace's own ``split``)."""
-        return self.workspace.split(orientation, **kwargs)
+    def split(
+        self,
+        axis: Axis | str,
+        *,
+        weights: tuple[float, ...] | None = None,
+        ratios: tuple[float, ...] | None = None,
+        min_size: int = 1,
+        separator: bool = True,
+        pane: Any = None,
+    ) -> tuple[Any, ...]:
+        """Split a pane (the workspace's own ``split``).
 
-    def dock(self, component: Component, *, edge: str = "bottom", size: int | None = None) -> Any:
-        """Dock ``component`` (the workspace's own ``dock``); theme it first."""
+        ``axis`` is ``Axis.X``/``Axis.Y`` or the 1.x
+        ``"vertical"``/``"horizontal"`` string; ``weights`` (2.0) wins over
+        ``ratios`` (legacy).
+        """
+        return self.workspace.split(
+            axis,
+            weights=weights,
+            ratios=ratios,
+            min_size=min_size,
+            separator=separator,
+            pane=pane,
+        )
+
+    def dock(
+        self,
+        component: Component,
+        *,
+        placement: Placement | None = None,
+        edge: str = "bottom",
+        size: int | None = None,
+    ) -> Any:
+        """Dock ``component`` (the workspace's own ``dock``); theme it first.
+
+        ``placement`` is ``Placement.TOP``/``BOTTOM``; the legacy ``edge``
+        string stays until W5.
+        """
         for current in _nodes(component):
             if isinstance(current, Widget) and current.theme is None:
                 current.theme = self._theme
         self._components.append(component)
-        return self.workspace.dock(component, edge=edge, size=size)
+        return self.workspace.dock(
+            component, placement=placement, edge=edge, size=size
+        )
 
-    def undock(self, edge: str = "bottom") -> Any:
-        """Release the dock on ``edge`` and forget its component.
+    def undock(
+        self,
+        placement: Placement | str | None = None,
+        edge: str = "bottom",
+    ) -> Any:
+        """Release the dock named by ``placement`` and forget its component.
 
         The workspace's :meth:`~motui.app.workspace.Workspace.undock` plus
         the App-side bookkeeping: the docked component's subtree leaves the
-        focus ring and the theme walk with it.
+        focus ring and the theme walk with it.  The legacy edge string is
+        accepted (positionally, as the demo passes it) until W5.
         """
-        pane = self.workspace.undock(edge)
+        pane = self.workspace.undock(placement, edge)
         if pane is not None:
             for block in pane.document.blocks():
                 self._forget(block.component)

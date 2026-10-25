@@ -6,6 +6,8 @@ import pytest
 
 from motui.app import Runtime, Workspace
 from motui.kernel import Selection
+from motui.kernel.document import Placement
+from motui.kernel.geom import Axis
 from motui.terminal import HeadlessScreen
 from motui.widgets.text import Text
 
@@ -60,6 +62,22 @@ def test_fill_split_and_pane_delegate_to_the_runtime():
     assert workspace.pane(right.id) is right
     assert workspace.frame.focused_pane is left
     assert left.document is runtime.document
+
+
+def test_split_and_dock_accept_the_2_0_enums():
+    runtime = _runtime()
+    workspace = runtime.workspace
+
+    left, right = workspace.split(Axis.X, weights=(2, 1))
+    assert [pane.id for pane in workspace.panes] == ["primary", "pane-1"]
+    assert left.rect.width > right.rect.width
+
+    top = workspace.dock(Text("top"), placement=Placement.TOP)
+    bottom = workspace.dock(Text("foot"), placement=Placement.BOTTOM)
+    assert workspace.frame.dock("top") is top
+    assert workspace.frame.dock("bottom") is bottom
+    assert workspace.undock(Placement.BOTTOM) is bottom
+    assert workspace.undock(Placement.TOP) is top
 
 
 def test_dock_hit_and_reveal_delegate_to_the_runtime():
