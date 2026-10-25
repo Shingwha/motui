@@ -16,13 +16,26 @@ from __future__ import annotations
 
 from ..kernel.document import Component, Revisioned
 from ..kernel.glyphs import GLYPHS, Border, Glyphs
-from ..kernel.cell import Line, Segment
+from ..kernel.cell import Line, Segment, Surface
+from ..kernel.layout import Constraints, as_constraints
 from ..kernel.style import Style
 from ..kernel.text import ellipsize_tail, visible_width
 from ..kernel.theme import Styles, Theme
 from ..widgets.base import Widget
 
 __all__ = ["Divider", "Panel"]
+
+
+def _answer(rows: list[Line], c: Constraints) -> Surface:
+    """The decorated rows as the 2.0 answer, honouring the height budget.
+
+    ``Surface.clipped`` truncates only, so rows already fitted to the width
+    pass through unchanged; a ``max_height`` slices a copy and leaves the
+    component's memo untouched.
+    """
+    if c.max_height is not None:
+        rows = rows[: c.max_height]
+    return Surface.clipped(rows, c.width)
 
 
 def _child_key(child: object) -> object:
@@ -132,15 +145,22 @@ class Divider(Widget):
             self.styles,
         )
 
-    def render(self, width: int) -> list[Line]:
+    def render(self, c: Constraints | int) -> Surface:
+        """The rule at the constraints' width, as a clipped surface.
+
+        A bare ``int`` is the 1.x spelling; ``max_height`` truncates (a rule
+        is one row, so a zero budget answers an empty surface).
+        """
+        c = as_constraints(c)
+        width = c.width
         style = self.group("borders").base
         label_style = self.group("text").muted
         if width <= 0 or visible_width(self.char) <= 0:
-            return [Line()]
+            return _answer([Line()], c)
         paint = width if self.max_width is None else max(0, min(width, self.max_width))
         label = ellipsize_tail(self.label, paint - 4) if self.label else ""
         segments = _labelled_rule(self.char, 2, label, label_style, style, paint)
-        return [Line(segments).fit(width)]
+        return _answer([Line(segments).fit(width)], c)
 
     def __repr__(self) -> str:
         if self.label:
@@ -253,7 +273,15 @@ class Panel(Widget):
             _child_key(self.child),
         )
 
-    def render(self, width: int) -> list[Line]:
+    def render(self, c: Constraints | int) -> Surface:
+        """Wrap the child in the panel and answer a clipped surface.
+
+        The 1.x bare width is accepted and the child still receives an inner
+        width as an int; ``max_height`` truncates the final rows (the wrap
+        memo keeps the untruncated ones).
+        """
+        c = as_constraints(c)
+        width = c.width
         if self.frame:
             style = self.group("borders").base
             framed = width >= 4
@@ -272,12 +300,12 @@ class Panel(Widget):
         memo = self._memo
         if memo is not None and memo[0] == key:
             self._child_rows = len(memo[2])
-            return list(memo[1])
+            return _answer(list(memo[1]), c)
         if not framed:
             rows = [self._bare_row(row, width, lead, style) for row in child_rows]
             self._child_rows = len(rows)
             self._memo = (key, rows, child_rows)
-            return list(rows)
+            return _answer(rows, c)
         rows = [row.fit(inner).fill(inner) for row in child_rows]
         self._child_rows = len(rows)
         out = [self._top_row(width, style)]
@@ -290,7 +318,7 @@ class Panel(Widget):
             out.append(framed_row.fit(width))
         out.append(self._bottom_row(width, style))
         self._memo = (key, out, child_rows)
-        return list(out)
+        return _answer(out, c)
 
     def _bare_row(self, row: Line, width: int, lead: int, ground: Style) -> Line:
         """One unwrapped row: the lead pad, the child, the fill to ``width``.

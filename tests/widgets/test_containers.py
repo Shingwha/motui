@@ -249,3 +249,23 @@ def test_a_spacer_takes_constraints_and_honours_the_height_budget():
     assert isinstance(surface, Surface)
     assert surface.height == 2
     assert all(row == Line() for row in surface)
+
+
+def test_a_divider_takes_constraints_and_honours_the_height_budget():
+    divider = Divider(char="-", label="load")
+    surface = divider.render(Constraints(width=10, max_height=1))
+    assert isinstance(surface, Surface)
+    assert [row.text for row in surface] == ["-- load --"]
+    assert divider.render(10) == divider.render(Constraints(width=10))
+    assert list(Divider(char="-").render(Constraints(width=5, max_height=0))) == []
+
+
+def test_a_panel_takes_constraints_and_honours_the_height_budget():
+    panel = Panel(Rows("body"), title="T")
+    surface = panel.render(Constraints(width=10, max_height=2))
+    assert isinstance(surface, Surface)
+    assert [row.text for row in surface] == [
+        "\u250c\u2500 T \u2500\u2500\u2500\u2500\u2510",
+        "\u2502 body   \u2502",
+    ]
+    assert [row.text for row in panel.render(10)][-1] == "\u2514" + "\u2500" * 8 + "\u2518"
