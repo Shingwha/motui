@@ -43,6 +43,7 @@ built-in syntax-highlighting seam --
 from .action import Button, Checkbox, Link
 from .autocomplete import Autocomplete
 from .base import Widget
+from .canvas import Canvas, Sparkline
 from .choice import CheckboxGroup, MultiSelect, Option, RadioGroup, Select
 from .collapsible import Collapsible
 from .combobox import ComboBox
@@ -68,6 +69,7 @@ __all__ = [
     "Autocomplete",
     "Button",
     "ButtonSpec",
+    "Canvas",
     "Checkbox",
     "CheckboxGroup",
     "Collapsible",
@@ -99,6 +101,7 @@ __all__ = [
     "ShortcutBar",
     "Slider",
     "Spacer",
+    "Sparkline",
     "Spinner",
     "StatusLine",
     "Table",
