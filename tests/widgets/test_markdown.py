@@ -2,7 +2,8 @@
 
 from dataclasses import replace
 
-from motui.kernel.cell import Line
+from motui.kernel.cell import Line, Surface
+from motui.kernel.layout import Constraints
 from motui.kernel.style import Style
 from motui.kernel.theme import DEFAULT_THEME
 from motui.widgets import Markdown
@@ -159,3 +160,31 @@ def test_a_custom_block_rule_interrupts_a_paragraph():
 
     md = Markdown("para\n!loud", block_rules=[Shout(), *default_block_rules()])
     assert texts(md, 20) == ["para", "", "LOUD"]
+
+
+# -- the 2.0 render contract -------------------------------------------------
+
+
+def test_markdown_takes_constraints_and_honours_the_height_budget():
+    md = Markdown("# H\n\npara")
+    assert isinstance(md.render(Constraints(width=80)), Surface)
+    assert md.render(80) == md.render(Constraints(width=80))
+    surface = md.render(Constraints(width=80, max_height=2))
+    assert [row.text for row in surface] == ["H", ""]
+    assert list(md.render(Constraints(width=80, max_height=0))) == []
+
+
+def test_a_truncated_markdown_keeps_links_clickable_and_the_width_cap():
+    md = Markdown("[docs](u)", max_width=9)
+    surface = md.render(Constraints(width=80, max_height=1))
+    assert [row.text for row in surface] == ["docs"]
+    assert md.click(0, 0) is True and md.take_result() == "u"
+    assert all(row.width <= 9 for row in md.render(Constraints(width=80)))
+
+
+def test_a_constrained_markdown_render_consumes_the_highlighter_rows():
+    surface = Markdown("```python\nx = 1\n```").render(
+        Constraints(width=80, max_height=2)
+    )
+    assert [row.text for row in surface] == ["```python", "x = 1"]
+    assert surface[1].segments[-1].style == DEFAULT_THEME.status.warning

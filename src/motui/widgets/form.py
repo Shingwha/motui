@@ -33,7 +33,8 @@ from dataclasses import dataclass
 
 from ..kernel.document import Component, Controller, Focusable, Revisioned
 from ..kernel.events import Event, KeyEvent
-from ..kernel.cell import Line
+from ..kernel.cell import Line, Surface
+from ..kernel.layout import Constraints, as_constraints
 from ..kernel.theme import Styles, Theme
 from ..widgets.base import Widget
 
@@ -251,12 +252,20 @@ class Form(Widget):
 
     # -- rendering ----------------------------------------------------------------
 
-    def render(self, width: int) -> list[Line]:
+    def render(self, c: Constraints | int) -> Surface:
         """Stack label, component and error rows per field, with gaps between.
 
         The label and error styles are the theme's ``content.accent`` and
         ``status.danger`` read on every call, so a rethemed form repaints.
+        A bare ``int`` is the 1.x width spelling and is normalized through
+        :func:`~motui.kernel.layout.as_constraints`; the field components
+        still receive that int width.  ``_spans`` records the untruncated
+        component-row geometry :meth:`child_at` maps through (the W2a
+        container precedent), while a ``max_height`` budget truncates only
+        the returned rows.  The surface is clipped, not padded.
         """
+        c = as_constraints(c)
+        width = c.width
         label_style = self.group("content").accent
         error_style = self.group("status").danger
         out: list[Line] = []
@@ -272,7 +281,9 @@ class Form(Widget):
             if field.error:
                 out.append(Line.from_text(field.error, error_style).fit(width))
         self._spans = spans
-        return out
+        if c.max_height is not None:
+            out = out[: c.max_height]
+        return Surface.clipped(out, c.width)
 
     def _field_at(self, row: int, col: int) -> tuple[int, int] | None:
         """The ``(field position, local row)`` owning a rendered cell, or ``None``."""

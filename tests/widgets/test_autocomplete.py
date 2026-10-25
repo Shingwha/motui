@@ -2,6 +2,8 @@
 
 import pytest
 
+from motui.kernel.cell import Surface
+from motui.kernel.layout import Constraints
 from motui.widgets import Autocomplete, Option
 
 from tests.testing import texts
@@ -21,7 +23,7 @@ def test_prefix_matches_rank_before_substring_matches(query, matched):
     auto.set_query(query)
     if not matched:
         assert auto.is_empty is True and auto.selected is None
-        assert auto.render(30) == [] and auto.move(1) is False
+        assert list(auto.render(30)) == [] and auto.move(1) is False
         return
     assert texts(auto, 30) == ["\u2192 " + matched[0], *("  " + label for label in matched[1:])]
 
@@ -97,3 +99,15 @@ def test_set_query_clears_the_pointer_mark():
     auto.set_query("beta")
     assert auto.hover_at(-1, -1) is False
     assert texts(auto, 20) == ["\u2192 beta"]
+
+
+# -- the 2.0 render contract -------------------------------------------------
+
+
+def test_autocomplete_takes_constraints_and_honours_the_height_budget():
+    auto = Autocomplete([Option("alpha"), Option("beta"), Option("gamma")])
+    assert isinstance(auto.render(Constraints(width=30)), Surface)
+    assert auto.render(30) == auto.render(Constraints(width=30))
+    surface = auto.render(Constraints(width=30, max_height=2))
+    assert [row.text for row in surface] == ["\u2192 alpha", "  beta"]
+    assert list(auto.render(Constraints(width=30, max_height=0))) == []

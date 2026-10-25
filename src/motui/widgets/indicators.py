@@ -30,7 +30,8 @@ theme field > :data:`~motui.kernel.theme.DEFAULT_THEME`.
 from __future__ import annotations
 
 from ..kernel.glyphs import GLYPHS, Glyphs
-from ..kernel.cell import Line, Segment
+from ..kernel.cell import Line, Segment, Surface
+from ..kernel.layout import Constraints, as_constraints
 from ..kernel.style import NONE
 from ..kernel.theme import Styles, Theme
 from ..widgets.base import Widget
@@ -106,12 +107,21 @@ class ProgressBar(Widget):
             self.styles,
         )
 
-    def render(self, width: int) -> list[Line]:
+    def render(self, c: Constraints | int) -> Surface:
+        """The label-plus-track row, under the render constraints.
+
+        A bare ``int`` is the 1.x width spelling and is normalized through
+        :func:`~motui.kernel.layout.as_constraints`; a ``max_height`` budget
+        truncates the single row (``0`` paints nothing).  The answer is
+        :meth:`~motui.kernel.cell.Surface.clipped`, not padded, so the bytes
+        match the old list answer.
+        """
+        c = as_constraints(c)
         done_style = self.group("status").success
         todo_style = self.group("text").faint
         lead = f"{self.label} " if self.label else ""
         if self.width_chars is None:
-            inner = max(0, width - Line.from_text(lead).width - 2)
+            inner = max(0, c.width - Line.from_text(lead).width - 2)
         else:
             inner = max(0, self.width_chars)
         done = min(inner, int(round(inner * self.fraction))) if inner else 0
@@ -124,7 +134,10 @@ class ProgressBar(Widget):
                 Segment("]"),
             )
         )
-        return [row.fit(width)]
+        rows = [row.fit(c.width)]
+        if c.max_height is not None:
+            rows = rows[: c.max_height]
+        return Surface.clipped(rows, c.width)
 
     def __repr__(self) -> str:
         return (
@@ -382,7 +395,17 @@ class Slider(Widget):
             self.styles,
         )
 
-    def render(self, width: int) -> list[Line]:
+    def render(self, c: Constraints | int) -> Surface:
+        """The track row, under the render constraints.
+
+        ``_last_width`` is the constrained width :meth:`click` maps a column
+        against (seeded even by a zero height budget).  A bare ``int`` is the
+        1.x width spelling and is normalized through
+        :func:`~motui.kernel.layout.as_constraints`; ``max_height`` truncates
+        the single row and the surface is clipped, not padded.
+        """
+        c = as_constraints(c)
+        width = c.width
         self._last_width = width  # the geometry ``click`` maps a column against
         text = self.group("text")
         filled_style = self.group("content").accent
@@ -423,7 +446,10 @@ class Slider(Widget):
             if self.focused:
                 band = band.merge(self.group("controls").focus)
             segments = [seg.with_style(seg.style.merge(band)) for seg in segments]
-        return [Line(segments).fit(width)]
+        rows = [Line(segments).fit(width)]
+        if c.max_height is not None:
+            rows = rows[: c.max_height]
+        return Surface.clipped(rows, c.width)
 
     def __repr__(self) -> str:
         return (
@@ -478,10 +504,19 @@ class Spinner(Widget):
         """The row cache's snapshot: the frame, the text, theme and styles."""
         return (self.frame, self.text, self.theme, self.styles)
 
-    def render(self, width: int) -> list[Line]:
-        """One fitted row: the current frame followed by the label."""
+    def render(self, c: Constraints | int) -> Surface:
+        """One fitted row: the current frame followed by the label.
+
+        A bare ``int`` is the 1.x width spelling and is normalized through
+        :func:`~motui.kernel.layout.as_constraints`; ``max_height`` truncates
+        the single row and the surface is clipped, not padded.
+        """
+        c = as_constraints(c)
         style = self.group("content").accent
-        return [Line.from_text(self.frame + self.text, style).fit(width)]
+        rows = [Line.from_text(self.frame + self.text, style).fit(c.width)]
+        if c.max_height is not None:
+            rows = rows[: c.max_height]
+        return Surface.clipped(rows, c.width)
 
     def __repr__(self) -> str:
         return f"Spinner({self.text!r}, frame={self.frame!r})"

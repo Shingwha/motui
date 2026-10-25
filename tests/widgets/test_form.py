@@ -1,5 +1,7 @@
 """Form: the field stack, focus navigation, values, validation and submission."""
 
+from motui.kernel.cell import Surface
+from motui.kernel.layout import Constraints
 from motui.widgets import Checkbox, CheckboxGroup, Field, Form, Input, Option
 
 from tests.testing import key, texts
@@ -97,7 +99,7 @@ def test_an_empty_form_submits_an_empty_mapping():
     form = Form([])
     assert form.activate() is True and form.take_result() == {}
     assert form.handle(key("tab")) is False
-    assert form.render(20) == []
+    assert list(form.render(20)) == []
 
 
 def test_child_at_maps_component_rows_and_owns_labels_gaps_and_errors():
@@ -114,3 +116,26 @@ def test_child_at_maps_component_rows_and_owns_labels_gaps_and_errors():
     assert rows[2] == "bad"
     assert form.child_at(2, 0) is None
     assert form.child_at(5, 0) is None
+
+
+# -- the 2.0 render contract -------------------------------------------------
+
+
+def test_a_form_takes_constraints_and_honours_the_height_budget():
+    form = Form(
+        [Field("a", Checkbox("x"), label="One"), Field("b", Checkbox("y"))],
+        gap=1,
+    )
+    assert isinstance(form.render(Constraints(width=20)), Surface)
+    assert form.render(20) == form.render(Constraints(width=20))
+    surface = form.render(Constraints(width=20, max_height=2))
+    assert [row.text for row in surface] == ["One", "[ ] x"]
+    assert list(form.render(Constraints(width=20, max_height=0))) == []
+
+
+def test_a_truncated_form_keeps_its_child_geometry():
+    first, second = Checkbox("x"), Checkbox("y")
+    form = Form([Field("a", first, label="One"), Field("b", second)], gap=1)
+    form.render(Constraints(width=20, max_height=2))
+    assert form.child_at(1, 0) == (first, 0, 0)
+    assert form.child_at(3, 0) == (second, 0, 0)

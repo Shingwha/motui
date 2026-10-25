@@ -2,6 +2,8 @@
 
 import pytest
 
+from motui.kernel.cell import Surface
+from motui.kernel.layout import Constraints
 from motui.kernel.style import NONE
 from motui.kernel.theme import DEFAULT_THEME
 from motui.widgets import Diff
@@ -11,8 +13,8 @@ from tests.testing import many, texts
 
 
 def test_identical_texts_render_no_rows():
-    assert Diff("a\nb", "a\nb").render(20) == []
-    assert Diff("", "").render(20) == []
+    assert list(Diff("a\nb", "a\nb").render(20)) == []
+    assert list(Diff("", "").render(20)) == []
 
 
 def test_a_replaced_line_renders_one_hunk_with_its_context():
@@ -74,3 +76,22 @@ def test_the_diff_bands_carry_the_theme_roles():
 def test_a_one_sided_diff_renders_one_hunk(before, after, expected):
     assert texts(Diff(before, after), 20) == expected
     assert texts(Diff("a\nb", ""), 20) == ["@@ -1,2 +0,0 @@", "-a", "-b"]
+
+
+# -- the 2.0 render contract -------------------------------------------------
+
+
+def test_a_diff_takes_constraints_and_honours_the_height_budget():
+    diff = Diff("a\nb\nc", "a\nx\nc")
+    assert isinstance(diff.render(Constraints(width=20)), Surface)
+    assert diff.render(20) == diff.render(Constraints(width=20))
+    surface = diff.render(Constraints(width=20, max_height=2))
+    assert [row.text for row in surface] == ["@@ -1,3 +1,3 @@", " a"]
+    assert list(diff.render(Constraints(width=20, max_height=0))) == []
+
+
+def test_the_diff_cache_keys_on_the_width_not_the_height_budget():
+    diff = Diff("a\nb\nc", "a\nx\nc")
+    diff.render(Constraints(width=20, max_height=1))
+    assert diff.render(Constraints(width=20)).height == 5
+    assert all(row.width <= 20 for row in diff.render(Constraints(width=20)))

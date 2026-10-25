@@ -57,7 +57,8 @@ from collections import Counter
 from dataclasses import replace
 
 from ..kernel.glyphs import GLYPHS, Glyphs
-from ..kernel.cell import Line, Segment
+from ..kernel.cell import Line, Segment, Surface
+from ..kernel.layout import Constraints, as_constraints
 from ..kernel.style import NONE, Style
 from ..kernel.theme import Styles, Theme
 from ..widgets.base import Widget
@@ -579,8 +580,8 @@ class Diff(Widget):
             self.styles,
         )
 
-    def render(self, width: int) -> list[Line]:
-        """The diff rows, each fitted to ``width`` (``fit`` truncates).
+    def render(self, c: Constraints | int) -> Surface:
+        """The diff rows, each fitted to the width (``fit`` truncates).
 
         One render is cached, the way :class:`~.markdown.Markdown` caches its
         own: the rows are a pure function of the width and the resolved
@@ -589,8 +590,15 @@ class Diff(Widget):
         resizes rarely, so a repeated key answers from the cache and a new
         one rebuilds it.  One entry, not a history -- the previous width's
         rows are dropped when the pane moves on.  Every hand-out is a copy of
-        the cache: the rows are immutable, but the list is the caller's,
-        because the viewport treats a returned list as its own.
+        the cache: the rows are immutable, but the caller's copy is its own,
+        because the viewport treats a returned sequence as its own.
+
+        A bare ``int`` is the 1.x width spelling and is normalized through
+        :func:`~motui.kernel.layout.as_constraints`; the cache key stays the
+        width (never ``max_height``), so a smaller budget truncates the
+        returned rows without rebuilding them.  The surface is
+        :meth:`~motui.kernel.cell.Surface.clipped`, not padded.  Long lines
+        still truncate through ``fit`` exactly as before (the W2.5 decision).
 
         With ``numbers`` the content rows carry one more segment in front of
         their own: the muted line-number cell :meth:`_build` already made.
@@ -598,7 +606,8 @@ class Diff(Widget):
         ``numbers`` left at ``False`` the rows are the single-segment lines
         they have always been, byte for byte.
         """
-        key = (width, self.theme, self.styles)
+        c = as_constraints(c)
+        key = (c.width, self.theme, self.styles)
         if self._rendered_rows is None or self._rendered_key != key:
             # The deletion band loses its weight here: the ``status.danger``
             # hue tells a reader what the row is, and weight is reserved for
@@ -616,10 +625,13 @@ class Diff(Widget):
             }
             self._rendered_key = key
             self._rendered_rows = [
-                self._paint(text, styles[kind], gutter, muted).fit(width)
+                self._paint(text, styles[kind], gutter, muted).fit(c.width)
                 for kind, text, gutter in self._rows
             ]
-        return list(self._rendered_rows)
+        rows = list(self._rendered_rows)
+        if c.max_height is not None:
+            rows = rows[: c.max_height]
+        return Surface.clipped(rows, c.width)
 
     def _paint(self, text: str, style: Style, gutter: str | None, hunk_style: Style) -> Line:
         """One row: its number cell (when there is one and ``numbers`` is on) then its text."""
