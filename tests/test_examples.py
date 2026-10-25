@@ -16,6 +16,7 @@ def test_the_quickstart_paints_headless_with_or_without_the_flag():
             cwd=ROOT,
             capture_output=True,
             text=True,
+            encoding="utf-8",
             timeout=25,
             check=False,
         )
