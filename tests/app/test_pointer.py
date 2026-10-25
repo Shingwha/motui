@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from motui.app import TUI
 from motui.app import FocusManager, Pointer, SelectionGesture
-from motui.core import HeadlessScreen
+from motui.terminal import HeadlessScreen
 from motui.core.events import MouseEvent
 from motui.core.lines import Line
 from motui.widgets import Padding

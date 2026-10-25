@@ -5,7 +5,7 @@ protocol.  :class:`TerminalScreen` owns the alternate-screen enter/leave byte
 pair for a real stream; :class:`HeadlessScreen` records every written byte in
 memory so tests and piped runs can inspect the exact output.  Neither screen
 interprets escape sequences: all escape bytes are constructed in
-:mod:`motui.core.ansi`, and the headless screen in particular is a recorder,
+:mod:`motui.terminal.ansi`, and the headless screen in particular is a recorder,
 not a terminal emulator.
 """
 
@@ -29,8 +29,8 @@ from .ansi import (
     leave_alt_screen,
     show_cursor,
 )
-from .style import ColorMode, detect_color_mode
-from .text import terminal_size
+from ..core.style import ColorMode
+from .capability import detect_color_mode, terminal_size
 
 __all__ = ["HeadlessScreen", "Screen", "TerminalScreen"]
 

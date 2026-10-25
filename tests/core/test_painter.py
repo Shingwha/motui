@@ -9,7 +9,7 @@ the synchronized-update pair (unless disabled) and one flush.
 
 from __future__ import annotations
 
-from motui.core.ansi import (
+from motui.terminal.ansi import (
     CLEAR_LINE,
     begin_sync_update,
     clear_screen,
@@ -18,7 +18,7 @@ from motui.core.ansi import (
 )
 from motui.core.block import Document
 from motui.core.lines import Line, Segment
-from motui.core.painter import Painter
+from motui.terminal.paint import Painter
 from motui.core.style import RESET, Style
 from motui.core.viewport import ScreenLayout, Viewport
 from tests.testing import RecordingScreen, Rows, many

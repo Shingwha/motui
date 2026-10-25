@@ -1,4 +1,4 @@
-"""The painter: full-screen row-diff rendering onto a :class:`~motui.core.screen.Screen`.
+"""The painter: full-screen row-diff rendering onto a :class:`~motui.terminal.screen.Screen`.
 
 The painter owns no document and no scroll state: every frame arrives as a
 :class:`~motui.core.viewport.ScreenLayout` the caller laid out (the
@@ -36,9 +36,9 @@ from .ansi import (
     cursor_position,
     end_sync_update,
 )
-from .lines import Line, styled_with
+from ..core.lines import Line, styled_with
 from .screen import Screen
-from .viewport import ScreenLayout
+from ..core.viewport import ScreenLayout
 
 __all__ = ["Painter"]
 

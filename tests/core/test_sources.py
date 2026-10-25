@@ -19,8 +19,8 @@ from motui.core.events import (
     PasteEvent,
     ResizeEvent,
 )
-from motui.core import KeyDecoder, RawTerminalKeys
-from motui.core.console import keys_from_console_events, windows_input_mode
+from motui.terminal import KeyDecoder, RawTerminalKeys
+from motui.terminal.win32 import keys_from_console_events, windows_input_mode
 
 _ENABLE_PROCESSED_INPUT = 0x0001
 _ENABLE_LINE_INPUT = 0x0002

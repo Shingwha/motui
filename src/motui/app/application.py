@@ -73,7 +73,7 @@ from ..core.block import Component
 from ..core.events import Event, KeyEvent, MouseEvent
 from ..core.hit import Hit
 from ..core.scroll import Scrollable
-from ..core.screen import Screen
+from ..terminal.screen import Screen
 from ..core.selection import Selection
 from ..core.style import ColorMode, Style
 from ..core.theme import DEFAULT_THEME, Theme

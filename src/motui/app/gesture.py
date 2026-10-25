@@ -39,7 +39,7 @@ press-release at one cell *clears* the selection and never fires ``on_end``
 ``on_end`` exactly once and the highlight stays until the next press, so the
 user can verify what was copied.  ``on_end=None`` selects without any
 effect; :func:`copy_on_select` is the shipped default, and its whole body is
-``extract`` + :meth:`Screen.copy <motui.core.screen.Screen.copy>` -- the
+``extract`` + :meth:`Screen.copy <motui.terminal.screen.Screen.copy>` -- the
 smallness is the proof that the mechanism/policy split held (D3/D6).
 
 The two time-driven behaviors ride the pump instead of adding any mechanism
@@ -99,7 +99,7 @@ def copy_on_select(tui: TUI, selection: Selection) -> bool:
 
     Still three lines -- every mechanism (the range walk of
     :func:`~motui.core.selection.extract`, the clipboard primitive
-    :meth:`Screen.copy <motui.core.screen.Screen.copy>`) lives in the
+    :meth:`Screen.copy <motui.terminal.screen.Screen.copy>`) lives in the
     kernel, and the whole policy is "which text, which screen, once".  The
     text comes from the pane the selection lives in (:attr:`TUI.selection_pane`
     -- D7: selection is single-document, and block ids are numbered per

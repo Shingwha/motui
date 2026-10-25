@@ -23,7 +23,7 @@ class RecordingScreen:
 
     ``entered`` / ``left`` count the buffer switches a session brackets itself
     with; the double writes no bytes for them (a test that cares about the
-    alt-screen bytes uses a :class:`~motui.core.screen.TerminalScreen` on a
+    alt-screen bytes uses a :class:`~motui.terminal.screen.TerminalScreen` on a
     stream it holds).
     """
 

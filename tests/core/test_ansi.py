@@ -12,7 +12,7 @@ import base64
 
 import pytest
 
-from motui.core.ansi import (
+from motui.terminal.ansi import (
     CLEAR_LINE,
     begin_sync_update,
     clear_screen,

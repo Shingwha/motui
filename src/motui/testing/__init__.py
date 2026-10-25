@@ -1,6 +1,6 @@
 """Test helpers: a headless TUI and a structured document snapshot.
 
-``headless_tui`` wires a :class:`~motui.core.screen.HeadlessScreen` (live by
+``headless_tui`` wires a :class:`~motui.terminal.screen.HeadlessScreen` (live by
 construction, every byte recorded) to a
 :class:`~motui.testing.ScriptedEvents` source with ``interactive`` forced
 off, so a test drives a real :class:`~motui.app.TUI` without touching a
@@ -11,7 +11,7 @@ The helpers sit above the kernel: they import the driver, the screens and the
 event model, which is exactly what a test needs to drive a real session.
 
 ``Emulator`` lives beside them in :mod:`motui.testing.emulator`: it consumes
-the bytes a :class:`~motui.core.painter.Painter` writes and rebuilds the cell
+the bytes a :class:`~motui.terminal.paint.Painter` writes and rebuilds the cell
 grid, so a test can assert on what a terminal would actually show rather than
 on escape-string spellings.
 """
@@ -22,7 +22,7 @@ from collections.abc import Iterable
 
 from ..app import TUI
 from ..core.events import Event, EventSource
-from ..core.screen import HeadlessScreen
+from ..terminal.screen import HeadlessScreen
 from .emulator import Emulator
 
 __all__ = ["Emulator", "ScriptedEvents", "headless_tui", "snapshot"]
@@ -62,7 +62,7 @@ def headless_tui(
     ``script`` is a sequence of events replayed by
     :class:`~motui.testing.ScriptedEvents`; ``keys`` overrides it with any
     :class:`~motui.core.events.EventSource`.  The screen is a
-    :class:`~motui.core.screen.HeadlessScreen` whose every written byte is
+    :class:`~motui.terminal.screen.HeadlessScreen` whose every written byte is
     readable from ``tui.screen.output``.
     """
     source = keys if keys is not None else ScriptedEvents(script or ())

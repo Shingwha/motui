@@ -17,7 +17,6 @@ rows it renders through: :class:`motui.core.lines.Text`.
 
 from __future__ import annotations
 
-import shutil
 from collections.abc import Iterator
 from functools import lru_cache
 
@@ -29,7 +28,6 @@ __all__ = [
     "fit_text",
     "index_bounds_at_columns",
     "index_pair_at_columns",
-    "terminal_size",
     "visible_width",
     "wrap_spans",
     "wrap_text",
@@ -640,9 +638,3 @@ def wrap_text(text: str, width: int) -> list[str]:
         return [""]
     text = _normalize_tabs(text)
     return [text[s:e] for s, e in wrap_spans(text, width)]
-
-
-def terminal_size() -> tuple[int, int]:
-    """Current terminal size as ``(columns, rows)``, falling back to 80x24."""
-    size = shutil.get_terminal_size(fallback=(80, 24))
-    return (size.columns, size.lines)

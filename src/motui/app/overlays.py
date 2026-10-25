@@ -571,7 +571,7 @@ class Stats(_MountedOverlay):
     ``c-g``.  It paints a small band stack in the frame's **top-right
     corner**, three rows wide as their content:
 
-    * ``frames``: :attr:`~motui.core.painter.Painter.frames`, every
+    * ``frames``: :attr:`~motui.terminal.paint.Painter.frames`, every
       painted frame (read at composition time, so the frame being painted
       is not counted yet), beside the frame rate;
     * the **frame rate** over the overlay's own last window of at least a

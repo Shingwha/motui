@@ -3,8 +3,8 @@
 :class:`TUI` ties the kernel together -- a
 :class:`~motui.core.block.Document`, the
 :class:`~motui.core.viewport.Viewport` over it, a
-:class:`~motui.core.painter.Painter` and a
-:class:`~motui.core.screen.Screen` -- and adds the runtime behaviour a
+:class:`~motui.terminal.paint.Painter` and a
+:class:`~motui.terminal.screen.Screen` -- and adds the runtime behaviour a
 full-screen application needs:
 
 * a **document facade** (``add``/``get``/``remove``/``system``) where every
@@ -68,20 +68,20 @@ import time
 from collections.abc import Awaitable, Callable
 from dataclasses import dataclass
 
-from ..core.ansi import cursor_shape, set_window_title
+from ..terminal.ansi import cursor_shape, set_window_title
 from ..core.block import Block, Component, Document, descend_chain
 from ..core.chrome import Separator
 from ..core.events import Event, EventSource
 from ..core.frame import DOCK_EDGES, Frame, Pane, Rect
 from ..core.hit import EveryHandle, Hit, RowRange
 from ..core.lines import Line, Text
-from ..core.painter import Painter
-from ..core.screen import Screen, TerminalScreen
+from ..terminal.paint import Painter
+from ..terminal.screen import Screen, TerminalScreen
 from ..core.selection import Selection, highlight
 from ..core.style import ColorMode
 from ..core.theme import DEFAULT_THEME, Theme
 from ..core.viewport import ScreenLayout, Viewport
-from ..core import RawTerminalKeys
+from ..terminal import RawTerminalKeys
 
 __all__ = ["TUI"]
 
@@ -171,7 +171,7 @@ def _body_address(viewport: Viewport, block: Block, row: int, width: int) -> int
 class TUI:
     """A full-screen application driver.
 
-    ``screen`` defaults to a :class:`~motui.core.screen.TerminalScreen`
+    ``screen`` defaults to a :class:`~motui.terminal.screen.TerminalScreen`
     (pass ``mouse=False`` to leave mouse tracking off), ``keys`` to no
     source at all (``read_event`` then returns ``None``).  ``mouse`` and
     ``hover`` apply only to
@@ -320,7 +320,7 @@ class TUI:
 
         A non-live screen answers ``False`` without touching the stream,
         exactly as :meth:`Screen.copy_to_clipboard
-        <motui.core.screen.Screen.copy_to_clipboard>` does.
+        <motui.terminal.screen.Screen.copy_to_clipboard>` does.
         """
         return self._screen.copy_to_clipboard(text)
 
@@ -1079,8 +1079,8 @@ class TUI:
 
         The sampling here is the driver's own: the retile and the reflow
         test both need the size *before* the composition runs, while
-        :meth:`~motui.core.painter.Painter.paint` samples again for
-        its full-repaint test, per the :class:`~motui.core.screen.Screen`
+        :meth:`~motui.terminal.paint.Painter.paint` samples again for
+        its full-repaint test, per the :class:`~motui.terminal.screen.Screen`
         protocol's "the painter calls it before every frame".  Neither
         sample can move to the other side without composing one frame at a
         stale size.

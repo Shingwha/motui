@@ -5,8 +5,8 @@ from __future__ import annotations
 
 import base64
 
-from motui.core import Clipboard, MemoryClipboard, ScreenClipboard
-from motui.core.screen import HeadlessScreen
+from motui.terminal import Clipboard, MemoryClipboard, ScreenClipboard
+from motui.terminal.screen import HeadlessScreen
 
 
 class _RecordingScreen:

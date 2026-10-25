@@ -24,8 +24,8 @@ from motui.core.lines import (
     styled_with,
     wrap_line,
 )
-from motui.core.painter import Painter
-from motui.core.screen import HeadlessScreen
+from motui.terminal.paint import Painter
+from motui.terminal.screen import HeadlessScreen
 from motui.core.style import NONE, RESET, Style
 from motui.core.viewport import Viewport
 from tests.testing import Rows

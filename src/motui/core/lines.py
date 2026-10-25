@@ -44,7 +44,7 @@ import re
 from collections.abc import Iterable
 from dataclasses import dataclass, field
 
-from .ansi import hyperlink_close, hyperlink_open
+from ..terminal.ansi import hyperlink_close, hyperlink_open
 from .style import NONE, RESET, ColorMode, Style, sgr_prefix
 from .theme import Theme, Themed
 from .text import (
@@ -89,7 +89,7 @@ def _cells_only(text: str) -> str:
     would drive the terminal instead of painting cells -- dropping mouse
     tracking, writing the clipboard, retitling the window -- so the door
     deletes it.  Every escape byte the toolkit emits is constructed in
-    :mod:`motui.core.ansi`; this door is what keeps that constitution true
+    :mod:`motui.terminal.ansi`; this door is what keeps that constitution true
     for the content channel.  A tab is not deleted but normalized to one
     space -- the repo's only tab rule (:func:`motui.core.text._normalize_tabs`,
     ``TAB_WIDTH == 1``), applied here so a segment built directly, off the
@@ -119,7 +119,7 @@ class Segment:
     ``__post_init__``, so control characters are deleted and a tab becomes
     one space before anything is measured or painted.  A run of text can
     therefore never carry an escape sequence into the byte stream; only
-    :mod:`motui.core.ansi` builds escapes.  The transform preserves width
+    :mod:`motui.terminal.ansi` builds escapes.  The transform preserves width
     (deleted characters occupy no columns, a tab counts one column like the
     space that replaces it), so layout and the rendering of clean text are
     untouched, and it is idempotent: a rebuild through :meth:`with_style`

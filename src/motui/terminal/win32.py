@@ -6,12 +6,12 @@ input-mode bits and :func:`windows_input_mode`; the record mappers
 :func:`_console_record_events`, :func:`_console_mouse_report`); the pure replay
 :func:`keys_from_console_events`; and the ctypes structures plus the
 ``kernel32`` prototype binding the live reader in
-:mod:`motui.core.sources` calls.
+:mod:`motui.terminal.keys` calls.
 
 Mouse records are surfaced with the VT path's own semantics: the mapper
 synthesizes the equivalent SGR-1006 report payloads
 (:func:`_console_mouse_report`) and feeds them to the one
-:class:`~motui.core.decoder.KeyDecoder`, so a press, release or motion
+:class:`~motui.terminal.decoder.KeyDecoder`, so a press, release or motion
 resolves to the same :class:`~motui.core.events.MouseEvent` on both
 platforms -- the decoder stays the single authority on what a report means.
 The record path has no tracking mode of its own (there is no 1002/1003
@@ -42,7 +42,7 @@ from collections.abc import Iterable
 from dataclasses import replace
 
 from .ansi import ESC
-from .events import (
+from ..core.events import (
     Event,
     FocusEvent,
     KeyEvent,

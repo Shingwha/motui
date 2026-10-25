@@ -10,13 +10,13 @@ import pytest
 from motui.app import TUI
 from motui.core import (
     DEFAULT_THEME,
-    HeadlessScreen,
     Rect,
     RowRange,
     Text,
 )
-from motui.core.ansi import enter_alt_screen, leave_alt_screen
-from motui.core.screen import TerminalScreen
+from motui.terminal import HeadlessScreen
+from motui.terminal.ansi import enter_alt_screen, leave_alt_screen
+from motui.terminal.screen import TerminalScreen
 from tests.testing import (
     Clock,
     RecordingScreen,

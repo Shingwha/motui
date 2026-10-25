@@ -13,9 +13,9 @@ Three layers carry it:
   :class:`~motui.core.lines.Line` / :class:`~motui.core.lines.Segment`
   row primitive, :class:`~motui.core.style.Style` /
   :class:`~motui.core.theme.Theme`, the measuring helpers, the event
-  model, the render core (:class:`~motui.core.screen.Screen`,
+  model, the render core (:class:`~motui.terminal.screen.Screen`,
   :class:`~motui.core.viewport.Viewport`,
-  :class:`~motui.core.painter.Painter`), the frame model
+  :class:`~motui.terminal.paint.Painter`), the frame model
   (:class:`~motui.core.frame.Pane`, :class:`~motui.core.frame.Rect`),
   the selection kernel (:class:`~motui.core.selection.Selection`,
   :func:`~motui.core.selection.highlight`,

@@ -21,7 +21,7 @@ from motui.core.events import (
     PasteEvent,
     ResizeEvent,
 )
-from motui.core import KeyDecoder
+from motui.terminal import KeyDecoder
 
 SHIFT = frozenset({"shift"})
 ALT = frozenset({"alt"})

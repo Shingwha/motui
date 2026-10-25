@@ -8,15 +8,15 @@ Nine groups live here:
   :class:`~motui.core.lines.Segment` row model with the plain-text
   :class:`~motui.core.lines.Text` component and the inline-action
   lookup :func:`~motui.core.lines.action_at`, every escape byte
-  built in :mod:`motui.core.ansi`, and the two values the component
+  built in :mod:`motui.terminal.ansi`, and the two values the component
   families fold into their own state: the cursor/window arithmetic
   :class:`~motui.core.cursor.Cursor` and the multiple-selection
   :class:`~motui.core.mark.MarkSet` with the row prefix
   :func:`~motui.core.mark.mark_prefix`;
-* the **clipboard** -- the one-method :class:`~motui.core.clipboard.Clipboard`
+* the **clipboard** -- the one-method :class:`~motui.terminal.clipboard.Clipboard`
   capability with the screen-backed
-  :class:`~motui.core.clipboard.ScreenClipboard` and the recording
-  :class:`~motui.core.clipboard.MemoryClipboard`;
+  :class:`~motui.terminal.clipboard.ScreenClipboard` and the recording
+  :class:`~motui.terminal.clipboard.MemoryClipboard`;
 * the **events** -- the :class:`~motui.core.events.Event` base, the five
   value types :class:`~motui.core.events.KeyEvent`,
   :class:`~motui.core.events.MouseEvent`,
@@ -37,9 +37,9 @@ Nine groups live here:
   result), plus the container coordinate
   primitives :class:`~motui.core.block.Container` and
   :func:`~motui.core.block.descend`;
-* the **render core** -- the :class:`~motui.core.screen.Screen` surfaces,
+* the **render core** -- the :class:`~motui.terminal.screen.Screen` surfaces,
   :class:`~motui.core.viewport.Viewport` layout and
-  :class:`~motui.core.painter.Painter` row-diff painting;
+  :class:`~motui.terminal.paint.Painter` row-diff painting;
 * the **frame model** -- :class:`~motui.core.frame.Rect` and
   :meth:`~motui.core.frame.Split.rects` (the screen's rectangles and
   their division), plus :class:`~motui.core.frame.Frame`, the
@@ -52,10 +52,10 @@ Nine groups live here:
   :func:`~motui.core.selection.highlight` overlay a composition root
   applies between layout and paint, and
   :func:`~motui.core.selection.extract`;
-* the **input** -- the pure :class:`~motui.core.decoder.KeyDecoder`
+* the **input** -- the pure :class:`~motui.terminal.decoder.KeyDecoder`
   (``bytes -> events``), the :class:`~motui.core.keymap.Keymap` and its
-  three default tables, and :class:`~motui.core.sources.RawTerminalKeys`
-  with the Windows console plumbing in :mod:`motui.core.console`.
+  three default tables, and :class:`~motui.terminal.keys.RawTerminalKeys`
+  with the Windows console plumbing in :mod:`motui.terminal.win32`.
 
 Each group lives in its own module -- ``style``, ``text``, ``lines``,
 ``ansi``, ``cursor``, ``mark``, ``events``, ``block``, ``screen``,
@@ -70,7 +70,7 @@ build on it, never the other way around, and the driver
 compose the core.
 """
 
-from .ansi import (
+from ..terminal.ansi import (
     CLEAR_LINE,
     ESC,
     clear_screen,
@@ -83,6 +83,12 @@ from .ansi import (
     leave_alt_screen,
     show_cursor,
 )
+from ..terminal.capability import terminal_size
+from ..terminal.clipboard import Clipboard, MemoryClipboard, ScreenClipboard
+from ..terminal.decoder import KeyDecoder
+from ..terminal.keys import RawTerminalKeys
+from ..terminal.paint import Painter
+from ..terminal.screen import HeadlessScreen, Screen, TerminalScreen
 from .block import (
     Block,
     Component,
@@ -90,9 +96,7 @@ from .block import (
     descend,
     descend_chain,
 )
-from .clipboard import Clipboard, MemoryClipboard, ScreenClipboard
 from .cursor import Cursor
-from .decoder import KeyDecoder
 from .events import (
     Event,
     EventSource,
@@ -113,13 +117,10 @@ from .keymap import (
 )
 from .lines import ELLIPSIS, Line, Segment, Text, action_at, wrap_line
 from .mark import MarkSet, mark_prefix
-from .painter import Painter
-from .screen import HeadlessScreen, Screen, TerminalScreen
 from .scroll import Scrollable, ScrollState
 from .selection import Selection, extract, highlight
-from .sources import RawTerminalKeys
 from .style import Color, FG_CODES, NONE, RESET, Style
-from .text import ellipsize_tail, terminal_size, visible_width, wrap_text
+from .text import ellipsize_tail, visible_width, wrap_text
 from .theme import DEFAULT_THEME, ColorPalette, Styles, Theme
 from .viewport import ScreenLayout, Viewport
 from .widget import Widget

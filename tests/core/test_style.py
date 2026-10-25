@@ -15,10 +15,10 @@ import pytest
 from motui.core.style import (
     Color,
     Style,
-    detect_color_mode,
     quantize,
     sgr_prefix,
 )
+from motui.terminal.capability import detect_color_mode
 
 
 def test_empty_style_has_no_prefix():

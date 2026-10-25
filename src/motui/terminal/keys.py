@@ -1,7 +1,7 @@
 """The key sources: :class:`RawTerminalKeys`, the real terminal source.
 
 ``RawTerminalKeys`` reads a real terminal -- POSIX ``termios`` raw mode or the
-Windows console-record path (see :mod:`motui.core.console`) -- with a daemon
+Windows console-record path (see :mod:`motui.terminal.win32`) -- with a daemon
 reader thread feeding an executor-backed queue, so ``read()`` stays async
 without the thread touching asyncio, and a cooked-line fallback when the
 terminal cannot be switched to raw mode.
@@ -9,7 +9,7 @@ terminal cannot be switched to raw mode.
 The source satisfies :class:`~motui.core.events.EventSource`: ``read()``
 returns the next :class:`~motui.core.events.Event`, or ``None`` at EOF.
 EOF is sticky -- every later ``read()`` returns ``None`` immediately -- and
-the reader runs :meth:`~motui.core.decoder.KeyDecoder.finish` when the stream
+the reader runs :meth:`~motui.terminal.decoder.KeyDecoder.finish` when the stream
 ends, so an unclosed paste or a truncated UTF-8 tail is not lost.  ``start()``
 may be called again after ``close()``: every start resets the EOF flag, the
 decoder and the queue.  ``close()`` makes a best effort to unblock a pending
@@ -29,8 +29,8 @@ import threading
 import time
 from concurrent.futures import ThreadPoolExecutor
 
-from .events import Event
-from .console import (
+from ..core.events import Event
+from .win32 import (
     _console_record_events,
     _console_record_fields,
     _FOCUS_EVENT,

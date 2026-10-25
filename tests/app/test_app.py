@@ -3,7 +3,8 @@
 from __future__ import annotations
 
 from motui.app import App
-from motui.core import HeadlessScreen, Theme
+from motui.core import Theme
+from motui.terminal import HeadlessScreen
 from motui.core.events import KeyEvent
 from motui.widgets import Button, Field, Form, Input, ScrollView
 from tests.testing import (
