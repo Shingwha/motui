@@ -6,12 +6,13 @@ import pytest
 
 from motui.kernel.glyphs import GLYPHS
 from motui.kernel.cell import Surface
+from motui.kernel.geom import Pos
 from motui.kernel.layout import Constraints
 from motui.kernel.style import Style
 from motui.kernel.theme import DEFAULT_THEME, Styles
 from motui.widgets import NavList, Tabs
 
-from tests.testing import texts
+from tests.testing import key, texts
 
 INDICATOR = Style(underline=True)
 
@@ -234,3 +235,102 @@ def test_a_disabled_navlist_refuses_every_gesture_but_still_renders():
     assert nav.select(0) is False and nav.move(1) is False
     assert nav.click(0, 0) is False
     assert texts(nav, 20) == ["\u258c a", "  b"]
+
+
+# -- the 2.0 keymap and action surface ----------------------------------------
+
+
+def test_the_navlist_keymap_moves_through_named_actions():
+    nav = NavList(["a", "b", "c"])
+    assert nav.on_key(key("down")) is True and nav.index == 1
+    assert nav.on_key(key("right")) is True and nav.index == 2
+    assert nav.on_key(key("up")) is True and nav.index == 1
+    assert nav.on_action("next") is True and nav.index == 2
+    assert nav.on_action("next") is False  # clamped at the last item
+    assert nav.on_action("prev") is True and nav.index == 1
+    assert nav.on_action("activate") is False
+    assert nav.on_action("nope") is False
+    assert nav.on_key(key("enter")) is False
+    assert NavList.handle is NavList.on_key
+    assert nav.take() is None
+
+
+def test_an_instance_navlist_keymap_rebind_is_private_to_the_instance():
+    nav = NavList(["a", "b", "c"])
+    other = NavList(["a", "b", "c"])
+    nav.keymap["j"] = "next"
+    assert "j" not in NavList.keymap
+    assert "j" not in other.keymap
+    assert nav.handle(key("j", "j")) is True and nav.index == 1
+    assert other.handle(key("j", "j")) is False and other.index == 0
+
+
+def test_the_navlist_typed_hooks_forward_to_click_and_hover():
+    nav = NavList(["a", "b", "c"])
+    assert nav.on_click(Pos(y=2, x=9)) is True and nav.index == 2
+    assert nav.on_hover(Pos(y=2, x=0)) is True
+    assert nav.on_hover(Pos(y=2, x=0)) is False
+    assert nav.on_hover(None) is True
+
+
+def test_the_navlist_declares_its_capabilities():
+    nav = NavList(["a"])
+    assert (nav.focusable, nav.clickable, nav.hoverable, nav.activatable) == (
+        True,
+        True,
+        True,
+        False,
+    )
+
+
+# -- the tab strip's 2.0 keymap and action surface ----------------------------
+
+
+def test_the_tabs_keymap_steps_through_named_actions():
+    tabs = Tabs(["a", "b", "c"])
+    assert tabs.on_key(key("right")) is True and tabs.index == 1
+    assert tabs.on_key(key("down")) is True and tabs.index == 2
+    assert tabs.on_key(key("left")) is True and tabs.index == 1
+    assert tabs.on_key(key("up")) is True and tabs.index == 0
+    assert tabs.on_action("prev") is False  # clamped at the first tab
+    assert tabs.on_action("next") is True and tabs.index == 1
+    assert tabs.on_action("activate") is False
+    assert tabs.on_action("nope") is False
+    assert Tabs.handle is Tabs.on_key
+    assert tabs.take() is None
+
+
+def test_an_instance_tabs_keymap_rebind_is_private_to_the_instance():
+    tabs = Tabs(["a", "b", "c"])
+    other = Tabs(["a", "b", "c"])
+    tabs.keymap["j"] = "next"
+    assert "j" not in Tabs.keymap
+    assert "j" not in other.keymap
+    assert tabs.handle(key("j", "j")) is True and tabs.index == 1
+    assert other.handle(key("j", "j")) is False and other.index == 0
+
+
+def test_the_tabs_typed_hooks_forward_to_click_and_hover():
+    tabs = Tabs(["a", "b", "c"])
+    tabs.render(Constraints(width=20))
+    assert tabs.on_click(Pos(y=0, x=5)) is True and tabs.index == 1
+    assert tabs.on_hover(Pos(y=0, x=5)) is True
+    assert tabs.on_hover(Pos(y=0, x=5)) is False
+    assert tabs.on_hover(None) is True
+
+
+def test_the_tabs_declares_its_capabilities():
+    tabs = Tabs(["a"])
+    assert (tabs.focusable, tabs.clickable, tabs.hoverable, tabs.activatable) == (
+        True,
+        True,
+        True,
+        False,
+    )
+
+
+def test_the_strip_has_no_second_cursor_implementation():
+    from motui.widgets import strip as strip_module
+
+    assert "ClampedCursor" not in dir(strip_module)
+    assert strip_module.__all__ == ["Keymap", "LabelStrip"]

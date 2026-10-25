@@ -117,6 +117,7 @@ from collections.abc import Iterable, Sequence
 from typing import NamedTuple
 
 from ..widgets.cursor import Cursor
+from ..kernel.events import KeyEvent
 from ..kernel.glyphs import GLYPHS, Border, Glyphs, pair_seat, seat_width
 from ..kernel.cell import Line, Segment, Surface, fuse, overlay, rest
 from ..kernel.layout import Constraints
@@ -125,6 +126,7 @@ from ..kernel.style import NONE, Style
 from ..kernel.text import WrapMode, visible_width
 from ..kernel.theme import Styles, Theme
 from ..widgets.base import Widget
+from .strip import Keymap
 
 __all__ = ["Table"]
 
@@ -346,6 +348,7 @@ class Table(Widget):
         "_border",
         "_hover_row",
         "_index",
+        "_keymap",
         "_last_layout",
         "_memo_layout",
         "_memo_natural",
@@ -364,6 +367,23 @@ class Table(Widget):
         "min_col_width",
         "rows",
         "cell_wrap",
+    )
+
+    #: The table owns the keyboard, clicks, the pointer's row and activation.
+    focusable = True
+    clickable = True
+    hoverable = True
+    activatable = True
+
+    #: The default key table (a per-instance copy backs ``self.keymap``).
+    keymap = Keymap(
+        {
+            "up": "prev",
+            "down": "next",
+            "left": "prev",
+            "right": "next",
+            "enter": "activate",
+        }
     )
 
     def __init__(
@@ -385,6 +405,9 @@ class Table(Widget):
         min_col_width: int = 3,
     ) -> None:
         super().__init__(theme, styles)
+        # The instance's own key table: rebinding one entry never reaches
+        # the class default (see :class:`~motui.widgets.strip.Keymap`).
+        self._keymap = dict(type(self).keymap)
         self.headers = list(headers)
         self.rows = [list(row) for row in rows]
         self.aligns = list(aligns) if aligns is not None else None
@@ -577,11 +600,14 @@ class Table(Widget):
         self._pending = self._index
         return True
 
-    def take_result(self) -> int | None:
-        """Read the pending row index once and clear it (the ``Resultful`` door)."""
+    def take(self) -> int | None:
+        """Read the pending row index once and clear it (the ``take`` door)."""
         value = self._pending
         self._pending = None
         return value
+
+    #: The 1.x spelling stays until W3b3 removes it.
+    take_result = take
 
     def toggle(self) -> bool:
         """Flip the cursor row's mark; ``True`` when there was one to flip.
@@ -626,6 +652,46 @@ class Table(Widget):
         changed = target != self._hover_row
         self._hover_row = target
         return changed
+
+    # -- the keyboard -----------------------------------------------------------
+
+    def on_action(self, name: str) -> bool:
+        """Run one named table action; ``False`` for an unknown name.
+
+        ``prev`` / ``next`` step the cursor through :meth:`move` and answer
+        its result (the first step lands on the edge it walks away from; an
+        edge with nowhere to go reports ``False``, the old focus router's
+        rule).  ``activate`` takes the row index through :meth:`activate`,
+        ``toggle`` flips the cursor row's mark, and both answer their verb's
+        result.  An unknown name answers ``False`` without touching the
+        table.
+        """
+        if name == "prev":
+            return self.move(-1)
+        if name == "next":
+            return self.move(1)
+        if name == "activate":
+            return self.activate()
+        if name == "toggle":
+            return self.toggle()
+        return False
+
+    def on_key(self, event: KeyEvent) -> bool:
+        """Route a key through :attr:`keymap` to :meth:`on_action`.
+
+        The default table binds the arrows and ``enter``; a key no entry
+        names is declined so the host keeps it.  A disabled table's verbs
+        answer ``False``, as they always did.
+        """
+        if not isinstance(event, KeyEvent):
+            return False
+        action = self.keymap.get(event.key)
+        if action is None:
+            return False
+        return self.on_action(action)
+
+    #: The 1.x routing door stays until W3b3 removes it.
+    handle = on_key
 
     # -- the host's data gestures -------------------------------------------------
 

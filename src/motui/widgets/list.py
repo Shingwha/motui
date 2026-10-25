@@ -28,7 +28,7 @@ and **clamps** at the ends (a data view, not a menu cycle -- D10), ``home``
 and ``end`` jump to the edges, ``click(row, col)`` maps one of the
 component's own rendered rows back onto an item (the counter rows carry
 none) and leaves it pending, and ``activate()`` does the same for the
-cursor row.  ``take_result()`` is the one-shot read (it clears the pick);
+cursor row.  ``take()`` is the one-shot read (it clears the pick);
 any consumed keystroke clears it too, so a stale pick never survives the
 next key.  ``disabled`` refuses every gesture, ``disabled_items`` marks
 individual rows (the cursor steps over them), and a disabled row paints
@@ -87,7 +87,7 @@ from __future__ import annotations
 from collections.abc import Iterable, Sequence
 
 from ..widgets.cursor import Cursor
-from ..kernel.events import Event, KeyEvent
+from ..kernel.events import KeyEvent
 from ..kernel.glyphs import GLYPHS, Glyphs, pair_seat, seat, seat_width
 from ..kernel.cell import Line, Segment, Surface, rest
 from ..kernel.layout import Constraints
@@ -95,6 +95,7 @@ from ..widgets.mark import MarkSet
 from ..kernel.style import Style
 from ..kernel.theme import Styles, Theme
 from ..widgets.base import Widget
+from .strip import Keymap
 
 __all__ = ["List"]
 
@@ -140,6 +141,7 @@ class List(Widget):
     __slots__ = (
         "_hover_row",
         "_index",
+        "_keymap",
         "_pending",
         "disabled",
         "disabled_items",
@@ -148,6 +150,22 @@ class List(Widget):
         "marked",
         "prefix_jump",
         "window",
+    )
+
+    #: The list owns the keyboard, clicks, the pointer's row and activation.
+    focusable = True
+    clickable = True
+    hoverable = True
+    activatable = True
+
+    #: The default key table (a per-instance copy backs ``self.keymap``).
+    keymap = Keymap(
+        {
+            "up": "prev",
+            "down": "next",
+            "home": "first",
+            "end": "last",
+        }
     )
 
     def __init__(
@@ -163,6 +181,9 @@ class List(Widget):
         styles: Styles | None = None,
     ) -> None:
         super().__init__(theme, styles)
+        # The instance's own key table: rebinding one entry never reaches
+        # the class default (see :class:`~motui.widgets.strip.Keymap`).
+        self._keymap = dict(type(self).keymap)
         self.items = list(items)
         if window < 1:
             raise ValueError(f"window must be at least 1 row, got {window}")
@@ -285,11 +306,14 @@ class List(Widget):
         self._pending = current
         return current is not None
 
-    def take_result(self) -> str | None:
-        """Read the pending pick once and clear it (the ``Resultful`` door)."""
+    def take(self) -> str | None:
+        """Read the pending pick once and clear it (the ``take`` door)."""
         value = self._pending
         self._pending = None
         return value
+
+    #: The 1.x spelling stays until W3b3 removes it.
+    take_result = take
 
     def toggle(self) -> bool:
         """Flip the cursor item's mark; ``True`` when there was one to flip.
@@ -360,41 +384,65 @@ class List(Widget):
 
     # -- the keyboard -----------------------------------------------------------
 
-    def handle(self, event: Event) -> bool:
+    def on_action(self, name: str) -> bool:
+        """Run one named cursor action; ``False`` only for an unknown name.
+
+        ``prev`` / ``next`` step one item, ``first`` / ``last`` jump to the
+        edges -- the four names :attr:`keymap` binds -- and ``activate`` /
+        ``toggle`` run the list's own activation and marking verbs.  A known
+        movement action answers ``True`` even at an edge, because the 1.x
+        ``handle`` consumed its four keys unconditionally; ``activate`` and
+        ``toggle`` answer whether there was something to take or flip, the
+        verbs' own rule.  An unknown name answers ``False`` without touching
+        the list, so a router keeps the key.
+        """
+        if name == "prev":
+            self.move(-1)
+            return True
+        if name == "next":
+            self.move(1)
+            return True
+        if name == "first":
+            self.home()
+            return True
+        if name == "last":
+            self.end()
+            return True
+        if name == "activate":
+            return self.activate()
+        if name == "toggle":
+            return self.toggle()
+        return False
+
+    def on_key(self, event: KeyEvent) -> bool:
         """Consume an event; ``True`` when the list took it.
 
-        The routing table, in order: ``up``/``down`` move the cursor one item
-        and are consumed; ``home``/``end`` jump to the edges and are
-        consumed; with :attr:`prefix_jump` armed, a
-        :class:`~motui.kernel.events.KeyEvent` whose ``key`` is a single
-        printable character jumps to the first item that starts with it
-        (case-insensitively) and is consumed whether or not an item matched
-        -- a printable typed at a focused list is the list's own gesture,
-        never a leak to the host.  Everything else -- ``enter``, ``tab``,
-        the control chords, a :class:`~motui.kernel.events.PasteEvent` -- is
-        declined, so the host and the focus tier keep the keys they own.
-        Every consumed key clears a pending result; a disabled control
-        declines everything.
+        The routing table, in order: the event's key through
+        :attr:`keymap` (``up``/``down``/``home``/``end`` by default, and
+        whatever a host rebound) and then its action; with
+        :attr:`prefix_jump` armed, a :class:`~motui.kernel.events.KeyEvent`
+        whose ``key`` is a single printable character jumps to the first
+        item that starts with it (case-insensitively) and is consumed
+        whether or not an item matched -- a printable typed at a focused
+        list is the list's own gesture, never a leak to the host.
+        Everything else -- ``enter``, ``tab``, the control chords, a
+        :class:`~motui.kernel.events.PasteEvent` -- is declined, so the
+        host and the focus tier keep the keys they own.  Every consumed key
+        clears a pending result; a disabled control declines everything.
         """
         if self.disabled or not isinstance(event, KeyEvent):
             return False
         name = event.key
-        if name == "up":
-            self.move(-1)
-            return True
-        if name == "down":
-            self.move(1)
-            return True
-        if name == "home":
-            self.home()
-            return True
-        if name == "end":
-            self.end()
-            return True
+        action = self.keymap.get(name)
+        if action is not None:
+            return self.on_action(action)
         if self.prefix_jump and len(name) == 1 and name.isprintable():
             self._jump(name)
             return True
         return False
+
+    #: The 1.x routing door stays until W3b3 removes it.
+    handle = on_key
 
     def _jump(self, char: str) -> bool:
         """Move the cursor to the first item starting with ``char``; ``True`` on a landing.

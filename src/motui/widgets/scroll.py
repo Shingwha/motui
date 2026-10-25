@@ -34,11 +34,12 @@ visible fraction, at least one cell, and no thumb at all when the content
 fits the window (the bar then paints its plain track).  With ``"both"``
 the bars meet in the bottom-right corner, which the vertical track owns.
 
-:meth:`ScrollPanel.handle` owns the scrolling keys -- ``up``/``down`` one
-row, ``page_up``/``page_down`` one window, ``home``/``end`` the edges --
-and the wheel on both axes (``wheel_left``/``wheel_right`` move one
-column).  It answers ``True`` only when an offset actually moved, so a host
-keeps the boundaries' keys.  :meth:`ScrollPanel.drag` owns the vertical bar
+:meth:`ScrollPanel.on_key` owns the scrolling keys through the class
+``keymap`` -- ``up``/``down`` one row, ``page_up``/``page_down`` one window,
+``home``/``end`` the edges -- and :meth:`ScrollPanel.on_mouse` the wheel on
+both axes (``wheel_left``/``wheel_right`` move one column).  Each answers
+``True`` only when an offset actually moved, so a host keeps the boundaries'
+keys.  :meth:`ScrollPanel.drag` owns the vertical bar
 itself: a press on the thumb grabs it, the motions map the grabbed row
 through the same thumb geometry, a press on the track pages toward it, and
 the release ends the drag.  ``ScrollPanel`` is a
@@ -61,6 +62,7 @@ from ..kernel.layout import Constraints, ScrollAxis, ScrollState
 from ..kernel.text import WrapMode
 from ..kernel.theme import Styles, Theme
 from ..widgets.base import Widget
+from .strip import Keymap
 
 __all__ = ["ScrollPanel"]
 
@@ -91,6 +93,7 @@ class ScrollPanel(Widget):
 
     __slots__ = (
         "_grab",
+        "_keymap",
         "_last_bar_x",
         "_last_bar_y",
         "_last_height",
@@ -107,6 +110,25 @@ class ScrollPanel(Widget):
         "height",
     )
 
+    #: The view takes the keyboard and clicks on its bars; it paints no hover
+    #: state and has no activation verb (a scroll is a move, not a pick).
+    focusable = True
+    clickable = True
+    hoverable = False
+    activatable = False
+
+    #: The default key table (a per-instance copy backs ``self.keymap``).
+    keymap = Keymap(
+        {
+            "up": "prev",
+            "down": "next",
+            "page_up": "page_prev",
+            "page_down": "page_next",
+            "home": "first",
+            "end": "last",
+        }
+    )
+
     def __init__(
         self,
         child: Component,
@@ -120,6 +142,9 @@ class ScrollPanel(Widget):
         styles: Styles | None = None,
     ) -> None:
         super().__init__(theme, styles)
+        # The instance's own key table: rebinding one entry never reaches
+        # the class default (see :class:`~motui.widgets.strip.Keymap`).
+        self._keymap = dict(type(self).keymap)
         if axis not in ("y", "x", "both"):
             raise ValueError(f"axis must be 'y', 'x' or 'both', got {axis!r}")
         self.axis = axis
@@ -294,44 +319,76 @@ class ScrollPanel(Widget):
 
     # -- events -----------------------------------------------------------------
 
-    def handle(self, event: Event) -> bool:
-        """Consume one scrolling event; ``True`` only when the window moved.
+    def on_action(self, name: str) -> bool:
+        """Run one named scrolling action; ``False`` for an unknown name.
 
-        Keys: ``up``/``down`` step one row, ``page_up``/``page_down`` one
-        window, ``home``/``end`` jump to the edges.  The wheel moves the
-        axis it names: ``wheel_up``/``wheel_down`` one row on ``"y"`` /
-        ``"both"``, ``wheel_left``/``wheel_right`` one column on ``"x"`` /
-        ``"both"`` -- the other axis's wheel is declined, so a y-only view
-        leaves horizontal scrolling to its host.  Every other event --
-        including a key this view does not bind -- is declined, so the
+        ``prev`` / ``next`` step one row, ``page_prev`` / ``page_next`` one
+        window, ``first`` / ``last`` the edges, and ``scroll_prev`` /
+        ``scroll_next`` one column on an x-scrolling view.  Every name
+        answers whether the offset actually moved (the 1.x ``handle``
+        rule), so a boundary keeps the key for the host; an unknown name
+        answers ``False`` untouched.
+        """
+        if name == "prev":
+            return self.scroll_up(1)
+        if name == "next":
+            return self.scroll_down(1)
+        if name == "page_prev":
+            return self.scroll_up(self.viewport_height)
+        if name == "page_next":
+            return self.scroll_down(self.viewport_height)
+        if name == "first":
+            return self.scroll_to(0)
+        if name == "last":
+            return self.scroll_to(self._max_offset()) if self._rendered else False
+        if name == "scroll_prev":
+            return self.scroll_x(-1)
+        if name == "scroll_next":
+            return self.scroll_x(1)
+        return False
+
+    def on_key(self, event: KeyEvent) -> bool:
+        """Route one scrolling key through :attr:`keymap` to :meth:`on_action`.
+
+        The default table binds the arrows, the page keys and the edges.
+        A key release and every key no entry names are declined, so the
         host's dispatch still gets its turn.
         """
-        if isinstance(event, MouseEvent):
-            if event.button == "wheel_up":
-                return self.scroll_up(1) if self.axis in ("y", "both") else False
-            if event.button == "wheel_down":
-                return self.scroll_down(1) if self.axis in ("y", "both") else False
-            if event.button == "wheel_left":
-                return self.scroll_x(-1) if self.axis in ("x", "both") else False
-            if event.button == "wheel_right":
-                return self.scroll_x(1) if self.axis in ("x", "both") else False
-            return False
         if not isinstance(event, KeyEvent) or event.kind == "release":
             return False
-        key = event.key
-        if key == "up":
-            return self.scroll_up(1)
-        if key == "down":
-            return self.scroll_down(1)
-        if key == "page_up":
-            return self.scroll_up(self.viewport_height)
-        if key == "page_down":
-            return self.scroll_down(self.viewport_height)
-        if key == "home":
-            return self.scroll_to(0)
-        if key == "end":
-            return self.scroll_to(self._max_offset()) if self._rendered else False
+        action = self.keymap.get(event.key)
+        if action is None:
+            return False
+        return self.on_action(action)
+
+    def on_mouse(self, event: MouseEvent) -> bool:
+        """Route one wheel notch to the axis it names.
+
+        ``wheel_up`` / ``wheel_down`` move one row on ``"y"`` / ``"both"``,
+        ``wheel_left`` / ``wheel_right`` one column on ``"x"`` / ``"both"``;
+        the other axis's wheel is declined, so a y-only view leaves
+        horizontal scrolling to its host.
+        """
+        if not isinstance(event, MouseEvent):
+            return False
+        if event.button == "wheel_up":
+            return self.on_action("prev") if self.axis in ("y", "both") else False
+        if event.button == "wheel_down":
+            return self.on_action("next") if self.axis in ("y", "both") else False
+        if event.button == "wheel_left":
+            return self.on_action("scroll_prev")
+        if event.button == "wheel_right":
+            return self.on_action("scroll_next")
         return False
+
+    def _dispatch(self, event: Event) -> bool:
+        """Send one 1.x event to the typed hook for its kind."""
+        if isinstance(event, MouseEvent):
+            return self.on_mouse(event)
+        return self.on_key(event)
+
+    #: The 1.x routing door stays until W3b3 removes it.
+    handle = _dispatch
 
     def drag(self, row: int, col: int, kind: str) -> bool:
         """Advance one step of a bar drag; ``True`` when the view took it.

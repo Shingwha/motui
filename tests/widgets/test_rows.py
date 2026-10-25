@@ -12,7 +12,7 @@ from motui.kernel.theme import DEFAULT_THEME, Styles
 from motui.widgets import Notice, ShortcutBar, StatusLine
 from motui.widgets.text import Text
 
-from tests.testing import texts
+from tests.testing import key, texts
 
 
 def test_status_line_puts_the_left_at_the_start_and_the_right_near_the_end():
@@ -116,3 +116,21 @@ def test_the_row_furniture_honours_the_height_budget(component):
     assert all(row.width <= 20 for row in surface)
     truncated = component.render(Constraints(width=20, max_height=0))
     assert isinstance(truncated, Surface) and truncated.height == 0
+
+
+def test_the_row_furniture_is_pure_display():
+    for widget in (
+        StatusLine(left=["l"]),
+        ShortcutBar([("k", "v")]),
+        Notice("n"),
+    ):
+        assert (widget.focusable, widget.clickable, widget.hoverable, widget.activatable) == (
+            False,
+            False,
+            False,
+            False,
+        )
+        assert widget.keymap == {}
+        assert widget.take() is None
+        assert widget.handle(key("down")) is False
+        assert widget.on_key(key("down")) is False

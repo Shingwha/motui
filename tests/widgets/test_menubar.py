@@ -3,12 +3,13 @@
 from dataclasses import replace
 
 from motui.kernel.cell import Surface
+from motui.kernel.geom import Pos
 from motui.kernel.layout import Constraints
 from motui.kernel.style import Style
 from motui.kernel.theme import DEFAULT_THEME
 from motui.widgets import ContextMenu, MenuBar, Option, Select
 
-from tests.testing import texts
+from tests.testing import key, texts
 
 
 def test_menubar_renders_one_row_with_dividers_and_padding():
@@ -117,3 +118,55 @@ def test_context_menu_renders_its_title_and_refuses_disabled_items():
     disabled = ContextMenu([Option("Open"), Option("Quit")], disabled_items={1})
     assert disabled.select(1) is False
     assert disabled.activate() is True and disabled.take_result() == Option("Open")
+
+
+# -- the 2.0 keymap and action surface ----------------------------------------
+
+
+def test_the_menubar_keymap_steps_and_activates_through_named_actions():
+    bar = MenuBar(["a", "b"])
+    assert bar.on_key(key("right")) is True and bar.index == 1
+    assert bar.on_key(key("left")) is True and bar.index == 0
+    assert bar.on_key(key("enter")) is True and bar.take() == "a"
+    assert bar.on_action("prev") is False  # clamped at the first label
+    assert bar.on_action("next") is True and bar.index == 1
+    assert bar.on_action("activate") is True and bar.take() == "b"
+    assert bar.take() is None
+    assert bar.on_action("nope") is False
+    assert MenuBar.handle is MenuBar.on_key
+    assert MenuBar.keymap["enter"] == "activate"
+
+
+def test_an_instance_menubar_keymap_rebind_is_private_to_the_instance():
+    bar = MenuBar(["a", "b"])
+    other = MenuBar(["a", "b"])
+    bar.keymap["j"] = "next"
+    assert "j" not in MenuBar.keymap
+    assert "j" not in other.keymap
+    assert bar.handle(key("j", "j")) is True and bar.index == 1
+    assert other.handle(key("j", "j")) is False and other.index == 0
+
+
+def test_the_menubar_typed_hooks_forward_to_click_and_hover():
+    bar = MenuBar(["File", "Edit"])
+    bar.render(Constraints(width=40))
+    assert bar.on_click(Pos(y=0, x=1)) is True and bar.index == 0
+    assert bar.on_hover(Pos(y=0, x=8)) is True
+    assert bar.on_hover(Pos(y=0, x=8)) is False
+    assert bar.on_hover(None) is True
+
+
+def test_the_menubar_declares_its_capabilities():
+    bar = MenuBar(["a"])
+    assert (bar.focusable, bar.clickable, bar.hoverable, bar.activatable) == (
+        True,
+        True,
+        True,
+        True,
+    )
+
+
+def test_the_context_menu_inherits_the_choice_keymap():
+    menu = ContextMenu([Option("Open"), Option("Quit")])
+    assert menu.on_key(key("down")) is True and menu.index == 1
+    assert menu.on_action("activate") is True and menu.take() == Option("Quit")

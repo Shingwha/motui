@@ -64,8 +64,9 @@ and :meth:`move` steps over them (clamped, never wrapping) exactly as
 :meth:`Tabs.move` does.  A pointer over a disabled row still marks it --
 hover is the pointer's echo, not a selection.
 
-There is deliberately **no** ``handle``: the rail's key routing belongs to
-the host, the same division of labour the tab strip keeps.  An empty
+The rail binds its own arrow keys through :attr:`keymap` (a host may
+rebind them on the instance); ``handle`` is the 1.x alias of :meth:`on_key`
+and stays until W3b3.  An empty
 ``glyphs.rail`` turns the indicator off and collapses its seat: the bar
 column is the glyph's own width (``visible_width``, so a wide bar takes its
 columns) and ``bar_space`` -- the separator after that column -- defaults to
@@ -90,6 +91,7 @@ from __future__ import annotations
 from typing import Iterable, Sequence
 
 from ..widgets.cursor import Cursor
+from ..kernel.events import KeyEvent
 from ..kernel.glyphs import GLYPHS, Glyphs, seat_width
 from ..kernel.cell import Line, Segment, Surface, rest
 from ..kernel.layout import Constraints
@@ -97,12 +99,12 @@ from ..kernel.style import Style
 from ..kernel.text import visible_width
 from ..kernel.theme import Styles, Theme
 from ..widgets.base import Widget
-from .strip import ClampedCursor
+from .strip import Keymap
 
 __all__ = ["NavList"]
 
 
-class NavList(ClampedCursor, Widget):
+class NavList(Widget):
     """A vertical navigation list: a bar indicator, a clamped selection.
 
     ``items`` is a list of labels, one row each; ``index`` is the selected
@@ -137,10 +139,28 @@ class NavList(ClampedCursor, Widget):
         "_groups",
         "_hover_index",
         "_index",
+        "_keymap",
         "_separator",
         "disabled",
         "glyphs",
         "items",
+    )
+
+    #: The rail owns the keyboard, clicks and the pointer's row; it has no
+    #: activation verb (a navigation row is a destination, not a command).
+    focusable = True
+    clickable = True
+    hoverable = True
+    activatable = False
+
+    #: The default key table (a per-instance copy backs ``self.keymap``).
+    keymap = Keymap(
+        {
+            "up": "prev",
+            "down": "next",
+            "left": "prev",
+            "right": "next",
+        }
     )
 
     def __init__(
@@ -157,6 +177,9 @@ class NavList(ClampedCursor, Widget):
         styles: Styles | None = None,
     ) -> None:
         super().__init__(theme, styles)
+        # The instance's own key table: rebinding one entry never reaches
+        # the class default (see :class:`~motui.widgets.strip.Keymap`).
+        self._keymap = dict(type(self).keymap)
         self.items = list(items)
         self.glyphs = glyphs
         bar = glyphs.rail
@@ -225,10 +248,89 @@ class NavList(ClampedCursor, Widget):
             return rows.active
         return rows.base
 
+    # -- the keyboard -----------------------------------------------------------
+
+    def on_action(self, name: str) -> bool:
+        """Run one named rail action; ``False`` for an unknown name.
+
+        ``prev`` / ``next`` step the selection one item through
+        :meth:`move` and answer its result -- an edge with nowhere to go
+        answers ``False``, the old focus router's rule.  The rail binds no
+        activation action: a navigation row selects, it does not activate.
+        """
+        if name == "prev":
+            return self.move(-1)
+        if name == "next":
+            return self.move(1)
+        return False
+
+    def on_key(self, event: KeyEvent) -> bool:
+        """Route a key through :attr:`keymap` to :meth:`on_action`.
+
+        The default table binds the four arrows; a key no entry names is
+        declined so the host keeps it.  A disabled rail answers ``False``.
+        """
+        if self.disabled or not isinstance(event, KeyEvent):
+            return False
+        action = self.keymap.get(event.key)
+        if action is None:
+            return False
+        return self.on_action(action)
+
+    #: The 1.x routing door stays until W3b3 removes it.
+    handle = on_key
+
+    # -- the cursor -------------------------------------------------------------
+
     @property
-    def _entries(self) -> list[str]:
-        """The item labels every cursor verb measures (group rows are chrome)."""
-        return self.items
+    def index(self) -> int:
+        """The selected item, always inside the item range.
+
+        Read-only: :meth:`select` and :meth:`move` are the moving doors.
+        Group rows are chrome and never enter this index.
+        """
+        return self._index
+
+    def _cursor(self) -> Cursor:
+        """The cursor value over the items and the disabled set."""
+        return Cursor(
+            len(self.items),
+            index=self._index,
+            disabled=self._disabled_items,
+        )
+
+    def select(self, index: int) -> bool:
+        """Select ``index``, clamped into range; True when it changed.
+
+        A ``disabled`` index is refused outright -- ``False``, nothing
+        moved -- a disabled rail refuses every selection, and an empty rail
+        answers ``False`` always.
+        """
+        if self.disabled or not self.items:
+            return False
+        cursor = self._cursor()
+        changed = cursor.select(index)
+        self._index = cursor.index
+        return changed
+
+    def move(self, delta: int) -> bool:
+        """Move the selection ``delta`` items, clamped and never wrapping.
+
+        Disabled items are **stepped over**: a positive step from index 1
+        with 2 disabled lands on 3, and a step whose direction holds no
+        enabled item left stays where it was (``False``).  A disabled rail
+        moves nowhere.  The answer is whether the selection changed.
+        """
+        if self.disabled or not self.items or delta == 0:
+            return False
+        before = self._index
+        cursor = self._cursor()
+        cursor.move(delta)
+        # A stale cursor (a host replaced the items in place) is clamped
+        # like any other request, and the clamping itself is a move.
+        cursor.index = cursor.clamp(cursor.index)
+        self._index = cursor.index
+        return cursor.index != before
 
     @property
     def bar_space(self) -> str:

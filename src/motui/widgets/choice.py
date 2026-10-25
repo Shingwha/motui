@@ -80,6 +80,7 @@ from dataclasses import dataclass
 from typing import Sequence
 
 from ..widgets.cursor import Cursor
+from ..kernel.events import KeyEvent
 from ..kernel.glyphs import GLYPHS, Glyphs, pair_seat, seat, seat_width
 from ..kernel.cell import Line, Segment, Surface, rest
 from ..kernel.layout import Constraints
@@ -88,6 +89,7 @@ from ..kernel.style import Style
 from ..kernel.text import visible_width
 from ..kernel.theme import Styles, Theme
 from ..widgets.base import Widget
+from .strip import Keymap
 
 __all__ = ["CheckboxGroup", "MultiSelect", "Option", "RadioGroup", "Select"]
 
@@ -201,6 +203,7 @@ class Select(Widget):
     __slots__ = (
         "_hover_row",
         "_index",
+        "_keymap",
         "_pending",
         "commit",
         "disabled",
@@ -215,6 +218,23 @@ class Select(Widget):
 
     #: The class-level multi-selection switch: only :class:`MultiSelect` sets it.
     _multi = False
+
+    #: The menu family owns the keyboard, clicks, the pointer's row and activation.
+    focusable = True
+    clickable = True
+    hoverable = True
+    activatable = True
+
+    #: The default key table (a per-instance copy backs ``self.keymap``).
+    keymap = Keymap(
+        {
+            "up": "prev",
+            "down": "next",
+            "left": "prev",
+            "right": "next",
+            "enter": "activate",
+        }
+    )
 
     def __init__(
         self,
@@ -232,6 +252,9 @@ class Select(Widget):
         styles: Styles | None = None,
     ) -> None:
         super().__init__(theme, styles)
+        # The instance's own key table: rebinding one entry never reaches
+        # the class default (see :class:`~motui.widgets.strip.Keymap`).
+        self._keymap = dict(type(self).keymap)
         self.options = list(options)
         self.title = title
         self.max_rows = max_rows
@@ -434,11 +457,58 @@ class Select(Widget):
         self._pending = self._chosen_of(selected)
         return True
 
-    def take_result(self) -> object | None:
-        """Read the pending result once and clear it (the ``Resultful`` door)."""
+    def take(self) -> object | None:
+        """Read the pending result once and clear it (the ``take`` door)."""
         value = self._pending
         self._pending = None
         return value
+
+    #: The 1.x spelling stays until W3b3 removes it.
+    take_result = take
+
+    def on_action(self, name: str) -> bool:
+        """Run one named cursor action; ``False`` for an unknown name.
+
+        ``prev`` / ``next`` step one row through :meth:`move` (wrapping or
+        clamping by ``wrap``), ``first`` / ``last`` take the edges through
+        :meth:`home` / :meth:`end`, and ``activate`` runs the list's own
+        :meth:`activate` (a multi-selection's toggle).  The movement names
+        answer the verb's result -- an edge with nowhere to go answers
+        ``False``, the rule the old focus router used for these rows.
+        ``toggle`` is bound only on a :class:`MultiSelect`; an unknown name
+        answers ``False`` without touching the list.
+        """
+        if name == "prev":
+            return self.move(-1)
+        if name == "next":
+            return self.move(1)
+        if name == "first":
+            return self.home()
+        if name == "last":
+            return self.end()
+        if name == "activate":
+            return self.activate()
+        if name == "toggle":
+            return self.toggle() if self._multi else False
+        return False
+
+    def on_key(self, event: KeyEvent) -> bool:
+        """Route a key through :attr:`keymap` to :meth:`on_action`.
+
+        The default table binds the arrows and ``enter``; a key no entry
+        names is declined so the host keeps it.  Everything the action
+        verbs refuse -- an empty list, an edge, a disabled row -- answers
+        ``False``, the 1.x focus router's result for these rows.
+        """
+        if not isinstance(event, KeyEvent):
+            return False
+        action = self.keymap.get(event.key)
+        if action is None:
+            return False
+        return self.on_action(action)
+
+    #: The 1.x routing door stays until W3b3 removes it.
+    handle = on_key
 
     def _is_disabled(self, index: int) -> bool:
         """Whether the data row ``index`` is disabled (whole control or per item)."""

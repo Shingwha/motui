@@ -53,12 +53,14 @@ the rows.
 from __future__ import annotations
 
 from ..widgets.cursor import Cursor
+from ..kernel.events import KeyEvent
 from ..kernel.glyphs import GLYPHS, Glyphs, pair_seat, seat_width
 from ..kernel.cell import Line, Segment, Surface, rest
 from ..kernel.layout import Constraints
 from ..kernel.style import Style
 from ..kernel.theme import Styles, Theme
 from ..widgets.base import Widget
+from .strip import Keymap
 
 __all__ = ["Tree", "TreeNode"]
 
@@ -142,10 +144,28 @@ class Tree(Widget):
         "_cursor",
         "_filter",
         "_hover_index",
+        "_keymap",
         "disabled",
         "glyphs",
         "indent",
         "root_nodes",
+    )
+
+    #: The tree owns the keyboard, clicks, the pointer's row and activation.
+    focusable = True
+    clickable = True
+    hoverable = True
+    activatable = True
+
+    #: The default key table (a per-instance copy backs ``self.keymap``).
+    keymap = Keymap(
+        {
+            "up": "prev",
+            "down": "next",
+            "left": "prev",
+            "right": "next",
+            "enter": "activate",
+        }
     )
 
     def __init__(
@@ -159,6 +179,9 @@ class Tree(Widget):
         styles: Styles | None = None,
     ) -> None:
         super().__init__(theme, styles)
+        # The instance's own key table: rebinding one entry never reaches
+        # the class default (see :class:`~motui.widgets.strip.Keymap`).
+        self._keymap = dict(type(self).keymap)
         self.root_nodes = list(root_nodes)
         self.indent = indent
         self.glyphs = glyphs
@@ -190,6 +213,47 @@ class Tree(Widget):
         return self.group("rows").band(
             active=current, hovered=hovered, focused=self.focused, disabled=disabled
         )
+
+    # -- the keyboard -----------------------------------------------------------
+
+    def on_action(self, name: str) -> bool:
+        """Run one named tree action; ``False`` for an unknown name.
+
+        ``prev`` / ``next`` move one visible row through :meth:`move` and
+        answer its result (an edge reports ``False``, the old focus router's
+        rule); ``expand`` / ``collapse`` fold the node under the cursor
+        without toggling, ``activate`` toggles it, and each answers whether
+        the fold changed.  An unknown name answers ``False`` without
+        touching the tree.
+        """
+        if name == "prev":
+            return self.move(-1)
+        if name == "next":
+            return self.move(1)
+        if name == "expand":
+            return self._fold(True)
+        if name == "collapse":
+            return self._fold(False)
+        if name == "activate":
+            return self.activate()
+        return False
+
+    def on_key(self, event: KeyEvent) -> bool:
+        """Route a key through :attr:`keymap` to :meth:`on_action`.
+
+        The default table binds the arrows to the cursor and ``enter`` to
+        the fold under it; a disabled tree declines everything, and a key
+        no entry names is declined so the host keeps it.
+        """
+        if self.disabled or not isinstance(event, KeyEvent):
+            return False
+        action = self.keymap.get(event.key)
+        if action is None:
+            return False
+        return self.on_action(action)
+
+    #: The 1.x routing door stays until W3b3 removes it.
+    handle = on_key
 
     @property
     def selected(self) -> TreeNode | None:
@@ -252,7 +316,7 @@ class Tree(Widget):
         cursor on a node, expanding or collapsing *is* the main operation.
         A leaf has nothing to expand, so activating one is a no-op and
         answers False; a disabled node or tree refuses activation.  A
-        ``Tree`` deliberately has **no** ``take_result`` -- its activation
+        ``Tree`` deliberately has **no** ``take()`` -- its activation
         is a fold, not a one-shot pick.  Collapsing can shrink the visible
         rows, so the cursor is clamped back into range afterwards.  While a
         :meth:`filter` is up the flag still flips -- it is the user's own
@@ -264,7 +328,25 @@ class Tree(Widget):
         node = self.selected
         if node is None or node.disabled or not node.children:
             return False
-        node.expanded = not node.expanded
+        return self._fold(not node.expanded)
+
+    def _fold(self, expanded: bool) -> bool:
+        """Set the node under the cursor to ``expanded``; ``True`` on a change.
+
+        The half :meth:`on_action`'s explicit ``expand`` / ``collapse``
+        names share: a leaf, a disabled node or a disabled tree answers
+        ``False``, an already-folded node answers ``False`` (nothing
+        changed), and a real flip re-clamps the cursor into the rows that
+        remain.
+        """
+        if self.disabled:
+            return False
+        node = self.selected
+        if node is None or node.disabled or not node.children:
+            return False
+        if node.expanded == expanded:
+            return False
+        node.expanded = expanded
         self._cursor = Cursor(len(self._visible())).clamp(self._cursor)
         return True
 
