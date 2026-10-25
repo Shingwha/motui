@@ -1,15 +1,17 @@
-"""ScrollView: a fixed-height window over a child's rows."""
+"""ScrollPanel: a fixed-height window over a child's rows."""
+
+import pytest
 
 from motui.kernel.cell import Surface
 from motui.kernel.glyphs import GLYPHS
 from motui.kernel.layout import Constraints
-from motui.widgets import ScrollView
+from motui.widgets import ScrollPanel
 
 from tests.testing import Rows, key, many, texts, wheel
 
 
-def view(rows=10, height=3, **kwargs) -> ScrollView:
-    return ScrollView(Rows(*many(rows)), height=height, **kwargs)
+def view(rows=10, height=3, **kwargs) -> ScrollPanel:
+    return ScrollPanel(Rows(*many(rows)), height=height, **kwargs)
 
 
 def test_a_fixed_height_clips_the_child_to_one_window():
@@ -17,19 +19,19 @@ def test_a_fixed_height_clips_the_child_to_one_window():
 
 
 def test_a_predicted_offset_paints_the_matching_slice_and_clamps():
-    scroll = ScrollView(Rows(*many(10)), height=3, offset=4)
+    scroll = ScrollPanel(Rows(*many(10)), height=3, offset=4)
     assert texts(scroll, 10) == ["r4", "r5", "r6"]
-    far = ScrollView(Rows(*many(10)), height=3, offset=99)
+    far = ScrollPanel(Rows(*many(10)), height=3, offset=99)
     assert texts(far, 10) == ["r7", "r8", "r9"]
     assert far.offset == 7
 
 
 def test_a_short_child_is_padded_to_the_fixed_height():
-    assert texts(ScrollView(Rows("a"), height=3), 10) == ["a", "", ""]
+    assert texts(ScrollPanel(Rows("a"), height=3), 10) == ["a", "", ""]
 
 
 def test_height_none_shows_every_row_and_never_scrolls():
-    scroll = ScrollView(Rows(*many(10)))
+    scroll = ScrollPanel(Rows(*many(10)))
     assert len(texts(scroll, 10)) == 10
     assert scroll.scroll_down(1) is False
     assert scroll.scroll_to(4) is False
@@ -79,7 +81,7 @@ def test_reveal_moves_the_minimum_and_declines_when_visible():
 
 def test_child_at_maps_visible_cells_through_the_painted_offset():
     child = Rows(*many(10))
-    scroll = ScrollView(child, height=3, offset=2)
+    scroll = ScrollPanel(child, height=3, offset=2)
     scroll.render(10)
     assert scroll.child_at(0, 0) == (child, 2, 0)
     assert scroll.child_at(2, 9) == (child, 4, 9)
@@ -89,7 +91,7 @@ def test_child_at_maps_visible_cells_through_the_painted_offset():
 
 def test_the_bar_reserves_the_last_column_and_paints_track_and_thumb():
     child = Rows(*many(10))
-    scroll = ScrollView(child, height=4, bar=True)
+    scroll = ScrollPanel(child, height=4, bar=True)
     rows = scroll.render(10)
     assert all(row.width == 10 for row in rows)
     assert rows[0].segments[-1].text == GLYPHS.bar_full
@@ -131,7 +133,7 @@ def test_a_view_without_a_bar_or_a_thumb_declines_drags():
 
 def test_a_child_that_shrinks_pulls_the_offset_back_in_range():
     child = Rows(*many(10))
-    scroll = ScrollView(child, height=3)
+    scroll = ScrollPanel(child, height=3)
     scroll.render(10)
     assert scroll.scroll_to(7) is True
     child.texts = ["only"]
@@ -143,7 +145,7 @@ def test_a_child_that_shrinks_pulls_the_offset_back_in_range():
 
 
 def test_a_natural_height_view_honours_the_height_budget():
-    scroll = ScrollView(Rows(*many(5)))
+    scroll = ScrollPanel(Rows(*many(5)))
     surface = scroll.render(Constraints(width=10, max_height=2))
     assert isinstance(surface, Surface)
     assert [row.text for row in surface] == ["r0", "r1"]
@@ -158,3 +160,11 @@ def test_an_explicit_height_wins_over_the_height_budget():
     assert isinstance(surface, Surface)
     assert [row.text for row in surface] == ["r0", "r1", "r2"]
     assert surface.height == 3
+
+
+def test_the_axis_is_vertical_only_in_this_wave():
+    assert ScrollPanel(Rows("a"), axis="y").axis == "y"
+    with pytest.raises(ValueError):
+        ScrollPanel(Rows("a"), axis="x")
+    with pytest.raises(ValueError):
+        ScrollPanel(Rows("a"), axis="both")

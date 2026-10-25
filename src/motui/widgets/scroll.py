@@ -1,6 +1,6 @@
-"""ScrollView: a window over any component's rows.
+"""ScrollPanel: a window over any component's rows.
 
-A :class:`ScrollView` renders its child at the width it can give it and
+A :class:`ScrollPanel` renders its child at the width it can give it and
 shows a fixed-height slice of the result.  It is the composition-layer
 answer to "this content is taller than its slot": charts, long forms, a
 panel's body, a markdown document -- any component works unchanged,
@@ -23,13 +23,13 @@ The bar uses :attr:`~motui.kernel.glyphs.Glyphs.bar_empty` and
 visible fraction, at least one cell, and no thumb at all when the content
 fits the window (the bar then paints its plain track).
 
-:meth:`ScrollView.handle` owns the scrolling keys -- ``up``/``down`` one
+:meth:`ScrollPanel.handle` owns the scrolling keys -- ``up``/``down`` one
 row, ``page_up``/``page_down`` one window, ``home``/``end`` the edges --
 and the vertical wheel.  It answers ``True`` only when the offset
-actually moved, so a host keeps the boundaries' keys.  :meth:`ScrollView.drag`
+actually moved, so a host keeps the boundaries' keys.  :meth:`ScrollPanel.drag`
 owns the bar itself: a press on the thumb grabs it, the motions map the
 grabbed row through the same thumb geometry, a press on the track pages
-toward it, and the release ends the drag.  ``ScrollView`` is a
+toward it, and the release ends the drag.  ``ScrollPanel`` is a
 :class:`~motui.kernel.document.Container`: a visible cell maps to the child
 row ``offset + row``, and the scrollbar column belongs to the view.
 ``revision`` folds the child's own snapshot (identity when it has none)
@@ -47,10 +47,10 @@ from ..kernel.layout import Constraints, ScrollState, as_constraints
 from ..kernel.theme import Styles, Theme
 from ..widgets.base import Widget
 
-__all__ = ["ScrollView"]
+__all__ = ["ScrollPanel"]
 
 
-class ScrollView(Widget):
+class ScrollPanel(Widget):
     """A clipped, scrollable window over one child component.
 
     ``height=None`` shows every child row; a fixed ``height`` shows exactly
@@ -65,6 +65,11 @@ class ScrollView(Widget):
     The width split is deliberate: with a bar the child renders at
     ``width - 1``, so the bar never covers content; without one it renders
     at ``width``.  Every painted row is fitted back to the painting width.
+
+    ``axis`` names the scrolling direction.  This wave implements the
+    vertical axis only (``"y"``); the horizontal and two-axis modes arrive
+    with the immutable ``Scroll`` values in W2.6, so any other value is
+    rejected at construction rather than silently ignored.
     """
 
     __slots__ = (
@@ -74,6 +79,7 @@ class ScrollView(Widget):
         "_last_offset",
         "_rendered",
         "_state",
+        "axis",
         "bar",
         "child",
         "glyphs",
@@ -87,16 +93,20 @@ class ScrollView(Widget):
         height: int | None = None,
         offset: int = 0,
         bar: bool = False,
+        axis: str = "y",
         glyphs: Glyphs = GLYPHS,
         theme: Theme | None = None,
         styles: Styles | None = None,
     ) -> None:
         super().__init__(theme, styles)
+        if axis != "y":
+            raise ValueError(f"axis must be 'y' in this wave, got {axis!r}")
+        self.axis = axis
         self.child = child
         self.glyphs = glyphs
         self.height = None if height is None else max(0, height)
         self.bar = bool(bar)
-        # The old focus default of the data/navigation family; a ScrollView
+        # The old focus default of the data/navigation family; a ScrollPanel
         # renders the same either way, but the flag stays part of the base.
         self.focused = True
         # The view never follows the tail: its state holds the offset plus
@@ -327,6 +337,7 @@ class ScrollView(Widget):
             self.glyphs,
             self.theme,
             self.styles,
+            self.axis,
         )
 
     def render(self, c: Constraints | int) -> Surface:
@@ -379,6 +390,6 @@ class ScrollView(Widget):
 
     def __repr__(self) -> str:
         return (
-            f"ScrollView(offset={self._state.offset}, height={self.height!r}, "
+            f"ScrollPanel(offset={self._state.offset}, height={self.height!r}, "
             f"bar={self.bar}, total_rows={self._state.content_height})"
         )

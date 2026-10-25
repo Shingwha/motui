@@ -223,7 +223,7 @@ class App:
         self._pointer: Pointer | None = None
         self._gesture: SelectionGesture | None = None
         # The drag route's state: the widget that took the press (a
-        # ScrollView bar), and the cell it was last addressed at.
+        # ScrollPanel bar), and the cell it was last addressed at.
         self._drag_target: Component | None = None
         self._drag_row = 0
         self._drag_col = 0
@@ -667,7 +667,7 @@ class App:
         hands the press to the first one whose ``drag`` is not the
         :class:`~motui.widgets.base.Widget` no-op.  That widget answers
         ``True`` only when the press landed on something it owns (the
-        ScrollView's bar column); otherwise the walk goes on and the press
+        ScrollPanel's bar column); otherwise the walk goes on and the press
         falls through to the gesture and pointer tiers.  Only the left
         button starts a drag.
         """

@@ -54,7 +54,7 @@ from motui.widgets import (
     ProgressBar,
     RadioGroup,
     Row,
-    ScrollView,
+    ScrollPanel,
     Select,
     ShortcutBar,
     Slider,
@@ -129,7 +129,7 @@ CASES = {
     "ProgressBar": lambda: ProgressBar(0.4, label="work"),
     "RadioGroup": lambda: RadioGroup(["one", _WIDE, "three"]),
     "Row": lambda: Row([Text("a"), Text("b")], gap=1),
-    "ScrollView": lambda: ScrollView(
+    "ScrollPanel": lambda: ScrollPanel(
         Text(_WIDE), height=2, bar=True, glyphs=replace(GLYPHS, bar_full="#", bar_empty=".")
     ),
     "Select": lambda: Select(

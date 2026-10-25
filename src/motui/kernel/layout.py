@@ -991,7 +991,7 @@ class Scrollable(Protocol):
 
     The narrow face the interaction tier needs: the geometry to paint a
     thumb from and the two verbs to move the window.  :class:`Viewport`,
-    ``ScrollView`` and ``Pane`` (delegating its viewport) answer it without
+    ``ScrollPanel`` and ``Pane`` (delegating its viewport) answer it without
     sharing a base class.
     """
 

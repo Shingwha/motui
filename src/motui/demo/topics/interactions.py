@@ -3,9 +3,19 @@
 from __future__ import annotations
 
 from motui import Button, Checkbox, Dialog, Link, Markdown, Modal, Text
-from motui.widgets import ButtonSpec, Column, Notice, ScrollView, Table
+from motui.widgets import ButtonSpec, Column, Notice, ScrollPanel, Table
 
 from ..stage import topic
+
+
+class ScrollView(ScrollPanel):
+    """Demo-only label: the topic footer's golden bytes still read "scrollview".
+
+    The library class is :class:`~motui.widgets.ScrollPanel`; the shell
+    renders the focused widget's class name, and this wave keeps the golden
+    byte until the W5 docs/golden pass renames it.
+    """
+
 
 _DISPATCH_ROWS = [
     ["1", "stats", "counts every event, consumes none"],

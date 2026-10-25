@@ -7,7 +7,7 @@ from motui.kernel import Theme
 from motui.kernel.document import Sizing
 from motui.terminal import HeadlessScreen
 from motui.kernel.events import KeyEvent
-from motui.widgets import Button, Field, Form, Input, ScrollView
+from motui.widgets import Button, Field, Form, Input, ScrollPanel
 from tests.testing import (
     Rows,
     ScriptedEvents,
@@ -80,7 +80,7 @@ def test_a_fill_section_added_through_the_app_takes_the_remainder():
 
 def test_the_wheel_routes_to_the_nearest_scrollable():
     app = App(screen=HeadlessScreen(40, 8), keys=ScriptedEvents(()))
-    view = ScrollView(Rows(*many(10)), height=3, bar=True)
+    view = ScrollPanel(Rows(*many(10)), height=3, bar=True)
     app.add(view)
     app.tui.paint()
 
@@ -91,14 +91,14 @@ def test_the_wheel_routes_to_the_nearest_scrollable():
 
     app.set_focus_targets([view])
     assert app.dispatch(key("page_down")) is True
-    assert view.offset == 3  # the focused ScrollView pages one window
+    assert view.offset == 3  # the focused ScrollPanel pages one window
     assert app.dispatch(key("page_up")) is True
     assert view.offset == 0
 
 
 def test_a_bar_drag_moves_the_scroll_view_without_a_selection():
     app = App(screen=HeadlessScreen(40, 8), keys=ScriptedEvents(()))
-    view = ScrollView(Rows(*many(10)), height=3, bar=True)
+    view = ScrollPanel(Rows(*many(10)), height=3, bar=True)
     app.add(view)
     app.tui.paint()
 

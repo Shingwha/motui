@@ -58,7 +58,7 @@ from .markdown import Markdown
 from .menubar import ContextMenu, MenuBar
 from .navlist import NavList
 from .rows import Notice, ShortcutBar, StatusLine
-from .scroll import ScrollView
+from .scroll import ScrollPanel
 from .table import Table
 from .tabs import Tabs
 from .textfield import Editor, Input
@@ -96,7 +96,7 @@ __all__ = [
     "ProgressBar",
     "RadioGroup",
     "Row",
-    "ScrollView",
+    "ScrollPanel",
     "Select",
     "ShortcutBar",
     "Slider",
