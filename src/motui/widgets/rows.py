@@ -98,6 +98,12 @@ class StatusLine(Widget):
 
     __slots__ = ("left", "right")
 
+    #: Pure display: no key, click, hover or activation verb.
+    focusable = False
+    clickable = False
+    hoverable = False
+    activatable = False
+
     def __init__(
         self,
         *,
@@ -158,6 +164,12 @@ class ShortcutBar(Widget):
         "glyphs",
         "items",
     )
+
+    #: Pure display: no key, click, hover or activation verb.
+    focusable = False
+    clickable = False
+    hoverable = False
+    activatable = False
 
     def __init__(
         self,
@@ -223,6 +235,12 @@ class Notice(Widget):
     """
 
     __slots__ = ("glyphs", "level", "text")
+
+    #: Pure display: no key, click, hover or activation verb.
+    focusable = False
+    clickable = False
+    hoverable = False
+    activatable = False
 
     def __init__(
         self,

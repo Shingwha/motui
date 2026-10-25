@@ -4,6 +4,7 @@ import pytest
 
 from motui.kernel.cell import Line, Surface
 from motui.kernel.document import descend_chain
+from motui.kernel.events import KeyEvent
 from motui.kernel.glyphs import GLYPHS
 from motui.kernel.layout import Constraints
 from motui.widgets import ScrollPanel
@@ -415,3 +416,87 @@ def test_the_bars_never_route_a_hit_into_the_child():
     assert child.hits == [(2, 30)]
     assert scroll.click(3, 0) is True  # the bottom bar still takes a click
     assert child.hits == [(2, 30)]
+
+
+# -- the 2.0 keymap and action surface ----------------------------------------
+
+
+def test_scroll_actions_drive_the_window_by_name():
+    scroll = view()
+    scroll.render(Constraints(width=10))
+    assert scroll.on_action("next") is True and scroll.offset == 1
+    assert scroll.on_action("prev") is True and scroll.offset == 0
+    assert scroll.on_action("prev") is False  # clamped at the top
+    assert scroll.on_action("page_next") is True and scroll.offset == 3
+    assert scroll.on_action("page_prev") is True and scroll.offset == 0
+    assert scroll.on_action("last") is True and scroll.offset == 7
+    assert scroll.on_action("first") is True and scroll.offset == 0
+    assert scroll.on_action("first") is False
+    assert scroll.on_action("activate") is False
+    assert scroll.on_action("nope") is False
+    assert ScrollPanel.keymap["page_down"] == "page_next"
+    assert ScrollPanel.handle is ScrollPanel._dispatch
+
+
+def test_the_typed_key_hook_matches_the_old_handle_for_every_key():
+    for name in (
+        "up",
+        "down",
+        "page_up",
+        "page_down",
+        "home",
+        "end",
+        "enter",
+        "left",
+        "right",
+    ):
+        legacy, typed = view(), view()
+        legacy.render(Constraints(width=10))
+        typed.render(Constraints(width=10))
+        assert legacy.handle(key(name)) == typed.on_key(key(name))
+        assert legacy.offset == typed.offset
+
+
+def test_the_key_hook_declines_a_release_and_the_wheel_hook_the_other_axis():
+    scroll = view()
+    scroll.render(Constraints(width=10))
+    assert scroll.on_key(KeyEvent("down", kind="release")) is False
+    assert scroll.on_mouse(wheel(0, 0, "down")) is True and scroll.offset == 1
+    assert scroll.on_mouse(wheel(0, 0, "up")) is True and scroll.offset == 0
+    assert scroll.on_mouse(wheel(0, 0, "left")) is False
+    assert scroll.on_mouse(wheel(0, 0, "up")) is False  # clamped at the top
+    horizontal = ScrollPanel(Wide(), height=3, axis="x")
+    horizontal.render(Constraints(width=20))
+    assert horizontal.on_mouse(wheel(0, 0, "up")) is False
+    assert horizontal.on_mouse(wheel(0, 0, "right")) is True
+    assert horizontal.x_offset == 1
+
+
+def test_the_horizontal_scroll_actions_move_one_column():
+    scroll = ScrollPanel(Wide(), height=3, axis="x")
+    scroll.render(Constraints(width=20))
+    assert scroll.on_action("scroll_next") is True and scroll.x_offset == 1
+    assert scroll.on_action("scroll_prev") is True and scroll.x_offset == 0
+    assert scroll.on_action("scroll_prev") is False
+
+
+def test_an_instance_scroll_keymap_rebind_is_private_to_the_instance():
+    scroll, other = view(), view()
+    scroll.render(Constraints(width=10))
+    other.render(Constraints(width=10))
+    scroll.keymap["j"] = "next"
+    assert "j" not in ScrollPanel.keymap
+    assert "j" not in other.keymap
+    assert scroll.on_key(key("j", "j")) is True and scroll.offset == 1
+    assert other.on_key(key("j", "j")) is False and other.offset == 0
+
+
+def test_the_scroll_panel_declares_its_capabilities():
+    scroll = view()
+    assert (scroll.focusable, scroll.clickable, scroll.hoverable, scroll.activatable) == (
+        True,
+        True,
+        False,
+        False,
+    )
+    assert scroll.take() is None
