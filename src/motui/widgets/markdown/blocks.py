@@ -163,7 +163,11 @@ class FenceRule:
     to the end of the buffer (streaming-safe): the opening marker renders,
     the closing one appears only once the fence actually closes.  Only the
     code lines' colors come from the highlighter -- the fence has no
-    container of its own.
+    container of its own.  The fence delimiter lines are single-row labels
+    and keep the ellipsis guard; the code lines take the context's
+    ``code_wrap`` (``WORD`` by default, so a long line wraps instead of
+    losing its tail), and a wrapped row keeps the highlighter's segment
+    styles because the wrap goes through :meth:`~motui.kernel.cell.Line.reflow`.
     """
 
     name = "fence"
@@ -187,9 +191,8 @@ class FenceRule:
         body = lines[1:-1] if closed else lines[1:]
         code = "\n".join(body)
         out = [Line.from_text(lines[0].strip(), theme.text.muted).clip(WrapMode.ELLIPSIS, width)]
-        out.extend(
-            row.clip(WrapMode.ELLIPSIS, width) for row in engine.highlight(code, _fence_lang(lines[0]))
-        )
+        for row in engine.highlight(code, _fence_lang(lines[0])):
+            out.extend(row.reflow(ctx.code_wrap, width))
         if closed:
             out.append(Line.from_text(lines[-1].strip(), theme.text.muted).clip(WrapMode.ELLIPSIS, width))
         return out

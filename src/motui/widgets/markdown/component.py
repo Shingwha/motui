@@ -226,8 +226,8 @@ class _Paragraph:
 class _StreamCache:
     """One Markdown render answer, and the append-only reuse rule.
 
-    Holds the last ``(text, width)`` render: its rows, the source lines
-    they came from, ``boundaries`` -- the ``(end, rows so far)`` pair the
+    Holds the last ``(text, width, code_wrap)`` render: its rows, the source
+    lines they came from, ``boundaries`` -- the ``(end, rows so far)`` pair the
     block loop recorded for every block -- and the claiming rule of each
     block in the same order.  :meth:`render` answers a new key one of
     three ways:
@@ -257,6 +257,7 @@ class _StreamCache:
 
     __slots__ = (
         "_boundaries",
+        "_code_wrap",
         "_lines",
         "_memo",
         "_primed",
@@ -270,6 +271,9 @@ class _StreamCache:
         self._primed = False
         self._text = ""
         self._width = 0
+        #: The fenced-code wrap the cached rows were laid out under.  A mode
+        #: change is a full re-render: the code rows' row count depends on it.
+        self._code_wrap: WrapMode | None = None
         self._rows: list[Line] = []
         self._lines: list[str] = []
         self._boundaries: list[tuple[int, int]] = []
@@ -284,7 +288,11 @@ class _StreamCache:
         self, text: str, width: int, ctx: RenderContext, gap: int
     ) -> list[Line]:
         """The rows for ``(text, width)``, reusing the cached prefix when sound."""
-        if self._primed and self._width == width:
+        if (
+            self._primed
+            and self._width == width
+            and self._code_wrap is ctx.code_wrap
+        ):
             if self._text == text:
                 return list(self._rows)
             if self._resume(text, width, ctx, gap):
@@ -300,7 +308,15 @@ class _StreamCache:
         scan = _BlockScan(lines, width, ctx, gap)
         scan.run()
         self._memo = None
-        self._store(text, width, lines, scan.rows, scan.boundaries, scan.rules)
+        self._store(
+            text,
+            width,
+            lines,
+            scan.rows,
+            scan.boundaries,
+            scan.rules,
+            code_wrap=ctx.code_wrap,
+        )
 
     def _resume(self, text: str, width: int, ctx: RenderContext, gap: int) -> bool:
         """The append-only path: re-render the tail, keep every earlier block.
@@ -353,7 +369,15 @@ class _StreamCache:
                 rules=list(self._rules),
             )
             scan.run()
-            self._store(text, width, lines, scan.rows, scan.boundaries, scan.rules)
+            self._store(
+                text,
+                width,
+                lines,
+                scan.rows,
+                scan.boundaries,
+                scan.rules,
+                code_wrap=ctx.code_wrap,
+            )
             return True
         if self._grow_paragraph(lines, width, ctx, gap):
             return True
@@ -368,7 +392,15 @@ class _StreamCache:
             first -= 1
         scan = self._rerender_from(first, lines, width, ctx, gap)
         self._memo = None
-        self._store(text, width, lines, scan.rows, scan.boundaries, scan.rules)
+        self._store(
+            text,
+            width,
+            lines,
+            scan.rows,
+            scan.boundaries,
+            scan.rules,
+            code_wrap=ctx.code_wrap,
+        )
         return True
 
     def _rerender_from(
@@ -488,7 +520,16 @@ class _StreamCache:
             lines, width, ctx, gap, start=end, rows=rows, boundaries=boundaries, rules=rules
         )
         scan.run()
-        self._store(text, width, lines, scan.rows, scan.boundaries, scan.rules, memo)
+        self._store(
+            text,
+            width,
+            lines,
+            scan.rows,
+            scan.boundaries,
+            scan.rules,
+            memo,
+            code_wrap=ctx.code_wrap,
+        )
         return True
 
     def _store(
@@ -500,10 +541,13 @@ class _StreamCache:
         boundaries: list[tuple[int, int]],
         rules: list[BlockRule],
         memo: _Paragraph | None = None,
+        *,
+        code_wrap: WrapMode,
     ) -> None:
         self._primed = True
         self._text = text
         self._width = width
+        self._code_wrap = code_wrap
         self._lines = lines
         self._rows = rows
         self._boundaries = boundaries
@@ -620,6 +664,12 @@ class Markdown(Widget):
     room; a negative value degrades to 0).  ``divider_max_width`` caps
     thematic-break rules' dividers at that many columns (default 80, the pi
     reference's rule width; ``None`` spans the whole width).
+    ``code_wrap`` is the fenced-code row policy (``WrapMode.WORD`` by
+    default, so a long code line wraps instead of losing its tail;
+    ``ELLIPSIS`` / ``CLIP`` keep one row, ``OVERFLOW`` leaves the natural
+    width to the container).  It is a plain mutable attribute: a write
+    replaces the context's mode and drops the stream cache, and the mode is
+    part of :meth:`revision` so a sealed document repaints too.
     ``max_width`` caps the document's **own** wrap width (``None`` by
     default, no cap) -- the sibling of ``divider_max_width``, and Textual's
     ``max-width``: the rows are wrapped at ``min(width, max_width)`` and come
@@ -710,6 +760,7 @@ class Markdown(Widget):
         gap: int = 1,
         divider_max_width: int | None = 80,
         max_width: int | None = None,
+        code_wrap: WrapMode = WrapMode.WORD,
     ) -> None:
         super().__init__(theme, styles)
         self.text = text
@@ -732,12 +783,13 @@ class Markdown(Widget):
         #: from them, one entry per row: ``(action, start, end)``.
         self._rows: list[Line] = []
         self._acts: list[list[tuple[str, int, int]]] = []
-        # The stamped rows and the span index of the last ``(text, width)``
-        # render: rebuilding them on every hit frame was the frame's cost
-        # (render-cost W4).  ``_stamp_key`` is the pair they describe; a
-        # different pair re-derives both from the stream cache's answer.
+        # The stamped rows and the span index of the last render: rebuilding
+        # them on every hit frame was the frame's cost (render-cost W4).
+        # ``_stamp_key`` is the triple they describe -- text, painted width,
+        # code wrap -- so a different one re-derives both from the stream
+        # cache's answer.
         self._stamp: list[Line] = []
-        self._stamp_key: tuple[str, int] | None = None
+        self._stamp_key: tuple[str, int, WrapMode] | None = None
         #: The span under the pointer: ``(row, start, end)`` or ``None``.
         self._hover_span: tuple[int, int, int] | None = None
         # The one-entry render cache; empty until the first render.
@@ -765,7 +817,29 @@ class Markdown(Widget):
             divider_max_width=divider_max_width,
             block_rules=list(BLOCK_RULES) if block_rules is None else list(block_rules),
             inline_rules=list(INLINE_RULES) if inline_rules is None else list(inline_rules),
+            code_wrap=code_wrap,
         )
+
+    @property
+    def code_wrap(self) -> WrapMode:
+        """How a fenced-code row wider than the document wrap responds.
+
+        ``WORD`` (the default) reflows the row, so a long code line stays
+        fully readable; ``ELLIPSIS`` / ``CLIP`` keep one row (marked / hard
+        cut) and ``OVERFLOW`` hands the natural-width row to the container.
+        A write replaces the context's mode, drops the stream cache and the
+        stamp key, and bumps :meth:`revision`; the fence delimiter lines are
+        single-row labels and stay ellipsized in every mode.
+        """
+        return self._ctx.code_wrap
+
+    @code_wrap.setter
+    def code_wrap(self, value: WrapMode) -> None:
+        if value is self._ctx.code_wrap:
+            return
+        self._ctx = replace(self._ctx, code_wrap=value)
+        self._cache = _StreamCache()
+        self._stamp_key = None
 
     def _effective_theme(self) -> Theme:
         """The theme the rules see: every non-``None`` ``styles`` group merged.
@@ -824,11 +898,11 @@ class Markdown(Widget):
 
         The answer comes from
         the component's one-entry stream cache (:class:`_StreamCache`): an
-        unchanged ``(text, width)`` is served as a copy, a text that only
-        grew past a sealed block boundary re-renders just its tail (for a
-        paragraph, only the suffix that changed) and splices it on, anything
-        else renders from scratch.  The returned sequence is always fresh,
-        the caller's to keep or trash.
+        unchanged ``(text, width, code_wrap)`` is served as a copy, a text
+        that only grew past a sealed block boundary re-renders just its tail
+        (for a paragraph, only the suffix that changed) and splices it on,
+        anything else renders from scratch.  The returned sequence is always
+        fresh, the caller's to keep or trash.
 
         A changed ``theme``/``styles`` effective theme is synced first
         (:meth:`_sync_theme`): the context theme moves, the stream cache is
@@ -861,7 +935,7 @@ class Markdown(Widget):
         paint = (
             c.width if self.max_width is None else max(0, min(c.width, self.max_width))
         )
-        key = (self.text, paint)
+        key = (self.text, paint, self._ctx.code_wrap)
         if self._stamp_key != key:
             rows = self._cache.render(self.text, paint, self._ctx, self._gap)
             self._stamp = _stamp_tasks(rows)
@@ -904,6 +978,7 @@ class Markdown(Widget):
             self.max_width,
             self._ctx.glyphs,
             self._ctx.divider_max_width,
+            self._ctx.code_wrap,
             self._gap,
             self._hover_span,
             self.theme,
