@@ -2,7 +2,8 @@
 
 > 本文件是波次之间唯一的稳定契约。每波合并后由 lead 回写“现实”，下一波只读这里。
 > 权威推导见 `ref/source/02-core-contracts.md`、`03-interaction.md`、`04-runtime.md`、`05-api-surface.md`。
-> 状态：W0a 已落地（2026-10-25）。标 ⏳ 的波次落地后改为 ✅ 并写实际签名。
+> 状态：W0a/W0b/W1 已落地（2026-10-25）。标 ⏳ 的波次落地后改为 ✅ 并写实际签名。
+> 现实：`core/` 已删除；`kernel` 62 名 / `terminal` 13 名 / root 41 名（W5 收敛）。
 
 ## 1. kernel 值（W0a ✅）
 

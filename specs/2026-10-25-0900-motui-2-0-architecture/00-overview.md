@@ -20,7 +20,7 @@
 
 | 门禁 | 基线 |
 |---|---|
-| `uv run pytest -q -p no:cacheprovider` | **921 passed**（W0a 后 1002） |
+| `uv run pytest -q -p no:cacheprovider` | **921 passed**（W0a 1002；W0b 1017；W1 1019） |
 | `uv run python tools/golden.py --check` | **57 topics match** |
 | `uv run python tools/framebench.py` | render-hash `a82f7968ed986ef2fa99bb9ec25e724b99ca03e26aa75f607e6219ee25a4f379` |
 | `uv run python -m motui < /dev/null` | exit 0 |
@@ -125,7 +125,7 @@ uv run python tools/growth.py
 |---|---|
 | W0a | ✅ 2026-10-25 @ `2.0/w0a-values`（1002 passed / golden 不变） |
 | W0b | ✅ 2026-10-25 @ `2.0/w0b-harness`（1017 passed / 工具与护栏全绿） |
-| W1 | ⏳ |
+| W1 | ✅ 2026-10-25 @ `2.0/w1-kernel`（1019 passed / core 删除 / hash 不变） |
 | W2a | ⏳ |
 | W2b | ⏳ |
 | W2c | ⏳ |
