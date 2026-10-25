@@ -17,17 +17,22 @@ from .decoder import KeyDecoder
 from .keys import RawTerminalKeys
 from .paint import Painter
 from .render import styled_line
-from .screen import HeadlessScreen, Screen, TerminalScreen
+from .screen import HeadlessScreen, MouseMode, Screen, TerminalOptions, TerminalScreen
+from .terminal import Capability, Terminal
 
 __all__ = [
+    "Capability",
     "Clipboard",
     "HeadlessScreen",
     "KeyDecoder",
     "MemoryClipboard",
+    "MouseMode",
     "Painter",
     "RawTerminalKeys",
     "Screen",
     "ScreenClipboard",
+    "Terminal",
+    "TerminalOptions",
     "TerminalScreen",
     "auto_theme",
     "detect_color_mode",
