@@ -10,6 +10,8 @@ from dataclasses import replace
 import pytest
 
 from motui.kernel.keymap import DEFAULT_EDITOR_KEYMAP
+from motui.kernel.cell import Surface
+from motui.kernel.layout import Constraints
 from motui.kernel.style import Style
 from motui.kernel.theme import DEFAULT_THEME, Styles
 from motui.widgets import Editor, Input
@@ -485,3 +487,36 @@ def test_set_text_rejoins_the_replacement():
     buffer.set_text("x\ny")
     assert buffer.value == "x\ny"
     assert buffer.value is buffer.value
+
+
+# -- the 2.0 render contract -------------------------------------------------
+
+
+def test_the_text_fields_take_constraints_and_honour_the_height_budget():
+    field = Input("hello")
+    assert isinstance(field.render(Constraints(width=20)), Surface)
+    assert field.render(20) == field.render(Constraints(width=20))
+    assert list(field.render(Constraints(width=20, max_height=0))) == []
+    assert field.render(Constraints(width=20, max_height=1)).height == 1
+
+    editor = Editor("a\nb\nc")
+    assert isinstance(editor.render(Constraints(width=20)), Surface)
+    assert editor.render(20) == editor.render(Constraints(width=20))
+    assert editor.render(Constraints(width=20, max_height=2)).height == 2
+
+
+def test_a_truncated_field_keeps_the_buffer_wrap_geometry():
+    field = Input("hello world")
+    assert field.render(Constraints(width=8, max_height=1)).height == 1
+    # The budget shapes the returned rows only: the buffer's visual geometry
+    # still comes from the constrained width, so the second wrapped row exists
+    # for the click mapping even though it was not painted.
+    assert field.click(1, 0) is True
+    assert field.cursor == (0, 6)
+
+
+def test_a_truncated_editor_render_is_byte_identical_to_the_width_render():
+    editor = Editor("a\nb\nc")
+    narrow = editor.render(Constraints(width=20, max_height=2))
+    assert narrow.rows == tuple(editor.render(20))[:2]
+    assert editor.render(20) == editor.render(Constraints(width=20))

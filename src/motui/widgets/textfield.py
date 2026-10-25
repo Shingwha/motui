@@ -52,7 +52,8 @@ import re
 
 from ..kernel.events import Event, PasteEvent
 from ..kernel.glyphs import GLYPHS, Glyphs, seat
-from ..kernel.cell import Line, Segment
+from ..kernel.cell import Line, Segment, Surface
+from ..kernel.layout import Constraints, as_constraints
 from ..kernel.text import visible_width
 from ..kernel.theme import Styles, Theme
 from ..widgets.base import Widget
@@ -507,19 +508,28 @@ class _TextField(Widget):
         """
         return self._revision()
 
-    def render(self, width: int) -> list[Line]:
-        """The rendered rows at ``width``, remembered while the snapshot holds.
+    def render(self, c: Constraints | int) -> Surface:
+        """The rendered rows at the constrained width, remembered while the snapshot holds.
 
-        While the width and :meth:`_revision` are unchanged, the remembered
-        rows of the last render come back as a list copy -- no re-walk over
-        the buffer's visual geometry, no row bodies rebuilt (the
-        component's memory).  A keystroke bumps the buffer's version and a
-        move changes the cursor, so either one misses; a miss builds the
-        rows, remembers them and moves the key.  ``last_width`` is seeded
-        on every call, hit or miss: it is the geometry the buffer's own
-        moves and clicks read, not part of the rendered bytes.  The
-        returned list is always the caller's own.
+        A bare ``int`` is the 1.x width spelling and is normalized through
+        :func:`~motui.kernel.layout.as_constraints`.  While the width and
+        :meth:`_revision` are unchanged, the remembered rows of the last
+        render come back as a list copy -- no re-walk over the buffer's
+        visual geometry, no row bodies rebuilt (the component's memory).  A
+        keystroke bumps the buffer's version and a move changes the cursor,
+        so either one misses; a miss builds the rows, remembers them and
+        moves the key.  ``last_width`` is seeded on every call, hit or miss:
+        it is the geometry the buffer's own moves and clicks read, not part
+        of the rendered bytes.
+
+        The memo keys on the width alone (never on ``max_height``): a
+        smaller budget truncates the returned rows without repainting the
+        buffer, so the remembered table stays whole for the next call.  The
+        surface is :meth:`~motui.kernel.cell.Surface.clipped`, not padded --
+        the painted bytes are the rows the 1.x list answer produced.
         """
+        c = as_constraints(c)
+        width = c.width
         self._buf.last_width = width
         revision = self._revision()
         rows = self._memo_rows
@@ -532,7 +542,10 @@ class _TextField(Widget):
             self._memo_revision = revision
             self._memo_width = width
             self._memo_rows = rows
-        return list(rows)
+        out = list(rows)
+        if c.max_height is not None:
+            out = out[: c.max_height]
+        return Surface.clipped(out, c.width)
 
     def _rows_for(self, width: int) -> list[Line]:
         """The freshly built rows at ``width``: :meth:`render`'s miss path."""
