@@ -37,8 +37,7 @@ class Placement(Enum):
     """Where a section sits: the scrolling body or a fixed region.
 
     ``FLOW`` is the document body a viewport scrolls; ``TOP``/``BOTTOM`` are
-    the fixed bands that never scroll away.  The value replaces the 1.x
-    ``pin`` string while :attr:`Section.pin` keeps answering that spelling.
+    the fixed bands that never scroll away.
     """
 
     FLOW = "flow"
@@ -184,67 +183,56 @@ def descend(component: Component, row: int, col: int) -> tuple[Component, int, i
 class Section:
     """One addressable row-producing unit inside a :class:`Document`.
 
-    Besides the id and the component, a block owns its own **row cache**
-    (:meth:`rows`): the rows a component answered at one width are the
+    Besides the id and the widget, a block owns its own **row cache**
+    (:meth:`rows`): the rows a widget answered at one width are the
     block's rows, so the cache belongs with the identity they hang on rather
     than in whatever object happened to lay them out last.  A cache on the
     layout side had to be pruned by id every frame -- a per-frame walk of the
     whole document to catch a removed block or an id reused by a new one; a
     cache on the block dies with the block and nothing reuses it.  The cache
-    is keyed ``(width, max_height, revision)``, and only a component that
+    is keyed ``(width, max_height, revision)``, and only a widget that
     implements :class:`Revisioned` and answers a non-``None`` snapshot is
-    cached: an unrevisioned component re-renders on every call, because the
+    cached: an unrevisioned widget re-renders on every call, because the
     block has no way to see that its content changed.
     """
 
     __slots__ = (
         "_cacheable",
-        "_component",
         "_id",
-        "_pin",
         "_placement",
         "_rows_cache",
         "_rows_max_height",
         "_rows_revision",
         "_rows_width",
         "_sizing",
+        "_widget",
     )
 
     def __init__(
         self,
         id: str,
-        component: Component,
+        widget: Component,
         *,
-        pin: str | None = None,
-        placement: Placement | None = None,
+        placement: Placement = Placement.FLOW,
         sizing: Sizing = Sizing.NATURAL,
     ) -> None:
-        if pin is not None and placement is not None:
-            raise ValueError("pass pin or placement, not both")
-        if pin is not None and pin not in ("top", "bottom"):
-            raise ValueError(f"pin must be 'top', 'bottom' or None, got {pin!r}")
-        if placement is None:
-            placement = Placement.FLOW if pin is None else Placement(pin)
-        elif not isinstance(placement, Placement):
+        if not isinstance(placement, Placement):
             raise ValueError(f"placement must be a Placement, got {placement!r}")
         if not isinstance(sizing, Sizing):
             raise ValueError(f"sizing must be a Sizing, got {sizing!r}")
         if sizing is Sizing.FILL and placement is not Placement.FLOW:
             raise ValueError("a FILL section must be placed in the flow")
         self._id = id
-        self._component = component
+        self._widget = widget
         self._placement = placement
-        # The 1.x spelling stays readable: a non-flow placement answers its
-        # pin string, a flow one answers None (the body had no pin).
-        self._pin = None if placement is Placement.FLOW else placement.value
         self._sizing = sizing
-        # The component's protocol membership never changes (it is fixed by
+        # The widget's protocol membership never changes (it is fixed by
         # the type), so it is decided once here: a per-frame isinstance on
         # every block would cost more than the cache saves.
-        self._cacheable = isinstance(component, Revisioned)
+        self._cacheable = isinstance(widget, Revisioned)
         # The cache slot: the last rows rendered at ``_rows_width`` whose
-        # component answered ``_rows_revision``.  ``None`` rows mean "nothing
-        # cached yet" -- a revision of ``None`` (a component without the
+        # widget answered ``_rows_revision``.  ``None`` rows mean "nothing
+        # cached yet" -- a revision of ``None`` (a widget without the
         # protocol, or one with its memory switched off) is a legitimate key,
         # so it cannot double as the empty marker.
         self._rows_cache: list[Line] | None = None
@@ -257,13 +245,9 @@ class Section:
         return self._id
 
     @property
-    def component(self) -> Component:
-        return self._component
-
-    @property
     def widget(self) -> Component:
-        """The 2.0 name of :attr:`component` (the same object)."""
-        return self._component
+        """The component this section renders."""
+        return self._widget
 
     @property
     def placement(self) -> Placement:
@@ -275,25 +259,15 @@ class Section:
         """Whether the block takes its natural height or the remaining one."""
         return self._sizing
 
-    @property
-    def pin(self) -> str | None:
-        """Fixed region of the block: ``"top"``, ``"bottom"``, or ``None``.
-
-        ``None`` (the default) leaves the block in the scrollable body;
-        ``"top"``/``"bottom"`` place it in the matching fixed region of the
-        screen, which never scrolls away.
-        """
-        return self._pin
-
     def revision(self) -> object:
-        """The component's snapshot for the rows it renders, or ``None``.
+        """The widget's snapshot for the rows it renders, or ``None``.
 
-        Forwards to a :class:`Revisioned` component and answers ``None``
+        Forwards to a :class:`Revisioned` widget and answers ``None``
         for anything else -- "no snapshot", the answer that leaves the row
         cache off.
         """
         if self._cacheable:
-            return cast("Revisioned", self._component).revision()
+            return cast("Revisioned", self._widget).revision()
         return None
 
     def render(self, c: Constraints) -> list[Line]:
@@ -381,7 +355,7 @@ class Section:
         """
         if not self._cacheable:
             return self._render(c)  # no snapshot
-        revision = cast("Revisioned", self._component).revision()
+        revision = cast("Revisioned", self._widget).revision()
         if revision is None:
             # A component with the protocol switched its memory off (``None``
             # is "no snapshot"): the block must not cache what it cannot
@@ -411,7 +385,7 @@ class Section:
         satisfies both, so the clipping pass normally hands every row back
         unchanged.
         """
-        surface = self._component.render(c)
+        surface = self._widget.render(c)
         rows = list(surface.rows)
         if c.max_height is not None and len(rows) > c.max_height:
             rows = rows[: c.max_height]
@@ -420,7 +394,7 @@ class Section:
         return rows
 
     def __repr__(self) -> str:
-        return f"Section(id={self._id!r}, pin={self._pin!r})"
+        return f"Section(id={self._id!r}, placement={self._placement!r})"
 
 
 class Document:
@@ -458,29 +432,22 @@ class Document:
         component: Component,
         *,
         id: str | None = None,
-        pin: str | None = None,
         placement: Placement = Placement.FLOW,
         sizing: Sizing = Sizing.NATURAL,
     ) -> Section:
         """Append a block; auto id ``b{n}`` when ``id`` is None.
 
-        ``pin`` is the 1.x spelling of ``placement`` and the two are exclusive
-        (``None``/``FLOW`` is the body).  Duplicate ids raise ``ValueError``.
+        ``placement`` is the body (``FLOW``, the default) or a fixed
+        ``TOP``/``BOTTOM`` band.  Duplicate ids raise ``ValueError``.
 
         The fill rules are checked here, at the one door a block enters the
         document through: at most one ``FILL`` section, it takes only the flow
         placement, and no flow section may follow it (a fill owns the remainder
         below every natural row, so content appended after it could never be
-        laid out).  Pinned sections are natural-height by definition and
+        laid out).  Fixed-region sections are natural-height by definition and
         therefore reject ``FILL``.
         """
-        if pin is not None:
-            if placement is not Placement.FLOW:
-                raise ValueError("pass pin or placement, not both")
-            if pin not in ("top", "bottom"):
-                raise ValueError(f"pin must be 'top', 'bottom' or None, got {pin!r}")
-            placement = Placement(pin)
-        elif not isinstance(placement, Placement):
+        if not isinstance(placement, Placement):
             raise ValueError(f"placement must be a Placement, got {placement!r}")
         if not isinstance(sizing, Sizing):
             raise ValueError(f"sizing must be a Sizing, got {sizing!r}")

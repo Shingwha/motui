@@ -2,19 +2,20 @@
 
 from __future__ import annotations
 
-from motui.kernel import RowRange
+from motui.kernel import Axis, RowRange
 
 from motui.widgets.text import Text
 from motui.kernel.frame import Chrome
 from motui.kernel.cell import Line
 from motui.widgets import Column, TreeNode
+from motui.kernel.document import Placement
 from tests.testing import Rows, headless_tui, many
 
 
 def test_hit_resolves_a_cell_to_its_block_row_and_column():
     tui = headless_tui(80, 6)
     body = tui.add(Rows(*many(10)))
-    foot = tui.add(Rows("foot"), pin="bottom")
+    foot = tui.add(Rows("foot"), placement=Placement.BOTTOM)
     tui.paint()
     hit = tui.hit(2, 0)
     assert hit is not None and hit.block.id == body and hit.row == 5 and hit.col == 2
@@ -72,7 +73,7 @@ def test_hit_leaf_descends_through_a_container_to_the_child():
 
 def test_hit_routes_each_split_pane_to_its_own_document():
     tui = headless_tui(20, 4)
-    left, right = tui.split("vertical")
+    left, right = tui.split(Axis.X)
     left_block = left.document.add(Rows("left"))
     right_block = right.document.add(Rows("right"))
     tui.paint()
@@ -94,7 +95,7 @@ def test_hit_resolves_a_dock_row():
 
 def test_visible_range_reports_screen_rows_including_a_top_pin():
     tui = headless_tui(20, 8)
-    tui.dock(Rows("head"), edge="top", size=2)
+    tui.dock(Rows("head"), placement=Placement.TOP, size=2)
     tui.add(Rows("body"))
     tui.paint()
     assert tui.visible_range() == RowRange(2, 7)

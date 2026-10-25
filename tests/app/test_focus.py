@@ -7,7 +7,7 @@ import pytest
 from motui.app import FocusManager
 from motui.app.focus import focus_targets
 from motui.kernel import Constraints, Document, Pane, Rect, Section, Surface, Viewport
-from motui.kernel.document import descend_chain
+from motui.kernel.document import Placement, descend_chain
 from motui.kernel.events import KeyEvent
 from motui.kernel.geom import Pos
 from motui.kernel.hit import Hit
@@ -353,7 +353,7 @@ def test_docked_blocks_join_the_ring_after_the_content_panes():
     body = Button("body")
     footer = Button("footer")
     tui.add(body)
-    tui.dock(footer, edge="bottom")
+    tui.dock(footer, placement=Placement.BOTTOM)
 
     assert focus_targets(tui) == (body, footer)
 

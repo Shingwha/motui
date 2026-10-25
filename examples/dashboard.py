@@ -15,7 +15,7 @@ import math
 
 from motui import App
 from motui.kernel.document import Sizing
-from motui.terminal import HeadlessScreen
+from motui.terminal import HeadlessScreen, TerminalOptions
 from motui.widgets import Sparkline, Text
 
 WIDTH, HEIGHT = 80, 20
@@ -43,7 +43,8 @@ def build(
     screen: HeadlessScreen | None = None, *, replay: bool = False
 ) -> tuple[App, Feed, Sparkline, Text]:
     """Assemble the App: a header row plus the sparkline filling the rest."""
-    app = App(screen=screen, auto=False)
+    options = TerminalOptions() if screen is None else TerminalOptions(screen=screen)
+    app = App(terminal=options, auto=False)
     if replay:
         # The clock seam ``Runtime.advance`` replays through: a frozen base
         # reading makes each virtual step cross exactly one timer deadline.

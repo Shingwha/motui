@@ -47,6 +47,7 @@ track-repeat ticker rides.
 
 from __future__ import annotations
 
+from dataclasses import dataclass
 from typing import TYPE_CHECKING, NamedTuple
 
 from ..kernel.events import Event, MouseEvent
@@ -62,7 +63,22 @@ from ..widgets.scroll import ScrollPanel
 if TYPE_CHECKING:
     from .runtime import Runtime, Timer
 
-__all__ = ["Scrollbar"]
+__all__ = ["Scrollbar", "ScrollbarStyles"]
+
+
+@dataclass(frozen=True, slots=True)
+class ScrollbarStyles:
+    """The explicit style overrides for a :class:`Scrollbar`.
+
+    ``track`` is the strip's empty cells and ``thumb`` the mapped span; a
+    ``None`` field falls through to the theme's
+    ``chrome.scrollbar``/``chrome.scrollbar_thumb`` (and then to
+    :data:`~motui.kernel.theme.DEFAULT_THEME`).  One value holds the pair:
+    an override is a value, not two independently optional knobs.
+    """
+
+    track: Style | None = None
+    thumb: Style | None = None
 
 
 class _Thumb(NamedTuple):
@@ -134,16 +150,17 @@ class Scrollbar:
     for; the kernel clips a budget that would squeeze the pane's viewport
     out, and a bar clipped to nothing routes nothing.  ``min_thumb`` is
     the shortest thumb the geometry may shave a long document down to.
-    ``style`` / ``thumb_style`` are explicit style overrides and ``theme``
-    the rest, each resolved at render time through the charter --
-    explicit > ``theme.chrome.scrollbar`` / ``theme.chrome.scrollbar_thumb``
-    > :data:`DEFAULT_THEME <motui.kernel.theme.DEFAULT_THEME>` field -- so
-    ``Theme(chrome=replace(..., scrollbar=...))`` restyles the track and its
-    thumb sibling, while an explicit style wins over both.  ``track`` /
-    ``thumb`` are the two cells the strip paints (defaults
-    ``glyphs.bar_empty`` / ``glyphs.bar_full``): a glyph is content, so a host
-    picks its own, and ``""`` paints the cell's budget empty -- the
-    closest semantics to ``size=0`` for a glyph the strip cannot draw.
+    ``styles`` is one :class:`ScrollbarStyles` value holding the two
+    explicit style overrides; each ``None`` field falls through to ``theme``
+    and then :data:`DEFAULT_THEME <motui.kernel.theme.DEFAULT_THEME>` -- so
+    ``ScrollbarStyles(track=...)`` restyles one half and leaves the other to
+    the theme.  ``theme`` supplies both when ``styles`` is omitted.
+    ``glyphs`` supplies every glyph: the strip paints ``glyphs.bar_empty``
+    over the track and ``glyphs.bar_full`` over the thumb, so a host picks
+    its own pair by passing a replaced :class:`~motui.kernel.glyphs.Glyphs`
+    (``replace(GLYPHS, bar_empty=".", bar_full="#")``).  An empty glyph
+    paints the cell's budget empty -- the closest semantics to ``size=0``
+    for a glyph the strip cannot draw.
     ``scroll_tick`` is the period a held track click repeats its page at.
 
     Constructing the bar registers it on the pane (the budget is
@@ -162,8 +179,8 @@ class Scrollbar:
     ``length`` cells, and ``length`` is what it owns.
 
     The bar's strip is painted by the chrome budget as one row per strip
-    cell, each exactly ``size`` columns wide (:attr:`track` cells, with
-    :attr:`thumb` over the thumb's rows), from the pane's own layout and
+    cell, each exactly ``size`` columns wide (the empty glyphs over the
+    track, the full glyph over the thumb's rows), from the pane's own layout and
     the strip's length alone -- the pure function the
     :class:`~motui.kernel.frame.Chrome` protocol asks for, and one whose
     strip is remembered under the very state it reads, so a frame that
@@ -194,11 +211,10 @@ class Scrollbar:
         "_scroll_tick",
         "_size",
         "_strip_cache",
-        "_style",
+        "_styles",
         "_target",
         "_theme",
         "_thumb",
-        "_thumb_style",
         "_track",
         "_tui",
     )
@@ -212,11 +228,8 @@ class Scrollbar:
         target: ScrollPanel | None = None,
         size: int = 1,
         min_thumb: int = 1,
-        style: Style | None = None,
-        thumb_style: Style | None = None,
+        styles: ScrollbarStyles | None = None,
         glyphs: Glyphs = GLYPHS,
-        track: str | None = None,
-        thumb: str | None = None,
         theme: Theme | None = None,
         scroll_tick: float = 0.05,
     ) -> None:
@@ -226,11 +239,10 @@ class Scrollbar:
         self._axis = axis
         self._size = size
         self._min_thumb = min_thumb
-        self._style = style
-        self._thumb_style = thumb_style
+        self._styles = styles
         self._glyphs = glyphs
-        self._track = glyphs.bar_empty if track is None else track
-        self._thumb = glyphs.bar_full if thumb is None else thumb
+        self._track = glyphs.bar_empty
+        self._thumb = glyphs.bar_full
         self._theme = theme
         self._scroll_tick = scroll_tick
         # The driver's frame seam (module docstring): the bar registers on
@@ -278,9 +290,9 @@ class Scrollbar:
         unique answer.
         """
         found = [
-            block.component
+            block.widget
             for block in pane.document.blocks()
-            if isinstance(block.component, ScrollPanel)
+            if isinstance(block.widget, ScrollPanel)
         ]
         if len(found) != 1:
             raise ValueError(
@@ -463,16 +475,16 @@ class Scrollbar:
         return [Line(cells)]
 
     def _resolve_track(self) -> Style:
-        """The track's style: explicit ``style`` > theme > DEFAULT (charter)."""
-        if self._style is not None:
-            return self._style
+        """The track's style: ``styles.track`` > theme > DEFAULT (charter)."""
+        if self._styles is not None and self._styles.track is not None:
+            return self._styles.track
         theme = self._theme if self._theme is not None else DEFAULT_THEME
         return theme.chrome.scrollbar
 
     def _resolve_thumb(self) -> Style:
-        """The thumb's style: explicit ``thumb_style`` > theme > DEFAULT."""
-        if self._thumb_style is not None:
-            return self._thumb_style
+        """The thumb's style: ``styles.thumb`` > theme > DEFAULT."""
+        if self._styles is not None and self._styles.thumb is not None:
+            return self._styles.thumb
         theme = self._theme if self._theme is not None else DEFAULT_THEME
         return theme.chrome.scrollbar_thumb
 

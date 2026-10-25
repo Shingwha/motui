@@ -38,8 +38,8 @@ from tests.testing import (
 def test_add_get_remove_and_system_address_blocks():
     tui = headless_tui()
     first = tui.add(Text("one"))
-    pinned_id = tui.add(Text("footer"), pin="bottom")
-    assert first == "b0" and tui.document.get(pinned_id).pin == "bottom"
+    pinned_id = tui.add(Text("footer"), placement=Placement.BOTTOM)
+    assert first == "b0" and tui.document.get(pinned_id).placement is Placement.BOTTOM
     assert tui.get("b0").text == "one"
 
     system_id = tui.system("hello")
@@ -85,7 +85,7 @@ def test_add_forwards_placement():
 
 def test_add_and_system_target_the_main_document_not_focus():
     tui = headless_tui(40, 6)
-    left, right = tui.split("vertical")
+    left, right = tui.split(Axis.X)
     tui.frame.focus(right)
 
     assert tui.add(Rows("body")) == "b0"
@@ -99,7 +99,7 @@ def test_add_and_system_target_the_main_document_not_focus():
 
 def test_reveal_follows_the_block_owner_not_the_focused_pane():
     tui = headless_tui(40, 6)
-    left, right = tui.split("vertical")
+    left, right = tui.split(Axis.X)
     block = tui.add(Rows(*many(20)), pane=right.id)
     tui.frame.focus(left)
     right.viewport.scroll_to(0)
@@ -113,7 +113,7 @@ def test_reveal_follows_the_block_owner_not_the_focused_pane():
 
 def test_duplicate_block_ids_are_rejected_across_the_frame():
     tui = headless_tui(40, 6)
-    left, right = tui.split("vertical")
+    left, right = tui.split(Axis.X)
     tui.add(Rows("explicit"), id="dup")
     with pytest.raises(ValueError, match="duplicate block id"):
         tui.add(Rows("same document"), id="dup")
@@ -131,7 +131,7 @@ def test_duplicate_block_ids_are_rejected_across_the_frame():
 
 def test_block_ids_are_allocated_across_the_whole_frame():
     tui = headless_tui(40, 6)
-    left, right = tui.split("vertical")
+    left, right = tui.split(Axis.X)
     left.document.add(Rows("transcript"))
     right.document.add(Rows("preview"))
     assert right.document.blocks()[0].id == "b0"
@@ -139,7 +139,7 @@ def test_block_ids_are_allocated_across_the_whole_frame():
     assert block == "b1"
     assert tui.pane(right.id) is right
     component = tui.get(block)
-    assert component is right.document.get(block).component
+    assert component is right.document.get(block).widget
     assert tui.remove(block) is component
     assert [held.id for held in right.document.blocks()] == ["b0"]
 
@@ -155,7 +155,7 @@ def test_pane_lookup_raises_for_an_unknown_id():
 
 def test_split_keeps_the_document_in_the_first_child():
     tui = headless_tui(40, 6)
-    left, right = tui.split("vertical", ratios=(2, 1))
+    left, right = tui.split(Axis.X, weights=(2, 1))
     left.document.add(Rows("transcript"))
     right.document.add(Rows("preview"))
     assert [pane.id for pane in tui.frame.panes] == ["primary", "pane-1"]
@@ -167,35 +167,34 @@ def test_split_keeps_the_document_in_the_first_child():
     assert left.rect.width == 26 and right.rect.x == 26
 
 
-def test_split_axes_and_the_legacy_strings_are_equivalent():
-    by_axis = headless_tui(40, 6)
-    axis_left, axis_right = by_axis.split(Axis.X, weights=(2, 1))
-    by_string = headless_tui(40, 6)
-    left, right = by_string.split("vertical", ratios=(2, 1))
-    assert (axis_left.rect, axis_right.rect) == (left.rect, right.rect)
+def test_split_axes_divide_width_and_height():
+    side_by_side = headless_tui(40, 6)
+    left, right = side_by_side.split(Axis.X, weights=(2, 1))
+    assert left.rect.width == 26 and right.rect.x == 26
+    assert left.rect.height == right.rect.height == 6
 
-    stacked_axis = headless_tui(40, 6)
-    axis_top, axis_bottom = stacked_axis.split(Axis.Y, weights=(1, 2))
-    stacked_string = headless_tui(40, 6)
-    top, bottom = stacked_string.split("horizontal", ratios=(1, 2))
-    assert (axis_top.rect, axis_bottom.rect) == (top.rect, bottom.rect)
+    stacked = headless_tui(40, 6)
+    top, bottom = stacked.split(Axis.Y, weights=(1, 2))
+    assert top.rect.height == 2 and bottom.rect.y == 2
+    assert top.rect.width == bottom.rect.width == 40
 
 
-def test_split_prefers_weights_over_ratios():
+def test_split_weights_divide_the_cells_proportionally():
     tui = headless_tui(40, 6)
-    left, right = tui.split(Axis.X, weights=(1, 2), ratios=(3, 1))
-    assert left.rect.width < right.rect.width
+    left, right = tui.split(Axis.X, weights=(1, 2))
+    assert left.rect.width == 13 and right.rect.width == 27
 
 
-def test_split_rejects_an_unknown_string():
+def test_split_rejects_a_legacy_string():
+    legacy = "vertical"
     with pytest.raises(ValueError, match="split axis"):
-        headless_tui(40, 6).split("diagonal")
+        headless_tui(40, 6).split(legacy)  # type: ignore[arg-type]
 
 
 def test_split_takes_an_explicit_pane_and_moves_no_focus():
     tui = headless_tui(40, 6)
-    left, right = tui.split("vertical")
-    top, bottom = tui.split("horizontal", pane=right.id)
+    left, right = tui.split(Axis.X)
+    top, bottom = tui.split(Axis.Y, pane=right.id)
     assert top.id == right.id and top.document is right.document
     assert bottom.document is not right.document
     assert tui.frame.focused_pane is left
@@ -203,16 +202,16 @@ def test_split_takes_an_explicit_pane_and_moves_no_focus():
 
 def test_pane_ids_are_monotonic_and_never_reused():
     tui = headless_tui(40, 6)
-    left, right = tui.split("vertical")
+    left, right = tui.split(Axis.X)
     assert (left.id, right.id) == ("primary", "pane-1")
     right.close()
-    first, second = tui.split("vertical", pane="primary")
+    first, second = tui.split(Axis.X, pane="primary")
     assert first.id == "primary" and second.id == "pane-2"
 
 
 def test_closing_a_child_returns_its_cells_and_the_focus():
     tui = headless_tui(40, 6)
-    left, right = tui.split("vertical")
+    left, right = tui.split(Axis.X)
     left.document.add(Rows("transcript"))
     right.document.add(Rows("preview"))
     tui.paint()
@@ -276,7 +275,7 @@ def test_reveal_answers_false_and_clamps_rows_and_fixed_regions():
     tui = headless_tui(40, 10)
     assert tui.reveal("head", 0) is False  # no composition yet
     _three_blocks(tui)
-    tui.add(Rows("status"), id="status", pin="bottom")
+    tui.add(Rows("status"), id="status", placement=Placement.BOTTOM)
     tui.paint()
     assert tui.viewport.offset == 21
 
@@ -326,8 +325,17 @@ async def test_a_button_press_comes_back_for_the_host_to_hit_test():
 
 
 def test_read_event_answers_none_without_a_source_or_on_a_non_live_screen():
-    assert asyncio.run(Runtime(screen=HeadlessScreen()).read_event()) is None
-    tui = Runtime(screen=TerminalScreen(io.StringIO()), keys=ScriptedEvents([key("a", "a")]))
+    assert asyncio.run(
+        Runtime(Terminal(TerminalOptions(screen=HeadlessScreen()))).read_event()
+    ) is None
+    tui = Runtime(
+        Terminal(
+            TerminalOptions(
+                screen=TerminalScreen(io.StringIO()),
+                input=ScriptedEvents([key("a", "a")]),
+            )
+        )
+    )
     assert asyncio.run(tui.read_event()) is None
 
 
@@ -349,7 +357,10 @@ class _BlockingSource:
 
 async def test_exit_unblocks_a_pending_read_event_immediately():
     source = _BlockingSource()
-    tui = Runtime(screen=HeadlessScreen(), keys=source, interactive=False)
+    tui = Runtime(
+        Terminal(TerminalOptions(screen=HeadlessScreen(), input=source)),
+        interactive=False,
+    )
     pending = asyncio.create_task(tui.read_event())
     tui.exit()
     assert await asyncio.wait_for(pending, 1) is None
@@ -363,7 +374,7 @@ async def test_a_terminal_driver_reads_through_the_terminal_source():
     screen = HeadlessScreen(20, 4)
     source = ScriptedEvents([key("a", "a"), None])
     terminal = Terminal(TerminalOptions(screen=screen, input=source))
-    tui = Runtime(terminal=terminal, interactive=False)
+    tui = Runtime(terminal, interactive=False)
 
     assert tui.screen is screen
     assert tui.keys is source
@@ -375,14 +386,14 @@ def test_a_terminal_driver_on_a_non_live_screen_reads_nothing():
     terminal = Terminal(
         TerminalOptions(stream=io.StringIO(), input=ScriptedEvents([key("a", "a")]))
     )
-    tui = Runtime(terminal=terminal, interactive=False)
+    tui = Runtime(terminal, interactive=False)
     assert asyncio.run(tui.read_event()) is None
 
 
 async def test_a_terminal_run_brackets_the_session_through_the_terminal():
     screen = HeadlessScreen(20, 3)
     tui = Runtime(
-        terminal=Terminal(TerminalOptions(screen=screen)), interactive=False
+        Terminal(TerminalOptions(screen=screen)), interactive=False
     )
 
     async def body(app: Runtime) -> None:
@@ -397,7 +408,7 @@ async def test_a_terminal_run_brackets_the_session_through_the_terminal():
 async def test_a_non_live_terminal_run_stays_silent_and_dumps_plain_text():
     stream = io.StringIO()
     tui = Runtime(
-        terminal=Terminal(TerminalOptions(stream=stream)), interactive=False
+        Terminal(TerminalOptions(stream=stream)), interactive=False
     )
     seen: list[str] = []
 
@@ -411,23 +422,26 @@ async def test_a_non_live_terminal_run_stays_silent_and_dumps_plain_text():
     assert enter_alt_screen() not in stream.getvalue()
 
 
-def test_the_terminal_wins_over_the_legacy_screen_and_keys():
-    legacy = HeadlessScreen(10, 2)
+def test_the_runtime_takes_the_terminal_as_its_only_endpoint():
     chosen = HeadlessScreen(20, 5)
     source = ScriptedEvents(())
     tui = Runtime(
-        screen=legacy,
-        keys=ScriptedEvents(()),
-        terminal=Terminal(TerminalOptions(screen=chosen, input=source)),
+        Terminal(TerminalOptions(screen=chosen, input=source)),
         interactive=False,
     )
     assert tui.screen is chosen
     assert tui.keys is source
+    with pytest.raises(TypeError):
+        Runtime(**{"screen": chosen})  # type: ignore[arg-type]
+    with pytest.raises(TypeError):
+        Runtime(
+            Terminal(TerminalOptions(screen=chosen)), **{"keys": source}  # type: ignore[arg-type]
+        )
 
 
 def test_a_terminal_driver_copies_through_the_terminal_clipboard():
     screen = HeadlessScreen()
-    tui = Runtime(terminal=Terminal(TerminalOptions(screen=screen)), interactive=False)
+    tui = Runtime(Terminal(TerminalOptions(screen=screen)), interactive=False)
     assert tui.copy_to_clipboard("copied") is True
     assert screen.output == copy_clipboard("copied")
 
@@ -452,7 +466,10 @@ async def test_exit_ends_run_async_and_a_second_session_starts_clean():
 
 def test_run_is_a_synchronous_entry_that_returns_when_the_session_exits():
     screen = RecordingScreen(20, 3, live=True)
-    tui = Runtime(screen=screen, keys=ScriptedEvents(()), interactive=False)
+    tui = Runtime(
+        Terminal(TerminalOptions(screen=screen, input=ScriptedEvents(()))),
+        interactive=False,
+    )
     tui.add(Text("hi"))
     # A host may end the session from inside the screen bracket; the sync
     # entry must still return once the session is over.
@@ -507,7 +524,7 @@ async def test_a_frame_mutation_after_a_session_does_not_raise():
 
 def _piped_tui() -> tuple[Runtime, io.StringIO]:
     stream = io.StringIO()
-    return Runtime(screen=TerminalScreen(stream)), stream
+    return Runtime(Terminal(TerminalOptions(screen=TerminalScreen(stream)))), stream
 
 
 async def test_a_non_live_run_stays_silent_and_dumps_plain_text():
@@ -527,7 +544,7 @@ async def test_a_non_live_run_stays_silent_and_dumps_plain_text():
 
 async def test_a_non_live_dump_degrades_on_a_stream_that_cannot_carry_the_frame():
     stream = io.TextIOWrapper(io.BytesIO(), encoding="cp1252")
-    tui = Runtime(screen=TerminalScreen(stream))
+    tui = Runtime(Terminal(TerminalOptions(screen=TerminalScreen(stream))))
     tui.add(Rows("\u2588 block"))
 
     async def body(app: Runtime) -> None:
@@ -542,7 +559,7 @@ async def test_a_non_live_dump_degrades_on_a_stream_that_cannot_carry_the_frame(
 def test_snapshot_renders_one_stanza_per_block():
     tui = headless_tui(80, 24)
     tui.add(Text("first\nsecond"))
-    tui.add(Text("foot"), pin="bottom")
+    tui.add(Text("foot"), placement=Placement.BOTTOM)
     text = snapshot(tui)
     assert text.startswith("[b0]\n  |first\n  |second\n")
     assert "[b1 | bottom]" in text
@@ -572,7 +589,7 @@ def test_the_bottom_dock_reserves_rows_beneath_the_pane_area():
     with pytest.raises(RuntimeError):
         tui.dock(Rows("second"))
     with pytest.raises(ValueError):
-        tui.dock(Rows("left"), edge="left")
+        tui.dock(Rows("left"), placement=Placement.FLOW)
 
     assert tui.undock() is dock
     tui.paint()
@@ -581,8 +598,8 @@ def test_the_bottom_dock_reserves_rows_beneath_the_pane_area():
 
 def test_top_and_bottom_docks_compose_and_an_empty_dock_keeps_no_rows():
     tui = headless_tui(20, 8)
-    top = tui.dock(Rows("top one", "top two"), edge="top")
-    bottom = tui.dock(Rows("bottom"), edge="bottom", size=1)
+    top = tui.dock(Rows("top one", "top two"), placement=Placement.TOP)
+    bottom = tui.dock(Rows("bottom"), placement=Placement.BOTTOM, size=1)
     tui.add(Rows("body"))
     tui.paint()
     assert rows(tui) == [
@@ -645,7 +662,7 @@ def test_the_pump_paints_on_the_throttle_and_runs_scheduled_callbacks():
 
     def grow() -> None:
         calls.append(1)
-        block.component.text += "x"
+        block.widget.text += "x"
         tui.refresh()
 
     handle = tui.every(0.010, grow)
@@ -704,7 +721,7 @@ def test_a_direct_frame_split_is_painted_by_the_pump():
     assert tui.tick(clock()) is None
     painted = len(tui.screen.output)
 
-    tui.frame.pane("primary").split("vertical")
+    tui.frame.pane("primary").split(Axis.X)
     clock.advance(0.05)
     tui.tick(clock())
     assert len(tui.screen.output) > painted

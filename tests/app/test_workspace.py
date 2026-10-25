@@ -8,12 +8,15 @@ from motui.app import Runtime, Workspace
 from motui.kernel import Selection
 from motui.kernel.document import Placement
 from motui.kernel.geom import Axis
-from motui.terminal import HeadlessScreen
+from motui.terminal import HeadlessScreen, Terminal, TerminalOptions
 from motui.widgets.text import Text
 
 
 def _runtime(width: int = 40, height: int = 6) -> Runtime:
-    return Runtime(screen=HeadlessScreen(width, height), interactive=False)
+    return Runtime(
+        Terminal(TerminalOptions(screen=HeadlessScreen(width, height))),
+        interactive=False,
+    )
 
 
 def test_the_facade_reads_the_runtime_it_was_made_from():
@@ -26,7 +29,8 @@ def test_the_facade_reads_the_runtime_it_was_made_from():
     assert workspace.frame is runtime.frame
     assert workspace.panes == runtime.frame.panes
     assert runtime.workspace is workspace  # cached, one facade per runtime
-    assert runtime.terminal is None  # the legacy screen path has no terminal
+    assert isinstance(runtime.terminal, Terminal)
+    assert runtime.terminal.screen is runtime.screen
 
 
 def test_add_get_and_remove_delegate_to_the_runtime():
@@ -57,7 +61,7 @@ def test_fill_split_and_pane_delegate_to_the_runtime():
     assert section.id == runtime.document.blocks()[0].id
     assert runtime.document.fills() == (section,)
 
-    left, right = workspace.split("vertical")
+    left, right = workspace.split(Axis.X)
     assert [pane.id for pane in workspace.panes] == ["primary", "pane-1"]
     assert workspace.pane(right.id) is right
     assert workspace.frame.focused_pane is left

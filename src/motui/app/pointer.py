@@ -18,7 +18,8 @@ hover where a component implements ``on_hover``, and completing a stationary
 click through the mounted :class:`~motui.app.focus.FocusManager` (or dispatching
 the deepest clickable leaf itself when there is none).  A host mounts it
 explicitly, the same rule the gesture and the ring follow, and opens 1003 with
-``Runtime(hover=True)`` -- a pointer without 1003 never sees a motion report::
+``TerminalOptions(mouse=MouseMode.MOVE)`` -- a pointer without 1003 never
+sees a motion report::
 
     gesture = SelectionGesture(tui)      # the drag selection
     pointer = Pointer(tui, ring=ring)    # the hover and the click
@@ -65,8 +66,8 @@ class Pointer:
     **Three contracts hold the tier together.**
 
     *Hover needs the terminal's any-event tracking.*  The host must open
-    DECSET 1003 (``Runtime(hover=True)`` / ``TerminalScreen(hover=True)`` /
-    ``HeadlessScreen(hover=True)``): under the default 1002 the terminal
+    DECSET 1003 (``TerminalOptions(mouse=MouseMode.MOVE)`` /
+    ``TerminalScreen(hover=True)`` / ``HeadlessScreen(hover=True)``): under the default 1002 the terminal
     reports motion only while a button is held, and a pointer that only
     moves is never heard -- the pointer cannot ask for the mode itself.
 
@@ -214,7 +215,7 @@ class Pointer:
         row = col = -1
         hit = self._tui.hit(x, y)
         if hit is not None:
-            target, row, col = descend(hit.block.component, hit.row, hit.col)
+            target, row, col = descend(hit.block.widget, hit.row, hit.col)
         return self._set_hovered(target, row, col)
 
     def _set_hovered(self, target: Component | None, row: int, col: int) -> bool:
@@ -271,7 +272,7 @@ class Pointer:
             return False
         if self._ring is not None:
             return self._ring.click(hit)
-        component, row, col = descend(hit.block.component, hit.row, hit.col)
+        component, row, col = descend(hit.block.widget, hit.row, hit.col)
         if not bool(getattr(component, "clickable", False)):
             return False
         on_click = getattr(component, "on_click", None)

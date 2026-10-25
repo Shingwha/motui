@@ -76,7 +76,7 @@ def _command_palette(b) -> None:
 
     def note(report) -> None:
         if report.source is opener:
-            b.session.open_palette()
+            b.session.open_palette(b.session.commands)
 
     b.note(note)
 

@@ -54,7 +54,7 @@ from motui.demo import Session  # noqa: E402
 from motui.demo.registry import TOPICS  # noqa: E402
 from motui.demo.script import HEADLESS_H, HEADLESS_W  # noqa: E402
 from motui.kernel.style import Style  # noqa: E402
-from motui.terminal import HeadlessScreen  # noqa: E402
+from motui.terminal import HeadlessScreen, TerminalOptions  # noqa: E402
 from motui.testing import Emulator  # noqa: E402
 
 #: Where the semantic snapshots live: one ``<section>--<topic>.txt`` per topic.
@@ -77,7 +77,7 @@ def frame(topic, width: int = HEADLESS_W, height: int = HEADLESS_H) -> Emulator:
     the recorded bytes are fed to a fresh emulator.
     """
     screen = HeadlessScreen(width, height)
-    session = Session(screen=screen, interactive=False)
+    session = Session(terminal=TerminalOptions(screen=screen))
     session.show_topic(topic.key, toast=False)
     session.runtime.paint()
     emulator = Emulator(width, height)

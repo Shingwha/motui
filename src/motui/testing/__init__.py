@@ -21,6 +21,7 @@ from __future__ import annotations
 from collections.abc import Iterable
 
 from ..app import Runtime
+from ..kernel.document import Placement
 from ..kernel.events import Event, EventSource
 from ..kernel.layout import Constraints
 from ..terminal.screen import HeadlessScreen, TerminalOptions
@@ -68,12 +69,8 @@ def headless_tui(
     readable from ``tui.screen.output``.
     """
     source = keys if keys is not None else ScriptedEvents(script or ())
-    return Runtime(
-        terminal=Terminal(
-            TerminalOptions(screen=HeadlessScreen(width, height), input=source)
-        ),
-        interactive=False,
-    )
+    terminal = Terminal(TerminalOptions(screen=HeadlessScreen(width, height), input=source))
+    return Runtime(terminal, interactive=False)
 
 
 def snapshot(tui: Runtime) -> str:
@@ -88,9 +85,9 @@ def snapshot(tui: Runtime) -> str:
     width = tui.screen.width
     out: list[str] = []
     for block in tui.document.blocks():
-        if block.pin is None:
+        if block.placement is Placement.FLOW:
             out.append(f"[{block.id}]")
         else:
-            out.append(f"[{block.id} | {block.pin}]")
+            out.append(f"[{block.id} | {block.placement.value}]")
         out.extend("  |" + row.text for row in block.render(Constraints(width=width)))
     return "\n".join(out)

@@ -15,7 +15,7 @@ from dataclasses import replace
 import pytest
 
 from motui.kernel.cell import Line, cut_line, slice_line
-from motui.kernel.document import Document
+from motui.kernel.document import Document, Placement
 from motui.kernel.frame import (
     Chrome,
     Frame,
@@ -25,6 +25,7 @@ from motui.kernel.frame import (
     Split,
     splice_row,
 )
+from motui.kernel.geom import Axis
 from motui.kernel.layout import ScreenLayout, Viewport
 from motui.kernel.text import index_bounds_at_columns
 from motui.widgets.text import Text
@@ -42,7 +43,7 @@ def _wrapping_pane(pane_id: str, rect: Rect, *texts: str) -> Pane:
 
 
 def _side_by_side() -> Frame:
-    left, right = Split("vertical", (1, 1)).rects(Rect(x=0, y=0, width=20, height=3))
+    left, right = Split(Axis.X, (1, 1)).rects(Rect(x=0, y=0, width=20, height=3))
     return Frame(
         [
             _pane("left", left, "l0", "l1", "l2"),
@@ -92,58 +93,62 @@ def test_rect_is_a_non_negative_value_with_edges():
     assert (rect.right, rect.bottom) == (12, 7)
 
 
-def test_split_ratios_tile_the_span_exactly():
+def test_split_weights_tile_the_span_exactly():
     cases = [
-        ("vertical", 40, (1, 1), [20, 20]),
-        ("vertical", 41, (1, 1), [20, 21]),
-        ("vertical", 10, (2, 1), [6, 4]),
-        ("horizontal", 12, (1, 3), [3, 9]),
-        ("vertical", 12, (1, 1, 1), [4, 4, 4]),
-        ("vertical", 5, (1, 1), [2, 3]),
-        ("vertical", 3, (3, 1), [2, 1]),
-        ("vertical", 1, (1, 1), [1, 0]),
+        (Axis.X, 40, (1, 1), [20, 20]),
+        (Axis.X, 41, (1, 1), [20, 21]),
+        (Axis.X, 10, (2, 1), [6, 4]),
+        (Axis.Y, 12, (1, 3), [3, 9]),
+        (Axis.X, 12, (1, 1, 1), [4, 4, 4]),
+        (Axis.X, 5, (1, 1), [2, 3]),
+        (Axis.X, 3, (3, 1), [2, 1]),
+        (Axis.X, 1, (1, 1), [1, 0]),
     ]
-    for orientation, span, ratios, expected in cases:
-        rect = Rect(x=0, y=0, width=span, height=3) if orientation == "vertical" else Rect(x=0, y=0, width=3, height=span)
-        rects = Split(orientation, ratios, 1).rects(rect)
+    for axis, span, weights, expected in cases:
+        rect = (
+            Rect(x=0, y=0, width=span, height=3)
+            if axis is Axis.X
+            else Rect(x=0, y=0, width=3, height=span)
+        )
+        rects = Split(axis, weights, 1).rects(rect)
         sizes = [
-            part.width if orientation == "vertical" else part.height for part in rects
+            part.width if axis is Axis.X else part.height for part in rects
         ]
         assert sizes == expected
-        if orientation == "vertical":
+        if axis is Axis.X:
             assert [part.x for part in rects] == [
                 sum(expected[:index]) for index in range(len(expected))
             ]
 
 
 def test_split_validates_its_arguments():
-    for ratios in ((), (0, 0), (-1, 1)):
+    for weights in ((), (0, 0), (-1, 1)):
         with pytest.raises(ValueError):
-            Split("vertical", ratios)
+            Split(Axis.X, weights)
     with pytest.raises(ValueError):
-        Split("diagonal", (1, 1))
+        Split("vertical", (1, 1))  # type: ignore[arg-type]
     with pytest.raises(ValueError):
-        Split("vertical", (1, 1), -1)
+        Split(Axis.X, (1, 1), -1)
 
 
 def test_a_split_pane_keeps_its_document_and_chrome_in_the_first_child():
     pane = _wrapping_pane("primary", Rect(x=0, y=0, width=20, height=4), "kept")
     marker = _marker_chrome("right", 1, "#")
     pane.add_chrome(marker)
-    left, right = pane.split("vertical", ratios=(2, 1))
+    left, right = pane.split(Axis.X, weights=(2, 1))
     assert left.id == "primary" and right.id == "pane-1"
     assert left.viewport is pane.viewport and left.chrome == (marker,)
     assert right.document.blocks() == ()
     assert pane.division is not None and pane.children == (left, right)
     with pytest.raises(RuntimeError):
-        pane.split("horizontal")
+        pane.split(Axis.Y)
 
 
 def test_closing_one_of_two_collapses_the_parent_and_strips_the_divider():
     pane = _wrapping_pane("primary", Rect(x=0, y=0, width=20, height=4), "0123456789")
     bar = _marker_chrome("right", 1, "#")
     pane.add_chrome(bar)
-    left, right = pane.split("vertical", ratios=(2, 1))
+    left, right = pane.split(Axis.X, weights=(2, 1))
     left.add_chrome(_divider_chrome("right"))
     right.document.add(Rows("R"))
     frame = Frame([pane])
@@ -162,7 +167,7 @@ def test_closing_a_later_child_keeps_the_parents_id():
     other = _pane("other", Rect(x=0, y=0, width=20, height=3), "o")
     root = _pane("primary", Rect(x=0, y=0, width=30, height=3), "a")
     frame = Frame([other, root])
-    panes = root.split("vertical", ratios=(1, 1, 1))
+    panes = root.split(Axis.X, weights=(1, 1, 1))
     panes[2].focus()
     panes[0].close()
     assert frame.focused_pane is panes[2]
@@ -178,7 +183,7 @@ def test_closing_one_of_three_redivides_over_the_survivors():
     for closed in (0, 1, 2):
         root = Pane("primary", Rect(x=0, y=0, width=30, height=3), Viewport(Document()))
         frame = Frame([root])
-        panes = root.split("vertical", ratios=(1, 1, 1))
+        panes = root.split(Axis.X, weights=(1, 1, 1))
         for before in panes[:-1]:
             before.add_chrome(_divider_chrome("right"))
         for index, pane in enumerate(panes):
@@ -186,7 +191,7 @@ def test_closing_one_of_three_redivides_over_the_survivors():
         panes[closed].close()
         survivors = tuple(pane for index, pane in enumerate(panes) if index != closed)
         assert frame.panes == survivors
-        assert root.division.ratios == (1, 1)
+        assert root.division.weights == (1, 1)
         assert [pane.rect for pane in survivors] == [
             Rect(x=0, y=0, width=15, height=3),
             Rect(x=15, y=0, width=15, height=3),
@@ -208,7 +213,7 @@ def test_a_focused_close_hands_focus_to_the_pane_that_took_its_place():
     for closed in (0, 1, 2):
         root = _pane("primary", Rect(x=0, y=0, width=30, height=3))
         frame = Frame([root])
-        panes = root.split("vertical", ratios=(1, 1, 1))
+        panes = root.split(Axis.X, weights=(1, 1, 1))
         panes[closed].focus()
         panes[closed].close()
         survivors = [pane for index, pane in enumerate(panes) if index != closed]
@@ -220,7 +225,7 @@ def test_close_refuses_a_root_a_container_a_second_close_and_a_loose_pane():
     root = frame.panes[0]
     with pytest.raises(RuntimeError):
         root.close()
-    left, right = root.split("vertical")
+    left, right = root.split(Axis.X)
     with pytest.raises(RuntimeError):
         root.close()
     left.close()
@@ -233,13 +238,13 @@ def test_close_refuses_a_root_a_container_a_second_close_and_a_loose_pane():
 def test_closing_inside_a_nested_split_keeps_the_outer_tree():
     root = _pane("primary", Rect(x=0, y=0, width=40, height=8))
     frame = Frame([root])
-    left, right = root.split("vertical", ratios=(1, 1))
-    top, bottom = right.split("horizontal", ratios=(1, 1))
+    left, right = root.split(Axis.X, weights=(1, 1))
+    top, bottom = right.split(Axis.Y, weights=(1, 1))
     frame.retile(Rect(x=0, y=0, width=40, height=8))
     bottom.close()
     assert right.division is None and right.viewport is top.viewport
     assert right.rect == Rect(x=20, y=0, width=20, height=8)
-    assert root.division.ratios == (1, 1)
+    assert root.division.weights == (1, 1)
     assert [pane.rect for pane in frame.panes] == [
         Rect(x=0, y=0, width=20, height=8),
         Rect(x=20, y=0, width=20, height=8),
@@ -249,18 +254,18 @@ def test_closing_inside_a_nested_split_keeps_the_outer_tree():
 def test_closing_the_only_child_restores_the_leaf_and_collapse_adopts_a_subtree():
     pane = _pane("primary", Rect(x=0, y=0, width=12, height=2), "a", "b")
     frame = Frame([pane])
-    (only,) = pane.split("vertical", ratios=(1,))
+    (only,) = pane.split(Axis.X, weights=(1,))
     only.close()
     assert pane.division is None and frame.panes == (pane,)
     assert [row.text for row in frame.compose(12, 2).rows] == ["a", "b"]
 
     root = _pane("primary", Rect(x=0, y=0, width=40, height=8))
     frame = Frame([root])
-    left, right = root.split("vertical", ratios=(1, 1))
-    top, bottom = right.split("horizontal", ratios=(1, 1))
+    left, right = root.split(Axis.X, weights=(1, 1))
+    top, bottom = right.split(Axis.Y, weights=(1, 1))
     frame.retile(Rect(x=0, y=0, width=40, height=8))
     left.close()
-    assert root.division.orientation == "horizontal"
+    assert root.division.axis is Axis.Y
     assert root.children == (top, bottom)
     assert [pane.rect for pane in frame.panes] == [
         Rect(x=0, y=0, width=40, height=4),
@@ -270,7 +275,7 @@ def test_closing_the_only_child_restores_the_leaf_and_collapse_adopts_a_subtree(
 
 def test_retile_re_divides_the_tree_and_keeps_every_panes_state():
     frame = Frame([_pane("primary", Rect(x=0, y=0, width=0, height=0), "r0")])
-    left, right = frame.panes[0].split("vertical", ratios=(1, 1))
+    left, right = frame.panes[0].split(Axis.X, weights=(1, 1))
     spy = _spy_chrome("right", 1, [], "s")
     left.add_chrome(spy)
     frame.retile(Rect(x=0, y=0, width=40, height=4))
@@ -278,7 +283,7 @@ def test_retile_re_divides_the_tree_and_keeps_every_panes_state():
     assert frame.panes == (left, right) and left.chrome == (spy,)
     frame.retile(Rect(x=0, y=0, width=20, height=4))
     assert (left.rect, right.rect) == (Rect(x=0, y=0, width=10, height=4), Rect(x=10, y=0, width=10, height=4))
-    top, bottom = right.split("horizontal", ratios=(1, 1))
+    top, bottom = right.split(Axis.Y, weights=(1, 1))
     frame.retile(Rect(x=0, y=0, width=40, height=8))
     assert [pane.rect for pane in frame.panes] == [
         Rect(x=0, y=0, width=20, height=8),
@@ -302,7 +307,7 @@ def test_focus_names_the_pane_input_routes_to():
 
 def test_a_dock_composes_beneath_the_panes_and_never_takes_focus():
     frame = Frame([_pane("primary", Rect(x=0, y=0, width=0, height=0), "l0", "l1", "l2")])
-    left, right = frame.panes[0].split("vertical", ratios=(1, 1))
+    left, right = frame.panes[0].split(Axis.X, weights=(1, 1))
     right.document.add(Rows("r0", "r1", "r2"))
     dock = Pane("dock", Rect(x=0, y=3, width=20, height=1), Viewport(document("f0")))
     frame.set_dock("bottom", dock)
@@ -324,7 +329,7 @@ def test_a_dock_composes_beneath_the_panes_and_never_takes_focus():
     with pytest.raises(ValueError):
         frame.focus("dock")
     with pytest.raises(RuntimeError):
-        dock.split("vertical")
+        dock.split(Axis.X)
     with pytest.raises(RuntimeError):
         dock.close()
     frame.retile(Rect(x=0, y=0, width=20, height=3))
@@ -360,9 +365,9 @@ def test_two_panes_compose_side_by_side_and_own_their_cells():
 
 
 def test_a_four_pane_nested_frame_composes_every_quadrant():
-    left, right = Split("vertical", (1, 1)).rects(Rect(x=0, y=0, width=20, height=4))
-    lt, lb = Split("horizontal", (1, 1)).rects(left)
-    rt, rb = Split("horizontal", (1, 1)).rects(right)
+    left, right = Split(Axis.X, (1, 1)).rects(Rect(x=0, y=0, width=20, height=4))
+    lt, lb = Split(Axis.Y, (1, 1)).rects(left)
+    rt, rb = Split(Axis.Y, (1, 1)).rects(right)
     frame = Frame(
         [
             _pane("lt", lt, "a0", "a1"),
@@ -391,7 +396,7 @@ def test_a_lone_full_frame_pane_composes_to_its_own_layout():
     assert composed is frame.pane_layout("primary")
     assert [row.text for row in composed.rows] == ["r1", "r2", "r3", "r4"]
     assert composed.row_blocks == (("b0", 1), ("b0", 2), ("b0", 3), ("b0", 4))
-    top, bottom = Split("horizontal", (1, 1)).rects(Rect(x=0, y=0, width=40, height=4))
+    top, bottom = Split(Axis.Y, (1, 1)).rects(Rect(x=0, y=0, width=40, height=4))
     stacked = Frame([_pane("top", top, "t0", "t1"), _pane("below", bottom, "u0", "u1")])
     assert [row.text for row in stacked.compose(40, 4).rows] == ["t0", "t1", "u0", "u1"]
 
@@ -464,7 +469,7 @@ def test_an_unchanged_plan_still_hands_the_memoized_row_back():
 
 
 def test_a_single_full_width_write_composes_to_its_own_line():
-    top, bottom = Split("horizontal", (1, 1)).rects(Rect(x=0, y=0, width=20, height=4))
+    top, bottom = Split(Axis.Y, (1, 1)).rects(Rect(x=0, y=0, width=20, height=4))
     frame = Frame([_pane("top", top, "t0", "t1"), _pane("below", bottom, "u0", "u1")])
     composed = frame.compose(20, 4)
     pane_rows = frame.pane_layout("top").rows
@@ -575,7 +580,7 @@ def test_inner_rect_subtracts_every_chrome_budget_and_bands_partition():
 
 
 def test_a_right_chrome_reserves_its_column_and_the_pane_rewraps_beside_it():
-    left, right = Split("vertical", (1, 1)).rects(Rect(x=0, y=0, width=20, height=3))
+    left, right = Split(Axis.X, (1, 1)).rects(Rect(x=0, y=0, width=20, height=3))
     framed = _wrapping_pane("right", right, "0123456789")
     framed.add_chrome(_marker_chrome("right", 1))
     frame = Frame([_pane("left", left, "l0", "l1", "l2"), framed])
@@ -606,7 +611,7 @@ def test_chromes_stack_in_order_and_the_divider_stacks_outermost():
 
     pane = _wrapping_pane("primary", Rect(x=0, y=0, width=20, height=3), "0123456789")
     pane.add_chrome(_marker_chrome("right", 1, "#"))
-    left, right = pane.split("vertical", ratios=(1, 1))
+    left, right = pane.split(Axis.X, weights=(1, 1))
     left.add_chrome(_divider_chrome("right"))
     right.document.add(Rows("rst"))
     frame = Frame([pane])
@@ -714,8 +719,8 @@ def test_a_body_scope_refuses_an_edge_that_owns_its_rows():
 def _windowed_pane() -> tuple[Pane, Chrome]:
     """A 6x4 pane with a one-row pinned header and footer: a 2-row window."""
     pane = _pane("primary", Rect(x=0, y=0, width=6, height=4), "a", "b")
-    pane.document.add(Rows("head"), id="head", pin="top")
-    pane.document.add(Rows("foot"), id="foot", pin="bottom")
+    pane.document.add(Rows("head"), id="head", placement=Placement.TOP)
+    pane.document.add(Rows("foot"), id="foot", placement=Placement.BOTTOM)
     chrome = Chrome(
         "right",
         1,
@@ -742,8 +747,8 @@ def test_a_body_band_paints_the_window_and_its_length_is_the_window_height():
         return [Line.from_text("-")] * length
 
     pane = _pane("primary", Rect(x=0, y=0, width=6, height=4), "a", "b")
-    pane.document.add(Rows("head"), id="head", pin="top")
-    pane.document.add(Rows("foot"), id="foot", pin="bottom")
+    pane.document.add(Rows("head"), id="head", placement=Placement.TOP)
+    pane.document.add(Rows("foot"), id="foot", placement=Placement.BOTTOM)
     pane.add_chrome(Chrome("right", 1, paint, scope="body"))
     layout = Frame([pane]).compose(6, 4)
     assert seen == [2]
@@ -792,7 +797,7 @@ def test_overlays_paint_back_to_front_by_layer_keeping_registration_order():
 
 
 def test_with_pane_rows_splices_a_rewrite_back_at_the_pane():
-    left, right = Split("vertical", (1, 1)).rects(Rect(x=0, y=0, width=20, height=2))
+    left, right = Split(Axis.X, (1, 1)).rects(Rect(x=0, y=0, width=20, height=2))
     frame = Frame([_pane("left", left, "l0", "l1"), _pane("right", right, "r0", "r1")])
     composed = frame.compose(20, 2)
     painted = frame.with_pane_rows(
@@ -810,6 +815,6 @@ def test_with_pane_rows_splices_a_rewrite_back_at_the_pane():
 
 def test_split_children_are_adopted_the_moment_they_exist():
     frame = Frame([Pane("primary", Rect(x=0, y=0, width=20, height=4), Viewport(Document()))])
-    left, right = frame.panes[0].split("vertical")
+    left, right = frame.panes[0].split(Axis.X)
     right.focus()
     assert frame.focused_pane is right

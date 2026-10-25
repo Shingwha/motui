@@ -91,8 +91,13 @@ class _Wide:
         return Surface.of(lines, self.columns, pad=False)
 
 
+def _app(*, screen: object = None, keys: object = None, **kwargs: object) -> App:
+    """An App over the 2.0 :class:`TerminalOptions` door."""
+    return App(terminal=TerminalOptions(screen=screen, input=keys), **kwargs)  # type: ignore[arg-type]
+
+
 def test_add_focus_and_bind_reach_the_right_component():
-    app = App(
+    app = _app(
         screen=HeadlessScreen(40, 6),
         keys=ScriptedEvents([key("a", "a"), key("enter"), None]),
     )
@@ -110,7 +115,7 @@ def test_add_focus_and_bind_reach_the_right_component():
 
 
 def test_fill_replaces_the_pane_and_mounts_theme_and_focus():
-    app = App(screen=HeadlessScreen(20, 5), keys=ScriptedEvents(()))
+    app = _app(screen=HeadlessScreen(20, 5), keys=ScriptedEvents(()))
     app.add(Rows("head"))
     button = Button("Go")
     section = app.fill(button)
@@ -125,7 +130,7 @@ def test_fill_replaces_the_pane_and_mounts_theme_and_focus():
 
 
 def test_add_themes_every_widget_of_a_nested_tree():
-    app = App(screen=HeadlessScreen(30, 6), keys=ScriptedEvents(()))
+    app = _app(screen=HeadlessScreen(30, 6), keys=ScriptedEvents(()))
     name, button = Input(), Button("Go")
     panel = Panel(Row([name, button]), title="nested")
 
@@ -137,7 +142,7 @@ def test_add_themes_every_widget_of_a_nested_tree():
 
 
 def test_add_themes_a_scroll_panels_child_through_its_subtree():
-    app = App(screen=HeadlessScreen(30, 6), keys=ScriptedEvents(()))
+    app = _app(screen=HeadlessScreen(30, 6), keys=ScriptedEvents(()))
     child = Input()
     view = ScrollPanel(child, height=2)
 
@@ -148,7 +153,7 @@ def test_add_themes_a_scroll_panels_child_through_its_subtree():
 
 
 def test_add_themes_a_forms_fields_through_its_scope():
-    app = App(screen=HeadlessScreen(30, 8), keys=ScriptedEvents(()))
+    app = _app(screen=HeadlessScreen(30, 8), keys=ScriptedEvents(()))
     form = Form([Field("name", Input()), Field("email", Input())])
 
     app.add(form)
@@ -158,7 +163,7 @@ def test_add_themes_a_forms_fields_through_its_scope():
 
 
 def test_removing_a_parent_drops_its_subtree_from_the_ring():
-    app = App(screen=HeadlessScreen(30, 6), keys=ScriptedEvents(()))
+    app = _app(screen=HeadlessScreen(30, 6), keys=ScriptedEvents(()))
     button = Button("Go")
     block = app.add(Row([button]))
     assert app.focus(button) is True
@@ -172,7 +177,7 @@ def test_removing_a_parent_drops_its_subtree_from_the_ring():
 
 
 def test_app_split_dock_and_undock_accept_the_2_0_enums():
-    app = App(screen=HeadlessScreen(40, 8), keys=ScriptedEvents(()))
+    app = _app(screen=HeadlessScreen(40, 8), keys=ScriptedEvents(()))
     left, right = app.split(Axis.X, weights=(2, 1))
     assert [pane.id for pane in app.workspace.panes] == ["primary", "pane-1"]
     assert left.rect.width > right.rect.width
@@ -182,12 +187,12 @@ def test_app_split_dock_and_undock_accept_the_2_0_enums():
     assert app.workspace.frame.dock("top") is top
     assert app.workspace.frame.dock("bottom") is bottom
     assert app.undock(Placement.BOTTOM) is bottom
-    assert app.undock("top") is top  # legacy edge string, kept through 2.0
+    assert app.undock(Placement.TOP) is top
 
 
 def test_remove_takes_the_section_add_answered():
     """The 2.0 removal door is the ``Section`` value, not a bare id."""
-    app = App(screen=HeadlessScreen(20, 4), keys=ScriptedEvents(()))
+    app = _app(screen=HeadlessScreen(20, 4), keys=ScriptedEvents(()))
     section = app.add(Rows("one"))
 
     assert app.remove(section) is section
@@ -197,7 +202,7 @@ def test_remove_takes_the_section_add_answered():
 
 
 def test_app_proxies_the_runtime_schedule_and_paint():
-    app = App(screen=HeadlessScreen(20, 3), keys=ScriptedEvents(()))
+    app = _app(screen=HeadlessScreen(20, 3), keys=ScriptedEvents(()))
     app.runtime._clock = lambda: 0.0
     calls: list[str] = []
     timer = app.every(0.05, lambda: calls.append("tick"))
@@ -216,7 +221,7 @@ def test_app_proxies_the_runtime_schedule_and_paint():
 
 
 def test_walk_visits_each_mounted_node_once_in_frame_order():
-    app = App(screen=HeadlessScreen(30, 6), keys=ScriptedEvents(()))
+    app = _app(screen=HeadlessScreen(30, 6), keys=ScriptedEvents(()))
     button = Button("Go")
     row = Row([button])
     section = app.add(row)
@@ -232,12 +237,16 @@ def test_walk_visits_each_mounted_node_once_in_frame_order():
 
 
 def test_set_focus_targets_is_gone():
-    app = App(screen=HeadlessScreen(20, 4), keys=ScriptedEvents(()))
+    app = _app(screen=HeadlessScreen(20, 4), keys=ScriptedEvents(()))
     assert not hasattr(app, "set_focus_targets")
 
 
 def test_resize_reaches_every_widget_and_is_not_consumed():
-    app = _HostApp(screen=HeadlessScreen(40, 8), keys=ScriptedEvents(()))
+    app = _HostApp(
+        terminal=TerminalOptions(
+            screen=HeadlessScreen(40, 8), input=ScriptedEvents(())
+        )
+    )
     left, right = _ResizeRecorder(), _ResizeRecorder()
     app.add(Form([Field("row", Row([left, right]))]))
     event = resize(100, 30)
@@ -249,7 +258,7 @@ def test_resize_reaches_every_widget_and_is_not_consumed():
 
 
 def test_a_fill_section_added_through_the_app_takes_the_remainder():
-    app = App(screen=HeadlessScreen(20, 5), keys=ScriptedEvents(()))
+    app = _app(screen=HeadlessScreen(20, 5), keys=ScriptedEvents(()))
     app.add(Rows("head"))
     app.add(Rows("game"), sizing=Sizing.FILL)
     app.runtime.paint()
@@ -257,7 +266,7 @@ def test_a_fill_section_added_through_the_app_takes_the_remainder():
 
 
 def test_the_wheel_routes_to_the_nearest_scrollable():
-    app = App(screen=HeadlessScreen(40, 8), keys=ScriptedEvents(()))
+    app = _app(screen=HeadlessScreen(40, 8), keys=ScriptedEvents(()))
     view = ScrollPanel(Rows(*many(10)), height=3, bar=True)
     app.add(view)
     app.runtime.paint()
@@ -275,7 +284,7 @@ def test_the_wheel_routes_to_the_nearest_scrollable():
 
 
 def test_the_horizontal_wheel_moves_the_x_panel_under_the_pointer():
-    app = App(screen=HeadlessScreen(40, 8), keys=ScriptedEvents(()))
+    app = _app(screen=HeadlessScreen(40, 8), keys=ScriptedEvents(()))
     view = ScrollPanel(_Wide(), height=3, axis="x")
     app.add(view)
     app.runtime.paint()
@@ -289,7 +298,7 @@ def test_the_horizontal_wheel_moves_the_x_panel_under_the_pointer():
 
 
 def test_the_horizontal_wheel_declines_a_vertical_only_panel():
-    app = App(screen=HeadlessScreen(40, 8), keys=ScriptedEvents(()))
+    app = _app(screen=HeadlessScreen(40, 8), keys=ScriptedEvents(()))
     view = ScrollPanel(Rows(*many(10)), height=3, axis="y")
     app.add(view)
     app.runtime.paint()
@@ -299,7 +308,7 @@ def test_the_horizontal_wheel_declines_a_vertical_only_panel():
 
 
 def test_the_vertical_wheel_leaves_the_horizontal_offset_alone():
-    app = App(screen=HeadlessScreen(40, 8), keys=ScriptedEvents(()))
+    app = _app(screen=HeadlessScreen(40, 8), keys=ScriptedEvents(()))
     view = ScrollPanel(_Wide(rows=10), height=3, axis="x")
     app.add(view)
     app.runtime.paint()
@@ -314,7 +323,7 @@ def test_the_vertical_wheel_leaves_the_horizontal_offset_alone():
 
 
 def test_the_vertical_wheel_still_scrolls_the_pane_outside_a_widget():
-    app = App(screen=HeadlessScreen(40, 8), keys=ScriptedEvents(()))
+    app = _app(screen=HeadlessScreen(40, 8), keys=ScriptedEvents(()))
     app.add(Rows(*many(30)))
     app.runtime.paint()
     pane = app.runtime.frame.focused_pane
@@ -326,7 +335,7 @@ def test_the_vertical_wheel_still_scrolls_the_pane_outside_a_widget():
 
 
 def test_a_bar_drag_moves_the_scroll_view_without_a_selection():
-    app = App(screen=HeadlessScreen(40, 8), keys=ScriptedEvents(()))
+    app = _app(screen=HeadlessScreen(40, 8), keys=ScriptedEvents(()))
     view = ScrollPanel(Rows(*many(10)), height=3, bar=True)
     app.add(view)
     app.runtime.paint()
@@ -343,7 +352,7 @@ def test_a_bar_drag_moves_the_scroll_view_without_a_selection():
 
 
 def test_mounted_controllers_dispatch_before_bindings_and_theme():
-    app = App(screen=HeadlessScreen(40, 6), keys=ScriptedEvents(()))
+    app = _app(screen=HeadlessScreen(40, 6), keys=ScriptedEvents(()))
     controller = _Controller()
     app.mount(controller)
     fired: list[str] = []
@@ -369,7 +378,7 @@ def test_mounted_controllers_dispatch_before_bindings_and_theme():
 
 
 def test_a_non_dispatching_mount_is_kept_but_not_fed():
-    app = App(screen=HeadlessScreen(40, 6), keys=ScriptedEvents(()))
+    app = _app(screen=HeadlessScreen(40, 6), keys=ScriptedEvents(()))
     controller = _Controller()
     app.mount(controller, dispatch=False)
 
@@ -379,7 +388,7 @@ def test_a_non_dispatching_mount_is_kept_but_not_fed():
 
 
 def test_a_form_owns_its_fields_and_a_click_moves_its_cursor():
-    app = App(screen=HeadlessScreen(40, 12), keys=ScriptedEvents(()))
+    app = _app(screen=HeadlessScreen(40, 12), keys=ScriptedEvents(()))
     name, email = Input(), Input()
     form = Form(
         [
@@ -409,7 +418,7 @@ def test_a_form_owns_its_fields_and_a_click_moves_its_cursor():
 
 def test_the_app_composes_a_runtime_workspace_and_terminal():
     screen = HeadlessScreen(20, 4)
-    app = App(screen=screen, keys=ScriptedEvents(()), auto=False)
+    app = _app(screen=screen, keys=ScriptedEvents(()), auto=False)
 
     assert isinstance(app.runtime, Runtime)
     assert isinstance(app.workspace, Workspace)
@@ -433,20 +442,19 @@ def test_terminal_options_build_the_screen_and_input_the_driver_uses():
 def test_terminal_options_win_over_the_legacy_arguments():
     legacy = HeadlessScreen(10, 2)
     chosen = HeadlessScreen(20, 5)
-    app = App(
-        screen=legacy,
-        keys=ScriptedEvents(()),
-        terminal=TerminalOptions(screen=chosen),
-        auto=False,
-    )
+    app = App(terminal=TerminalOptions(screen=chosen), auto=False)
     assert app.terminal.screen is chosen
     assert app.runtime.screen is chosen
+    with pytest.raises(TypeError):
+        App(**{"screen": legacy})  # type: ignore[arg-type]
+    with pytest.raises(TypeError):
+        App(**{"keys": ScriptedEvents(())})  # type: ignore[arg-type]
 
 
-def test_legacy_arguments_fold_into_the_app_terminal():
+def test_the_app_builds_its_terminal_from_the_options():
     screen = HeadlessScreen(30, 6)
     source = ScriptedEvents(())
-    app = App(screen=screen, keys=source, auto=False)
+    app = App(terminal=TerminalOptions(screen=screen, input=source), auto=False)
 
     assert isinstance(app.terminal, Terminal)
     assert app.terminal.screen is screen
@@ -455,12 +463,16 @@ def test_legacy_arguments_fold_into_the_app_terminal():
     assert app.runtime.keys is source
 
 
-def test_the_legacy_mouse_and_hover_switches_map_to_one_mode():
+def test_the_mouse_mode_flows_from_the_terminal_options_to_the_app():
     screen = HeadlessScreen()
     configured = App(terminal=TerminalOptions(screen=screen), auto=False)
     assert configured.terminal.options.mouse is MouseMode.MOVE
-    assert App(hover=False, auto=False).terminal.options.mouse is MouseMode.DRAG
-    assert App(mouse=False, hover=True, auto=False).terminal.options.mouse is MouseMode.OFF
+    without_motion = App(
+        terminal=TerminalOptions(mouse=MouseMode.DRAG), auto=False
+    )
+    assert without_motion.terminal.options.mouse is MouseMode.DRAG
+    off = App(terminal=TerminalOptions(mouse=MouseMode.OFF), auto=False)
+    assert off.terminal.options.mouse is MouseMode.OFF
 
 
 def test_an_app_with_terminal_options_paints_the_same_rows():
@@ -473,7 +485,7 @@ def test_an_app_with_terminal_options_paints_the_same_rows():
     assert rows(app.runtime) == ["one", "", "", ""]
 
 
-async def test_the_terminal_and_legacy_paths_paint_the_same_bytes():
+async def test_two_apps_with_equal_terminal_options_paint_the_same_bytes():
     async def rendered(app: App) -> str:
         app.add(Rows("one"))
         app.add(Rows("two"))
@@ -484,7 +496,7 @@ async def test_the_terminal_and_legacy_paths_paint_the_same_bytes():
         await app.runtime.run_session(body)
         return app.runtime.screen.output
 
-    legacy = App(screen=HeadlessScreen(20, 4), keys=ScriptedEvents(()), auto=False)
+    legacy = _app(screen=HeadlessScreen(20, 4), keys=ScriptedEvents(()), auto=False)
     modern = App(
         terminal=TerminalOptions(
             screen=HeadlessScreen(20, 4), input=ScriptedEvents(())

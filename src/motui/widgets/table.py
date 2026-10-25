@@ -799,7 +799,7 @@ class Table(Widget):
                 def render(self, c):
                     return Surface.clipped(self.table.header_lines(c.width), c.width)
 
-            tui.add(StickyHeader(table), pin="top")
+            tui.add(StickyHeader(table), placement=Placement.TOP)
             tui.add(table)                      # the grid scrolls under the pin
 
         The pinned rows line up with the grid because both read the same

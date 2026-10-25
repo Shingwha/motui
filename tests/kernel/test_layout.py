@@ -12,7 +12,7 @@ from __future__ import annotations
 import pytest
 
 from motui.kernel.cell import Line, Surface
-from motui.kernel.document import Document, Sizing
+from motui.kernel.document import Document, Placement, Sizing
 from motui.kernel.layout import Constraints, ScrollAxis, ScrollState, Viewport
 from motui.widgets.text import Text
 from tests.testing import Rows, document, many
@@ -113,8 +113,8 @@ def test_scroll_state_thumb_matches_the_1x_table(
 def test_layout_returns_exactly_height_rows():
     doc = Document()
     doc.add(Rows(*many(10)))
-    doc.add(Rows("t1", "t2"), pin="top")
-    doc.add(Rows("b1"), pin="bottom")
+    doc.add(Rows("t1", "t2"), placement=Placement.TOP)
+    doc.add(Rows("b1"), placement=Placement.BOTTOM)
     view = Viewport(doc)
     for height in (0, 1, 2, 3, 4, 7):
         layout = view.layout(80, height)
@@ -195,24 +195,26 @@ def test_scroll_to_bottom_follows_new_content():
 
 
 def test_pinned_regions_never_scroll_and_are_not_body_rows():
-    for pin in ("bottom", "top"):
+    for placement in (Placement.BOTTOM, Placement.TOP):
         doc = Document()
         doc.add(Rows(*many(10)))
-        doc.add(Rows("pin"), pin=pin)
+        doc.add(Rows("pin"), placement=placement)
         view = Viewport(doc)
         view.layout(80, 4)
         view.scroll_up(100)
         layout = view.layout(80, 4)
         assert layout.total_rows == 10
-        assert _texts(layout.rows)[-1 if pin == "bottom" else 0] == "pin"
+        assert _texts(layout.rows)[
+            -1 if placement is Placement.BOTTOM else 0
+        ] == "pin"
         assert "pin" not in _texts(layout.body_rows)
 
 
 def test_bottom_region_wins_when_fixed_regions_overflow():
     doc = Document()
     doc.add(Rows(*many(10)))
-    doc.add(Rows("t1", "t2", "t3"), pin="top")
-    doc.add(Rows("b1", "b2", "b3", "b4"), pin="bottom")
+    doc.add(Rows("t1", "t2", "t3"), placement=Placement.TOP)
+    doc.add(Rows("b1", "b2", "b3", "b4"), placement=Placement.BOTTOM)
     layout = Viewport(doc).layout(80, 4)
     assert layout.body_rows == ()
     assert _texts(layout.rows) == ["b1", "b2", "b3", "b4"]
@@ -231,8 +233,8 @@ def test_row_ownership_names_the_block_and_row_and_is_immutable():
 def test_block_order_lists_every_block_in_document_order():
     doc = Document()
     first = doc.add(Rows("a"))
-    second = doc.add(Rows("b"), pin="top")
-    third = doc.add(Rows("c"), pin="bottom")
+    second = doc.add(Rows("b"), placement=Placement.TOP)
+    third = doc.add(Rows("c"), placement=Placement.BOTTOM)
     layout = Viewport(doc).layout(80, 4)
     assert layout.block_order == (first.id, second.id, third.id)
 
@@ -287,7 +289,7 @@ def test_streaming_content_recounts_the_body():
     assert layout.total_rows == 8
     assert _texts(layout.body_rows) == ["m1", "t0", "t1", "t2"]
     assert layout.row_blocks[0] == (mid.id, 1)
-    mid.component.texts = ["m0", "m1", "m2", "m3"]
+    mid.widget.texts = ["m0", "m1", "m2", "m3"]
     layout = view.layout(80, 4)
     assert layout.total_rows == 10
     assert view.offset == 6
@@ -414,10 +416,10 @@ def test_a_fill_gets_zero_height_when_the_flow_fills_the_pane():
 
 def test_pinned_regions_and_a_fill_share_the_screen():
     doc = Document()
-    top = doc.add(Rows("T"), pin="top")
+    top = doc.add(Rows("T"), placement=Placement.TOP)
     flow = doc.add(Rows("flow"))
     fill = doc.add(Rows("F"), sizing=Sizing.FILL)
-    bottom = doc.add(Rows("B"), pin="bottom")
+    bottom = doc.add(Rows("B"), placement=Placement.BOTTOM)
     layout = Viewport(doc).layout(10, 6)
     assert _texts(layout.rows) == ["T", "flow", "F", "", "", "B"]
     assert layout.row_blocks == (
@@ -456,8 +458,8 @@ def test_a_fill_is_rendered_with_its_residual_budget_and_padded():
 
 def test_the_fill_budget_under_a_pinned_region_is_the_screen_remainder():
     doc = Document()
-    doc.add(Rows("T"), pin="top")
-    doc.add(Rows("B"), pin="bottom")
+    doc.add(Rows("T"), placement=Placement.TOP)
+    doc.add(Rows("B"), placement=Placement.BOTTOM)
     fill = _FillRows("x")
     doc.add(fill, sizing=Sizing.FILL)
     layout = Viewport(doc).layout(5, 4)
@@ -468,7 +470,7 @@ def test_the_fill_budget_under_a_pinned_region_is_the_screen_remainder():
 def test_natural_height_ignores_the_fill_and_counts_natural_sections():
     doc = Document()
     doc.add(Rows("a", "b"))
-    doc.add(Rows("top"), pin="top")
+    doc.add(Rows("top"), placement=Placement.TOP)
     doc.add(Rows("fill"), sizing=Sizing.FILL)
     assert Viewport(doc).natural_height(10) == 3
 

@@ -355,12 +355,12 @@ class _BodyIndex:
 
     @property
     def top_blocks(self) -> list[Section]:
-        """The ``pin="top"`` blocks in document order."""
+        """The ``Placement.TOP`` blocks in document order."""
         return self._top
 
     @property
     def bottom_blocks(self) -> list[Section]:
-        """The ``pin="bottom"`` blocks in document order."""
+        """The ``Placement.BOTTOM`` blocks in document order."""
         return self._bottom
 
     @property
@@ -480,9 +480,9 @@ class _BodyIndex:
         bottom: list[Section] = []
         total = 0
         for block in blocks:
-            if block.pin == "top":
+            if block.placement is Placement.TOP:
                 top.append(block)
-            elif block.pin == "bottom":
+            elif block.placement is Placement.BOTTOM:
                 bottom.append(block)
             else:
                 revision = block.revision()
@@ -538,8 +538,8 @@ class Viewport:
     def layout(self, width: int, height: int) -> ScreenLayout:
         """Render the document against ``width``x``height`` and apply scroll state.
 
-        Fixed-region blocks render first, in document order: ``pin="top"``
-        rows above the window, ``pin="bottom"`` rows below it, and the
+        Fixed-region blocks render first, in document order: ``Placement.TOP``
+        rows above the window, ``Placement.BOTTOM`` rows below it, and the
         unpinned ones form the scrollable body.  The window height is
         ``vh = max(height - top_total - bottom_total, 0)``.  When the fixed
         regions alone would exceed ``height`` the bottom region is

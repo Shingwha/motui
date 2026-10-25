@@ -75,15 +75,15 @@ from ..kernel.events import Event, KeyEvent, MouseEvent, ResizeEvent
 from ..kernel.geom import Axis, Pos
 from ..kernel.hit import Hit
 from ..kernel.layout import Scrollable, ScrollableX
-from ..terminal.screen import MouseMode, Screen, TerminalOptions
+from ..terminal.screen import TerminalOptions
 from ..terminal.terminal import Terminal
 from ..kernel.selection import Selection
-from ..kernel.style import ColorMode, Style
+from ..kernel.style import Style
 from ..kernel.theme import DEFAULT_THEME, Theme
 from ..widgets.base import Widget
 from .command_palette import CommandPalette
 from .commands import CommandRegistry
-from .runtime import Runtime, Timer
+from .runtime import Runtime, Timer, _stdin_isatty
 from .find import Find
 from .focus import FocusManager, focus_targets, iter_widgets
 from .gesture import SelectionGesture
@@ -110,19 +110,6 @@ SCROLL_KEYS = {
 _BUTTONS = ("left", "middle", "right")
 
 
-def _mouse_mode(mouse: bool, hover: bool) -> MouseMode:
-    """Fold the legacy ``mouse``/``hover`` switches into one :class:`MouseMode`.
-
-    ``mouse=False`` is :attr:`MouseMode.OFF` regardless of ``hover``;
-    otherwise ``hover=True`` asks for all-motion reporting
-    (:attr:`MouseMode.MOVE`, the historical 1003) and ``hover=False`` keeps
-    the button-event tracking (:attr:`MouseMode.DRAG`, the historical 1002).
-    """
-    if not mouse:
-        return MouseMode.OFF
-    return MouseMode.MOVE if hover else MouseMode.DRAG
-
-
 def _nodes(component: Component) -> Iterator[Component]:
     """Every node of ``component``'s explicit tree, depth first.
 
@@ -142,24 +129,18 @@ class App:
 
     ``theme`` is the application theme (``DEFAULT_THEME`` when omitted) --
     handed to the runtime's chrome and assigned to mounted widgets that did
-    not take an explicit one.  ``terminal=`` is the 2.0 configuration: a
-    :class:`~motui.terminal.screen.TerminalOptions` from which the App
+    not take an explicit one.  ``terminal=`` is the one configuration door:
+    a :class:`~motui.terminal.screen.TerminalOptions` from which the App
     builds one :class:`~motui.terminal.terminal.Terminal` and hands it to
-    the runtime; the legacy ``mouse``/``hover``/``color_mode``/``screen``/
-    ``keys``/``focus_events``/``sync`` arguments are then ignored.  Without
-    ``terminal=`` those arguments are folded into an equivalent
-    ``TerminalOptions`` (the old ``mouse``/``hover`` pair becomes one
-    :class:`~motui.terminal.screen.MouseMode`), so :attr:`terminal` is
-    always the endpoint the runtime uses.  ``title`` is set through the
-    runtime's OSC 2 surface when non-empty.
+    the runtime; with none given the defaults build a live terminal screen.
+    ``title`` is set through the runtime's OSC 2 surface when non-empty.
     ``auto=True`` mounts the default controllers; ``auto=False`` mounts
     none, leaving :attr:`runtime`/``workspace`` and the caller's own loop
-    (the ``Runtime`` is still fully usable).  ``keys=`` is the event source,
-    ``throttle`` the pump's flush interval.
-    ``interactive``/``focus_events``/``sync`` are the runtime's own
-    switches, forwarded verbatim.  ``on_selection`` replaces the selection
-    gesture's ``on_end`` (the default is
-    :func:`~motui.app.gesture.copy_on_select`).
+    (the ``Runtime`` is still fully usable).  ``throttle`` is the pump's
+    flush interval.  ``on_selection`` replaces the selection gesture's
+    ``on_end`` (the default is
+    :func:`~motui.app.gesture.copy_on_select`).  ``handlers`` is the host's
+    ordered handler list; ``None`` keeps the built-in dispatch order.
     """
 
     def __init__(
@@ -167,42 +148,24 @@ class App:
         *,
         theme: Theme | None = None,
         terminal: TerminalOptions | None = None,
-        mouse: bool = True,
-        hover: bool = True,
-        color_mode: ColorMode | None = None,
-        title: str = "",
-        auto: bool = True,
-        screen: Screen | None = None,
-        keys: "EventSource | None" = None,
         throttle: float = 0.030,
-        interactive: bool | None = None,
-        focus_events: bool = False,
-        sync: bool = True,
+        auto: bool = True,
+        title: str = "",
         on_selection: Callable[["Runtime", Selection], object] | None = None,
+        handlers: tuple[object, ...] | None = None,
     ) -> None:
         self._theme = DEFAULT_THEME if theme is None else theme
-        if terminal is not None:
-            endpoint = Terminal(terminal)
-        else:
-            endpoint = Terminal(
-                TerminalOptions(
-                    input=keys,
-                    mouse=_mouse_mode(mouse, hover),
-                    focus_events=focus_events,
-                    color_mode="auto" if color_mode is None else color_mode,
-                    sync=sync,
-                ),
-                screen=screen,
-            )
+        endpoint = Terminal(TerminalOptions() if terminal is None else terminal)
         self.runtime: Runtime = Runtime(
-            terminal=endpoint,
+            endpoint,
             throttle=throttle,
+            interactive=endpoint.live and _stdin_isatty(),
             theme=self._theme,
-            interactive=interactive,
         )
         self.workspace: Workspace = self.runtime.workspace
         self.terminal: Terminal = endpoint
         self.auto = auto
+        self.handlers: tuple[object, ...] = () if handlers is None else tuple(handlers)
         self._components: list[Component] = []
         self._bindings: dict[str, Callable[[], object]] = {}
         self._modals: list[Modal] = []
@@ -339,8 +302,7 @@ class App:
         component: Component,
         *,
         id: str | None = None,
-        pin: str | None = None,
-        placement: Placement | None = None,
+        placement: Placement = Placement.FLOW,
         sizing: Sizing = Sizing.NATURAL,
         pane: Any = None,
     ) -> Section:
@@ -352,12 +314,11 @@ class App:
         in the main (primary) document, never the focused pane.  The section
         carries :meth:`~motui.app.runtime.Runtime.add`'s id -- unique across
         the frame -- and the mounted component.
-        ``placement``/``sizing`` are the 2.0 document spellings.
+        ``placement``/``sizing`` are the document's own spellings.
         """
         section = self.workspace.add(
             component,
             id=id,
-            pin=pin,
             placement=placement,
             sizing=sizing,
             pane=pane,
@@ -497,24 +458,21 @@ class App:
 
     def split(
         self,
-        axis: Axis | str,
+        axis: Axis,
         *,
-        weights: tuple[float, ...] | None = None,
-        ratios: tuple[float, ...] | None = None,
+        weights: tuple[float, ...] = (1, 1),
         min_size: int = 1,
         separator: bool = True,
         pane: Any = None,
     ) -> tuple[Any, ...]:
         """Split a pane (the workspace's own ``split``).
 
-        ``axis`` is ``Axis.X``/``Axis.Y`` or the 1.x
-        ``"vertical"``/``"horizontal"`` string; ``weights`` (2.0) wins over
-        ``ratios`` (legacy).
+        ``axis`` is :class:`~motui.kernel.geom.Axis` (``X`` divides the
+        width, ``Y`` the height) and ``weights`` the children's shares.
         """
         return self.workspace.split(
             axis,
             weights=weights,
-            ratios=ratios,
             min_size=min_size,
             separator=separator,
             pane=pane,
@@ -524,39 +482,33 @@ class App:
         self,
         component: Component,
         *,
-        placement: Placement | None = None,
-        edge: str = "bottom",
+        placement: Placement = Placement.BOTTOM,
         size: int | None = None,
     ) -> Any:
         """Dock ``component`` (the workspace's own ``dock``); theme it first.
 
-        ``placement`` is ``Placement.TOP``/``BOTTOM``; the legacy ``edge``
-        string stays until W5.
+        ``placement`` is ``TOP`` or ``BOTTOM``; ``FLOW`` raises.
         """
         for current in _nodes(component):
             if isinstance(current, Widget) and current.theme is None:
                 current.theme = self._theme
         self._components.append(component)
-        return self.workspace.dock(
-            component, placement=placement, edge=edge, size=size
-        )
+        return self.workspace.dock(component, placement=placement, size=size)
 
     def undock(
         self,
-        placement: Placement | str | None = None,
-        edge: str = "bottom",
+        placement: Placement = Placement.BOTTOM,
     ) -> Any:
         """Release the dock named by ``placement`` and forget its component.
 
         The workspace's :meth:`~motui.app.workspace.Workspace.undock` plus
         the App-side bookkeeping: the docked component's subtree leaves the
-        focus ring and the theme walk with it.  The legacy edge string is
-        accepted (positionally, as the demo passes it) until W5.
+        focus ring and the theme walk with it.
         """
-        pane = self.workspace.undock(placement, edge)
+        pane = self.workspace.undock(placement)
         if pane is not None:
             for block in pane.document.blocks():
-                self._forget(block.component)
+                self._forget(block.widget)
         return pane
 
     def toast(self, text: str, *, style: Style | None = None) -> None:
@@ -578,21 +530,25 @@ class App:
 
     def open_palette(
         self,
-        commands: "CommandRegistry | list[object]",
+        commands: CommandRegistry,
         **kwargs: Any,
     ) -> CommandPalette:
         """Open the lazily created command palette over ``commands``.
 
-        ``commands`` is a :class:`~motui.app.commands.CommandRegistry` --
-        its :meth:`~motui.app.commands.CommandRegistry.options` view is what
-        the palette renders -- or a ready list of options (the 1.x path,
-        kept for compatibility until W5).
+        ``commands`` is a :class:`~motui.app.commands.CommandRegistry`; its
+        :meth:`~motui.app.commands.CommandRegistry.options` view is what the
+        palette renders.  Any other type raises ``TypeError`` -- the palette
+        speaks one command model, not a bare list of options.
         """
-        options = commands.options() if isinstance(commands, CommandRegistry) else commands
+        if not isinstance(commands, CommandRegistry):
+            raise TypeError(
+                "App.open_palette() takes a CommandRegistry, got "
+                f"{type(commands).__name__}"
+            )
         if self._palette is None:
             kwargs.setdefault("theme", self._theme)
             kwargs.setdefault("focus", self._focus)
-            self._palette = CommandPalette(self.runtime, options, **kwargs)
+            self._palette = CommandPalette(self.runtime, commands.options(), **kwargs)
         self._palette.open()
         return self._palette
 

@@ -72,15 +72,14 @@ from ..kernel.document import Placement, Section, Component, Document, Sizing, d
 from ..kernel.geom import Axis, Pos
 from ..kernel.frame import Separator
 from ..kernel.events import Event, EventSource
-from ..kernel.frame import DOCK_EDGES, Frame, Pane, Rect
+from ..kernel.frame import Frame, Pane, Rect
 from ..kernel.hit import Hit, RowRange
 from ..kernel.cell import Line
 from ..widgets.text import Text
 from ..terminal.paint import Painter
-from ..terminal.screen import MouseMode, Screen, TerminalScreen
+from ..terminal.screen import MouseMode, Screen
 from ..terminal.terminal import Terminal
 from ..kernel.selection import Selection, highlight
-from ..kernel.style import ColorMode
 from ..kernel.theme import DEFAULT_THEME, Theme
 from ..kernel.layout import ScreenLayout, Viewport
 from ..terminal import RawTerminalKeys
@@ -155,35 +154,14 @@ def _stdin_isatty() -> bool:
         return False
 
 
-#: The 2.0 axis spelling mapped to the 1.x orientation string.  ``Axis.X``
-#: divides width (panes side by side), which the legacy string calls
-#: ``"vertical"`` because of its divider.
-_ORIENTATIONS = {Axis.X: "vertical", Axis.Y: "horizontal"}
+def _dock_edge(placement: Placement) -> str:
+    """The frame edge a dock placement names; ``FLOW`` is not a dock.
 
-
-def _orientation(axis: Axis | str) -> str:
-    """``"vertical"``/``"horizontal"`` for an ``Axis`` or the legacy string."""
-    if isinstance(axis, Axis):
-        return _ORIENTATIONS[axis]
-    if axis in ("vertical", "horizontal"):
-        return axis
-    raise ValueError(
-        f"split axis must be an Axis or 'vertical'/'horizontal', got {axis!r}"
-    )
-
-
-def _dock_edge(placement: Placement | str | None, edge: str) -> str:
-    """Resolve a dock placement or the legacy edge string to an edge name.
-
-    ``Placement.BOTTOM``/``TOP`` name the fixed bands; ``FLOW`` is not a
-    dock and raises.  A string is the 1.x spelling (``"top"``/``"bottom"``)
-    and is passed through so the frame's own edge validation stays the one
-    rejection point.  The string path is removed in W5.
+    ``Placement.TOP``/``BOTTOM`` are the two fixed bands; anything else --
+    a flow section or a non-enum value -- raises ``ValueError``.
     """
-    if placement is None:
-        return edge
-    if isinstance(placement, str):
-        return placement
+    if not isinstance(placement, Placement):
+        raise ValueError(f"dock placement must be a Placement, got {placement!r}")
     if placement is Placement.FLOW:
         raise ValueError("a dock cannot use Placement.FLOW")
     return placement.value
@@ -245,7 +223,7 @@ def _body_address(viewport: Viewport, block: Section, row: int, width: int) -> i
     for held in viewport.document.blocks():
         if held is block:
             break
-        if held.pin is None:
+        if held.placement is Placement.FLOW:
             address += held.row_count(Constraints(width=width))
     count = block.row_count(Constraints(width=width))
     row = max(0, min(row, count - 1)) if count else 0
@@ -255,58 +233,23 @@ def _body_address(viewport: Viewport, block: Section, row: int, width: int) -> i
 class Runtime:
     """A full-screen application driver.
 
-    ``screen`` defaults to a :class:`~motui.terminal.screen.TerminalScreen`
-    (pass ``mouse=False`` to leave mouse tracking off), ``keys`` to no
-    source at all (``read_event`` then returns ``None``).  ``mouse`` and
-    ``hover`` apply only to
-    the default screen and the :class:`RawTerminalKeys` source
-    :meth:`run` attaches: a custom ``screen`` brings its own tracking
-    settings (a host driving hover passes ``HeadlessScreen(hover=True)`` /
-    ``TerminalScreen(hover=True)`` itself -- the default screen is built
-    with the switches here, ``hover`` opening DECSET 1003 for a
-    :class:`~motui.app.pointer.Pointer`), and the attached source's
-    Windows console-record path opens its button-free motion under the same
-    switch (its 1003 counterpart; an explicit ``keys=`` source is the
-    caller's own contract).
-    ``focus_events`` (off by default) adds DECSET 1004 to the default
-    screen's enter/leave bracket, so a live session is told when its window
-    gains or loses focus and the decoder reports it as a
-    :class:`~motui.kernel.events.FocusEvent`; the reports are the **host's**
-    to interpret -- the
-    :class:`~motui.app.pointer.Pointer` tier still watches mouse reports
-    only, and scrubbing a hover or pausing an animation on a lost focus is
-    the host's own loop.
-    ``sync`` (the default) hands the painter the synchronized-update bracket
-    (DECSET 2026): every non-empty frame leaves as one write wrapped in the
-    pair, so a terminal that knows the mode swaps the frame in whole and one
-    that does not ignores the bytes; an unchanged frame still writes zero
-    bytes, switch or no switch.
-    ``color_mode`` is forwarded to the default screen only when set: left
-    ``None`` the screen's own ``"auto"`` stands (the environment probe --
-    ``NO_COLOR``/``TERM=dumb`` mean no color, ``COLORTERM`` truecolor and a
-    ``256color`` ``TERM`` pick their modes, anything else stays truecolor),
-    and an explicit :data:`~motui.kernel.style.ColorMode` overrides the
-    probe.  The painter reads the mode off the screen and renders its rows
-    for that capability.
+    ``terminal`` is the one configuration door: a
+    :class:`~motui.terminal.terminal.Terminal` brings its own screen (with
+    the mouse mode already mapped), input source and clipboard, and the
+    driver enters, leaves and reads through it.  The input source defaults
+    to none (``read_event`` then returns ``None``); a screen's tracking
+    switches live on its :class:`~motui.terminal.screen.TerminalOptions`,
+    never here.
+
+    ``interactive`` says whether :meth:`run` may attach a
+    :class:`RawTerminalKeys` source when the session is live and no source
+    was supplied; it is off by default, so a test-driven runtime never
+    touches the real input.  ``throttle`` is the pump's flush interval.
     ``theme`` is the driver's own theme (default
     :data:`~motui.kernel.theme.DEFAULT_THEME`), read by the chrome the
     driver composes -- the split's divider
     (:class:`~motui.kernel.frame.Separator`); widgets are never themed
     from here, they each take ``theme=`` themselves.
-    ``interactive`` overrides the derived value; when left ``None`` it is
-    ``screen.live and sys.stdin.isatty()``.  An interactive live session
-    without an explicit key source gets a :class:`RawTerminalKeys` attached
-    (and closed) by :meth:`run`; an explicit ``keys=`` source is always used
-    as given.
-
-    ``terminal=`` is the 2.0 door: a :class:`~motui.terminal.terminal.Terminal`
-    brings its own screen (with the mouse mode already mapped), input source
-    and clipboard, and the driver enters, leaves and reads through it.  When
-    it is given it wins over ``screen``/``keys`` and every screen-shaped
-    switch (``mouse``/``hover``/``focus_events``/``sync``/``color_mode``);
-    the legacy arguments stay for hosts that hand the driver a screen
-    directly.  Either path paints through the same :class:`Painter` and
-    stays byte-identical on a live screen.
 
     Internally the driver holds one
     :class:`~motui.kernel.frame.Frame` whose primary pane is
@@ -323,45 +266,20 @@ class Runtime:
 
     def __init__(
         self,
+        terminal: Terminal,
         *,
-        screen: Screen | None = None,
-        keys: EventSource | None = None,
         throttle: float = 0.030,
-        interactive: bool | None = None,
-        mouse: bool = True,
-        hover: bool = False,
-        focus_events: bool = False,
-        sync: bool = True,
-        color_mode: ColorMode | None = None,
+        interactive: bool = False,
         theme: Theme | None = None,
-        terminal: Terminal | None = None,
     ) -> None:
-        if terminal is not None:
-            # The terminal owns the screen's switches and its input; the
-            # legacy screen/keys/mouse/hover arguments are not consulted.
-            self._terminal: Terminal | None = terminal
-            self._screen = terminal.screen
-            keys = terminal.input
-            self._hover = terminal.options.mouse is MouseMode.MOVE
-            sync = terminal.options.sync
-        else:
-            self._terminal = None
-            if screen is not None:
-                self._screen = screen
-            else:
-                # A switch left at its default is not forwarded: the screen's own
-                # default (color_mode="auto" -> the env probe) is the contract.
-                extra = {} if color_mode is None else {"color_mode": color_mode}
-                self._screen = TerminalScreen(
-                    mouse=mouse,
-                    hover=hover,
-                    focus_events=focus_events,
-                    **extra,
-                )
-            #: The hover switch :meth:`run` hands the default key source: it
-            #: gates the record path's button-free motion (see the class
-            #: docstring).  An explicit ``keys=`` source is used as given.
-            self._hover = hover
+        self._terminal = terminal
+        self._screen = terminal.screen
+        #: The event source the runtime reads; :meth:`run` may replace it with
+        #: a server-owned raw source when the session is interactive.
+        self.keys = terminal.input
+        #: The hover switch the attached raw source opens: the terminal's
+        #: mouse mode is the one configuration point.
+        self._hover = terminal.options.mouse is MouseMode.MOVE
         self._document = Document()
         self._viewport = Viewport(self._document)
         #: The theme the driver's own chrome reads (the split's divider);
@@ -376,12 +294,9 @@ class Runtime:
         # Structural frame changes (split/close/chrome/dock/overlay) mark the
         # driver dirty by themselves: a host never follows them with refresh().
         self._frame.on_change = self.refresh
-        self.painter = Painter(self._screen, sync=sync)
-        self.keys = keys
+        self.painter = Painter(self._screen, sync=terminal.options.sync)
         self.throttle = throttle
-        self.interactive = bool(
-            self.screen.live and _stdin_isatty() if interactive is None else interactive
-        )
+        self.interactive = interactive
         self._dirty = True
         self._stopped = False
         self._last_paint = float("-inf")
@@ -426,11 +341,12 @@ class Runtime:
         return self._screen
 
     @property
-    def terminal(self) -> Terminal | None:
+    def terminal(self) -> Terminal:
         """The terminal endpoint this runtime enters, leaves and reads through.
 
-        ``None`` for the legacy construction that hands the runtime a screen
-        directly; a terminal-attached runtime reads and copies through it.
+        The one configuration door: the terminal owns the screen, its input
+        source and its clipboard, so the runtime never builds or replaces a
+        screen by itself.
         """
         return self._terminal
 
@@ -448,18 +364,14 @@ class Runtime:
     # -- clipboard ---------------------------------------------------------------
 
     def copy_to_clipboard(self, text: str) -> bool:
-        """Put ``text`` on the terminal's clipboard through the screen (OSC 52).
+        """Put ``text`` on the terminal's clipboard through the terminal (OSC 52).
 
-        A terminal-attached driver goes through the terminal's
-        :class:`~motui.terminal.clipboard.ScreenClipboard`; either path
-        writes the same OSC 52 bytes.  A non-live screen answers ``False``
-        without touching the stream, exactly as
-        :meth:`Screen.copy_to_clipboard
+        The terminal's :class:`~motui.terminal.clipboard.ScreenClipboard`
+        writes the bytes; a non-live screen answers ``False`` without
+        touching the stream, exactly as :meth:`Screen.copy_to_clipboard
         <motui.terminal.screen.Screen.copy_to_clipboard>` does.
         """
-        if self._terminal is not None:
-            return self._terminal.clipboard.copy(text)
-        return self._screen.copy_to_clipboard(text)
+        return self._terminal.clipboard.copy(text)
 
     @property
     def document(self) -> Document:
@@ -540,8 +452,7 @@ class Runtime:
         component: Component,
         *,
         id: str | None = None,
-        pin: str | None = None,
-        placement=None,
+        placement: Placement = Placement.FLOW,
         sizing: Sizing = Sizing.NATURAL,
         pane: Pane | str | None = None,
     ) -> str:
@@ -552,8 +463,7 @@ class Runtime:
         content pane in paint order) is the target.  Focus routes input, not
         content ownership, so a click on another pane never changes where a
         producer's blocks land; pass ``pane=tui.frame.focused_pane`` when a
-        focused-pane write is really what is meant.  ``pin`` is the 1.x
-        placement spelling; ``placement``/``sizing`` are the 2.0 ones and
+        focused-pane write is really what is meant.  ``placement``/``sizing``
         forward to :meth:`~motui.kernel.document.Document.add` (which owns
         the fill rules).  Section ids are unique across the whole frame: an
         automatic id is the first free ``bN`` over every pane's document,
@@ -567,9 +477,8 @@ class Runtime:
             id = self._next_block_id()
         elif self._panes_holding(id):
             raise ValueError(f"duplicate block id: {id!r}")
-        options = {"placement": placement} if placement is not None else {}
         target.viewport.document.add(
-            component, id=id, pin=pin, sizing=sizing, **options
+            component, id=id, placement=placement, sizing=sizing
         )
         self.refresh()
         return id
@@ -610,7 +519,7 @@ class Runtime:
         is not silently resolved to the first: it raises ``ValueError`` and
         names the panes, because frame-wide uniqueness is the contract.
         """
-        return self._holder(id).viewport.document.get(id).component
+        return self._holder(id).viewport.document.get(id).widget
 
     def remove(self, id: str) -> Component:
         """Detach the block with ``id`` and answer its component.
@@ -618,7 +527,7 @@ class Runtime:
         The same frame-wide resolution :meth:`get` performs; an ambiguous id
         raises ``ValueError`` listing the panes instead of picking one.
         """
-        component = self._holder(id).viewport.document.remove(id).component
+        component = self._holder(id).viewport.document.remove(id).widget
         self.refresh()
         return component
 
@@ -733,8 +642,8 @@ class Runtime:
             return False  # an unknown address reveals nothing
         viewport = pane.viewport
         block = viewport.document.get(bid)
-        if block.pin is not None:
-            return True  # a fixed-region block is always on screen (D3's pin)
+        if block.placement is not Placement.FLOW:
+            return True  # a fixed-region block is always on screen
         layout = self._frame.pane_layout(pane.id)
         placement = self._frame.region(pane.id)
         if layout is None or placement is None or not layout.body_rows:
@@ -766,10 +675,9 @@ class Runtime:
 
     def split(
         self,
-        axis: Axis | str,
+        axis: Axis,
         *,
-        weights: tuple[float, ...] | None = None,
-        ratios: tuple[float, ...] | None = None,
+        weights: tuple[float, ...] = (1, 1),
         min_size: int = 1,
         separator: bool = True,
         pane: Pane | str | None = None,
@@ -778,14 +686,10 @@ class Runtime:
 
         ``axis`` is the 2.0 spelling: :attr:`~motui.kernel.geom.Axis.X`
         divides the width (panes side by side) and
-        :attr:`~motui.kernel.geom.Axis.Y` the height (panes stacked).  The
-        1.x strings are still accepted and mean the same: ``"vertical"``
-        is ``Axis.X`` (the divider runs vertically) and ``"horizontal"`` is
-        ``Axis.Y``; W5 removes the string path.  ``weights`` is the 2.0 name
-        for the children's weights -- ``(2, 1)`` gives the first twice the
-        cells of the second -- and wins over the legacy ``ratios`` when both
-        are passed; ``(1, 1)`` is the default.  ``min_size`` is the floor
-        each child is raised to.
+        :attr:`~motui.kernel.geom.Axis.Y` the height (panes stacked).
+        ``weights`` are the children's shares -- ``(2, 1)`` gives the first
+        twice the cells of the second -- and ``(1, 1)`` is the default.
+        ``min_size`` is the floor each child is raised to.
 
         ``pane`` names the target: an explicit pane (or id) wins, and with
         none named the focused pane splits.  Two weights give the
@@ -808,15 +712,12 @@ class Runtime:
         overlapping content.  ``False`` leaves the panes abutting, no
         divider and no cell spent on one.
         """
-        orientation = _orientation(axis)
-        if weights is not None:
-            ratios = weights
-        elif ratios is None:
-            ratios = (1, 1)
+        if not isinstance(axis, Axis):
+            raise ValueError(f"split axis must be an Axis, got {axis!r}")
         target = self._focus_pane(pane)
-        children = target.split(orientation, ratios=ratios, min_size=min_size)
+        children = target.split(axis, weights=weights, min_size=min_size)
         if separator:
-            edge = "right" if orientation == "vertical" else "bottom"
+            edge = "right" if axis is Axis.X else "bottom"
             for before, after in zip(children, children[1:]):
                 before.add_chrome(
                     Separator(self, before.id, after.id, edge).chrome
@@ -874,18 +775,14 @@ class Runtime:
         self,
         component: Component,
         *,
-        placement: Placement | None = None,
-        edge: str = "bottom",
+        placement: Placement = Placement.BOTTOM,
         size: int | None = None,
     ) -> Pane:
-        """Pin ``component`` against a dock edge; return its pane.
+        """Pin ``component`` against a dock placement; return its pane.
 
-        ``placement`` is the 2.0 spelling: :attr:`~motui.kernel.document.
-        Placement.BOTTOM` and ``TOP`` name the fixed bands, while ``FLOW``
-        raises (a dock is never part of the scrolling body).  ``edge`` is
-        the 1.x string (``"top"``/``"bottom"``), still accepted for
-        compatibility and removed in W5; it is ignored when a placement is
-        given.
+        ``placement`` is :attr:`~motui.kernel.document.Placement.BOTTOM`
+        (the default) or ``TOP``; ``FLOW`` raises ``ValueError`` (a dock is
+        never part of the scrolling body).
 
         A dock is a frame-level region outside the pane area, holding its
         own viewport built around the component handed over: the component
@@ -900,9 +797,7 @@ class Runtime:
         dock claims no rows and paints nothing.  One dock per edge; a
         second :meth:`dock` on the same edge raises ``RuntimeError``.
         """
-        edge = _dock_edge(placement, edge)
-        if edge not in DOCK_EDGES:
-            raise ValueError(f"dock edge must be one of {DOCK_EDGES}, got {edge!r}")
+        edge = _dock_edge(placement)
         if self._frame.dock(edge) is not None:
             raise RuntimeError(f"the frame already holds a {edge} dock")
         document = Document()
@@ -916,16 +811,14 @@ class Runtime:
 
     def undock(
         self,
-        placement: Placement | str | None = None,
-        edge: str = "bottom",
+        placement: Placement = Placement.BOTTOM,
     ) -> Pane | None:
-        """Release the dock named by ``placement`` (or the legacy ``edge``).
+        """Release the dock named by ``placement``; ``None`` when that edge is empty.
 
-        ``Placement.BOTTOM``/``TOP`` select the band; a string is the 1.x
-        edge spelling and is accepted positionally or as ``edge=``.  W5
-        removes the string path.  An empty edge answers ``None``.
+        ``Placement.BOTTOM`` (the default) or ``TOP`` select the band;
+        anything else raises ``ValueError``.
         """
-        edge = _dock_edge(placement, edge)
+        edge = _dock_edge(placement)
         pane = self._frame.dock(edge)
         if pane is None:
             return None
@@ -935,9 +828,9 @@ class Runtime:
         self.refresh()
         return pane
 
-    def dock_region(self, edge: str = "bottom") -> Rect | None:
-        """The rectangle the last composition laid the dock on ``edge`` in."""
-        pane = self._frame.dock(edge)
+    def dock_region(self, placement: Placement = Placement.BOTTOM) -> Rect | None:
+        """The rectangle the last composition laid the dock on ``placement`` in."""
+        pane = self._frame.dock(_dock_edge(placement))
         return None if pane is None else self._frame.region(pane.id)
 
     def _dock_height(self, edge: str, width: int, height: int) -> int:
@@ -1144,15 +1037,9 @@ class Runtime:
         """
         if not self.screen.live:
             return None
-        if self._terminal is not None:
-            if self._terminal.input is None:
-                return None
-            read = self._terminal.read_event
-        else:
-            source = self.keys
-            if source is None:
-                return None
-            read = source.read
+        if self._terminal.input is None:
+            return None
+        read = self._terminal.read_event
         exit_event = self._exit_event
         if exit_event is None:
             self._exit_event = exit_event = asyncio.Event()
@@ -1251,7 +1138,7 @@ class Runtime:
             return None  # removed since the last layout
         row = span.row_in_block
         col = x - placement.x
-        chain = descend_chain(block.component, row, col)
+        chain = descend_chain(block.widget, row, col)
         return Hit(pane, block, row, col, chain)
 
     def hit_leaf(self, x: int, y: int) -> tuple[Component, int, int] | None:
@@ -1482,13 +1369,9 @@ class Runtime:
             source.start()
             self.keys = source
             self._owned_source = source
-            if self._terminal is not None:
-                self._terminal.attach(source)
+            self._terminal.attach(source)
         if self.screen.live:
-            if self._terminal is not None:
-                self._terminal.enter()
-            else:
-                self.screen.enter()
+            self._terminal.enter()
         # Every run starts from a blank screen: the alternate screen starts
         # blank, and a non-live run still paints its final frame from scratch.
         self.painter.reset()
@@ -1571,17 +1454,13 @@ class Runtime:
             self._owned_source.close()
             if self.keys is self._owned_source:
                 self.keys = None  # the next run attaches a fresh source
-            if self._terminal is not None:
-                self._terminal.attach(None)
+            self._terminal.attach(None)
             self._owned_source = None
         # The final frame: painted rows before the live screen leaves, a
         # zero-write logical frame (the dump reads it) on a piped one.
         self._paint_at(self.clock())
         if self.screen.live:
-            if self._terminal is not None:
-                self._terminal.leave()
-            else:
-                self.screen.leave()
+            self._terminal.leave()
             self.screen.flush()
         else:
             self._dump_final_screen()
@@ -1612,6 +1491,6 @@ class Runtime:
 
     def __repr__(self) -> str:
         return (
-            f"Runtime(screen={self.screen!r}, blocks={len(self.document)}, "
+            f"Runtime(terminal={self._terminal!r}, blocks={len(self.document)}, "
             f"interactive={self.interactive})"
         )

@@ -6,8 +6,9 @@ from dataclasses import replace
 
 import pytest
 
-from motui.app import Scrollbar
+from motui.app import Scrollbar, ScrollbarStyles
 from motui.kernel import Axis, Style, Theme
+from motui.kernel.document import Placement
 from motui.kernel.events import MouseEvent, PasteEvent
 from motui.kernel.frame import SEPARATOR_CHROME_NAME, Chrome
 from motui.kernel.glyphs import GLYPHS
@@ -70,9 +71,9 @@ def driven(total: int, height: int, offset: int, **knobs):
 
 def test_the_strip_is_the_scrolling_window_between_pinned_regions():
     tui = headless_tui(20, 10)
-    tui.add(Rows("head"), id="head", pin="top")
+    tui.add(Rows("head"), id="head", placement=Placement.TOP)
     tui.add(Rows(*many(100)))
-    tui.add(Rows("foot one", "foot two"), id="foot", pin="bottom")
+    tui.add(Rows("foot one", "foot two"), id="foot", placement=Placement.BOTTOM)
     tui.paint()
     tui.viewport.scroll_up(tui.viewport.offset)  # detach the tail, show the top
     tui.paint()
@@ -85,7 +86,7 @@ def test_the_strip_is_the_scrolling_window_between_pinned_regions():
 
 def test_a_pane_filled_by_fixed_regions_paints_no_strip():
     tui = headless_tui(20, 10)
-    tui.add(Rows(*many(12)), id="foot", pin="bottom")
+    tui.add(Rows(*many(12)), id="foot", placement=Placement.BOTTOM)
     tui.paint()
     strip = bar(tui)
     assert strip_texts(tui) == [" "] * 10
@@ -95,7 +96,7 @@ def test_a_pane_filled_by_fixed_regions_paints_no_strip():
 def test_a_press_over_a_pinned_region_is_not_the_bars():
     tui = headless_tui(20, 10)
     tui.add(Rows(*many(100)))
-    tui.add(Rows("foot one", "foot two"), id="foot", pin="bottom")
+    tui.add(Rows("foot one", "foot two"), id="foot", placement=Placement.BOTTOM)
     tui.paint()
     strip = bar(tui)
     assert strip.handle(press(19, 8)) is False
@@ -106,10 +107,10 @@ def test_a_press_over_a_pinned_region_is_not_the_bars():
 def test_a_divider_and_a_bar_stack_on_a_shared_edge():
     tui = headless_tui(30, 10)
     tui.add(Rows(*many(100)))
-    tui.add(Rows("foot one", "foot two"), id="foot", pin="bottom")
+    tui.add(Rows("foot one", "foot two"), id="foot", placement=Placement.BOTTOM)
     tui.paint()
     Scrollbar(tui)
-    tui.split("vertical", ratios=(2, 1), separator=False)
+    tui.split(Axis.X, weights=(2, 1), separator=False)
     left = tui.frame.pane("primary")
     # The separator stacks outermost whatever else sits on the edge, so the
     # divider owns the split's last column and the bar's window the one
@@ -141,11 +142,11 @@ def test_the_bar_budgets_its_column_and_the_pane_rewraps_beside_it():
 
 def test_custom_glyphs_paint_the_strip():
     tui = scrolled(100, 10, 45)
-    bar(tui, track=".", thumb="#")
+    bar(tui, glyphs=replace(GLYPHS, bar_empty=".", bar_full="#"))
     assert "".join(strip_texts(tui)) == "....#....."
 
     wide = scrolled(100, 10, 45)
-    bar(wide, size=2, track="=", thumb="X")
+    bar(wide, size=2, glyphs=replace(GLYPHS, bar_empty="=", bar_full="X"))
     assert [row.text[-2:] for row in wide.rows] == ["=="] * 4 + ["XX"] + ["=="] * 5
 
 
@@ -153,7 +154,7 @@ def test_an_empty_glyph_paints_the_reserved_column_empty():
     tui = headless_tui(10, 2)
     tui.add(Text("0123456789"))
     tui.paint()
-    bar(tui, track="", thumb="")
+    bar(tui, glyphs=replace(GLYPHS, bar_empty="", bar_full=""))
     assert [row.text for row in tui.rows] == ["012345678 ", "9         "]
 
 
@@ -195,7 +196,7 @@ def test_a_drag_routes_the_painted_strip_beside_a_stacked_separator():
     tui.paint()
     tui.scroll_up(100 - 10 - 45)
     strip = Scrollbar(tui)
-    tui.split("vertical", ratios=(2, 1))
+    tui.split(Axis.X, weights=(2, 1))
     tui.paint()
     left = tui.frame.pane("primary")
     assert left.rect.width == 20
@@ -284,7 +285,11 @@ def test_min_thumb_sets_the_shortest_thumb():
 def test_the_styles_resolve_explicit_then_theme():
     cases = (
         (
-            {"style": Style(fg="#111111"), "thumb_style": Style(fg="#222222")},
+            {
+                "styles": ScrollbarStyles(
+                    track=Style(fg="#111111"), thumb=Style(fg="#222222")
+                )
+            },
             "#111111",
             "#222222",
         ),
@@ -336,7 +341,7 @@ def test_a_drag_maps_the_window_not_the_pane():
     # old, pane-tall mapping would have answered 13 here, not 14.
     tui = headless_tui(20, 10)
     tui.add(Rows(*many(24)))
-    tui.add(Rows("foot one", "foot two"), id="foot", pin="bottom")
+    tui.add(Rows("foot one", "foot two"), id="foot", placement=Placement.BOTTOM)
     tui.paint()
     tui.viewport.scroll_to(8)
     tui.paint()
