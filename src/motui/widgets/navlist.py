@@ -34,7 +34,7 @@ group override): ``content.accent`` paints the active label,
 non-active bars and the group rows, and ``content.accent`` the active bar.
 ``rows.base`` is the resting surface every row rests on.
 ``focused`` is the focus flag the focus tier sets
-(:class:`~motui.kernel.document.Focusable`): while it is ``False`` the active
+the focus tier sets: while it is ``False`` the active
 bar composes ``text.muted`` whole over its style -- the indicator
 drops a hue, it is never removed, and the label is never dimmed (the
 ``Tabs`` rule, verbatim).  It starts ``True``, the old default.
@@ -59,7 +59,7 @@ host themes them.
 
 ``disabled`` names the indices that are visible but not selectable: their
 label renders in ``text.faint`` over the
-non-active ``text.muted`` bar seat, :meth:`click` and :meth:`select` refuse them,
+non-active ``text.muted`` bar seat, :meth:`on_click` and :meth:`select` refuse them,
 and :meth:`move` steps over them (clamped, never wrapping) exactly as
 :meth:`Tabs.move` does.  A pointer over a disabled row still marks it --
 hover is the pointer's echo, not a selection.
@@ -81,9 +81,9 @@ show, unlike a tab strip's one-row chrome.
 
 Pure component: the host routes keys and cells, ``render`` only draws.
 Rows are the items -- there is no window and no column arithmetic, so
-:meth:`click` takes the row as the index (the column is ignored, and the
-docstring says so, as the kernel's ``Clickable`` charter demands) and
-:meth:`hover_at` speaks the same row language as :class:`Tabs`.
+:meth:`on_click` takes the row as the index (the column is ignored, and the
+docstring says so, as the clickable charter demands) and
+:meth:`on_hover` speaks the same row language as :class:`Tabs`.
 """
 
 from __future__ import annotations
@@ -113,7 +113,7 @@ class NavList(Widget):
     index passed there is kept -- the constructor rewrites no explicit
     request, the verbs are what refuse) and on every later
     :meth:`select`/:meth:`move`.  ``disabled_items`` is an iterable of indices
-    that render but refuse :meth:`click`/:meth:`select` and are stepped
+    that render but refuse :meth:`on_click`/:meth:`select` and are stepped
     over by :meth:`move`; the ``disabled`` flag refuses every gesture.  ``groups`` lays group title rows between the
     items (see the module docstring): they render but refuse every verb,
     and ``index`` stays an **item** index.
@@ -202,13 +202,13 @@ class NavList(Widget):
         # The old constructor default; FocusManager/App may flip it later.
         self.focused = True
         #: The pointer tier's flag; the row-level emphasis lives in
-        #: ``_hover_index`` (:meth:`hover_at`).
+        #: ``_hover_index`` (:meth:`on_hover`).
         self.hover = False
         #: The whole rail refuses every selection gesture when disabled.
         self.disabled = disabled
         self._index = 0
         # The item row the pointer is on, or ``None``; written by
-        # ``hover_at``, read by ``render``.  ``None`` renders byte-for-byte
+        # ``on_hover``, read by ``render``.  ``None`` renders byte-for-byte
         # what the list always did, and a group row never marks.
         self._hover_index: int | None = None
         # The indices that are visible but not selectable; a frozenset so
@@ -277,9 +277,6 @@ class NavList(Widget):
             return False
         return self.on_action(action)
 
-    #: The 1.x routing door stays until W3b3 removes it.
-    handle = on_key
-
     # -- the cursor -------------------------------------------------------------
 
     @property
@@ -337,12 +334,12 @@ class NavList(Widget):
         """The derived gutter (blank bar column plus separator); read-only."""
         return self._bar_space
 
-    def click(self, row: int, col: int) -> bool:
-        """Select the item the **rendered** row ``row`` covers; True on a hit.
+    def on_click(self, pos: Pos) -> bool:
+        """Select the item the **rendered** row ``pos.y`` covers; True on a hit.
 
         The row is the cell: the list paints its rows itself -- items and
         group rows interleaved -- and never windows, so there is no
-        last-render table to walk and ``col`` is ignored (the whole row is
+        last-render table to walk and ``pos.x`` is ignored (the whole row is
         the cell).  A row outside the list, on a **disabled** item, on a
         **group title row**, or on a disabled rail answers ``False`` and
         changes nothing; a hit on an enabled item selects it -- even when it
@@ -350,26 +347,26 @@ class NavList(Widget):
         """
         if self.disabled:
             return False
-        index = self._item_at(row)
+        index = self._item_at(pos.y)
         if index is None or index in self._disabled_items:
             return False
         self.select(index)
         return True
 
-    def hover_at(self, row: int, col: int) -> bool:
-        """Mark the item the **rendered** row ``row`` covers; True on a change.
+    def on_hover(self, pos: Pos | None) -> bool:
+        """Mark the item the **rendered** row ``pos.y`` covers; True on a change.
 
-        The row is the cell, ``col`` is ignored, and every row that covers
-        no item -- a group title row, a negative row (the pointer left),
+        The row is the cell, ``pos.x`` is ignored, and every row that
+        covers no item -- a group title row, ``None`` (the pointer left),
         anything past the last row -- answers "no row" and clears the
-        marking, exactly as :meth:`Tabs.hover_at` does; a group row is
+        marking, exactly as :meth:`Tabs.on_hover` does; a group row is
         therefore never marked.  Disabled items are marked like any other
         (the band is the pointer's echo, not a selection).  The answer
         is whether the marked row changed; :meth:`render` rests that row on
         ``rows.hover`` -- the pointer's own token, whatever row
         it is on (D3).
         """
-        target = self._item_at(row)
+        target = None if pos is None else self._item_at(pos.y)
         changed = target != self._hover_index
         self._hover_index = target
         return changed

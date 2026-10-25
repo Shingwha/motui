@@ -17,29 +17,29 @@ The cursor is clamped, never wrapping -- a menu bar is a data strip, not
 :class:`~motui.widgets.choice.Select`'s cycling menu: :meth:`MenuBar.move`
 stops at the ends, steps over ``disabled_items`` and clears a stale pending
 result, :meth:`MenuBar.select` clamps and refuses a disabled index, and
-:meth:`MenuBar.click` / :meth:`MenuBar.hover_at` resolve a cell against the
+:meth:`MenuBar.on_click` / :meth:`MenuBar.on_hover` resolve a cell against the
 span table of the component's **last render** (the leading and trailing
 padding, every divider gap, a row other than the first and a truncating
 ``fit`` all carry no label).  ``disabled=True`` refuses every gesture.
 
-:meth:`MenuBar.activate` is the bar's activation: it leaves the active
-label's text pending, and :meth:`MenuBar.take_result` reads that value once
+:meth:`MenuBar.on_action` is the bar's activation: it leaves the active
+label's text pending, and :meth:`MenuBar.take` reads that value once
 and clears it.  An empty bar and a disabled bar (or a disabled active label)
 answer ``False`` and leave nothing pending.  ``focused`` is the focus flag
-the focus tier sets (``Focusable``); the bar renders the same whether it is
+the focus tier sets; the bar renders the same whether it is
 focused or not -- its active label is the selection, not a focus band -- and
 the flag is part of :meth:`MenuBar.revision` all the same.
 
 :class:`ContextMenu` is :class:`~motui.widgets.choice.Select`'s desktop-menu
 preset: a vertical option list with the menu cursor, ``commit=False`` (only
-:meth:`~motui.widgets.choice.Select.activate` settles a pick),
+:meth:`~motui.widgets.choice.Select.on_action` settles a pick),
 ``wrap=True`` (the ends cycle) and ``window=False`` (the list window hangs at
-the top).  An :meth:`~motui.widgets.choice.Select.activate` leaves the
-option under the cursor pending and :meth:`~motui.widgets.choice.Select.take_result`
+the top).  An :meth:`~motui.widgets.choice.Select.on_action` leaves the
+option under the cursor pending and :meth:`~motui.widgets.choice.Select.take`
 reads it once.  The menu itself neither opens nor positions itself; a host
 mounts it over a click with a modal controller --
 ``Modal(tui, menu, anchor=(y, x))`` -- routes the pointer through the modal
-and calls ``menu.activate()`` on the return key.
+and calls ``menu.on_action("activate")`` on the return key.
 """
 
 from __future__ import annotations
@@ -68,7 +68,7 @@ class MenuBar(LabelStrip):
     every later :meth:`select`/:meth:`move` (a disabled index passed to the
     constructor is kept -- the constructor rewrites no explicit request, the
     verbs refuse).  ``disabled_items`` names the labels that are visible but
-    refuse :meth:`select`/:meth:`click`/:meth:`activate` and are stepped over
+    refuse :meth:`select`/:meth:`on_click`/:meth:`on_action` and are stepped over
     by :meth:`move`; the ``disabled`` flag refuses every gesture.
 
     Styles resolve at render time from the theme (or a ``styles=`` group
@@ -81,7 +81,7 @@ class MenuBar(LabelStrip):
     ``True``, the old default.
 
     ``_last_width`` is the width the last :meth:`render` painted at -- the
-    geometry :meth:`click` maps a column against; until the first paint it is
+    geometry :meth:`on_click` maps a column against; until the first paint it is
     80, the same convention as ``Tabs``/``TextBuffer.last_width``.  The span
     table is recorded once per render, so a hit never re-renders the bar.
     """
@@ -119,12 +119,12 @@ class MenuBar(LabelStrip):
         # The old constructor default; FocusManager/App may flip it later.
         self.focused = True
         #: The pointer tier's flag; the label-level emphasis lives in
-        #: ``_hover_index`` (:meth:`hover_at`).
+        #: ``_hover_index`` (:meth:`on_hover`).
         self.hover = False
         #: The whole bar refuses every gesture when disabled.
         self.disabled = disabled
         self._index = 0
-        # The label the pointer is on, or ``None``; written by ``hover_at``,
+        # The label the pointer is on, or ``None``; written by ``on_hover``,
         # read by ``render``.  ``None`` renders byte-for-byte what the bar
         # always did.
         self._hover_index: int | None = None
@@ -137,8 +137,8 @@ class MenuBar(LabelStrip):
         # label, in paint order -- so a hit reads the table instead of
         # re-rendering the bar.
         self._spans: tuple[tuple[int, int, int], ...] | None = None
-        #: The pending one-shot result: written by ``activate``, read once by
-        #: ``take_result``.
+        #: The pending one-shot result: written by activation, read once by
+        #: ``take``.
         self._pending: str | None = None
         if self.items:
             # Clamped like every later request; the disabled rule belongs to
@@ -163,28 +163,11 @@ class MenuBar(LabelStrip):
             self._pending = None
         return moved
 
-    def activate(self) -> bool:
-        """Leave the active label pending; ``True`` when there is one.
-
-        The bar's :class:`~motui.kernel.document.Activable` verb: a host routes
-        the return key here and reads the label once through
-        :meth:`take_result`.  An empty or disabled bar, or a disabled active
-        label, answers ``False`` and leaves nothing pending.
-        """
-        if self.disabled or not self.items or self._index in self._disabled_items:
-            self._pending = None
-            return False
-        self._pending = self.items[self._index]
-        return True
-
     def take(self) -> str | None:
         """Read the pending label once and clear it (the ``take`` door)."""
         value = self._pending
         self._pending = None
         return value
-
-    #: The 1.x spelling stays until W3b3 removes it.
-    take_result = take
 
     # -- the keyboard -----------------------------------------------------------
 
@@ -194,7 +177,7 @@ class MenuBar(LabelStrip):
         ``prev`` / ``next`` step the active label through :meth:`move` and
         answer its result (a clamped edge reports ``False``, the old focus
         router's rule); ``activate`` leaves the active label pending through
-        :meth:`activate` and answers whether there was one.  An unknown name
+        :meth:`on_action` and answers whether there was one.  An unknown name
         answers ``False`` without touching the bar.
         """
         if name == "prev":
@@ -202,7 +185,11 @@ class MenuBar(LabelStrip):
         if name == "next":
             return self.move(1)
         if name == "activate":
-            return self.activate()
+            if self.disabled or not self.items or self._index in self._disabled_items:
+                self._pending = None
+                return False
+            self._pending = self.items[self._index]
+            return True
         return False
 
     def on_key(self, event: KeyEvent) -> bool:
@@ -218,9 +205,6 @@ class MenuBar(LabelStrip):
         if action is None:
             return False
         return self.on_action(action)
-
-    #: The 1.x routing door stays until W3b3 removes it.
-    handle = on_key
 
     def _style_of(self, index: int) -> Style:
         """The style one label renders with (the stricter state wins)."""
@@ -285,7 +269,7 @@ class ContextMenu(Select):
     rides through untouched), ``title`` is the optional heading row and
     ``marker`` the cursor row's glyph (the vocabulary's ``cursor``,
     ``"\u2192"``).  The preset's knobs are a desktop menu's: ``commit=False``
-    (moving the cursor picks nothing -- only :meth:`~motui.widgets.choice.Select.activate`
+    (moving the cursor picks nothing -- only :meth:`~motui.widgets.choice.Select.on_action`
     settles the option under it), ``wrap=True`` (the ends cycle) and
     ``window=False`` (a window longer than ``max_rows`` hangs at the top).
     They may still be overridden through ``**kwargs``, which forwards every
@@ -294,9 +278,9 @@ class ContextMenu(Select):
     The menu neither opens nor positions itself: a host mounts it with the
     modal controller at the click cell -- ``Modal(tui, menu, anchor=(y, x))``
     -- routes the pointer reports through the modal (a click inside the panel
-    lands the cursor, a click outside dismisses), calls ``menu.activate()``
+    lands the cursor, a click outside dismisses), calls ``menu.on_action("activate")``
     on the return key and reads the choice once through
-    :meth:`~motui.widgets.choice.Select.take_result`, which answers the
+    :meth:`~motui.widgets.choice.Select.take`, which answers the
     pending :class:`~motui.widgets.choice.Option` (or ``None`` for a cancel).
     """
 

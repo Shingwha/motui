@@ -4,17 +4,16 @@ Every component renders through the frozen protocol
 ``render(c: Constraints) -> Surface`` and depends only on the kernel
 (``block``/``lines``/``style``/``text``): no screen, painter, keys or app
 imports.  Pure renderers hold to that one method; the interactive ones add
-the controller vocabulary of the naming charter beside it -- ``Input`` /
-``Editor`` consume events through ``handle(event) -> bool``
-(routed by the keymap they hold while the query is theirs), ``Select`` /
-``Tabs`` / ``NavList`` / ``Tree`` / ``Autocomplete`` / ``RadioGroup`` /
-``Slider`` move with ``move(delta)`` (``select(index)`` on the tab strip and
-the navigation rail) and answer a mouse hit
-through ``click(row, col)``; the menus, the tree and the form widgets add
-the activation verb,
-``activate() -> bool``, ``Dialog`` runs its own button keys through
-``handle(event)`` and presses a button on a click, and ``Spinner`` advances
-by hand -- never by reading a clock.  The action primitives
+the typed hooks of the 2.0 interaction model beside it -- ``Input`` /
+``Editor`` consume events through ``on_key`` / ``on_paste`` (routed by the
+keymap they hold while the query is theirs), ``Select`` / ``Tabs`` /
+``NavList`` / ``Tree`` / ``Autocomplete`` / ``RadioGroup`` / ``Slider``
+move with ``move(delta)`` (``select(index)`` on the tab strip and the
+navigation rail) and answer a mouse hit through ``on_click(pos)``; the
+menus, the tree and the form widgets add ``on_action("activate")``,
+``Dialog`` runs its own button keys through ``on_key`` and presses a
+button on a click, and ``Spinner`` advances by hand -- never by reading a
+clock.  The action primitives
 (:class:`Button`, :class:`Checkbox`, :class:`Link`) are the minimal
 clickable units; the form widgets (:class:`RadioGroup`, :class:`Slider`)
 hold a
@@ -24,9 +23,9 @@ filtered dropdown, and :class:`ShortcutBar` is the chrome-only
 row of key hints.  :class:`Diff` renders two texts as one unified diff
 (the LCS runs once, at construction) and :class:`List` is the windowed
 cursor over a long sequence.  The pointer tier flips ``hover`` on any
-component that
-declares it (:class:`~motui.kernel.document.Hoverable`) and calls
-``hover_at(row, col)`` where a component has rows.  The layout containers (:class:`Row`,
+component that carries the flag and, for a component with
+``hoverable = True``, tells it the row through ``on_hover(pos)``.  The
+layout containers (:class:`Row`,
 :class:`Column`, :class:`Spacer`, :class:`Padding`) are components too and
 live in :mod:`motui.widgets.layout`.  :class:`StatusLine` (a
 two-column status row) rounds out the library; this package is the import

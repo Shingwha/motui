@@ -14,7 +14,7 @@ dividers ``text.muted`` -- a separator is never
 accent -- and the label under the pointer merges ``surfaces.hover``.
 
 ``focused`` is the focus flag the focus tier sets
-(:class:`~motui.kernel.document.Focusable`).  While it is ``False`` the
+The focus tier's flag.  While it is ``False`` the
 indicator **drops from accent to muted** -- the label is *not* dimmed (the
 old reverse-video recipe dimmed it; that behaviour is gone).  The color
 rule is worth spelling out because :meth:`~motui.kernel.style.Style.merge`
@@ -27,7 +27,7 @@ unfocused strip loses the indicator's hue, never the indicator.
 
 ``disabled_items`` names the indices that are visible but not selectable:
 their label renders in ``text.faint``, so a
-disabled label is quiet by default, :meth:`click` answers ``False``
+disabled label is quiet by default, :meth:`on_click` answers ``False``
 without touching the selection, and :meth:`move` **steps over** them --
 a step towards a disabled index lands on the next enabled one, and a step
 with no enabled index left in that direction stays put.  :meth:`select`
@@ -48,9 +48,9 @@ The strip is horizontal, period: the second axis this class used to take
 rail is :class:`~motui.widgets.navlist.NavList`.  Pure component: the
 host routes keys and cells, ``render`` only draws.  ``_last_width`` is
 the width the last :meth:`render` painted at -- the geometry
-:meth:`click` maps a column against; until the first paint it is 80, the
-same convention as ``TextBuffer.last_width``.  :meth:`click` and the
-pointer tier's :meth:`hover_at` resolve a cell through the one walk
+:meth:`on_click` maps a column against; until the first paint it is 80, the
+same convention as ``TextBuffer.last_width``.  :meth:`on_click` and the
+pointer tier's :meth:`on_hover` resolve a cell through the one walk
 :meth:`_hit` runs over this component's own last render, so the host
 never resolves a tab itself: the leading and trailing padding, every
 ``" rule "`` gap, a cell past the last label and a truncating ``fit``
@@ -87,7 +87,7 @@ class Tabs(LabelStrip):
     into ``0..len(tabs)-1`` on construction (a disabled index passed there
     is kept: see the module docstring) and on every later
     :meth:`select`/:meth:`move`.  ``disabled_items`` is an iterable of indices
-    that render but refuse :meth:`click`/:meth:`select` and are stepped
+    that render but refuse :meth:`on_click`/:meth:`select` and are stepped
     over by :meth:`move`; the ``disabled`` flag refuses every gesture.
 
     Styles resolve at render time from the theme (or a ``styles=`` group
@@ -101,7 +101,7 @@ class Tabs(LabelStrip):
     style is untouched.  ``focused`` starts ``True``, the old default.
 
     ``_last_width`` is the width the last :meth:`render` painted at -- the
-    geometry :meth:`click` maps a column against; until the first paint it
+    geometry :meth:`on_click` maps a column against; until the first paint it
     is 80, the same convention as ``TextBuffer.last_width``.  The marking
     starts ``None``, so an un-hovered strip renders exactly the bytes it
     always did.
@@ -136,12 +136,12 @@ class Tabs(LabelStrip):
         # The old constructor default; FocusManager/App may flip it later.
         self.focused = True
         #: The pointer tier's flag; the label-level emphasis lives in
-        #: ``_hover_index`` (:meth:`hover_at`).
+        #: ``_hover_index`` (:meth:`on_hover`).
         self.hover = False
         #: The whole strip refuses every selection gesture when disabled.
         self.disabled = disabled
         self._index = 0
-        # The label the pointer is on, or ``None``; written by ``hover_at``,
+        # The label the pointer is on, or ``None``; written by ``on_hover``,
         # read by ``render``.  ``None`` renders byte-for-byte what the strip
         # always did.
         self._hover_index: int | None = None
@@ -194,9 +194,6 @@ class Tabs(LabelStrip):
         if action is None:
             return False
         return self.on_action(action)
-
-    #: The 1.x routing door stays until W3b3 removes it.
-    handle = on_key
 
     def revision(self) -> object:
         """The row cache's snapshot: every input the strip's row reads.

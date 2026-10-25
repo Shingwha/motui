@@ -558,7 +558,7 @@ class _StreamCache:
 def _span_index(rows: Sequence[Line]) -> list[list[tuple[str, int, int]]]:
     """The action spans of ``rows``: one ``(action, start, end)`` list per row.
 
-    The index :meth:`Markdown.click` / :meth:`Markdown.hover_at` read, so the
+    The index :meth:`Markdown.on_click` / :meth:`Markdown.on_hover` read, so the
     hit testing never re-walks the segments: derived in display columns (the
     :attr:`~motui.kernel.cell.Segment.width` walk, left-closed and
     right-open, exactly what :func:`~motui.kernel.cell.action_at` answers
@@ -687,11 +687,11 @@ class Markdown(Widget):
 
     **Inline links are clickable spans.**  A ``[label](url)`` run carries the
     url as its ``Segment.link`` (the terminal gets a real OSC 8 hyperlink)
-    and as its ``Segment.action``, so the component is :class:`Hoverable` and
-    :class:`Clickable` over its **last render's** row table:
-    ``click(row, col)`` leaves the url of the span the cell hit pending
-    (the host reads it once through :meth:`take_result`) and answers
-    ``True`` -- a cell off every span declines -- and ``hover_at(row, col)``
+    and as its ``Segment.action``, so the component is ``hoverable`` and
+    ``clickable`` over its **last render's** row table:
+    ``on_click(pos)`` leaves the url of the span the cell hit pending
+    (the host reads it once through :meth:`take`) and answers
+    ``True`` -- a cell off every span declines -- and ``on_hover(pos)``
     remembers the span under the pointer, answering whether the render
     changed.  The span index (row -> ``(action, start, end)``, columns as
     :func:`~motui.kernel.cell.action_at` reports them) is derived from
@@ -712,10 +712,10 @@ class Markdown(Widget):
     bare placeholder and :func:`_stamp_tasks` writes the ordinal onto the
     finished rows after the cache (the hover rule's shape: cache untouched,
     streaming resume unaffected).  A click on the box leaves the payload
-    pending -- read once through :meth:`take_result` -- and the *host* owns
+    pending -- read once through :meth:`take` -- and the *host* owns
     the rest of the loop, because ``text`` is the host's::
 
-        result = md.take_result()
+        result = md.take()
         if result and result.startswith("todo:"):
             index = int(result.removeprefix("todo:"))
             md.text = toggle_task(md.text, index)   # the host's own rewrite
@@ -731,6 +731,10 @@ class Markdown(Widget):
     the rows.  The parse is the block engine's own fence rule (see
     :func:`~.blocks._scan_fences`).
     """
+
+    #: Inline links and task boxes take pointer clicks and paint a hover.
+    clickable = True
+    hoverable = True
 
     __slots__ = (
         "_acts",
@@ -778,7 +782,7 @@ class Markdown(Widget):
         self._user_highlighter = highlighter
         #: The pending pick: ``click`` leaves a hit span's action (the url of
         #: a link) here, and the host reads it once through
-        #: :meth:`take_result`.
+        #: :meth:`take`.
         self._pending: str | None = None
         #: The last render's rows (the viewport's copy is its own; these are
         #: the base rows the hit testing reads) and the span index derived
@@ -932,7 +936,7 @@ class Markdown(Widget):
         (render-cost W4: rebuilding them was the frame's cost on every hit):
         the task markers' flat ordinals are stamped onto the rows
         (:func:`_stamp_tasks`), the span index of the stamped rows is derived
-        (:func:`_span_index` -- the table ``click`` / ``hover_at`` hit-test
+        (:func:`_span_index` -- the table ``on_click`` / ``on_hover`` hit-test
         against), and the hovered span, when the pointer is on one, is merged
         into its row of the returned copy.  The remembered rows stay
         hover-free and unstamped by the hover, so the cache's key and the
@@ -1025,37 +1029,37 @@ class Markdown(Widget):
             self._fences_text = self.text
         return list(self._fences)
 
-    def hover_at(self, row: int, col: int) -> bool:
+    def on_hover(self, pos: Pos | None) -> bool:
         """Mark the cell under the pointer; answer whether the render changed.
 
-        ``row < 0`` (the pointer left) clears the mark.  The cell resolves
+        ``None`` (the pointer left) clears the mark.  The cell resolves
         against the span index of the last render: a column inside a span
         remembers ``(row, start, end)``, anything else -- plain prose, a
         column past the row -- clears it.  The answer is whether that span
         differs from the one remembered, exactly when the frame repaints.
         """
-        hit = self._hit(row, col)
-        span = None if hit is None else (row, hit[1], hit[2])
+        hit = None if pos is None else self._hit(pos.y, pos.x)
+        span = None if hit is None else (pos.y, hit[1], hit[2])
         changed = span != self._hover_span
         self._hover_span = span
         return changed
 
-    def click(self, row: int, col: int) -> bool:
-        """Leave the span's action under ``(row, col)`` pending; hit?
+    def on_click(self, pos: Pos) -> bool:
+        """Leave the span's action under ``pos`` pending; hit?
 
         A cell on a link (or any other action-carrying run a custom rule
         renders) leaves that payload pending for the host to read once
-        through :meth:`take_result`, and answers ``True``; a cell anywhere
-        else -- plain prose, a column outside the row -- answers ``False``
-        and consumes nothing.
+        through :meth:`take`, and answers ``True``; a cell anywhere else --
+        plain prose, a column outside the row -- answers ``False`` and
+        consumes nothing.
         """
-        hit = self._hit(row, col)
+        hit = self._hit(pos.y, pos.x)
         if hit is None:
             return False
         self._pending = hit[0]
         return True
 
-    def take_result(self) -> str | None:
+    def take(self) -> str | None:
         """Read the pending action payload once and clear it."""
         value = self._pending
         self._pending = None

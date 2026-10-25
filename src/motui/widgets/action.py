@@ -5,13 +5,12 @@ The three smallest interactive units the toolkit ships, one family file:
 ``[ ] label`` toggle beside it, and ``Link`` a one-row text in the theme's
 ``link`` band that only the mouse and an activation follow.  Each holds state
 and answers controller methods like every component (D1): ``on_click`` and
-``activate`` land the operation in a one-shot result the host reads through
+``on_action("activate")`` land the operation in a one-shot result the host reads through
 ``take()`` -- there is no callback, no event bus and no public
 ``chosen``.
 
 ``hover`` and ``focused`` are the flags the pointer and focus tiers write
-(:class:`~motui.kernel.document.Hoverable` /
-:class:`~motui.kernel.document.Focusable`); they only change how the row
+(the pointer's and the focus tier's flags); they only change how the row
 renders, and a component that is neither hovered nor focused renders exactly
 the base style.  The three resolve their row band through the same rule --
 base, then the hover band, then the focus band (:func:`_band`) -- so one
@@ -84,7 +83,7 @@ class Button(Widget):
     apart overrides the groups).  The groups resolve on every render, as
     ``styles`` override > theme group > :data:`DEFAULT_THEME`.
 
-    :meth:`on_click` and :meth:`activate` are the two doors to the same
+    :meth:`on_click` and :meth:`on_action` are the two doors to the same
     operation -- a button always has a main one, so neither ever answers
     ``False`` while enabled -- and both write the pending result for the
     host to read once through :meth:`take`.  A disabled button
@@ -132,34 +131,22 @@ class Button(Widget):
         always lands while the button is enabled: a button has no dead cells
         and no miss.
         """
-        return self.activate()
+        return self.on_action("activate")
 
-    def click(self, row: int, col: int) -> bool:
-        """The 1.x cell spelling of :meth:`on_click`."""
-        return self.on_click(Pos(y=row, x=col))
-
-    def activate(self) -> bool:
-        """Take the activation (the Activable verb); ``False`` when disabled."""
+    def on_action(self, name: str) -> bool:
+        """Run the button's one action (``"activate"``); others decline."""
+        if name != "activate":
+            return False
         if self.disabled:
             return False
         self._pending = True
         return True
-
-    def on_action(self, name: str) -> bool:
-        """Run the button's one action (``"activate"``); others decline."""
-        if name == "activate":
-            return self.activate()
-        return False
 
     def take(self) -> bool | None:
         """Read the pending activation once and clear it."""
         value = self._pending
         self._pending = None
         return value
-
-    def take_result(self) -> bool | None:
-        """The 1.x alias of :meth:`take`."""
-        return self.take()
 
     def revision(self) -> object:
         """The row's value snapshot: label, flags, state, theme and styles.
@@ -216,7 +203,7 @@ class Checkbox(Widget):
     """A one-row checked/unchecked toggle with a ``[x]`` / ``[ ]`` mark.
 
     ``checked`` starts ``False`` (or at the constructor's value) and is
-    flipped by :meth:`activate` and :meth:`on_click` -- both are the same
+    flipped by :meth:`on_action` and :meth:`on_click` -- both are the same
     operation and always land ``True`` while enabled (a checkbox always has
     a main one) -- which leaves the new state pending for :meth:`take`.  The row renders ``"{mark} label"`` with the
     checkbox's styling: the mark in ``styles.content.accent`` and the label
@@ -277,35 +264,23 @@ class Checkbox(Widget):
         ``pos`` is ignored: the whole one-row control is the toggle, mark
         and label alike.  ``False`` when disabled.
         """
-        return self.activate()
+        return self.on_action("activate")
 
-    def click(self, row: int, col: int) -> bool:
-        """The 1.x cell spelling of :meth:`on_click`."""
-        return self.on_click(Pos(y=row, x=col))
-
-    def activate(self) -> bool:
-        """Flip :attr:`checked` and leave the new state pending; ``False`` when disabled."""
+    def on_action(self, name: str) -> bool:
+        """Run the checkbox's one action (``"activate"``); others decline."""
+        if name != "activate":
+            return False
         if self.disabled:
             return False
         self.checked = not self.checked
         self._pending = self.checked
         return True
 
-    def on_action(self, name: str) -> bool:
-        """Run the checkbox's one action (``"activate"``); others decline."""
-        if name == "activate":
-            return self.activate()
-        return False
-
     def take(self) -> bool | None:
         """Read the pending toggle (the new ``checked`` value) once and clear it."""
         value = self._pending
         self._pending = None
         return value
-
-    def take_result(self) -> bool | None:
-        """The 1.x alias of :meth:`take`."""
-        return self.take()
 
     def revision(self) -> object:
         """The row's value snapshot: label, state, flags, theme and styles.
@@ -377,7 +352,7 @@ class Link(Widget):
     ``styles.content.link``.  While the pointer tier holds :attr:`hover` it
     merges ``styles.surfaces.hover``, and while :attr:`focused` (the focus
     tier's flag, writable by contract) it merges ``styles.controls.focus``.
-    A click anywhere on the row or an :meth:`activate` leaves ``True``
+    A click anywhere on the row or an activation leaves ``True``
     pending for :meth:`take`; a disabled link refuses both doors and
     renders the faint text band.  :attr:`hint` is the tooltip's protocol --
     the ``chrome.Tooltip`` overlay reads it off the leaf under the pointer,
@@ -425,34 +400,22 @@ class Link(Widget):
         answer is always ``True`` while enabled; what the host does with the
         pending result is its own policy.
         """
-        return self.activate()
+        return self.on_action("activate")
 
-    def click(self, row: int, col: int) -> bool:
-        """The 1.x cell spelling of :meth:`on_click`."""
-        return self.on_click(Pos(y=row, x=col))
-
-    def activate(self) -> bool:
-        """Take the link's activation; ``False`` when disabled."""
+    def on_action(self, name: str) -> bool:
+        """Run the link's one action (``"activate"``); others decline."""
+        if name != "activate":
+            return False
         if self.disabled:
             return False
         self._pending = True
         return True
-
-    def on_action(self, name: str) -> bool:
-        """Run the link's one action (``"activate"``); others decline."""
-        if name == "activate":
-            return self.activate()
-        return False
 
     def take(self) -> bool | None:
         """Read the pending follow once and clear it."""
         value = self._pending
         self._pending = None
         return value
-
-    def take_result(self) -> bool | None:
-        """The 1.x alias of :meth:`take`."""
-        return self.take()
 
     def revision(self) -> object:
         """The row's value snapshot: text, flags, theme and styles.

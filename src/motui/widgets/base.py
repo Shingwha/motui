@@ -12,11 +12,12 @@ Subclasses implement :meth:`render` and override only the verbs they take.
 A pure renderer need not inherit this class at all: :class:`Component` --
 one ``render(c) -> Surface`` -- remains the rendering obligation.
 
-2.0 adds the explicit tree the runtime will derive facts from: ``parent`` /
-``children``, :meth:`walk`, :meth:`touch` and the ``generation`` counter.
-The tree is strictly additive -- the 1.x verbs keep their signatures and
-defaults, no component has to adopt the tree to keep working, and
-:meth:`revision` still answers ``None`` so no existing row cache changes.
+2.0 adds the explicit tree the runtime derives facts from: ``parent`` /
+``children``, :meth:`walk`, :meth:`touch` and the ``generation`` counter,
+and states interaction as typed hooks plus capability flags.  A subclass
+overrides only the hooks it takes; a pure renderer need not inherit this
+class at all, because :class:`Component` -- one ``render(c) -> Surface`` --
+remains the rendering obligation.
 """
 
 from __future__ import annotations
@@ -26,7 +27,7 @@ from typing import Protocol, cast, runtime_checkable
 
 from ..kernel.cell import Surface
 from ..kernel.document import Component
-from ..kernel.events import Event, KeyEvent, MouseEvent, PasteEvent, ResizeEvent
+from ..kernel.events import KeyEvent, MouseEvent, PasteEvent, ResizeEvent
 from ..kernel.geom import Pos
 from ..kernel.layout import Constraints
 from ..kernel.theme import DEFAULT_THEME, Styles, Theme
@@ -44,9 +45,8 @@ class HasResult(Protocol):
     and never needs a second write to reset it.  ``None`` means "nothing
     pending"; a widget whose legal result is ``None`` uses the take itself
     as the signal (a cancel), and a ``False``/``0``/``""`` answer is a real
-    result (test with ``is not None``).  This is the 2.0 name of the 1.x
-    :class:`~motui.kernel.document.Resultful`; :meth:`Widget.take` is its
-    default implementation and delegates to ``take_result``.
+    result (test with ``is not None``).  :meth:`Widget.take` is the default
+    implementation.
     """
 
     def take(self) -> object | None:
@@ -90,17 +90,11 @@ class Widget:
         "theme",
     )
 
-    #: Whether this widget owns the focus of its descendants: the App
-    #: registers the widget itself and skips its subtree (a ``Form`` routes
-    #: every field's keys through its own ``handle``).  The 1.x spelling;
-    #: :attr:`focus_scope` is its 2.0 alias and both default to ``False``.
-    owns_focus = False
-
     # -- capability flags: what the runtime may route to this widget --------
     #
     # Class defaults, all off: a pure renderer stays out of every tier until
-    # it says otherwise.  W3b replaces the capability-protocol type probes
-    # with reads of these flags; this wave only publishes them.
+    # it says otherwise.  The runtime reads these flags; it never probes a
+    # capability protocol.
 
     focusable = False
     clickable = False
@@ -110,11 +104,11 @@ class Widget:
     #: Key -> action names for the widget's own routing.  Empty on the base;
     #: a subclass declares its table and an instance may override entries.
     #: The merge rule is ``{**type(self).keymap, **instance.keymap}`` at the
-    #: routing site (W3b), not in this attribute.
+    #: routing site, not in this attribute.
     keymap: Mapping[str, str] = {}
 
     #: Whether focus routing stays inside this widget's subtree (a ``Form``
-    #: routes its fields itself).  The 2.0 name of :attr:`owns_focus`.
+    #: routes its fields itself).
     focus_scope = False
 
     def __init__(
@@ -235,58 +229,23 @@ class Widget:
         """Paint the widget's rows; every concrete widget implements this."""
         raise NotImplementedError
 
-    # -- optional interaction verbs: no-ops by default ----------------------
-
-    def handle(self, event: Event) -> bool:
-        """Consume one event; a widget that takes no events declines."""
-        return False
-
-    def click(self, row: int, col: int) -> bool:
-        """Take a click on one cell; a widget that has no click declines."""
-        return False
-
-    def drag(self, row: int, col: int, kind: str) -> bool:
-        """Take one step of a drag on one cell; a widget without drags declines.
-
-        ``kind`` is ``"press"``, ``"motion"`` or ``"release"``.  The App
-        routes a press to the nearest widget overriding this verb, then
-        keeps sending that widget the motion and release reports -- the
-        cell is in the widget's own ``render`` coordinates, like
-        :meth:`click`.
-        """
-        return False
-
-    def hover_at(self, row: int, col: int) -> bool:
-        """Move the pointer onto one cell; a widget without rows declines."""
-        return False
-
-    def activate(self) -> bool:
-        """Take the activation verb; a widget without one declines."""
-        return False
-
-    def take_result(self) -> object | None:
-        """Read the one-shot result; a widget without one answers ``None``."""
-        return None
-
-    # -- 2.0 typed hooks: delegate to the 1.x verbs ------------------------
+    # -- typed interaction hooks: no-ops by default -------------------------
     #
-    # The runtime will route events through these hooks (W3b/W4) while the
-    # old verbs keep serving the 1.x callers.  The defaults below are the
-    # whole compatibility story: a subclass that only overrides
-    # ``handle`` / ``click`` / ``hover_at`` / ``drag`` / ``activate`` /
-    # ``take_result`` behaves exactly as before.
+    # The runtime routes through these hooks only; there is no untyped verb
+    # fallback.  A subclass overrides the hooks it takes and answers ``True``
+    # when it consumed the input.
 
     def on_key(self, e: KeyEvent) -> bool:
-        """Handle one key press; the default forwards to :meth:`handle`."""
-        return self.handle(e)
+        """Handle one key press; a widget that takes no keys declines."""
+        return False
 
     def on_mouse(self, e: MouseEvent) -> bool:
-        """Handle one mouse report; the default forwards to :meth:`handle`."""
-        return self.handle(e)
+        """Handle one mouse report; a widget that takes no mouse declines."""
+        return False
 
     def on_paste(self, e: PasteEvent) -> bool:
-        """Handle one paste payload; the default forwards to :meth:`handle`."""
-        return self.handle(e)
+        """Handle one paste payload; a widget that takes no paste declines."""
+        return False
 
     def on_resize(self, e: ResizeEvent) -> None:
         """React to a terminal resize; the base widget has nothing to size."""
@@ -297,36 +256,31 @@ class Widget:
         self.focused = gained
 
     def on_click(self, pos: Pos) -> bool:
-        """Take a click at ``pos``; the default forwards to ``click(row, col)``."""
-        return self.click(pos.y, pos.x)
+        """Take a click at ``pos``; a widget without a click declines."""
+        return False
 
     def on_hover(self, pos: Pos | None) -> bool:
         """Take the pointer at ``pos``, or its departure for ``None``.
 
-        The departure is the 1.x sentinel ``hover_at(-1, -1)``: a component
-        with a hovered row reads a negative row as "no pointer".
+        A widget with a hovered row reads ``None`` as "no pointer".
         """
-        if pos is None:
-            return self.hover_at(-1, -1)
-        return self.hover_at(pos.y, pos.x)
+        return False
 
     def on_drag(self, pos: Pos, phase: str) -> bool:
-        """Take one drag step at ``pos``; forward to ``drag(row, col, phase)``."""
-        return self.drag(pos.y, pos.x, phase)
+        """Take one drag step at ``pos``; a widget without drags declines."""
+        return False
 
     def on_action(self, name: str) -> bool:
-        """Run the named action; only ``"activate"`` is bound on the base.
+        """Run the named action; the base binds none and declines.
 
-        An unknown action answers ``False`` without calling :meth:`activate`
-        -- the keymap router (W3b) uses that to keep routing the key.
+        An unknown action answers ``False`` so the keymap router keeps
+        routing the key.
         """
-        if name == "activate":
-            return self.activate()
         return False
 
     def take(self) -> object | None:
-        """Read the one-shot result; the default forwards to ``take_result``."""
-        return self.take_result()
+        """Read the one-shot result; a widget without one answers ``None``."""
+        return None
 
     def revision(self) -> object | None:
         """The row cache's change token; ``None`` disables caching."""

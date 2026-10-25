@@ -198,7 +198,7 @@ class LinkInlineRule:
     .styled` wraps around the label, so a terminal can open a real
     hyperlink) and ``action`` is what the *application* hears -- a click on
     the label leaves the url pending for
-    :meth:`Markdown.take_result <motui.widgets.markdown.Markdown.take_result>`.
+    :meth:`Markdown.take <motui.widgets.markdown.Markdown.take>`.
     Neither reaches the row's text: the label is all that renders.
     """
 

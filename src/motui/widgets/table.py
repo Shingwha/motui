@@ -69,9 +69,9 @@ and ``move`` / ``click`` / ``activate`` are the interactive surface a host
 routes keys and hits to.  ``move`` clamps at the ends (a data view, not a
 menu cycle -- D10), ``click`` maps a block row onto a data row through the
 very layout ``render`` emits, and ``activate`` leaves the cursor row's index
-pending for :meth:`take_result` (read once, self-clearing).
+pending for :meth:`take` (read once, self-clearing).
 
-The pointer tier adds a second, weaker highlight: ``hover_at(row, col)``
+The pointer tier adds a second, weaker highlight: ``on_hover(pos)``
 marks the data row a cell resolves to -- through the same layout, without
 moving the cursor -- and that row's cells take the row hover band
 (``rows.hover``), whatever row it is on (D3: the hover wins even over the
@@ -278,21 +278,21 @@ class Table(Widget):
     while the header and the grid rules stay untouched;
     the row count and the column budgets are exactly the same whether a
     row is under the cursor or not.  ``move(delta)`` steps
-    it and clamps at the ends, ``click(row, col)`` maps a rendered row onto
+    it and clamps at the ends, ``on_click(pos)`` maps a rendered row onto
     a data row (``col`` is ignored: a data row owns its whole width), and
-    ``activate()`` leaves it pending for :meth:`take_result` -- the row
+    activation leaves it pending for :meth:`take` -- the row
     index a host reads once, cleared by the next ``move`` or by a click
     that lands.
     ``focused`` is the focus flag the focus tier sets
-    (:class:`~motui.kernel.document.Focusable`): while it is ``False`` the
+    the focus tier sets: while it is ``False`` the
     cursor row wears ``rows.inactive`` instead -- the band stays legible
     but loses weight, and every other row renders unchanged.  It starts
     ``True``, the old constructor default.
 
     ``hover`` is the pointer tier's flag
-    (:class:`~motui.kernel.document.Hoverable`); :meth:`hover_at` marks the
+    the pointer tier sets; :meth:`on_hover` marks the
     data row under the pointer -- resolved through the same row layout
-    (:meth:`_layout`) :meth:`click` reads, without moving the cursor -- and
+    (:meth:`_layout`) :meth:`on_click` reads, without moving the cursor -- and
     that row's cells take the row hover band under the band they
     already carry (the cursor's included: D3's precedence makes the hover
     win outright, so a hovered cursor row wears the hover band alone).  The
@@ -422,7 +422,7 @@ class Table(Widget):
         self._glyphs = glyphs
         self._border = glyphs.grid if grid is None else grid
         #: The pointer tier's flag; the row-level emphasis lives in
-        #: ``_hover_row`` (:meth:`hover_at`).
+        #: ``_hover_row`` (:meth:`on_hover`).
         self.hover = False
         #: The marked data rows (:class:`~motui.widgets.mark.MarkSet`, raw
         #: row indices): :meth:`toggle` flips the cursor row's mark, and
@@ -435,7 +435,7 @@ class Table(Widget):
         # cursor renders exactly the bytes it always did.
         self._index: int | None = None
         # The data row the pointer is on, or ``None``; written by
-        # ``hover_at``, read by ``render``.  ``None`` renders byte-for-byte
+        # ``on_hover``, read by ``render``.  ``None`` renders byte-for-byte
         # what the table always did.
         self._hover_row: int | None = None
         #: The whole table refuses every cursor gesture when disabled.
@@ -444,7 +444,7 @@ class Table(Widget):
         #: new iterable to replace it).
         self.disabled_items = frozenset(disabled_items)
         # The pending activation: written by ``activate``, read once by
-        # ``take_result``, cleared by ``move`` and by a click that lands.
+        # ``take``, cleared by ``move`` and by a click that lands.
         self._pending: int | None = None
         # Explicit column budgets (``set_widths``), or ``None`` for the
         # measured widths; read by ``_budgets`` on every render.
@@ -463,7 +463,7 @@ class Table(Widget):
         self._memo_natural_revision: object = None
         # The visual-row structure of the remembered grid (the memo's
         # companion) and the structure of the most recent render -- what
-        # ``click``/``hover_at`` map a block row through.  ``None`` until a
+        # ``click``/``on_hover`` map a block row through.  ``None`` until a
         # render; the hit then reads the unwrapped one-line-per-record shape.
         self._memo_layout: list[_Slot] | None = None
         self._last_layout: list[_Slot] | None = None
@@ -549,11 +549,11 @@ class Table(Widget):
         """Whether data row ``index`` is disabled (the table or per item)."""
         return self.disabled or index in self.disabled_items
 
-    def click(self, row: int, col: int) -> bool:
-        """Place the cursor on the data row rendered at block row ``row``; True on a hit.
+    def on_click(self, pos: Pos) -> bool:
+        """Place the cursor on the data row rendered at ``pos.y``; True on a hit.
 
-        ``row`` is a 0-based row of this component's own ``render`` output --
-        exactly what :meth:`~motui.app.TUI.hit` reports -- and the
+        ``pos.y`` is a 0-based row of this component's own ``render`` output
+        -- exactly what :meth:`~motui.app.TUI.hit` reports -- and the
         mapping back onto a data row comes from the **most recent render's**
         visual-row structure (:meth:`_layout`): the top rule, the header
         (every visual line of it) and every ``├─┼─┤`` rule carry no data,
@@ -562,7 +562,7 @@ class Table(Widget):
         shrunk or wrapped cell, a header that takes more room than the body:
         the layout is read off the same shape ``render`` emits.  A row that
         carries no data -- the frame rows, and every row past the last
-        rendered one -- answers ``False`` and changes nothing.  ``col`` is
+        rendered one -- answers ``False`` and changes nothing.  ``pos.x`` is
         ignored, and deliberately so: every column of a data row belongs to
         that row, so no column narrows the hit.  A hit moves the cursor
         there (even when it already was) and clears a pending result; a
@@ -571,9 +571,9 @@ class Table(Widget):
         if self.disabled:
             return False
         layout = self._hit_layout()
-        if not 0 <= row < len(layout):
+        if not 0 <= pos.y < len(layout):
             return False
-        entry = layout[row]
+        entry = layout[pos.y]
         if entry.data_row is None:  # a frame row: no data row to land on
             return False
         if self._is_disabled(entry.data_row):
@@ -582,32 +582,11 @@ class Table(Widget):
         self._pending = None
         return True
 
-    def activate(self) -> bool:
-        """Leave the data row under the cursor pending; True when there was one.
-
-        The table's :class:`~motui.kernel.document.Activable` verb: a host
-        routes the return key here and reads the result once through
-        :meth:`take_result` -- the data row's index.  Answers whether there
-        was a row to take: ``False``, with nothing pending, for an empty
-        table, a disabled table or row, or a cursor no current row answers.
-        """
-        if self.disabled or self.selected is None or self._index is None:
-            self._pending = None
-            return False
-        if self._is_disabled(self._index):
-            self._pending = None
-            return False
-        self._pending = self._index
-        return True
-
     def take(self) -> int | None:
         """Read the pending row index once and clear it (the ``take`` door)."""
         value = self._pending
         self._pending = None
         return value
-
-    #: The 1.x spelling stays until W3b3 removes it.
-    take_result = take
 
     def toggle(self) -> bool:
         """Flip the cursor row's mark; ``True`` when there was one to flip.
@@ -627,28 +606,28 @@ class Table(Widget):
         self.marked.toggle(self._index)
         return True
 
-    def hover_at(self, row: int, col: int) -> bool:
-        """Mark the data row under a rendered row; True when the marking changed.
+    def on_hover(self, pos: Pos | None) -> bool:
+        """Mark the data row under the pointer; True when the marking changed.
 
-        The pointer tier's row-level half (D3), and :meth:`click`'s mapping
-        without its cursor move: ``row`` is a 0-based row of this
+        The pointer tier's row-level half (D3), and :meth:`on_click`'s
+        mapping without its cursor move: ``pos.y`` is a 0-based row of this
         component's own ``render`` output, resolved through the same
         most-recent-render visual-row structure (:meth:`_layout`) -- a frame
         row (a rule, any header visual line) carries no data and clears the
         marking, exactly as a row past the last rendered one does.  Every
-        visual line of a wrapped record maps onto that record.  ``col`` is
-        ignored like ``click``'s, and a negative ``row`` clears the marking
-        (the pointer left).  The answer is whether the marked data row
+        visual line of a wrapped record maps onto that record.  ``pos.x``
+        is ignored, and ``None`` clears the marking (the pointer left).  The
+        answer is whether the marked data row
         changed, so a motion inside one record answers ``False``;
         :meth:`render` rests that row's cells -- every visual line of them
         -- on the row hover band (the cursor row's included: D3's
         precedence makes the hover win outright).
         """
         target: int | None = None
-        if row >= 0:
+        if pos is not None:
             layout = self._hit_layout()
-            if 0 <= row < len(layout):
-                target = layout[row].data_row
+            if 0 <= pos.y < len(layout):
+                target = layout[pos.y].data_row
         changed = target != self._hover_row
         self._hover_row = target
         return changed
@@ -661,7 +640,7 @@ class Table(Widget):
         ``prev`` / ``next`` step the cursor through :meth:`move` and answer
         its result (the first step lands on the edge it walks away from; an
         edge with nowhere to go reports ``False``, the old focus router's
-        rule).  ``activate`` takes the row index through :meth:`activate`,
+        rule).  ``activate`` takes the row index through the activation action,
         ``toggle`` flips the cursor row's mark, and both answer their verb's
         result.  An unknown name answers ``False`` without touching the
         table.
@@ -671,7 +650,14 @@ class Table(Widget):
         if name == "next":
             return self.move(1)
         if name == "activate":
-            return self.activate()
+            if self.disabled or self.selected is None or self._index is None:
+                self._pending = None
+                return False
+            if self._is_disabled(self._index):
+                self._pending = None
+                return False
+            self._pending = self._index
+            return True
         if name == "toggle":
             return self.toggle()
         return False
@@ -689,9 +675,6 @@ class Table(Widget):
         if action is None:
             return False
         return self.on_action(action)
-
-    #: The 1.x routing door stays until W3b3 removes it.
-    handle = on_key
 
     # -- the host's data gestures -------------------------------------------------
 
@@ -911,7 +894,7 @@ class Table(Widget):
         grid, remembers it together with its natural widths and visual-row
         layout and moves the key; the returned rows are always the caller's
         own.  Either way the visual-row layout is recorded for
-        :meth:`click` / :meth:`hover_at` -- the last render's full layout,
+        :meth:`on_click` / :meth:`on_hover` -- the last render's full layout,
         which also describes the untruncated rows a host may have pinned.
         """
         width = c.width
@@ -1291,8 +1274,8 @@ class Table(Widget):
     def _layout(self, width: int | None = None) -> list[_Slot]:
         """What each rendered visual row carries: its kind, data row and visual line.
 
-        :meth:`render` emits one line per entry and :meth:`click` /
-        :meth:`hover_at` read the same structure back (the last render's,
+        :meth:`render` emits one line per entry and :meth:`on_click` /
+        :meth:`on_hover` read the same structure back (the last render's,
         through :meth:`_hit_layout`), so the table's row arithmetic lives in
         exactly one place.  An entry whose ``data_row`` is an ``int`` is a
         visual line of that :attr:`rows` entry; a frame entry carries

@@ -68,7 +68,7 @@ __all__ = ["Tree", "TreeNode"]
 class TreeNode:
     """One tree node: a label, child nodes, an ``expanded`` flag and ``disabled``.
 
-    A plain mutable class on purpose: :meth:`Tree.activate` flips
+    A plain mutable class on purpose: :meth:`Tree.on_action` flips
     ``expanded`` in place instead of rebuilding the path back to the root,
     which is what a frozen dataclass would force.  ``children`` is copied
     into a list; a node without children is a leaf and never expands.  A
@@ -118,13 +118,13 @@ class Tree(Widget):
     the column blank) and two empty glyphs collapse the column.
 
     ``focused`` is the focus flag the focus tier sets
-    (:class:`~motui.kernel.document.Focusable`): while it is ``True`` the
+    : while it is ``True`` the
     cursor row's band is ``rows.active``; while it is ``False`` that band
     is ``rows.inactive`` -- the cursor stays legible but loses weight, and
     every other row renders unchanged.
 
     ``hover`` is the pointer tier's flag
-    (:class:`~motui.kernel.document.Hoverable`); :meth:`hover_at` marks the
+    ; :meth:`on_hover` marks the
     visible node row under the pointer and that row wears
     ``rows.hover`` -- the pointer's own token, whatever row it is on
     (D3).
@@ -188,7 +188,7 @@ class Tree(Widget):
         # The old constructor default; FocusManager/App may flip it later.
         self.focused = True
         #: The pointer tier's flag; the row-level emphasis lives in
-        #: ``_hover_index`` (:meth:`hover_at`).
+        #: ``_hover_index`` (:meth:`on_hover`).
         self.hover = False
         #: The whole tree refuses every cursor gesture when disabled.
         self.disabled = disabled
@@ -198,7 +198,7 @@ class Tree(Widget):
         # default -- renders exactly the walk the tree always did.
         self._filter: str | None = None
         # The visible node row the pointer is on, or ``None``; written by
-        # ``hover_at``, read by ``render``.  ``None`` renders byte-for-byte
+        # ``on_hover``, read by ``render``.  ``None`` renders byte-for-byte
         # what the tree always did.
         self._hover_index: int | None = None
 
@@ -235,7 +235,12 @@ class Tree(Widget):
         if name == "collapse":
             return self._fold(False)
         if name == "activate":
-            return self.activate()
+            if self.disabled:
+                return False
+            node = self.selected
+            if node is None or node.disabled or not node.children:
+                return False
+            return self._fold(not node.expanded)
         return False
 
     def on_key(self, event: KeyEvent) -> bool:
@@ -251,9 +256,6 @@ class Tree(Widget):
         if action is None:
             return False
         return self.on_action(action)
-
-    #: The 1.x routing door stays until W3b3 removes it.
-    handle = on_key
 
     @property
     def selected(self) -> TreeNode | None:
@@ -288,47 +290,26 @@ class Tree(Widget):
         self._cursor = cursor.index
         return moved
 
-    def click(self, row: int, col: int) -> bool:
-        """Place the cursor on the visible node at rendered row ``row``; True on a hit.
+    def on_click(self, pos: Pos) -> bool:
+        """Place the cursor on the visible node at ``pos.y``; True on a hit.
 
-        ``row`` is a 0-based row of this component's own ``render`` -- the
+        ``pos.y`` is a 0-based row of this component's own ``render`` -- the
         visible nodes, in draw order.  A row that is an enabled node answers
         ``True`` and moves the cursor there (even when it already was); a
         disabled node, a disabled tree, and any row past the last node
-        answer ``False`` and leave the cursor alone.  ``col`` is ignored: a
-        node row belongs to its node from the first indent column to the
+        answer ``False`` and leave the cursor alone.  ``pos.x`` is ignored:
+        a node row belongs to its node from the first indent column to the
         last label column -- no column narrows the hit.
         """
         if self.disabled:
             return False
         visible = self._visible()
-        if not 0 <= row < len(visible):
+        if not 0 <= pos.y < len(visible):
             return False
-        if visible[row][0].disabled:
+        if visible[pos.y][0].disabled:
             return False
-        self._cursor = row
+        self._cursor = pos.y
         return True
-
-    def activate(self) -> bool:
-        """Expand/collapse the node under the cursor; True when it changed.
-
-        The tree's :class:`~motui.kernel.document.Activable` verb: with the
-        cursor on a node, expanding or collapsing *is* the main operation.
-        A leaf has nothing to expand, so activating one is a no-op and
-        answers False; a disabled node or tree refuses activation.  A
-        ``Tree`` deliberately has **no** ``take()`` -- its activation
-        is a fold, not a one-shot pick.  Collapsing can shrink the visible
-        rows, so the cursor is clamped back into range afterwards.  While a
-        :meth:`filter` is up the flag still flips -- it is the user's own
-        state -- but the rendered chains follow the matches, so the fold
-        becomes visible once the filter clears.
-        """
-        if self.disabled:
-            return False
-        node = self.selected
-        if node is None or node.disabled or not node.children:
-            return False
-        return self._fold(not node.expanded)
 
     def _fold(self, expanded: bool) -> bool:
         """Set the node under the cursor to ``expanded``; ``True`` on a change.
@@ -367,7 +348,7 @@ class Tree(Widget):
         filter's own is recomputed from the match structure on every walk,
         so the two cannot drift -- ``filter(None)`` restores the user's rows
         because nothing was ever rewritten, and the filter never interferes
-        with :meth:`activate`, whose fold simply waits for the filter to
+        with :meth:`on_action`, whose fold simply waits for the filter to
         clear.  The cursor returns to the top row whenever the query
         changes (a new query is a new list -- the ``Autocomplete`` rule),
         and the answer says whether the *rows* changed: ``True`` for a
@@ -421,23 +402,23 @@ class Tree(Widget):
                 return row != current
         return False  # no enabled visible label starts with the character
 
-    def hover_at(self, row: int, col: int) -> bool:
-        """Mark the visible node row under a cell; True when the marking changed.
+    def on_hover(self, pos: Pos | None) -> bool:
+        """Mark the visible node row under the pointer; True on a change.
 
-        The pointer tier's row-level half (D3): ``row`` is a 0-based row of
-        the visible nodes in draw order -- exactly what :meth:`click`
-        consumes, minus the cursor move -- and ``col`` is ignored like
-        ``click``'s (a node row owns the whole width).  A row past the last
-        node answers "no node" and clears the marking; a negative ``row``
-        clears it too (the pointer left).  The answer is whether the marked
-        row changed, and :meth:`render` rests that row on the theme's
-        ``hover`` band -- the pointer's own token, whatever row it is on.
+        The pointer tier's row-level half (D3): ``pos.y`` is a 0-based row of
+        the visible nodes in draw order -- exactly what :meth:`on_click`
+        consumes, minus the cursor move -- and ``pos.x`` is ignored (a node
+        row owns the whole width).  A row past the last node answers "no
+        node" and clears the marking; ``None`` clears it too (the pointer
+        left).  The answer is whether the marked row changed, and
+        :meth:`render` rests that row on the theme's ``hover`` band -- the
+        pointer's own token, whatever row it is on.
         """
-        if row < 0:
+        if pos is None:
             target = None
         else:
             visible = self._visible()
-            target = row if 0 <= row < len(visible) else None
+            target = pos.y if 0 <= pos.y < len(visible) else None
         changed = target != self._hover_index
         self._hover_index = target
         return changed
@@ -447,7 +428,7 @@ class Tree(Widget):
 
         The one non-trivial part is :meth:`_node_shape`: every node's
         ``(label, expanded, disabled)`` in document order, because a node's
-        flag can be flipped in place (that is what :meth:`activate` does)
+        flag can be flipped in place (that is what :meth:`on_action` does)
         and the labels decide both the rows the unfiltered walk draws and
         the matches the filtered one keeps -- a *reference* to the root list
         would compare equal to itself after such a flip, which is exactly
@@ -476,7 +457,7 @@ class Tree(Widget):
         """The whole tree as ``(label, expanded, disabled)`` triples, depth-first.
 
         A value view of the mutable :class:`TreeNode` graph: whatever a host
-        or an :meth:`activate` does to the roots -- a flip, a re-label, a
+        or an :meth:`on_action` does to the roots -- a flip, a re-label, a
         disabled toggle, a child added or removed, a subtree reordered --
         moves this tuple, and two equal tuples describe two trees whose
         walks can only agree.
@@ -520,27 +501,27 @@ class Tree(Widget):
 
         ``open`` is what the row's own indicator shows: the node's
         ``expanded`` flag on the unfiltered walk, and "this node holds a
-        kept child" on the filtered one (:meth:`_walk_filtered`) -- so a
+        kept child" on the filtered one (:meth:`_visit_filtered`) -- so a
         drawn ``\\u25be`` never disagrees with the rows actually below it,
         and the filter's derived auto-expansion is visible in the indicator
         without the flag ever being written.
         """
         out: list[tuple[TreeNode, int, bool]] = []
         if self._filter is None:
-            self._walk(self.root_nodes, 0, out)
+            self._visit(self.root_nodes, 0, out)
         else:
-            self._walk_filtered(self.root_nodes, 0, out, self._filter.lower())
+            self._visit_filtered(self.root_nodes, 0, out, self._filter.lower())
         return out
 
-    def _walk(
+    def _visit(
         self, nodes, depth: int, out: list[tuple[TreeNode, int, bool]]
     ) -> None:
         for node in nodes:
             out.append((node, depth, node.expanded))
             if node.expanded:
-                self._walk(node.children, depth + 1, out)
+                self._visit(node.children, depth + 1, out)
 
-    def _walk_filtered(
+    def _visit_filtered(
         self,
         nodes,
         depth: int,
@@ -560,7 +541,7 @@ class Tree(Widget):
         """
         for node in nodes:
             below: list[tuple[TreeNode, int, bool]] = []
-            self._walk_filtered(node.children, depth + 1, below, needle)
+            self._visit_filtered(node.children, depth + 1, below, needle)
             if below or needle in node.label.lower():
                 out.append((node, depth, bool(below)))
                 out.extend(below)

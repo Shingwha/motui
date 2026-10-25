@@ -92,13 +92,13 @@ class _TextField(Widget):
 
     ``focused`` is the flag the focus tier writes
     (:class:`~motui.app.focus.FocusManager`, through
-    :class:`~motui.kernel.document.Focusable`) -- the same flag a shell
+    the focus tier) -- the same flag a shell
     takes at construction; the shell only renders by it (the block cursor
     and the empty-field hint).  ``hover`` is the pointer tier's flag
-    (:class:`~motui.kernel.document.Hoverable`): the fields take the
+    : the fields take the
     **block-level** hover only -- the whole rendered row (prompt included)
     merges the theme's ``hover`` while it is ``True`` -- and implement no
-    ``hover_at``: a text row has no sub-row items to mark.
+    ``on_hover``: a text row has no sub-row items to mark.
 
     ``mask`` is the display-only mask: non-empty, every character of every
     rendered row is replaced by glyphs of its first character while the
@@ -290,9 +290,6 @@ class _TextField(Widget):
         """Insert one paste payload through the buffer."""
         return self._route(e)
 
-    #: The 1.x spelling; W3b3 removes it.
-    handle = on_key
-
     def on_action(self, name: str) -> bool:
         """Run one keymap action by name, as the buffer's router would.
 
@@ -302,7 +299,7 @@ class _TextField(Widget):
         take -- answers ``False`` so a host keeps routing the key.
         """
         if name == "activate":
-            return self.activate()
+            return False  # a field has no activation of its own
         if name not in set(self._buf.keymap.values()):
             return False
         method = getattr(self, name, None)
@@ -388,18 +385,17 @@ class _TextField(Widget):
         """Extend the selection one visual row down, keeping the inner column."""
         return self._buf.select_down()
 
-    def click(self, row: int, col: int) -> bool:
+    def on_click(self, pos: Pos) -> bool:
         """Dock the block cursor at this field's own rendered cell; True on a hit.
 
-        ``row``/``col`` are a 0-based cell of the component's own
-        ``render`` output -- exactly what
-        :meth:`~motui.app.TUI.hit` reports -- so the shell first
-        undoes its own row policy and then lets the buffer resolve the
-        column.  An :class:`Editor` adds the ``max_rows`` window's first
-        rendered row back onto ``row`` (the same window :meth:`render`
+        ``pos`` is a 0-based cell of the component's own ``render`` output
+        -- exactly what :meth:`~motui.app.TUI.hit` reports -- so the shell
+        first undoes its own row policy and then lets the buffer resolve
+        the column.  An :class:`Editor` adds the ``max_rows`` window's first
+        rendered row back onto ``pos.y`` (the same window :meth:`render`
         slices by, read off the current cursor, via :meth:`_window`), so
         "the third row on screen" is the third row of the window whatever
-        the buffer's length; an :class:`Input` hands ``col`` straight
+        the buffer's length; an :class:`Input` hands ``pos.x`` straight
         through, the prompt's width already being the buffer's indent, so a
         click on the prompt or on a wrapped row's indent folds onto that
         row's first character.  A row outside the rendered rows answers
@@ -414,9 +410,9 @@ class _TextField(Widget):
         """
         rows = self._buf.visual_rows(self._buf.last_width, self._indent())
         start, count = self._window(rows, self._buf.locate(rows)[0])
-        if not 0 <= row < count:
+        if not 0 <= pos.y < count:
             return False
-        return self._buf.place(start + row, col)
+        return self._buf.place(start + pos.y, pos.x)
 
     # -- visual geometry -------------------------------------------------------
 
@@ -439,7 +435,7 @@ class _TextField(Widget):
         row (:meth:`_window_start`) and ``count`` how many rows are shown
         from there (:meth:`_row_cap`, clamped to the rows that remain).
         :meth:`render` slices by it, :meth:`cursor_position` shifts the
-        cursor's row by ``start`` and :meth:`click` rejects a row outside
+        cursor's row by ``start`` and :meth:`on_click` rejects a row outside
         it: one expression of the window, so the three cannot disagree.
         """
         start = self._window_start(len(rows), cursor_index)
@@ -705,7 +701,7 @@ class Input(_TextField):
     paste smuggle in a row break.  ``hover`` is the pointer tier's
     block-level band: while it is ``True`` every rendered row (prompt
     included) merges the theme's ``hover``; there is no row-level
-    ``hover_at`` -- a text row has no sub-row items to mark.  ``mask``
+    ``on_hover`` -- a text row has no sub-row items to mark.  ``mask``
     (``""`` = plain) replaces every rendered character with its own glyph
     while :attr:`~_TextField.text` stays plain: the display-only secret
     field, set at construction (a host that wants a reveal switch redraws
@@ -830,9 +826,6 @@ class Input(_TextField):
         if isinstance(event, PasteEvent):
             return self.on_paste(event)
         return super().on_key(event)
-
-    #: The 1.x spelling; W3b3 removes it.
-    handle = on_key
 
     # -- rendering ---------------------------------------------------------------
 
@@ -980,7 +973,7 @@ class Editor(_TextField):
     glyph while :attr:`~_TextField.text` stays plain -- the display-only
     secret field, set at construction.  ``hover`` is the pointer tier's
     block-level band: while it is ``True`` every rendered row merges the
-    theme's ``hover``; there is no row-level ``hover_at``.  The class
+    theme's ``hover``; there is no row-level ``on_hover``.  The class
     declares ``cursor_shape = "beam"``: a text buffer reads best with the
     terminal's bar cursor, and the host reads the attribute off the focused
     leaf and passes it to :meth:`~motui.app.TUI.set_cursor_shape`.
@@ -1045,25 +1038,25 @@ class Editor(_TextField):
 
     # -- the logical-line view (OVERFLOW) --------------------------------------
 
-    def click(self, row: int, col: int) -> bool:
+    def on_click(self, pos: Pos) -> bool:
         """Dock the cursor on a logical-line cell in ``OVERFLOW`` mode.
 
         The OVERFLOW render has one row per logical line, so the shared
-        shell's wrapped-row walk would answer the wrong line.  ``row`` is a
-        row of :meth:`render`'s ``max_rows`` window and ``col`` a display
-        column of the line; the cell resolves through the kernel's boundary
-        resolver and the buffer's flat-offset setter, the same pair
+        shell's wrapped-row walk would answer the wrong line.  ``pos.y`` is
+        a row of :meth:`render`'s ``max_rows`` window and ``pos.x`` a
+        display column of the line; the cell resolves through the kernel's
+        boundary resolver and the buffer's flat-offset setter, the same pair
         :meth:`TextBuffer.place` uses.  Every other mode keeps the shared
         implementation.
         """
         if self._wrap is not WrapMode.OVERFLOW:
-            return super().click(row, col)
+            return super().on_click(pos)
         rows = self._logical_rows()
         start, count = self._window(rows, self._buf.row)
-        if not 0 <= row < count:
+        if not 0 <= pos.y < count:
             return False
-        line = rows[start + row]
-        offset = line.start + index_bounds_at_columns(line.text, col)[0]
+        line = rows[start + pos.y]
+        offset = line.start + index_bounds_at_columns(line.text, pos.x)[0]
         self._buf._drop_selection()
         self._buf._set_offset(offset)
         return True
