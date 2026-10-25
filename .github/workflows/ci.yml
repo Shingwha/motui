@@ -81,11 +81,8 @@ jobs:
       - name: example -- quickstart
         run: uv run python examples/quickstart.py --headless
 
-      - name: example -- snake
-        run: uv run python examples/snake.py --headless
-
-      - name: example -- dashboard
-        run: uv run python examples/dashboard.py --headless
+      - name: example -- code
+        run: uv run python examples/code.py --headless
 
       - name: example -- wide table
         run: uv run python examples/wide_table.py --headless
