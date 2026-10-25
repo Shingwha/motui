@@ -42,12 +42,11 @@ them (``focus``/``toast``/``open_modal`` then report the missing layer).
 constructing the App gives it to the driver, and :meth:`App.add` assigns it
 to every :class:`~motui.widgets.base.Widget` in the mounted subtree whose
 ``theme`` is still ``None`` (an explicit ``theme=`` stays a local
-override).  Re-assigning :attr:`App.theme` walks the mounted components
-again and also calls ``set_theme(value)`` on the app-owned overlays
-(toasts, tooltip, palette, find) and on every controller added with
-:meth:`App.mount`; the walk is best-effort over
-``child``/``children``/``body``/``input``/``list``/``_fields``, which
-covers the container shapes the library ships.
+override).  The subtree is the widget's explicit :meth:`Widget.walk`, so
+the theme pass and the focus ring read the same tree.  Re-assigning
+:attr:`App.theme` walks the mounted components again and also calls
+``set_theme(value)`` on the app-owned overlays (toasts, tooltip, palette,
+find) and on every controller added with :meth:`App.mount`.
 
 **Mounted controllers.**  :meth:`App.mount` adds a host controller (a pane
 ``Scrollbar``, a dev overlay) to the App's controller tier.  A dispatching
@@ -57,23 +56,22 @@ only themes and keeps (the host feeds it itself -- the demo's counting
 ``Stats``).  :meth:`App.unmount` removes it without detaching: the
 controller's lifecycle stays the host's.
 
-**Focus.**  A widget that overrides one of the interaction verbs
-(``handle``/``activate``/``select``/``move``/``toggle``) over the
-:class:`~motui.widgets.base.Widget` defaults is registered in the ring when
-it is added; nested widgets are found through the same recursive walk.
-:meth:`App.set_focus_targets` replaces the ring (the demo's per-topic
-pattern), :meth:`App.focus` addresses one by block id or component.
+**Focus.**  The ring is derived from the tree, never registered: every
+mounted pane and dock contributes its document roots in paint order, and a
+preorder walk keeps the nodes that are ``focusable`` (or a
+``focus_scope``, whose subtree the ring stops at).  Mounting and removing
+a block re-derives the ring, so a removed target can never keep the
+focus.  :meth:`App.focus` addresses one target by block id or component.
 """
 
 from __future__ import annotations
 
 import asyncio
-import builtins
-from collections.abc import Awaitable, Callable, Iterable
+from collections.abc import Awaitable, Callable, Iterator
 from typing import TYPE_CHECKING, Any
 
 from ..kernel.document import Component, Placement, Section, Sizing
-from ..kernel.events import Event, KeyEvent, MouseEvent
+from ..kernel.events import Event, KeyEvent, MouseEvent, ResizeEvent
 from ..kernel.hit import Hit
 from ..kernel.layout import Scrollable, ScrollableX
 from ..terminal.screen import Screen
@@ -84,7 +82,7 @@ from ..widgets.base import Widget
 from .command_palette import CommandPalette
 from .driver import TUI
 from .find import Find
-from .focus import FocusManager
+from .focus import FocusManager, focus_targets, iter_widgets
 from .gesture import SelectionGesture
 from .modal import Modal
 from .overlays import Toasts, Tooltip
@@ -104,68 +102,22 @@ SCROLL_KEYS = {
     "wheel_down": 3,
 }
 
-#: The attributes the theme/focus walk recurses through: every container
-#: shape the library ships (``Row``/``Column``/``Panel``/``Form``/...).
-_CHILD_ATTRS = ("child", "children", "body", "input", "list", "_fields")
-
-#: The verbs a widget overrides to count as interactive (the ``Widget``
-#: defaults are no-ops).
-_INTERACTION_VERBS = ("handle", "activate", "select", "move", "toggle")
-
 #: The report names that count as a button press for pane focus.
 _BUTTONS = ("left", "middle", "right")
 
 
-def _walk(component: Component) -> "list[Component]":
-    """Every component in ``component``'s subtree, each object once.
+def _nodes(component: Component) -> Iterator[Component]:
+    """Every node of ``component``'s explicit tree, depth first.
 
-    Best-effort over :data:`_CHILD_ATTRS`: an attribute that is a component
-    is visited, a list/tuple of components is visited item by item, and
-    anything else is ignored.  Identity dedupe keeps a shared child from
-    being themed or registered twice.
+    A component without ``walk`` is its own one-node tree.  The explicit
+    tree is the only source: an attribute that merely looks like a child
+    (a ``ScrollPanel.child``) is not guessed at.
     """
-    seen: set[int] = set()
-    found: list[Component] = []
-    stack: list[Component] = [component]
-    while stack:
-        current = stack.pop()
-        if id(current) in seen:
-            continue
-        seen.add(id(current))
-        found.append(current)
-        for name in _CHILD_ATTRS:
-            child = getattr(current, name, None)
-            if child is None:
-                continue
-            if name == "_fields" and isinstance(child, (list, tuple)):
-                # A form's fields are values; the component each one wraps
-                # is the actual child.
-                for field in child:
-                    component = getattr(field, "component", None)
-                    if isinstance(component, Component):
-                        stack.append(component)
-                continue
-            if isinstance(child, Component):
-                stack.append(child)
-            elif isinstance(child, (list, tuple)):
-                stack.extend(item for item in child if isinstance(item, Component))
-    return found
-
-
-def _looks_interactive(component: Component) -> bool:
-    """Whether ``component`` overrides one of the interaction verbs.
-
-    ``Widget`` answers every verb as a no-op, so an override is the
-    library's own signal that the component consumes input; a plain
-    renderer (no ``Widget`` at all) is never registered.
-    """
-    if not isinstance(component, Widget):
-        return False
-    for name in _INTERACTION_VERBS:
-        override = getattr(type(component), name, None)
-        if override is not None and override is not getattr(Widget, name, None):
-            return True
-    return False
+    walk = getattr(component, "walk", None)
+    if callable(walk):
+        yield from walk()
+    else:
+        yield component
 
 
 class App:
@@ -254,7 +206,7 @@ class App:
         self._theme = value
         self.tui.theme = value
         for component in tuple(self._components):
-            for current in _walk(component):
+            for current in _nodes(component):
                 if isinstance(current, Widget) and current.theme is None:
                     current.theme = value
         for overlay in (self._toasts, self._tooltip, self._palette, self._find):
@@ -393,22 +345,15 @@ class App:
     def _mount(self, component: Component) -> None:
         """Take a freshly mounted component into the theme walk and focus ring."""
         self._components.append(component)
-        walked = _walk(component)
-        owned: set[int] = set()
-        for current in walked:
-            if isinstance(current, Widget) and current.owns_focus:
-                owned.update(
-                    builtins.id(child) for child in _walk(current) if child is not current
-                )
-        for current in walked:
+        for current in _nodes(component):
             if isinstance(current, Widget) and current.theme is None:
                 current.theme = self._theme
-            if (
-                self._focus is not None
-                and builtins.id(current) not in owned
-                and _looks_interactive(current)
-            ):
-                self._focus.add(current)
+        self._sync_focus()
+
+    def _sync_focus(self) -> None:
+        """Re-derive the ring from the tree after a mount or an unmount."""
+        if self._focus is not None:
+            self._focus.sync(focus_targets(self.tui))
 
     def get(self, id: str) -> Component:
         """The component with ``id`` (the driver's frame-wide lookup)."""
@@ -425,13 +370,11 @@ class App:
         return component
 
     def _forget(self, component: Component) -> None:
-        """Drop ``component`` and its subtree from the focus ring and the theme walk."""
-        if self._focus is not None:
-            for current in _walk(component):
-                self._focus.remove(current)
+        """Drop ``component`` from the theme walk and re-derive the focus ring."""
         self._components = [
             held for held in self._components if held is not component
         ]
+        self._sync_focus()
 
     # -- focus ------------------------------------------------------------------
 
@@ -440,12 +383,12 @@ class App:
         self._bindings[key] = callback
 
     def focus(self, target: "str | Component") -> bool:
-        """Focus a block id or a component, registering it when needed."""
+        """Focus a block id or a component that is in the tree-derived ring."""
         if isinstance(target, str):
             target = self.tui.get(target)
         if self._focus is None:
             return False
-        self._focus.add(target)
+        self._focus.sync(focus_targets(self.tui))
         moved = self._focus.focus(target)
         self.tui.refresh()
         return moved
@@ -454,6 +397,7 @@ class App:
         """Step the focus ring one target forward (wrapping)."""
         if self._focus is None:
             return False
+        self._focus.sync(focus_targets(self.tui))
         moved = self._focus.focus_next()
         if moved:
             self.tui.refresh()
@@ -463,23 +407,11 @@ class App:
         """Step the focus ring one target back (wrapping)."""
         if self._focus is None:
             return False
+        self._focus.sync(focus_targets(self.tui))
         moved = self._focus.focus_next(-1)
         if moved:
             self.tui.refresh()
         return moved
-
-    def set_focus_targets(self, targets: Iterable[Component]) -> None:
-        """Replace the focus ring with ``targets`` and focus the first one."""
-        if self._focus is None:
-            return
-        for known in tuple(self._focus.targets):
-            self._focus.remove(known)
-        held = tuple(targets)
-        for target in held:
-            self._focus.add(target)
-        if held:
-            self._focus.focus(held[0])
-        self.tui.refresh()
 
     # -- frame surface ------------------------------------------------------------
 
@@ -489,7 +421,7 @@ class App:
 
     def dock(self, component: Component, *, edge: str = "bottom", size: int | None = None) -> Any:
         """Dock ``component`` (the driver's own ``dock``); theme it first."""
-        for current in _walk(component):
+        for current in _nodes(component):
             if isinstance(current, Widget) and current.theme is None:
                 current.theme = self._theme
         self._components.append(component)
@@ -570,8 +502,17 @@ class App:
     def dispatch(self, event: Event) -> bool:
         """Route one event through the default tiers; ``True`` when consumed.
 
-        The order is the class docstring's, first claim wins.
+        The order is the class docstring's, first claim wins.  A
+        :class:`~motui.kernel.events.ResizeEvent` first reaches every
+        mounted widget's ``on_resize`` (the whole tree, a focus scope's
+        subtree included) and then keeps travelling: the broadcast informs,
+        it never consumes.
         """
+        if type(event) is ResizeEvent:
+            for widget in iter_widgets(self.tui):
+                on_resize = getattr(widget, "on_resize", None)
+                if on_resize is not None:
+                    on_resize(event)
         if self._palette is not None and self._palette.is_open:
             if self._palette.handle(event):
                 return True

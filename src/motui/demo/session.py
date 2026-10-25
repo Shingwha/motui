@@ -194,13 +194,14 @@ class Session(App):
         if self.body is not None and self.body.focus is not None:
             body_targets = self.body.focus.targets
             targets.extend(body_targets)
-        self.set_focus_targets(targets)
         manager = self.focus_manager
-        if manager is not None:
-            if body_targets:
-                manager.focus(body_targets[0])  # the topic's first target, not the catalog
-            elif self.catalog is not None:
-                manager.focus(self.catalog)
+        if manager is None:
+            return
+        manager.sync(targets)
+        if body_targets:
+            manager.focus(body_targets[0])  # the topic's first target, not the catalog
+        elif self.catalog is not None:
+            manager.focus(self.catalog)
 
     def _clear_stage(self) -> None:
         body = self.body
