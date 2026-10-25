@@ -9,7 +9,7 @@ from motui.kernel.document import Sizing
 from motui.kernel.layout import Constraints
 from motui.terminal import HeadlessScreen
 from motui.kernel.events import KeyEvent
-from motui.widgets import Button, Field, Form, Input, ScrollPanel
+from motui.widgets import Button, Field, Form, Input, Panel, Row, ScrollPanel
 from tests.testing import (
     Rows,
     ScriptedEvents,
@@ -87,6 +87,47 @@ def test_fill_replaces_the_pane_and_mounts_theme_and_focus():
     assert [row.text for row in app.tui.rows] == [" Go ", "", "", "", ""]
 
 
+def test_add_themes_every_widget_of_a_nested_tree():
+    app = App(screen=HeadlessScreen(30, 6), keys=ScriptedEvents(()))
+    name, button = Input(), Button("Go")
+    panel = Panel(Row([name, button]), title="nested")
+
+    app.add(panel)
+
+    assert panel.theme is app.theme
+    assert name.theme is app.theme
+    assert button.theme is app.theme
+
+
+def test_add_themes_a_forms_fields_through_its_scope():
+    app = App(screen=HeadlessScreen(30, 8), keys=ScriptedEvents(()))
+    form = Form([Field("name", Input()), Field("email", Input())])
+
+    app.add(form)
+
+    assert form.theme is app.theme
+    assert [field.component.theme for field in form.fields] == [app.theme, app.theme]
+
+
+def test_removing_a_parent_drops_its_subtree_from_the_ring():
+    app = App(screen=HeadlessScreen(30, 6), keys=ScriptedEvents(()))
+    button = Button("Go")
+    block = app.add(Row([button]))
+    assert app.focus(button) is True
+    assert app.focus_manager is not None
+
+    app.remove(block)
+
+    assert app.focus_manager.targets == ()
+    assert app.focus_manager.focused is None
+    assert button.focused is False
+
+
+def test_set_focus_targets_is_gone():
+    app = App(screen=HeadlessScreen(20, 4), keys=ScriptedEvents(()))
+    assert not hasattr(app, "set_focus_targets")
+
+
 def test_a_fill_section_added_through_the_app_takes_the_remainder():
     app = App(screen=HeadlessScreen(20, 5), keys=ScriptedEvents(()))
     app.add(Rows("head"))
@@ -106,7 +147,7 @@ def test_the_wheel_routes_to_the_nearest_scrollable():
     assert app.dispatch(wheel(0, 0, "up")) is True
     assert view.offset == 0
 
-    app.set_focus_targets([view])
+    app.focus(view)
     assert app.dispatch(key("page_down")) is True
     assert view.offset == 3  # the focused ScrollPanel pages one window
     assert app.dispatch(key("page_up")) is True

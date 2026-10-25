@@ -225,36 +225,20 @@ class FocusManager:
         is cleared -- its flag drops and ``on_change(None)`` fires -- while
         a focus that survived the edit stays put (the common per-round
         case: one block was added elsewhere).
+
+        With **no** focus, only the target tuple is replaced: the manager
+        touches no component's flag, exactly like the constructor, so a
+        widget's own default (a focused field inside a mounted block) is
+        never rewritten merely because the App mounted something else.
         """
         held = tuple(targets)
-        if self._focused is not None and any(
-            self._focused is known for known in held
-        ):
+        if self._focused is None:
+            self._targets = held
+            return
+        if any(self._focused is known for known in held):
             self._replace(held, self._focused)
         else:
             self._replace(held, None)
-
-    def _add(self, target: Component) -> bool:
-        """Append ``target`` to the cycle; ``True`` when added (internal).
-
-        The App no longer registers targets: the ring is re-derived from
-        the tree by :meth:`sync`.  This exists for the one constructor-time
-        path that predates the tree (the residual half of the migration) and
-        answers ``False`` for an already-held object.
-        """
-        if self._registered(target):
-            return False
-        self._targets = (*self._targets, target)
-        return True
-
-    def _remove(self, target: Component) -> bool:
-        """Drop ``target`` from the cycle; ``True`` when held (internal)."""
-        if not self._registered(target):
-            return False
-        self._targets = tuple(known for known in self._targets if known is not target)
-        if target is self._focused:
-            self._set_focused(None)
-        return True
 
     def focus(self, target: Component) -> bool:
         """Focus ``target``; ``True`` when the focus moved there.

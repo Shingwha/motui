@@ -212,6 +212,14 @@ def test_sync_clears_the_focus_only_when_it_left_the_set():
     assert manager.focused is None and changes == [a, None]
 
 
+def test_sync_without_a_focus_leaves_the_widgets_own_flags_alone():
+    a, b = Cursor(), Cursor()  # both construct focused=True
+    manager = FocusManager()
+    manager.sync([a, b])
+    assert manager.targets == (a, b)
+    assert (a.focused, b.focused) == (True, True)
+
+
 def test_focus_next_walks_and_wraps_both_ways():
     a, b, c = Cursor(), Cursor(), Cursor()
     manager = FocusManager([a, b, c])
