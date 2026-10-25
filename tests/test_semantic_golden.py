@@ -97,7 +97,7 @@ def test_every_scene_has_a_snapshot(semantic):
     expected = {semantic.scene_name(name) for name in SCENES}
     found = {path.name: path for path in semantic.GOLDEN.glob("*.txt")}
     assert set(found) == expected
-    assert len(found) == 3
+    assert len(found) == len(SCENES)
     for name in SCENES:
         lines = found[semantic.scene_name(name)].read_text(
             encoding="utf-8"

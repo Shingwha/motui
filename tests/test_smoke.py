@@ -1,4 +1,4 @@
-"""The shipped showcase still boots: the three scene entries and every mode.
+"""The shipped showcase still boots: every scene entry and every mode.
 
 This is a smoke test, not an IA test.  It renders each scene on the two
 supported geometries and runs the same paths a user runs -- ``--pages``,
@@ -14,7 +14,7 @@ from motui.demo import SCENES, main, render_scene, scene_output
 
 
 def test_every_scene_renders_a_bounded_frame():
-    assert SCENES == ("splash", "menu", "gallery")
+    assert SCENES == ("splash", "menu", "breakout", "gallery")
     for name in SCENES:
         for width, height in ((80, 24), (100, 30)):
             text = render_scene(name, width=width, height=height, phase=8)
@@ -34,6 +34,7 @@ def test_pages_entry_prints_every_scene(monkeypatch, capsys):
         assert f"\u2500\u2500 /{name} \u2500" in out, name
     assert "Breakout" in out
     assert "2.0 in one page" in out
+    assert "score" in out and "paddle" in out
 
 
 def test_the_piped_entry_prints_the_menu(monkeypatch, capsys):
@@ -60,6 +61,14 @@ def test_gallery_scene_is_reachable_headless(capsys):
     assert main(["--scene", "gallery", "--headless"]) == 0
     out = capsys.readouterr().out
     assert "2.0 in one page" in out and "tab focus" in out
+
+
+def test_breakout_replays_headless(capsys):
+    assert main(["--scene", "breakout", "--frames", "30", "--headless"]) == 0
+    out = capsys.readouterr().out
+    assert "breakout" in out and "score" in out
+    assert "\u2584" in out  # the brick wall is painted
+    assert "paddle" in out
 
 
 def test_unknown_scene_is_a_usage_error(capsys):

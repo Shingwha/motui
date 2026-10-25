@@ -1,4 +1,4 @@
-"""The showcase's scene machine: one widget, three matching scenes.
+"""The showcase's scene machine: one widget, five matching scenes.
 
 ``Showcase`` is the widget ``python -m motui`` fills its pane with.  It
 owns the current scene's name and one integer **phase** -- the animation
@@ -42,14 +42,23 @@ from ..widgets import (
 from ..widgets.base import Widget
 from ..widgets.choice import Option, Select
 from .art import big_text, center, gradient_styles
+from .breakout import BreakoutScene
 
-__all__ = ["SCENES", "GalleryScene", "MenuScene", "Scene", "Showcase", "SplashScene"]
+__all__ = [
+    "SCENES",
+    "BreakoutScene",
+    "GalleryScene",
+    "MenuScene",
+    "Scene",
+    "Showcase",
+    "SplashScene",
+]
 
 #: Single-row clip for the composed menu rows (no ellipsis on chrome).
 _CLIP = WrapMode.CLIP
 
-#: The scenes in tour order: the splash, the menu, the gallery.
-SCENES: tuple[str, ...] = ("splash", "menu", "gallery")
+#: The scenes in tour order: splash, menu, breakout, gallery.
+SCENES: tuple[str, ...] = ("splash", "menu", "breakout", "gallery")
 
 #: The phase (animation tick) a scene starts on when it is entered.
 START_PHASE = 0
@@ -160,10 +169,10 @@ class SplashScene:
 class MenuScene:
     """The hub: a centred panel of four destinations.
 
-    ``Breakout`` and ``Dashboard`` are named already but have no scene in
-    this build, so choosing one shows a toast line and stays put; ``Gallery``
-    is live.  Up/down (or j/k) move the cursor, enter opens the choice, a
-    click selects a row, ``esc`` returns to the splash and ``q`` quits.
+    ``Breakout`` and ``Dashboard`` are playable/live in this build alongside
+    ``Gallery``; ``Quit`` leaves.  Up/down (or j/k) move the cursor, enter
+    opens the choice, a click selects a row, ``esc`` returns to the splash
+    and ``q`` quits.
     """
 
     name = "menu"
@@ -171,8 +180,6 @@ class MenuScene:
     def __init__(self, theme: Theme) -> None:
         self.theme = theme
         self._phase = 0
-        self._notice = ""
-        self._notice_until = 0
         self._top = 0
         self._left = 0
         self.options = [
@@ -200,13 +207,7 @@ class MenuScene:
         self._phase = phase
         width = c.width
         panel_width = min(48, max(24, width - 4))
-        panel_rows = list(self.panel.render(Constraints(width=panel_width)))
-        content = list(panel_rows)
-        if self._notice:
-            content.append(Line())
-            content.append(
-                Line.from_text(self._notice, self.theme.status.warning)
-            )
+        content = list(self.panel.render(Constraints(width=panel_width)))
         height = c.max_height if c.max_height is not None else len(content) + 4
         top = max(0, (height - len(content)) // 2)
         left = max(0, (width - panel_width) // 2)
@@ -220,8 +221,6 @@ class MenuScene:
 
     def tick(self, phase: int) -> str | None:
         self._phase = phase
-        if self._notice and phase >= self._notice_until:
-            self._notice = ""
         return None
 
     def on_key(self, event: KeyEvent) -> str | None:
@@ -256,36 +255,9 @@ class MenuScene:
         return None
 
     def _activate(self) -> str | None:
+        """Open the chosen destination (``None`` only for an empty menu)."""
         option = self.list.options[self.list.index]
-        value = option.value
-        if value == "gallery":
-            return "gallery"
-        if value == "quit":
-            return "quit"
-        self._notice = f"{option.label} \u2014 coming in this build"
-        self._notice_until = self._phase + 90
-        return None
-
-
-class _PlaceholderScene:
-    """The gallery's stand-in until the real components land."""
-
-    def __init__(self, name: str, theme: Theme) -> None:
-        self.name = name
-        self.theme = theme
-
-    def render(self, c: Constraints, phase: int) -> Surface:
-        row = Line.from_text(f"/{self.name}")
-        return Surface.of([row], c.width)
-
-    def tick(self, phase: int) -> str | None:
-        return None
-
-    def on_key(self, event: KeyEvent) -> str | None:
-        return None
-
-    def on_click(self, pos: Pos) -> str | None:
-        return None
+        return str(option.value)
 
 
 class GalleryScene:
@@ -432,6 +404,7 @@ def _scenes(theme: Theme) -> dict[str, Scene]:
     return {
         "splash": SplashScene(theme),
         "menu": MenuScene(theme),
+        "breakout": BreakoutScene(theme),
         "gallery": GalleryScene(theme),
     }
 
