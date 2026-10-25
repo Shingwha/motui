@@ -57,6 +57,7 @@ from ..kernel.text import visible_width
 from ..kernel.theme import Theme, Themed
 from ..kernel.layout import ScreenLayout
 from ..widgets.textfield import Input
+from ..kernel.layout import Constraints
 
 if TYPE_CHECKING:
     from .driver import TUI
@@ -284,7 +285,7 @@ class Find(Themed):
         span = len(needle)
         width = self._width
         for block in pane.document.blocks():
-            for row_index, row in enumerate(block.rows_view(width)):
+            for row_index, row in enumerate(block.rows_view(Constraints(width=width))):
                 text = row.text
                 lowered = text.lower()
                 found = lowered.find(needle)
@@ -410,7 +411,7 @@ class Find(Themed):
             return layout
         cell = Line.from_text(self._counter(), self._theme.text.faint)
         room = max(1, rect.width - cell.width - 1)  # one gap column before the counter
-        query_rows = [row.fit(room) for row in self.input.render(room)] or [Line()]
+        query_rows = [row.fit(room) for row in self.input.render(Constraints(width=room))] or [Line()]
         rows = [
             *query_rows[:-1],
             query_rows[-1].fill(room) + Line.from_text(" ") + cell,
