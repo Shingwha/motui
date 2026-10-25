@@ -4,6 +4,8 @@ from dataclasses import replace
 
 import pytest
 
+from motui.kernel.cell import Surface
+from motui.kernel.layout import Constraints
 from motui.kernel.style import Style
 from motui.kernel.theme import DEFAULT_THEME, Styles
 from motui.widgets import ProgressBar, Slider, Spinner
@@ -111,3 +113,25 @@ def test_spinner_advances_through_its_frames_and_wraps():
     empty = Spinner("x", frames=())
     empty.advance()
     assert texts(empty, 20) == ["x"]
+
+
+# -- the 2.0 render contract -------------------------------------------------
+
+
+def test_the_indicators_take_constraints_and_honour_the_height_budget():
+    for component in (ProgressBar(0.5, width_chars=4), Slider(5), Spinner("x")):
+        assert isinstance(component.render(Constraints(width=14)), Surface)
+        assert component.render(14) == component.render(Constraints(width=14))
+        assert list(component.render(Constraints(width=14, max_height=0))) == []
+        assert component.render(Constraints(width=14, max_height=1)).height == 1
+
+
+def test_a_zero_height_slider_render_still_seeds_the_click_geometry():
+    slider = Slider(0, maximum=10)
+    slider.render(Constraints(width=14, max_height=0))
+    assert slider.click(0, 11) is True and slider.value == 10
+
+
+def test_an_unbounded_progress_bar_still_follows_the_constrained_width():
+    surface = ProgressBar(1.0).render(Constraints(width=10))
+    assert [row.text for row in surface] == ["[" + "\u2588" * 8 + "]"]
