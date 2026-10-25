@@ -2,9 +2,20 @@
 
 > 本文件是波次之间唯一的稳定契约。每波合并后由 lead 回写“现实”，下一波只读这里。
 > 权威推导见 `ref/source/02-core-contracts.md`、`03-interaction.md`、`04-runtime.md`、`05-api-surface.md`。
-> 状态：草案（W0a 前）。标 ⏳ 的波次落地后改为 ✅ 并写实际签名。
+> 状态：W0a 已落地（2026-10-25）。标 ⏳ 的波次落地后改为 ✅ 并写实际签名。
 
-## 1. kernel 值（W0a ✅ 待实现）
+## 1. kernel 值（W0a ✅）
+
+**实际面**（`src/motui/kernel/__init__.py` 恰好 12 名）：`Axis` `Cell` `Constraints` `Line` `Pos` `Rect` `Scroll` `ScrollAxis` `Segment` `Size` `Surface` `WrapMode`。
+
+已定决策：
+
+- 几何方向枚举是 `geom.Axis`；滚动轴值叫 `layout.ScrollAxis`（**最终名**，不再改）。
+- `Line.clip(width: int)` 本波是整数硬裁；W2.5 换成 `clip/reflow(mode, width)`。
+- `Line.styled()` **不在 kernel**：kernel 不构造 terminal 字节；W1 把 SGR/OSC8 渲染放到 `terminal/` 与 `kernel/paint.py` 的边界（`Painter` 注入 renderer）。
+- `kernel/cell.Style` 是 8 字段过渡占位；W1 用真实 `core.style.Style` 替换后删除占位。
+- `Surface.blank(size)` 返回 `height` 行空 `Line()`（宽 0）；`Surface.of` 才保证每行恰 `width`。
+- `Segment.action` 不参与 equality；`Cell.action` 过内容门。W1 合并时统一为 `Cell`/`Segment` 同一门。
 
 ```python
 # kernel/geom.py
@@ -83,26 +94,25 @@ class Constraints:
     max_height: int | None = None     # None = 自然高度
 
 @dataclass(frozen=True, slots=True, kw_only=True)
-class Axis0:   # 名称待定：scroll axis value。W2.6 最终定名 AxisScroll 或复用 Axis 值？
+class ScrollAxis:   # 最终名（避免与方向枚举 geom.Axis 冲突）
     offset: int = 0
     content: int = 0
     viewport: int = 0
     sticky: bool = False
-    def clamp(self) -> "Axis0": ...
+    def clamp(self) -> "ScrollAxis": ...
     @property
     def max_offset(self) -> int: ...
-    def reveal(self, row: int) -> "Axis0": ...
+    def reveal(self, row: int) -> "ScrollAxis": ...
     def thumb(self, track: int, min_length: int = 1) -> tuple[int, int] | None: ...
 
 @dataclass(frozen=True, slots=True, kw_only=True)
 class Scroll:
-    x: Axis0 = Axis0()
-    y: Axis0 = field(default_factory=lambda: Axis0(sticky=True))
+    x: ScrollAxis = ScrollAxis()
+    y: ScrollAxis = field(default_factory=lambda: ScrollAxis(sticky=True))
 ```
 
-> **命名冲突未决**：`geom.Axis` 是方向枚举（X/Y），scroll 的轴状态需要一个不同名字。
-> 规格 `02` 第 6 节把滚动轴值也叫 `Axis`；W0a 先以 `ScrollAxis` 落地并在 handoff 记录，
-> W2.6 前由 lead 决定最终公开名（`geometry.Axis` 与 `layout.ScrollAxis`，或 `Axis` 值 + `Direction`）。
+> 命名已定：`geom.Axis` 是方向枚举（X/Y），滚动轴状态是 `layout.ScrollAxis`，两者都在
+> `motui.kernel` 根导出。W2.6 不再改名。
 
 ```python
 # kernel/text.py

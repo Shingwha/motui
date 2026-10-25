@@ -20,7 +20,7 @@
 
 | 门禁 | 基线 |
 |---|---|
-| `uv run pytest -q -p no:cacheprovider` | **921 passed** |
+| `uv run pytest -q -p no:cacheprovider` | **921 passed**（W0a 后 1002） |
 | `uv run python tools/golden.py --check` | **57 topics match** |
 | `uv run python tools/framebench.py` | render-hash `a82f7968ed986ef2fa99bb9ec25e724b99ca03e26aa75f607e6219ee25a4f379` |
 | `uv run python -m motui < /dev/null` | exit 0 |
@@ -123,7 +123,7 @@ uv run python tools/growth.py
 
 | 波 | 状态 |
 |---|---|
-| W0a | ⏳ |
+| W0a | ✅ 2026-10-25 @ `2.0/w0a-values`（1002 passed / golden 不变） |
 | W0b | ⏳ |
 | W1 | ⏳ |
 | W2a | ⏳ |
