@@ -1,8 +1,12 @@
-"""Widget tree plumbing: parent/children, walk order, and generation touch."""
+"""Widget base: tree plumbing, generation touch, typed hooks and capabilities."""
 
 from __future__ import annotations
 
-from motui.widgets.base import Widget
+from motui.kernel.events import KeyEvent, MouseEvent, PasteEvent, ResizeEvent
+from motui.kernel.geom import Pos
+from motui.widgets.base import Container, Cursor, HasResult, MarkSet, Widget
+from motui.widgets.cursor import Cursor as DirectCursor
+from motui.widgets.mark import MarkSet as DirectMarkSet
 
 
 class Node(Widget):
@@ -200,3 +204,174 @@ def test_a_widget_that_skips_init_can_still_assign_walk_and_touch():
 
     assert raw.value == 3
     assert raw.generation == 1
+
+
+class Legacy(Widget):
+    """A 1.x-shaped widget: it overrides only the old interaction verbs."""
+
+    __slots__ = ("_log", "result")
+
+    def __init__(self, result: object | None = None) -> None:
+        super().__init__()
+        self._log: list[tuple] = []
+        self.result = result
+
+    def handle(self, event):
+        self._log.append(("handle", event))
+        return event is not None
+
+    def click(self, row: int, col: int) -> bool:
+        self._log.append(("click", row, col))
+        return True
+
+    def hover_at(self, row: int, col: int) -> bool:
+        self._log.append(("hover", row, col))
+        return True
+
+    def drag(self, row: int, col: int, kind: str) -> bool:
+        self._log.append(("drag", row, col, kind))
+        return True
+
+    def activate(self) -> bool:
+        self._log.append(("activate",))
+        return True
+
+    def take_result(self) -> object | None:
+        return self.result
+
+
+class Taker:
+    """A non-widget object with the one result method the protocol needs."""
+
+    def take(self) -> object | None:
+        return 5
+
+
+# -- typed hooks delegate to the 1.x verbs -----------------------------------
+
+
+def test_the_key_mouse_and_paste_hooks_default_to_handle():
+    widget = Legacy()
+    key = KeyEvent("a", "a")
+    mouse = MouseEvent(x=2, y=1)
+    paste = PasteEvent("hi")
+
+    assert widget.on_key(key) is True
+    assert widget.on_mouse(mouse) is True
+    assert widget.on_paste(paste) is True
+
+    assert widget._log == [
+        ("handle", key),
+        ("handle", mouse),
+        ("handle", paste),
+    ]
+
+
+def test_the_resize_hook_is_a_no_op_on_the_base():
+    widget = Legacy()
+
+    assert widget.on_resize(ResizeEvent(80, 24)) is None
+    assert widget._log == []
+
+
+def test_the_click_hook_forwards_the_pos_as_row_and_col():
+    widget = Legacy()
+
+    assert widget.on_click(Pos(x=3, y=1)) is True
+    assert widget._log == [("click", 1, 3)]
+
+
+def test_the_hover_hook_forwards_a_pos_and_the_negative_departure():
+    widget = Legacy()
+
+    assert widget.on_hover(Pos(x=3, y=1)) is True
+    assert widget.on_hover(None) is True
+    assert widget._log == [("hover", 1, 3), ("hover", -1, -1)]
+
+
+def test_the_drag_hook_forwards_the_pos_and_the_phase():
+    widget = Legacy()
+
+    assert widget.on_drag(Pos(x=3, y=1), "motion") is True
+    assert widget._log == [("drag", 1, 3, "motion")]
+
+
+def test_the_focus_hook_flips_the_focused_flag():
+    widget = Legacy()
+
+    widget.on_focus(True)
+    assert widget.focused is True
+    widget.on_focus(False)
+    assert widget.focused is False
+
+
+def test_the_action_hook_binds_activate_and_declines_any_other_name():
+    widget = Legacy()
+
+    assert widget.on_action("activate") is True
+    assert widget.on_action("next") is False
+    assert widget._log == [("activate",)]
+
+
+def test_take_delegates_to_take_result_and_keeps_false_distinct_from_none():
+    assert Legacy().take() is None
+    assert Legacy(False).take() is False
+    assert Legacy(0).take() == 0
+    picked = object()
+    assert Legacy(picked).take() is picked
+
+
+def test_a_plain_widget_declines_every_default_hook():
+    widget = Widget()
+
+    assert widget.on_key(KeyEvent("a")) is False
+    assert widget.on_mouse(MouseEvent()) is False
+    assert widget.on_paste(PasteEvent("x")) is False
+    assert widget.on_resize(ResizeEvent(10, 5)) is None
+    assert widget.on_click(Pos()) is False
+    assert widget.on_hover(None) is False
+    assert widget.on_drag(Pos(), "press") is False
+    assert widget.on_action("activate") is False
+    assert widget.on_action("anything") is False
+    assert widget.take() is None
+
+
+# -- capability flags and class-level state --------------------------------
+
+
+def test_capability_flags_and_keymap_default_to_off_and_empty():
+    for widget in (Widget(), Container()):
+        assert widget.focusable is False
+        assert widget.clickable is False
+        assert widget.hoverable is False
+        assert widget.activatable is False
+        assert widget.focus_scope is False
+        assert widget.owns_focus is False
+    assert Widget.keymap == {}
+    assert Container.keymap == {}
+
+
+def test_has_result_is_a_runtime_checkable_protocol():
+    assert isinstance(Legacy(), HasResult)
+    assert isinstance(Taker(), HasResult)
+    assert not isinstance(object(), HasResult)
+
+
+def test_container_is_a_widget_whose_child_at_declines_by_default():
+    container = Container()
+
+    assert isinstance(container, Widget)
+    assert container.child_at(0, 0) is None
+    assert container.child_at(7, 11) is None
+
+
+# -- re-exports -------------------------------------------------------------
+
+
+def test_cursor_and_mark_set_are_reexported_from_their_own_modules():
+    assert Cursor is DirectCursor
+    assert MarkSet is DirectMarkSet
+    cursor = Cursor(count=3)
+    assert cursor.move(1) is True and cursor.index == 1
+    marks = MarkSet([2])
+    assert marks.toggle(2) is False and 2 not in marks

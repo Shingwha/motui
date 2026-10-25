@@ -21,15 +21,36 @@ defaults, no component has to adopt the tree to keep working, and
 
 from __future__ import annotations
 
-from collections.abc import Iterable, Iterator
-from typing import cast
+from collections.abc import Iterable, Iterator, Mapping
+from typing import Protocol, cast, runtime_checkable
 
-from ..kernel.events import Event
 from ..kernel.cell import Surface
+from ..kernel.document import Component
+from ..kernel.events import Event, KeyEvent, MouseEvent, PasteEvent, ResizeEvent
+from ..kernel.geom import Pos
 from ..kernel.layout import Constraints
 from ..kernel.theme import DEFAULT_THEME, Styles, Theme
+from .cursor import Cursor
+from .mark import MarkSet
 
-__all__ = ["Widget"]
+__all__ = ["Container", "Cursor", "HasResult", "MarkSet", "Widget"]
+
+
+@runtime_checkable
+class HasResult(Protocol):
+    """A widget with a one-shot result: ``take() -> object | None``.
+
+    Reading the result **clears** it, so a host reads a pick exactly once
+    and never needs a second write to reset it.  ``None`` means "nothing
+    pending"; a widget whose legal result is ``None`` uses the take itself
+    as the signal (a cancel), and a ``False``/``0``/``""`` answer is a real
+    result (test with ``is not None``).  This is the 2.0 name of the 1.x
+    :class:`~motui.kernel.document.Resultful`; :meth:`Widget.take` is its
+    default implementation and delegates to ``take_result``.
+    """
+
+    def take(self) -> object | None:
+        ...
 
 
 class Widget:
@@ -71,8 +92,30 @@ class Widget:
 
     #: Whether this widget owns the focus of its descendants: the App
     #: registers the widget itself and skips its subtree (a ``Form`` routes
-    #: every field's keys through its own ``handle``).
+    #: every field's keys through its own ``handle``).  The 1.x spelling;
+    #: :attr:`focus_scope` is its 2.0 alias and both default to ``False``.
     owns_focus = False
+
+    # -- capability flags: what the runtime may route to this widget --------
+    #
+    # Class defaults, all off: a pure renderer stays out of every tier until
+    # it says otherwise.  W3b replaces the capability-protocol type probes
+    # with reads of these flags; this wave only publishes them.
+
+    focusable = False
+    clickable = False
+    hoverable = False
+    activatable = False
+
+    #: Key -> action names for the widget's own routing.  Empty on the base;
+    #: a subclass declares its table and an instance may override entries.
+    #: The merge rule is ``{**type(self).keymap, **instance.keymap}`` at the
+    #: routing site (W3b), not in this attribute.
+    keymap: Mapping[str, str] = {}
+
+    #: Whether focus routing stays inside this widget's subtree (a ``Form``
+    #: routes its fields itself).  The 2.0 name of :attr:`owns_focus`.
+    focus_scope = False
 
     def __init__(
         self, theme: Theme | None = None, styles: Styles | None = None
@@ -225,6 +268,86 @@ class Widget:
         """Read the one-shot result; a widget without one answers ``None``."""
         return None
 
+    # -- 2.0 typed hooks: delegate to the 1.x verbs ------------------------
+    #
+    # The runtime will route events through these hooks (W3b/W4) while the
+    # old verbs keep serving the 1.x callers.  The defaults below are the
+    # whole compatibility story: a subclass that only overrides
+    # ``handle`` / ``click`` / ``hover_at`` / ``drag`` / ``activate`` /
+    # ``take_result`` behaves exactly as before.
+
+    def on_key(self, e: KeyEvent) -> bool:
+        """Handle one key press; the default forwards to :meth:`handle`."""
+        return self.handle(e)
+
+    def on_mouse(self, e: MouseEvent) -> bool:
+        """Handle one mouse report; the default forwards to :meth:`handle`."""
+        return self.handle(e)
+
+    def on_paste(self, e: PasteEvent) -> bool:
+        """Handle one paste payload; the default forwards to :meth:`handle`."""
+        return self.handle(e)
+
+    def on_resize(self, e: ResizeEvent) -> None:
+        """React to a terminal resize; the base widget has nothing to size."""
+        return None
+
+    def on_focus(self, gained: bool) -> None:
+        """Take or lose the focus; the default flips :attr:`focused`."""
+        self.focused = gained
+
+    def on_click(self, pos: Pos) -> bool:
+        """Take a click at ``pos``; the default forwards to ``click(row, col)``."""
+        return self.click(pos.y, pos.x)
+
+    def on_hover(self, pos: Pos | None) -> bool:
+        """Take the pointer at ``pos``, or its departure for ``None``.
+
+        The departure is the 1.x sentinel ``hover_at(-1, -1)``: a component
+        with a hovered row reads a negative row as "no pointer".
+        """
+        if pos is None:
+            return self.hover_at(-1, -1)
+        return self.hover_at(pos.y, pos.x)
+
+    def on_drag(self, pos: Pos, phase: str) -> bool:
+        """Take one drag step at ``pos``; forward to ``drag(row, col, phase)``."""
+        return self.drag(pos.y, pos.x, phase)
+
+    def on_action(self, name: str) -> bool:
+        """Run the named action; only ``"activate"`` is bound on the base.
+
+        An unknown action answers ``False`` without calling :meth:`activate`
+        -- the keymap router (W3b) uses that to keep routing the key.
+        """
+        if name == "activate":
+            return self.activate()
+        return False
+
+    def take(self) -> object | None:
+        """Read the one-shot result; the default forwards to ``take_result``."""
+        return self.take_result()
+
     def revision(self) -> object | None:
         """The row cache's change token; ``None`` disables caching."""
         return None
+
+
+class Container(Widget):
+    """A widget whose children occupy cells of its own rendered surface.
+
+    The base adds the coordinate door a host uses to descend into a
+    composed widget: :meth:`child_at` takes a 0-based cell of this widget's
+    own ``render`` output and answers ``(component, row, col)`` in the
+    child's coordinates -- or ``None`` for a cell this widget owns (border,
+    padding, gap).  The default declines every cell; a real container
+    overrides it with the geometry of its last render.  ``Container`` does
+    not proxy events, focus or results: it only routes coordinates.
+    """
+
+    __slots__ = ()
+
+    def child_at(self, row: int, col: int) -> tuple[Component, int, int] | None:
+        """The child owning one of this widget's cells; ``None`` by default."""
+        return None
+
