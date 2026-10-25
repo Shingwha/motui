@@ -62,6 +62,9 @@ jobs:
       - name: golden frames -- every page byte for byte
         run: uv run python tools/golden.py --check
 
+      - name: semantic frames -- grid, attributes and cursor
+        run: uv run python tools/semantic.py --check
+
       - name: api snapshot
         run: uv run python tools/api.py --check
 
