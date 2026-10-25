@@ -27,7 +27,7 @@ from ..kernel.layout import Constraints
 from ..kernel.style import NONE, Style
 from ..kernel.theme import Styles, Theme
 from ..kernel.text import WrapMode
-from ..widgets.base import Widget
+from ..widgets.base import Container, Widget
 
 __all__ = ["Column", "Padding", "Row", "Spacer"]
 
@@ -52,7 +52,7 @@ def _answer(rows: list[Line], c: Constraints) -> Surface:
     return Surface.clipped(rows, c.width)
 
 
-class Row:
+class Row(Container):
     """Children laid out side by side in aligned columns.
 
     ``widths[i]`` fixes a column's width (``None`` = flexible).  Flexible
@@ -76,7 +76,7 @@ class Row:
     exactly as on a miss.
     """
 
-    __slots__ = ("_cell_rows", "_cells", "_memo", "children", "gap", "widths")
+    __slots__ = ("_cell_rows", "_cells", "_memo", "gap", "widths")
 
     def __init__(
         self,
@@ -85,6 +85,10 @@ class Row:
         widths: list[int | None] | None = None,
         gap: int = 1,
     ) -> None:
+        super().__init__()
+        # The base owns ``children`` (declared by ``Container``'s parent):
+        # assigning the list also points every widget child's ``parent``
+        # back at this row.
         self.children = list(children)
         self.widths = None if widths is None else list(widths)
         self.gap = gap
@@ -197,7 +201,7 @@ class Row:
         return f"Row({self.children!r}, widths={self.widths!r}, gap={self.gap})"
 
 
-class Column:
+class Column(Container):
     """Children stacked vertically, ``gap`` blank rows between them.
 
     The container implements ``Container.child_at`` over the geometry of its
@@ -210,9 +214,12 @@ class Column:
     ``child_at`` offsets are rebuilt from the child row counts either way.
     """
 
-    __slots__ = ("_memo", "_offsets", "children", "gap")
+    __slots__ = ("_memo", "_offsets", "gap")
 
     def __init__(self, children, *, gap: int = 0) -> None:
+        super().__init__()
+        # The base owns ``children``; the assignment adopts each widget
+        # child (``parent``) and leaves pure components alone.
         self.children = list(children)
         self.gap = gap
         # No cached geometry before the first render: `child_at` declines
@@ -283,19 +290,22 @@ class Column:
         return f"Column({self.children!r}, gap={self.gap})"
 
 
-class Spacer:
+class Spacer(Widget):
     """``rows`` blank rows: vertical whitespace as a first-class component.
 
     Replaces the ``Text("")`` rows hosts used to stack for breathing room
     between blocks.  ``rows <= 0`` renders nothing.  A spacer has no styles
-    and no theme -- it is whitespace, nothing else -- and no children, so it
-    implements no ``Container.child_at``: ``isinstance(Spacer, Container)``
-    is ``False``.
+    and no theme values it reads -- it is whitespace, nothing else -- and no
+    children, so it implements no ``Container.child_at``:
+    ``isinstance(Spacer, Container)`` is ``False``.  It still inherits
+    :class:`~motui.widgets.base.Widget` so ``walk()``/``touch()`` and the
+    capability defaults cover it like every other mounted node.
     """
 
     __slots__ = ("rows",)
 
     def __init__(self, rows: int = 1) -> None:
+        super().__init__()
         self.rows = rows
 
     def revision(self) -> object:
@@ -365,6 +375,9 @@ class Padding(Widget):
     ) -> None:
         super().__init__(theme, styles)
         self.child = child
+        # The explicit tree: the padded child is this widget's child; a
+        # widget child gets its ``parent`` pointed back here.
+        self.children = [child]
         self.left = left
         self.right = right
         self.top = top
