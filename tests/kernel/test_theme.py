@@ -1,5 +1,5 @@
-"""Theme values and the Themed resolution rule: the 2.0 role groups and
-the Ink & Signal dark defaults they ship with.
+"""Theme values and the ``Theme.group`` resolution rule: the 2.0 role
+groups and the Ink & Signal dark defaults they ship with.
 
 A Theme is one frozen tree of ten role groups.  Its field defaults are the
 dark theme (``Theme() == Theme.dark()``), the 1.x flat names are gone, and
@@ -78,6 +78,16 @@ def test_replace_builds_a_variant_without_mutating_the_default():
     assert theme.borders.base == DEFAULT_THEME.borders.base
     assert theme != DEFAULT_THEME
     assert DEFAULT_THEME.content.accent == Theme().content.accent
+
+
+def test_theme_group_prefers_the_styles_override_and_falls_back_whole():
+    assert DEFAULT_THEME.group("text") is DEFAULT_THEME.text
+    empty = Styles()
+    assert DEFAULT_THEME.group("text", empty) is DEFAULT_THEME.text
+    override = replace(DEFAULT_THEME.text, base=Style(fg="#ff0000"))
+    assert DEFAULT_THEME.group("text", Styles(text=override)) is override
+    # A partial ``Styles`` leaves every other group to the theme.
+    assert DEFAULT_THEME.group("rows", Styles(text=override)) is DEFAULT_THEME.rows
 
 
 def test_explicit_style_beats_the_theme_field():

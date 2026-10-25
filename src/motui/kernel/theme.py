@@ -30,8 +30,9 @@ each style it renders as::
 
     explicit style parameter  >  theme field  >  DEFAULT_THEME field
 
-:class:`Themed` stores the resolved theme once, at construction, and picks
-each style with :meth:`Themed.pick`.
+:meth:`Theme.group` resolves one role group against an optional
+``Styles`` override, so a widget, a controller and a highlighter all read
+the same rule.
 """
 
 from __future__ import annotations
@@ -58,7 +59,6 @@ __all__ = [
     "SyntaxStyles",
     "TextStyles",
     "Theme",
-    "Themed",
 ]
 
 
@@ -361,6 +361,18 @@ class Theme:
     overlays: OverlayStyles = field(default_factory=OverlayStyles)
     syntax: SyntaxStyles = field(default_factory=SyntaxStyles)
 
+    def group(self, name: str, styles: Styles | None = None) -> object:
+        """The role group ``name``: the ``styles`` override, else the theme's.
+
+        The one resolution rule every themed consumer shares (a
+        :class:`~motui.widgets.base.Widget`, a controller and a syntax
+        highlighter alike).  ``styles=None`` -- or a group left ``None`` on
+        the override -- answers this theme's group; a group set on the
+        override wins whole.
+        """
+        override = getattr(styles, name, None) if styles is not None else None
+        return override if override is not None else getattr(self, name)
+
     # -- constructors ------------------------------------------------------
 
     @classmethod
@@ -509,27 +521,6 @@ class Theme:
                 builtin=palette.inline_code,
             ),
         )
-
-class Themed:
-    """Base for components that resolve styles against a theme.
-
-    A themed component stores one resolved theme -- ``theme`` when given,
-    :data:`DEFAULT_THEME` otherwise -- and picks each style with
-    :meth:`pick`: the explicit style wins, otherwise the fallback token.
-    Subclasses resolve their styles in ``__init__`` and keep the stored
-    theme for the rare render-time pick (a divider whose label a host
-    restyles in place).
-    """
-
-    __slots__ = ("_theme",)
-
-    def __init__(self, theme: Theme | None = None) -> None:
-        self._theme = theme or DEFAULT_THEME
-
-    def pick(self, explicit: Style | None, fallback: Style) -> Style:
-        """``explicit`` when given, else ``fallback``."""
-        return explicit if explicit is not None else fallback
-
 
 #: The shipped theme: what every component falls back to.  ``Theme()`` --
 #: the Ink & Signal dark theme, equal to :meth:`Theme.dark`.

@@ -52,7 +52,7 @@ from typing import Protocol, runtime_checkable
 
 from ..kernel.cell import Line, Segment, fuse
 from ..kernel.style import Style
-from ..kernel.theme import Theme, Themed
+from ..kernel.theme import DEFAULT_THEME, Theme
 
 __all__ = [
     "Highlighter",
@@ -501,7 +501,7 @@ def _highlight_line(
 _LINE_MEMO_MAX = 4096
 
 
-class RegexHighlighter(Themed):
+class RegexHighlighter:
     """The built-in highlighter: ordered regex rules per language.
 
     ``theme`` supplies every token color (see the module docstring);
@@ -527,7 +527,7 @@ class RegexHighlighter(Themed):
         theme: Theme | None = None,
         languages: dict[str, list[tuple[str, str | Style]]] | None = None,
     ) -> None:
-        super().__init__(theme)
+        self._theme = theme if theme is not None else DEFAULT_THEME
         self._plain = self._theme.content.code
         styles = _token_styles(self._theme)
         table = dict(_BUILTIN_LANGUAGES)
