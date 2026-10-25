@@ -90,7 +90,7 @@ motui.kernel	Pos	class	(*, x: 'int' = 0, y: 'int' = 0) -> None
 motui.kernel	RESET	value	'\x1b[0m'
 motui.kernel	Rect	class	(*, x: 'int' = 0, y: 'int' = 0, width: 'int' = 0, height: 'int' = 0) -> None
 motui.kernel	ResizeEvent	class	(width: 'int', height: 'int') -> None
-motui.kernel	RowRange	class	(first: 'int', last: 'int') -> None
+motui.kernel	RowSpan	class	(first: 'int', last: 'int') -> None
 motui.kernel	ScreenLayout	class	(rows: 'tuple[Line, ...]', body_rows: 'tuple[Line, ...]', row_blocks: 'tuple[tuple[str, int] | None, ...]' = <factory>, block_order: 'tuple[str, ...]' = (), offset: 'int' = 0, total_rows: 'int' = 0, width: 'int' = 0, height: 'int' = 0, viewport_start: 'int' = 0) -> None
 motui.kernel	Scroll	class	(*, x: 'ScrollAxis' = ScrollAxis(offset=0, content=0, viewport=0, sticky=False), y: 'ScrollAxis' = <factory>) -> None
 motui.kernel	ScrollAxis	class	(*, offset: 'int' = 0, content: 'int' = 0, viewport: 'int' = 0, sticky: 'bool' = False) -> None

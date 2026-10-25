@@ -39,6 +39,7 @@ from .document import Document, Placement, Section, Sizing
 
 __all__ = [
     "Constraints",
+    "RowSpan",
     "ScreenLayout",
     "Scroll",
     "ScrollAxis",
@@ -47,6 +48,14 @@ __all__ = [
     "ScrollableX",
     "Viewport",
 ]
+
+
+@dataclass(frozen=True, slots=True)
+class RowSpan:
+    """A pane's visible body rows as screen rows: ``first`` .. ``last`` inclusive."""
+
+    first: int
+    last: int
 
 
 @dataclass(frozen=True, slots=True, kw_only=True)

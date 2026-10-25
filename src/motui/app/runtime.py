@@ -73,7 +73,7 @@ from ..kernel.geom import Axis, Pos
 from ..kernel.frame import Separator
 from ..kernel.events import Event, EventSource
 from ..kernel.frame import Frame, Pane, Rect
-from ..kernel.hit import Hit, RowRange
+from ..kernel.hit import Hit
 from ..kernel.cell import Line
 from ..widgets.text import Text
 from ..terminal.paint import Painter
@@ -81,7 +81,7 @@ from ..terminal.screen import MouseMode, Screen
 from ..terminal.terminal import Terminal
 from ..kernel.selection import Selection, highlight
 from ..kernel.theme import DEFAULT_THEME, Theme
-from ..kernel.layout import ScreenLayout, Viewport
+from ..kernel.layout import RowSpan, ScreenLayout, Viewport
 from ..terminal import RawTerminalKeys
 from ..kernel.layout import Constraints
 from .workspace import Workspace
@@ -214,8 +214,8 @@ def _body_address(viewport: Viewport, block: Section, row: int, width: int) -> i
     answers its first row).  The counts come from each block's count gate
     (:meth:`~motui.kernel.document.Section.row_count`): the layout just filled
     the same cache, so the walk reads counts instead of re-wrapping rows,
-    and a block whose content moved carries a moved revision, so no count
-    is stale.  The half of :meth:`Runtime.reveal` that is pure arithmetic over
+    and a block whose content was touched carries a moved generation, so no
+    count is stale.  The half of :meth:`Runtime.reveal` that is pure arithmetic over
     the document; the caller has already resolved the block out of the
     document, so the walk is total.
     """
@@ -743,7 +743,7 @@ class Runtime:
         span = table.resolve(y, x)
         return None if span is None else self._frame.pane(span.pane_id)
 
-    def visible_range(self, pane: Pane | str | None = None) -> RowRange | None:
+    def visible_range(self, pane: Pane | str | None = None) -> RowSpan | None:
         """A pane's visible body rows as screen rows (the focused pane by default).
 
         ``first``/``last`` are *screen* rows and include the pane's top pin
@@ -767,7 +767,7 @@ class Runtime:
         if placement is None or layout is None or not layout.body_rows:
             return None
         first = placement.y + layout.viewport_start
-        return RowRange(first, first + len(layout.body_rows) - 1)
+        return RowSpan(first, first + len(layout.body_rows) - 1)
 
     # -- the docks -----------------------------------------------------------------
 

@@ -1,9 +1,10 @@
 """hit: the value types the controllers pass around.
 
 The controllers in :mod:`motui.app` act on addresses the driver resolves:
-:class:`Hit` (a hit-test result) and :class:`RowRange` (a pane's visible
-body rows as screen rows).  They are plain values with no dependency on
-the driver, so they live in the core and both layers can name them; the
+:class:`Hit` (a hit-test result).  A pane's visible rows are a
+:class:`~motui.kernel.layout.RowSpan`, which lives with the layout values.
+:class:`Hit` is a plain value with no dependency on
+the driver, so it lives in the core and both layers can name it; the
 cancellable timer handle lives with the runtime
 (:class:`motui.app.runtime.Timer`), where the pump owns it.
 """
@@ -15,15 +16,7 @@ from dataclasses import dataclass
 from .document import Component, Section
 from .frame import Pane
 
-__all__ = ["Hit", "RowRange"]
-
-
-@dataclass(frozen=True)
-class RowRange:
-    """A pane's visible body rows as screen rows: ``first`` .. ``last`` inclusive."""
-
-    first: int
-    last: int
+__all__ = ["Hit"]
 
 
 @dataclass(frozen=True)
