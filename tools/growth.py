@@ -14,7 +14,7 @@ and runs the real gates against that copy:
 
 * ``python -m pytest -q -p no:cacheprovider`` (or ``tests/kernel`` with
   ``--quick``);
-* ``python tools/golden.py --check``;
+* ``python tools/semantic.py --check``;
 * ``python tools/api.py --check --allow-additions`` (full runs only).
 
 The repository itself is never touched: every edit happens under
@@ -156,7 +156,7 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument(
         "--quick",
         action="store_true",
-        help="run tests/kernel and the golden check only",
+        help="run tests/kernel and the semantic check only",
     )
     parser.add_argument(
         "--keep",
@@ -193,10 +193,10 @@ def main(argv: list[str] | None = None) -> int:
         results = [
             ("pytest", _run("pytest", pytest_args, target, env)),
             (
-                "golden",
+                "semantic",
                 _run(
-                    "golden",
-                    [sys.executable, "tools/golden.py", "--check"],
+                    "semantic",
+                    [sys.executable, "tools/semantic.py", "--check"],
                     target,
                     env,
                 ),

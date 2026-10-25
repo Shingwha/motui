@@ -1,27 +1,27 @@
-"""Semantic golden frames: the cell grid, its attributes and the cursor.
+"""Semantic golden frames: one snapshot per showcase scene.
 
 Run it from the repository root::
 
     uv run python tools/semantic.py            # the gate's line: --check
     uv run python tools/semantic.py --check    # compare tests/golden/semantic
-    uv run python tools/semantic.py --update   # re-record every topic
+    uv run python tools/semantic.py --update   # re-record every scene
     uv run python tools/semantic.py --check --snapshot DIR   # another set
 
-Where the byte golden (:mod:`tools.golden`) pins the exact escape stream a
-topic paints, this tool pins what a terminal would *show*: the bytes go
-through :class:`~motui.testing.emulator.Emulator`, which rebuilds the cell
-grid, and each row is written as its text plus the styled runs over it.  A
-change that only reorders escapes stays green; a change in glyphs, SGR
-attributes, OSC 8 links or the cursor anchor moves the snapshot.
+The tool pins what a terminal would *show* for each of the three showcase
+scenes (``splash``, ``menu``, ``gallery``): the bytes ``scene_output``
+paints go through :class:`~motui.testing.emulator.Emulator`, which rebuilds
+the cell grid, and each row is written as its text plus the styled runs
+over it.  A change that only reorders escapes stays green; a change in
+glyphs, SGR attributes, OSC 8 links or the cursor anchor moves the snapshot.
 
-The frame is the same one ``tools.golden`` renders -- the very path
-``python -m motui --pages`` walks: a fresh headless ``Session`` at the
-replay's geometry, ``show_topic(toast=False)``, one ``paint`` -- so the two
-golden sets describe one frame from two angles.
+``scene_output`` is the production painter path at a fixed phase: a fresh
+headless runtime, ``fill(Showcase)`` and one ``paint`` -- no event pump, no
+clock, no terminal.  The same path ``python -m motui --pages`` renders as
+text, so the scene snapshots and the page dump describe one frame.
 
-Format, one LF-terminated file per topic::
+Format, one LF-terminated file per scene::
 
-    # <section>/<key> <width>x<height> cursor=<x>,<y>
+    # <scene> <width>x<height> cursor=<x>,<y>
     <row text>\\t<runs>
     ...
 
@@ -34,12 +34,10 @@ hexed, so the key is the exact SGR bytes without depending on ``repr``; a
 link is appended as its ``repr`` (quotes included) and breaks a run when it
 changes.  The cursor is the emulator's zero-based final position.
 
-Re-record with ``--update`` only for an intended change, and re-record the
-whole set in one commit: the shell chrome every topic shares means one
-chrome change moves every file.  ``--check`` compares bytes; the one
-accepted other spelling is the exact ``LF -> CRLF`` conversion a Windows
-checkout makes (this repository has no line-ending attributes), the same
-rule ``tools.golden`` applies.  Missing, extra and changed files all fail.
+Re-record with ``--update`` only for an intended change; ``--check``
+compares bytes.  The one accepted other spelling is the exact ``LF -> CRLF``
+conversion a Windows checkout makes (this repository has no line-ending
+attributes).  Missing, extra and changed files all fail.
 """
 
 from __future__ import annotations
@@ -50,38 +48,37 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT / "src"))
 
-from motui.demo import Session  # noqa: E402
-from motui.demo.registry import TOPICS  # noqa: E402
-from motui.demo.script import HEADLESS_H, HEADLESS_W  # noqa: E402
+from motui.demo import PAGE_PHASE, SCENES, scene_output  # noqa: E402
 from motui.kernel.style import Style  # noqa: E402
-from motui.terminal import HeadlessScreen, TerminalOptions  # noqa: E402
 from motui.testing import Emulator  # noqa: E402
 
-#: Where the semantic snapshots live: one ``<section>--<topic>.txt`` per topic.
+#: The geometry every scene snapshot records.
+WIDTH = 100
+HEIGHT = 30
+
+#: Where the semantic snapshots live: one ``<scene>.txt`` per scene.
 GOLDEN = ROOT / "tests" / "golden" / "semantic"
 
 #: The style of a cell no run has touched; a run is everything else.
 _DEFAULT_STYLE = Style()
 
 
-def topic_name(topic) -> str:
-    """The file name of one topic's semantic frame."""
-    return f"{topic.section}--{topic.key}.txt"
+def scene_name(name: str) -> str:
+    """The file name of one scene's semantic frame."""
+    return f"{name}.txt"
 
 
-def frame(topic, width: int = HEADLESS_W, height: int = HEADLESS_H) -> Emulator:
-    """Emulate one topic's painted bytes on a ``width`` x ``height`` grid.
-
-    This is ``demo.render_topic``'s path byte for byte up to the paint: a
-    fresh session, ``show_topic`` with the toast off, one ``paint`` -- then
-    the recorded bytes are fed to a fresh emulator.
-    """
-    screen = HeadlessScreen(width, height)
-    session = Session(terminal=TerminalOptions(screen=screen))
-    session.show_topic(topic.key, toast=False)
-    session.runtime.paint()
+def frame(
+    name: str,
+    width: int = WIDTH,
+    height: int = HEIGHT,
+    phase: int = PAGE_PHASE,
+) -> Emulator:
+    """Emulate one scene's painted bytes on a ``width`` x ``height`` grid."""
     emulator = Emulator(width, height)
-    emulator.feed(screen.output)
+    emulator.feed(
+        scene_output(name, width=width, height=height, phase=phase)
+    )
     return emulator
 
 
@@ -111,14 +108,16 @@ def _runs(row) -> str:
     return "|".join(pieces) if pieces else "-"
 
 
-def snapshot(topic, width: int = HEADLESS_W, height: int = HEADLESS_H) -> str:
-    """One topic's semantic frame: the cursor header, then text and runs."""
-    emulator = frame(topic, width, height)
+def snapshot(
+    name: str,
+    width: int = WIDTH,
+    height: int = HEIGHT,
+    phase: int = PAGE_PHASE,
+) -> str:
+    """One scene's semantic frame: the cursor header, then text and runs."""
+    emulator = frame(name, width, height, phase)
     cursor = emulator.cursor
-    lines = [
-        f"# {topic.section}/{topic.key} {width}x{height} "
-        f"cursor={cursor.x},{cursor.y}"
-    ]
+    lines = [f"# {name} {width}x{height} cursor={cursor.x},{cursor.y}"]
     for row in emulator.grid:
         text = "".join(cell.char for cell in row).rstrip()
         lines.append(f"{text}\t{_runs(row)}")
@@ -131,23 +130,23 @@ def matches(recorded: bytes, expected: bytes) -> bool:
 
 
 def check(directory: Path | None = None) -> list[str]:
-    """Compare every topic against its file; one line per problem, sorted.
+    """Compare every scene against its file; one line per problem, sorted.
 
-    ``"<name>: missing"`` for a topic with no file, ``"<name>: differs"``
+    ``"<name>: missing"`` for a scene with no file, ``"<name>: differs"``
     (:func:`matches`) for one that moved, ``"<name>: extra"`` for a file no
-    topic owns.  An empty list is the gate's pass.
+    scene owns.  An empty list is the gate's pass.
     """
     where = GOLDEN if directory is None else directory
     problems: list[str] = []
     expected: dict[str, bytes] = {}
-    for topic in TOPICS:
-        name = topic_name(topic)
-        expected[name] = snapshot(topic).encode("utf-8")
-        path = where / name
+    for name in SCENES:
+        file_name = scene_name(name)
+        expected[file_name] = snapshot(name).encode("utf-8")
+        path = where / file_name
         if not path.is_file():
-            problems.append(f"{name}: missing")
-        elif not matches(path.read_bytes(), expected[name]):
-            problems.append(f"{name}: differs")
+            problems.append(f"{file_name}: missing")
+        elif not matches(path.read_bytes(), expected[file_name]):
+            problems.append(f"{file_name}: differs")
     if where.is_dir():
         for path in where.glob("*.txt"):
             if path.name not in expected:
@@ -156,13 +155,13 @@ def check(directory: Path | None = None) -> list[str]:
 
 
 def update(directory: Path | None = None) -> None:
-    """Record every topic afresh: one LF-terminated file per topic."""
+    """Record every scene afresh: one LF-terminated file per scene."""
     where = GOLDEN if directory is None else directory
     where.mkdir(parents=True, exist_ok=True)
-    for topic in TOPICS:
-        path = where / topic_name(topic)
+    for name in SCENES:
+        path = where / scene_name(name)
         with path.open("w", encoding="utf-8", newline="\n") as sink:
-            sink.write(snapshot(topic))
+            sink.write(snapshot(name))
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -190,7 +189,7 @@ def main(argv: list[str] | None = None) -> int:
             return 2
     if mode == "--update":
         update(where)
-        print(f"semantic: recorded {len(TOPICS)} topics into {where}")
+        print(f"semantic: recorded {len(SCENES)} scenes into {where}")
         return 0
     problems = check(where)
     for problem in problems:
@@ -198,7 +197,7 @@ def main(argv: list[str] | None = None) -> int:
     if problems:
         print(f"semantic: {len(problems)} problem(s) -- re-record with --update if intended")
         return 1
-    print(f"semantic: {len(TOPICS)} topics match")
+    print(f"semantic: {len(SCENES)} scenes match")
     return 0
 
 

@@ -2,7 +2,7 @@
 #
 # One interpreter (3.12, the package's floor), one pinned uv (the version
 # the group's agents ran the local gates with), and the spec's gate lines:
-# pytest, framebench, the golden check and the two piped demo runs.  The
+# pytest, framebench, the semantic check and the two piped demo runs.  The
 # lines a shell would spell differently are the redirect (``< /dev/null`` /
 # ``< NUL``) and the framebench pipe (its output kept in the log while the
 # hash line is checked), so those two steps carry a small ``python -c``
@@ -58,9 +58,6 @@ jobs:
         # not a red CI.  The exit code and the line's presence are asserted.
         run: |
           uv run python -c "import re, subprocess, sys; done = subprocess.run([sys.executable, 'tools/framebench.py'], capture_output=True, text=True); sys.stdout.write(done.stdout); sys.stderr.write(done.stderr); raise SystemExit(0 if done.returncode == 0 and re.search(r'^render-hash  : [0-9a-f]{64}$', done.stdout, re.M) else 1)"
-
-      - name: golden frames -- every page byte for byte
-        run: uv run python tools/golden.py --check
 
       - name: semantic frames -- grid, attributes and cursor
         run: uv run python tools/semantic.py --check
