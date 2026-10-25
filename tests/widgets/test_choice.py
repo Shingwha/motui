@@ -5,6 +5,8 @@ from dataclasses import replace
 import pytest
 
 from motui.kernel.glyphs import GLYPHS
+from motui.kernel.cell import Surface
+from motui.kernel.layout import Constraints
 from motui.kernel.style import Style
 from motui.kernel.theme import DEFAULT_THEME, Styles
 from motui.widgets import CheckboxGroup, MultiSelect, Option, RadioGroup, Select
@@ -40,7 +42,7 @@ def test_an_empty_list_has_no_selection_and_cannot_move():
     empty = Select([])
     assert empty.selected is None
     assert empty.move(1) is False
-    assert empty.render(20) == []
+    assert list(empty.render(20)) == []
 
 
 def test_assigning_the_index_clamps_into_the_rows():
@@ -255,7 +257,8 @@ def test_radio_index_clamps_and_selected_reads_the_label():
     assert group.index == 0 and group.selected == "a"
     assert texts(group, 20)[0] == "(\u2022) a"
     empty = RadioGroup([])
-    assert empty.index == 0 and empty.selected is None and empty.render(20) == []
+    assert empty.index == 0 and empty.selected is None
+    assert list(empty.render(20)) == []
 
 
 def test_radio_move_clamps_and_leaves_the_new_selection_pending():
@@ -360,3 +363,20 @@ def test_the_custom_glyph_pairs_pad_to_the_wider_member():
         ["a", "b"], glyphs=replace(GLYPHS, radio_off="", radio_on=">")
     )
     assert texts(group, 20) == ["> a", "  b"]
+
+
+# -- the 2.0 render contract -------------------------------------------------
+
+
+def test_select_answers_a_surface_and_honours_the_height_budget():
+    menu = Select(THREE)
+    surface = menu.render(Constraints(width=20, max_height=2))
+    assert isinstance(surface, Surface)
+    assert [row.text for row in surface] == ["\u2192 one", "  two"]
+    assert surface.width == 20 and surface.height == 2
+    # The 1.x int spelling still answers the natural window.
+    assert [row.text for row in menu.render(20)] == [
+        "\u2192 one",
+        "  two",
+        "  three",
+    ]
