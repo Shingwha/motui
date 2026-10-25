@@ -35,13 +35,19 @@ class Feed:
         """Append one sine sample and answer it."""
         self.frame += 1
         value = 0.5 + 0.45 * math.sin(self.frame / 6.0)
-        self.values = self.values[1:] + [value]
+        self.values = [*self.values[1:], value]
         return value
 
 
-def build(screen: HeadlessScreen | None = None) -> tuple[App, Feed, Sparkline, Text]:
+def build(
+    screen: HeadlessScreen | None = None, *, replay: bool = False
+) -> tuple[App, Feed, Sparkline, Text]:
     """Assemble the App: a header row plus the sparkline filling the rest."""
     app = App(screen=screen, auto=False)
+    if replay:
+        # The clock seam ``Runtime.advance`` replays through: a frozen base
+        # reading makes each virtual step cross exactly one timer deadline.
+        app.runtime._clock = lambda: 0.0
     feed = Feed()
     header = Text("motui dashboard | braille sparkline")
     spark = Sparkline(feed.values, marker="braille")
@@ -60,7 +66,7 @@ def build(screen: HeadlessScreen | None = None) -> tuple[App, Feed, Sparkline, T
 
 def headless(frames: int) -> int:
     """Replay ``frames`` deterministic frames and print one summary line."""
-    app, feed, spark, _header = build(HeadlessScreen(WIDTH, HEIGHT))
+    app, feed, spark, _header = build(HeadlessScreen(WIDTH, HEIGHT), replay=True)
     for _ in range(frames):
         app.runtime.advance(1.0 / FRAME_RATE)
         app.paint_now()

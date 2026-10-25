@@ -46,8 +46,9 @@ class _LegacyCommandMeta(type):
     @property
     def __signature__(cls) -> inspect.Signature:
         """The keyword-only constructor signature (the legacy shim is invisible)."""
-        parameters = list(inspect.signature(cls.__init__).parameters.values())[1:]
-        return inspect.Signature(parameters)
+        signature = inspect.signature(cls.__init__)
+        parameters = list(signature.parameters.values())[1:]
+        return signature.replace(parameters=parameters)
 
     def __call__(cls, *args: object, **kwargs: object) -> object:
         if args:
