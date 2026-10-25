@@ -172,11 +172,11 @@ def test_a_collapsible_folds_its_body_away_and_back():
 
 def test_click_and_activate_flip_the_section_and_leave_the_state_pending():
     section = Collapsible("options", Text("body"))
-    assert section.activate() is True
-    assert (section.open, section.take_result()) == (False, False)
-    assert section.click(0, 40) is True
-    assert (section.open, section.take_result()) == (True, True)
-    assert section.click(1, 0) is False and section.take_result() is None
+    assert section.on_action("activate") is True
+    assert (section.open, section.take()) == (False, False)
+    assert section.on_click(Pos(x=40, y=0)) is True
+    assert (section.open, section.take()) == (True, True)
+    assert section.on_click(Pos(x=0, y=1)) is False and section.take() is None
 
 
 def test_the_collapsible_title_takes_hover_and_focus_bands():
@@ -193,13 +193,13 @@ def test_the_collapsible_title_takes_hover_and_focus_bands():
         ),
     )
     plain = section.render(Constraints(width=20))
-    assert section.hover_at(0, 1) is True
+    assert section.on_hover(Pos(x=1, y=0)) is True
     assert section.render(Constraints(width=20))[0].segments[0].style == title.merge(hover)
     assert section.render(Constraints(width=20))[1] == plain[1]
-    section.hover_at(1, 0)
+    section.on_hover(Pos(x=0, y=1))
     section.focused = True
     assert section.render(Constraints(width=20))[0].segments[0].style == title.merge(focus)
-    assert section.hover_at(1, 0) is False
+    assert section.on_hover(Pos(x=0, y=1)) is False
     assert section.render(Constraints(width=20))[1] == plain[1]
 
 
@@ -214,7 +214,7 @@ def test_the_collapsible_child_at_maps_the_body_and_owns_the_title():
 
 def test_a_disabled_collapsible_refuses_both_doors_and_nested_content_fits():
     section = Collapsible("options", Text("body"), disabled=True)
-    assert section.activate() is False and section.click(0, 0) is False
+    assert section.on_action("activate") is False and section.on_click(Pos(x=0, y=0)) is False
     nested = Collapsible("outer", Collapsible("inner", Text("a long body line to wrap")))
     assert all(row.width <= 12 for row in nested.render(Constraints(width=12)))
 
@@ -332,7 +332,7 @@ def test_a_divider_is_a_childless_widget():
     assert divider.children == [] and list(divider.walk()) == [divider]
 
 
-def test_walk_visits_a_shared_child_once():
+def test_the_tree_visits_a_shared_child_once():
     shared = Text("shared")
     row = Row([shared, shared], widths=[6, 6], gap=1)
 
@@ -357,6 +357,6 @@ def test_a_collapsible_adopts_its_body_and_answers_the_toggle_action():
     assert section.on_action("toggle") is True
     assert (section.open, section.take()) == (False, False)
     assert section.on_click(Pos(y=0, x=40)) is True
-    assert (section.open, section.take_result()) == (True, True)
+    assert (section.open, section.take()) == (True, True)
     assert section.on_click(Pos(y=1, x=0)) is False
     assert section.take() is None

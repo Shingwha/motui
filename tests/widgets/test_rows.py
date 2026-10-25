@@ -132,5 +132,5 @@ def test_the_row_furniture_is_pure_display():
         )
         assert widget.keymap == {}
         assert widget.take() is None
-        assert widget.handle(key("down")) is False
+        assert widget.on_key(key("down")) is False
         assert widget.on_key(key("down")) is False

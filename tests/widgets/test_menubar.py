@@ -31,14 +31,14 @@ def test_menubar_answers_a_surface_and_honours_the_height_budget():
     assert surface.width == 40 and surface.height == 1
     # A zero height budget paints no row; the width still feeds the hits.
     assert bar.render(Constraints(width=40, max_height=0)).height == 0
-    assert bar.click(0, 1) is True and bar.index == 0
+    assert bar.on_click(Pos(x=1, y=0)) is True and bar.index == 0
 
 
 def test_an_over_wide_bar_truncates_and_the_cut_label_carries_no_span():
     bar = MenuBar(["alpha", "beta"])
     row = bar.render(Constraints(width=4))[0]
     assert row.width == 4 and row.text == " al\u2026"
-    assert bar.click(0, 1) is False
+    assert bar.on_click(Pos(x=1, y=0)) is False
 
 
 def test_menubar_move_clamps_and_steps_over_disabled():
@@ -56,51 +56,51 @@ def test_menubar_move_clamps_and_steps_over_disabled():
 def test_menubar_click_maps_the_last_render_span_table():
     bar = MenuBar(["File", "Edit", "View"])
     bar.render(Constraints(width=40))
-    assert bar.click(0, 1) is True and bar.index == 0
-    assert bar.click(0, 8) is True and bar.index == 1
-    assert bar.click(0, 15) is True and bar.index == 2
-    assert bar.click(0, 5) is False
-    assert bar.click(0, 19) is False
-    assert bar.click(1, 8) is False
-    assert bar.click(0, 8) is True
+    assert bar.on_click(Pos(x=1, y=0)) is True and bar.index == 0
+    assert bar.on_click(Pos(x=8, y=0)) is True and bar.index == 1
+    assert bar.on_click(Pos(x=15, y=0)) is True and bar.index == 2
+    assert bar.on_click(Pos(x=5, y=0)) is False
+    assert bar.on_click(Pos(x=19, y=0)) is False
+    assert bar.on_click(Pos(x=8, y=1)) is False
+    assert bar.on_click(Pos(x=8, y=0)) is True
 
 
 def test_a_disabled_label_is_visible_but_not_selectable():
     bar = MenuBar(["a", "b", "c"], disabled_items={1})
-    assert bar.click(0, 5) is False and bar.index == 0
+    assert bar.on_click(Pos(x=5, y=0)) is False and bar.index == 0
     assert bar.select(1) is False
     assert bar.move(1) is True and bar.index == 2
-    assert bar.activate() is True and bar.take_result() == "c"
+    assert bar.on_action("activate") is True and bar.take() == "c"
 
 
 def test_a_disabled_bar_refuses_every_gesture():
     bar = MenuBar(["a", "b"], disabled=True)
     assert bar.move(1) is False
     assert bar.select(1) is False
-    assert bar.click(0, 1) is False
-    assert bar.activate() is False and bar.take_result() is None
+    assert bar.on_click(Pos(x=1, y=0)) is False
+    assert bar.on_action("activate") is False and bar.take() is None
 
 
 def test_hover_at_marks_one_label_and_clears_back():
     theme = replace(DEFAULT_THEME, surfaces=replace(DEFAULT_THEME.surfaces, hover=Style(underline=True)))
     bar = MenuBar(["File", "Edit"], theme=theme)
     plain = bar.render(Constraints(width=40))
-    assert bar.hover_at(0, 8) is True
+    assert bar.on_hover(Pos(x=8, y=0)) is True
     assert bar.render(Constraints(width=40))[0].segments[3].style.underline is True
-    assert bar.hover_at(0, 8) is False
-    assert bar.hover_at(0, 5) is True
+    assert bar.on_hover(Pos(x=8, y=0)) is False
+    assert bar.on_hover(Pos(x=5, y=0)) is True
     assert bar.render(Constraints(width=40)) == plain
-    assert bar.hover_at(-1, -1) is False
+    assert bar.on_hover(None) is False
 
 
 def test_activate_leaves_the_active_label_pending_once():
     bar = MenuBar(["File", "Edit"])
-    assert bar.activate() is True and bar.take_result() == "File"
-    assert bar.take_result() is None
+    assert bar.on_action("activate") is True and bar.take() == "File"
+    assert bar.take() is None
     assert bar.move(1) is True
-    bar.activate()
-    assert bar.move(-1) is True and bar.take_result() is None
-    assert MenuBar([]).activate() is False
+    bar.on_action("activate")
+    assert bar.move(-1) is True and bar.take() is None
+    assert MenuBar([]).on_action("activate") is False
 
 
 def test_context_menu_is_the_wrap_and_activate_select_preset():
@@ -108,8 +108,8 @@ def test_context_menu_is_the_wrap_and_activate_select_preset():
     assert isinstance(menu, Select)
     assert menu.commit is False and menu.wrap is True and menu.window is False
     assert menu.select(1) is True
-    assert menu.activate() is True and menu.take_result() == Option("Save", "save")
-    assert menu.take_result() is None
+    assert menu.on_action("activate") is True and menu.take() == Option("Save", "save")
+    assert menu.take() is None
 
 
 def test_context_menu_renders_its_title_and_refuses_disabled_items():
@@ -117,7 +117,7 @@ def test_context_menu_renders_its_title_and_refuses_disabled_items():
     assert texts(menu, 20) == ["File", "\u2192 Open", "  Quit"]
     disabled = ContextMenu([Option("Open"), Option("Quit")], disabled_items={1})
     assert disabled.select(1) is False
-    assert disabled.activate() is True and disabled.take_result() == Option("Open")
+    assert disabled.on_action("activate") is True and disabled.take() == Option("Open")
 
 
 # -- the 2.0 keymap and action surface ----------------------------------------
@@ -133,7 +133,7 @@ def test_the_menubar_keymap_steps_and_activates_through_named_actions():
     assert bar.on_action("activate") is True and bar.take() == "b"
     assert bar.take() is None
     assert bar.on_action("nope") is False
-    assert MenuBar.handle is MenuBar.on_key
+    assert not hasattr(MenuBar, "handle")
     assert MenuBar.keymap["enter"] == "activate"
 
 
@@ -143,8 +143,8 @@ def test_an_instance_menubar_keymap_rebind_is_private_to_the_instance():
     bar.keymap["j"] = "next"
     assert "j" not in MenuBar.keymap
     assert "j" not in other.keymap
-    assert bar.handle(key("j", "j")) is True and bar.index == 1
-    assert other.handle(key("j", "j")) is False and other.index == 0
+    assert bar.on_key(key("j", "j")) is True and bar.index == 1
+    assert other.on_key(key("j", "j")) is False and other.index == 0
 
 
 def test_the_menubar_typed_hooks_forward_to_click_and_hover():

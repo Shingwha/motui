@@ -14,6 +14,7 @@ from dataclasses import replace
 import pytest
 
 from motui.kernel.cell import Line, Segment
+from motui.kernel.geom import Pos
 from motui.kernel.style import Style
 from motui.widgets.text import Text
 
@@ -261,31 +262,31 @@ class SpanText(Text):
 def test_text_inline_spans_answer_a_click_once():
     field = SpanText()
     field.render(Constraints(width=40))
-    assert field.click(0, 0) is False
-    assert field.click(0, 12) is False
-    assert field.click(0, 5) is True
-    assert field.take_result() == "open"
-    assert field.take_result() is None
+    assert field.on_click(Pos(x=0, y=0)) is False
+    assert field.on_click(Pos(x=12, y=0)) is False
+    assert field.on_click(Pos(x=5, y=0)) is True
+    assert field.take() == "open"
+    assert field.take() is None
 
 
 def test_text_hover_merges_the_themed_band_over_the_span():
     band = Style(fg="#ff00ff", reverse=True)
     field = SpanText(theme=replace(DEFAULT_THEME, surfaces=replace(DEFAULT_THEME.surfaces, hover=band)))
     field.render(Constraints(width=40))
-    assert field.hover_at(0, 5) is True
+    assert field.on_hover(Pos(x=5, y=0)) is True
     hovered = field.render(Constraints(width=40))[0]
     assert hovered.segments[1].style == ACCENT.merge(band)
     assert hovered.segments[1].text == "docs"
-    assert field.hover_at(0, 5) is False
-    assert field.hover_at(-1, -1) is True
+    assert field.on_hover(Pos(x=5, y=0)) is False
+    assert field.on_hover(None) is True
 
 
 def test_plain_text_rows_decline_clicks_and_hovers():
     field = Text("hello")
     field.render(Constraints(width=10))
-    assert field.hover_at(0, 0) is False
-    assert field.click(0, 0) is False
-    assert field.take_result() is None
+    assert field.on_hover(Pos(x=0, y=0)) is False
+    assert field.on_click(Pos(x=0, y=0)) is False
+    assert field.take() is None
 
 
 def test_short_names_are_the_same_functions() -> None:

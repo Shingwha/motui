@@ -46,8 +46,8 @@ def test_a_short_list_renders_every_item_without_counters():
 
 def test_move_clamps_at_the_ends_and_clears_the_pending_pick():
     lst = List(["a", "b", "c"], window=2)
-    assert lst.activate() is True and lst.take_result() == "a"
-    assert lst.move(1) is True and lst.index == 1 and lst.take_result() is None
+    assert lst.on_action("activate") is True and lst.take() == "a"
+    assert lst.move(1) is True and lst.index == 1 and lst.take() is None
     assert lst.move(9) is True and lst.index == 2
     assert lst.move(1) is False
     assert lst.move(-9) is True and lst.index == 0
@@ -66,15 +66,15 @@ def test_index_clamps_and_an_empty_list_is_inert():
     empty = List()
     empty.index = 5
     assert empty.index == 0 and list(empty.render(Constraints(width=20))) == []
-    assert empty.move(1) is False and empty.activate() is False
+    assert empty.move(1) is False and empty.on_action("activate") is False
     assert empty.home() is False and empty.end() is False
 
 
 def test_activate_lands_the_cursor_item_once():
     lst = List(["a", "b", "c"], window=2)
     lst.index = 1
-    assert lst.activate() is True and lst.take_result() == "b"
-    assert lst.take_result() is None
+    assert lst.on_action("activate") is True and lst.take() == "b"
+    assert lst.take() is None
 
 
 def test_click_maps_rendered_rows_and_refuses_the_counter_rows():
@@ -82,30 +82,31 @@ def test_click_maps_rendered_rows_and_refuses_the_counter_rows():
     lst.index = 50
     rows = texts(lst, 30)
     assert rows[0] == "\u2191 48 more" and rows[-1] == "\u2193 48 more"
-    assert lst.click(0, 0) is False
-    assert lst.click(len(rows) - 1, 0) is False
-    assert lst.click(len(rows), 0) is False
-    assert lst.click(2, 99) is True
-    assert lst.index == 49 and lst.take_result() == "r49"
+    assert lst.on_click(Pos(x=0, y=0)) is False
+    assert lst.on_click(Pos(x=0, y=len(rows) - 1)) is False
+    assert lst.on_click(Pos(x=0, y=len(rows))) is False
+    assert lst.on_click(Pos(x=99, y=2)) is True
+    assert lst.index == 49 and lst.take() == "r49"
 
 
 def test_the_prefix_jump_scans_from_the_top_case_insensitively():
     lst = List(["alpha", "Beta", "beta two", "Gamma", "delta"], window=3)
     lst.index = 4
-    assert lst.handle(key("b", "b")) is True
+    assert lst.on_key(key("b", "b")) is True
     assert lst.index == 1
-    assert lst.handle(key("d", "d")) is True and lst.index == 4
-    assert lst.handle(key("z", "z")) is True and lst.index == 4
+    assert lst.on_key(key("d", "d")) is True and lst.index == 4
+    assert lst.on_key(key("z", "z")) is True and lst.index == 4
 
 
 def test_handle_consumes_its_own_keys_and_declines_the_hosts():
     lst = List(["a", "b", "c"], window=2)
-    assert lst.handle(key("down")) is True and lst.index == 1
-    assert lst.handle(key("up")) is True and lst.index == 0
-    assert lst.handle(key("end")) is True and lst.index == 2
-    assert lst.handle(key("home")) is True and lst.index == 0
-    for event in (key("enter"), key("tab"), key("c-n"), key("space", " "), paste("text")):
-        assert lst.handle(event) is False
+    assert lst.on_key(key("down")) is True and lst.index == 1
+    assert lst.on_key(key("up")) is True and lst.index == 0
+    assert lst.on_key(key("end")) is True and lst.index == 2
+    assert lst.on_key(key("home")) is True and lst.index == 0
+    for event in (key("enter"), key("tab"), key("c-n"), key("space", " ")):
+        assert lst.on_key(event) is False
+    assert lst.on_paste(paste("text")) is False
 
 
 def test_the_list_keymap_routes_its_keys_through_named_actions():
@@ -119,7 +120,7 @@ def test_the_list_keymap_routes_its_keys_through_named_actions():
     assert lst.on_action("activate") is True and lst.take() == "a"
     assert lst.on_action("toggle") is True and list(lst.marked) == [0]
     assert lst.on_action("nope") is False and list(lst.marked) == [0]
-    assert List.handle is List.on_key
+    assert not hasattr(List, "handle")
     assert List.keymap["down"] == "next"
 
 
@@ -129,11 +130,11 @@ def test_an_instance_keymap_rebind_never_writes_through_the_class_table():
     lst.keymap["j"] = "next"
     assert "j" not in List.keymap
     assert "j" not in other.keymap
-    assert lst.handle(key("j", "j")) is True and lst.index == 1
+    assert lst.on_key(key("j", "j")) is True and lst.index == 1
     # The unbound list still falls through to its printable prefix jump.
-    assert other.handle(key("j", "j")) is True and other.index == 0
+    assert other.on_key(key("j", "j")) is True and other.index == 0
     del lst.keymap["j"]
-    assert lst.handle(key("j", "j")) is True and lst.index == 1
+    assert lst.on_key(key("j", "j")) is True and lst.index == 1
 
 
 def test_the_typed_hooks_forward_to_the_1x_click_and_hover_verbs():
@@ -147,12 +148,12 @@ def test_the_typed_hooks_forward_to_the_1x_click_and_hover_verbs():
     assert lst.on_click(Pos(y=0, x=0)) is False  # the counter row
 
 
-def test_take_is_the_result_door_and_the_alias_answers_the_same():
+def test_take_reads_the_result_once():
     lst = List(["a"])
     assert lst.take() is None
-    assert lst.activate() is True and lst.take() == "a"
+    assert lst.on_action("activate") is True and lst.take() == "a"
     assert lst.take() is None
-    assert lst.activate() is True and lst.take_result() == "a"
+    assert lst.on_action("activate") is True and lst.take() == "a"
 
 
 def test_the_list_declares_its_capabilities():
@@ -211,16 +212,16 @@ def test_disabled_items_are_visible_but_skipped_and_refused():
     assert lst.move(1) is True and lst.index == 3
     assert lst.move(1) is False
     lst.index = 1
-    assert lst.activate() is False and lst.take_result() is None
+    assert lst.on_action("activate") is False and lst.take() is None
     assert lst.toggle() is False
-    assert lst.click(1, 0) is False
+    assert lst.on_click(Pos(x=0, y=1)) is False
 
 
 def test_a_disabled_list_refuses_every_gesture_but_still_renders():
     lst = List(["a", "b"], window=2, disabled=True)
     assert lst.move(1) is False and lst.home() is False and lst.end() is False
-    assert lst.activate() is False and lst.click(0, 0) is False
-    assert lst.handle(key("down")) is False
+    assert lst.on_action("activate") is False and lst.on_click(Pos(x=0, y=0)) is False
+    assert lst.on_key(key("down")) is False
     assert texts(lst, 20) == ["\u2192 a", "  b"]
 
 
@@ -351,10 +352,10 @@ def test_a_long_cell_wraps_instead_of_ellipsizing():
 def test_the_second_visual_line_maps_onto_its_record_for_click_and_hover():
     table = Table(["A"], [["one two three four"]])
     table.render(Constraints(width=12))
-    assert table.click(4, 0) is True and table.index == 0
-    assert table.hover_at(4, 0) is True
-    assert table.hover_at(5, 0) is False  # the same record: the marking did not move
-    assert table.click(6, 0) is False     # the bottom rule carries no data
+    assert table.on_click(Pos(x=0, y=4)) is True and table.index == 0
+    assert table.on_hover(Pos(x=0, y=4)) is True
+    assert table.on_hover(Pos(x=0, y=5)) is False  # the same record: the marking did not move
+    assert table.on_click(Pos(x=0, y=6)) is False     # the bottom rule carries no data
 
 
 def test_wrapping_keeps_segment_styles_links_and_actions():
@@ -478,30 +479,30 @@ def test_move_clamps_and_the_first_step_lands_on_the_edge_it_leaves():
 def test_click_maps_rendered_data_rows_and_misses_the_frame():
     table = Table(["A"], [["1"], ["2"], ["3"]])
     rendered = table.render(Constraints(width=9))
-    assert table.click(3, 0) is True and table.index == 0
-    assert table.click(5, 99) is True and table.index == 1
-    assert table.click(7, 0) is True and table.index == 2
+    assert table.on_click(Pos(x=0, y=3)) is True and table.index == 0
+    assert table.on_click(Pos(x=99, y=5)) is True and table.index == 1
+    assert table.on_click(Pos(x=0, y=7)) is True and table.index == 2
     for row in (0, 1, 2, 4, 6, 8, 9, -1):
-        assert table.click(row, 0) is False
+        assert table.on_click(Pos(x=0, y=row)) is False
     assert table.index == 2
     assert len(rendered) == 9
 
 
 def test_activate_takes_the_row_index_once():
     table = Table(["A"], [["1"], ["2"]])
-    assert table.activate() is False and table.take_result() is None
+    assert table.on_action("activate") is False and table.take() is None
     table.index = 1
-    assert table.activate() is True and table.take_result() == 1
-    assert table.take_result() is None
+    assert table.on_action("activate") is True and table.take() == 1
+    assert table.take() is None
 
 
 def test_a_step_or_a_landing_click_clears_a_pending_result():
     table = Table(["A"], [["1"], ["2"]])
     table.index = 1
-    assert table.activate() is True
-    assert table.move(0) is False and table.take_result() is None
-    assert table.activate() is True
-    assert table.click(3, 0) is True and table.take_result() is None
+    assert table.on_action("activate") is True
+    assert table.move(0) is False and table.take() is None
+    assert table.on_action("activate") is True
+    assert table.on_click(Pos(x=0, y=3)) is True and table.take() is None
 
 
 def test_sort_by_orders_on_the_rendered_text_and_is_stable():
@@ -570,11 +571,11 @@ def test_disabled_rows_and_tables_refuse_their_gestures():
     assert table.move(1) is True and table.index == 0
     assert table.move(1) is True and table.index == 3
     table.index = 1
-    assert table.activate() is False and table.toggle() is False
-    assert table.click(5, 0) is False
-    assert table.click(9, 0) is True and table.index == 3
+    assert table.on_action("activate") is False and table.toggle() is False
+    assert table.on_click(Pos(x=0, y=5)) is False
+    assert table.on_click(Pos(x=0, y=9)) is True and table.index == 3
     dead = Table(["A"], [["1"]], disabled=True)
-    assert dead.move(1) is False and dead.click(3, 0) is False
+    assert dead.move(1) is False and dead.on_click(Pos(x=0, y=3)) is False
 
 
 def test_table_answers_a_surface_and_honours_the_height_budget():
@@ -607,7 +608,7 @@ def test_the_table_keymap_routes_its_keys_through_named_actions():
     assert table.on_key(key("enter")) is True and table.take() == 0
     assert table.on_action("toggle") is True and list(table.marked) == [0]
     assert table.on_action("nope") is False
-    assert Table.handle is Table.on_key
+    assert not hasattr(Table, "handle")
     assert Table.keymap["down"] == "next" and Table.keymap["enter"] == "activate"
 
 
@@ -617,8 +618,8 @@ def test_an_instance_table_keymap_rebind_is_private_to_the_instance():
     table.keymap["j"] = "next"
     assert "j" not in Table.keymap
     assert "j" not in other.keymap
-    assert table.handle(key("j", "j")) is True and table.index == 0
-    assert other.handle(key("j", "j")) is False and other.index is None
+    assert table.on_key(key("j", "j")) is True and table.index == 0
+    assert other.on_key(key("j", "j")) is False and other.index is None
 
 
 def test_the_table_typed_hooks_forward_to_click_and_hover():
@@ -631,13 +632,13 @@ def test_the_table_typed_hooks_forward_to_click_and_hover():
     assert table.on_click(Pos(y=0, x=0)) is False  # the top rule
 
 
-def test_take_is_the_table_result_door_and_the_alias_answers_the_same():
+def test_take_reads_the_table_result_once():
     table = Table(["A"], [["0"]])
     table.index = 0
     assert table.take() is None
-    assert table.activate() is True and table.take() == 0
-    table.activate()
-    assert table.take_result() == 0
+    assert table.on_action("activate") is True and table.take() == 0
+    table.on_action("activate")
+    assert table.take() == 0
 
 
 def test_the_table_declares_its_capabilities():
@@ -672,17 +673,17 @@ def test_a_collapsed_root_renders_one_row():
 
 def test_activate_expands_and_collapses_the_visible_rows():
     tree = Tree([sample()])
-    assert tree.activate() is True
+    assert tree.on_action("activate") is True
     assert texts(tree, 30) == ["\u25be src", "    app.py", "  \u25b8 lib"]
-    assert tree.activate() is True
+    assert tree.on_action("activate") is True
     assert texts(tree, 30) == ["\u25b8 src"]
 
 
 def test_nested_expansion_indents_with_spaces_only():
     tree = Tree([sample()])
-    tree.activate()
+    tree.on_action("activate")
     tree.move(2)
-    assert tree.activate() is True
+    assert tree.on_action("activate") is True
     assert texts(tree, 30) == [
         "\u25be src",
         "    app.py",
@@ -695,7 +696,7 @@ def test_nested_expansion_indents_with_spaces_only():
 
 def test_move_clamps_inside_the_visible_rows():
     tree = Tree([sample()])
-    tree.activate()
+    tree.on_action("activate")
     tree.move(1)
     assert tree.selected.label == "app.py"
     tree.move(-9)
@@ -707,29 +708,29 @@ def test_move_clamps_inside_the_visible_rows():
 
 def test_click_places_the_cursor_on_the_visible_row_and_ignores_the_column():
     tree = Tree([sample()])
-    tree.activate()
+    tree.on_action("activate")
     for col in (0, 3, 999):
-        assert tree.click(1, col) is True and tree.selected.label == "app.py"
+        assert tree.on_click(Pos(x=col, y=1)) is True and tree.selected.label == "app.py"
     for row in (-1, 3, 9):
-        assert tree.click(row, 0) is False
+        assert tree.on_click(Pos(x=0, y=row)) is False
     assert tree.selected.label == "app.py"
 
 
 def test_a_leaf_and_an_empty_tree_decline_activation():
     leaf = Tree([TreeNode("solo")])
-    assert leaf.activate() is False and texts(leaf, 20) == ["  solo"]
+    assert leaf.on_action("activate") is False and texts(leaf, 20) == ["  solo"]
     empty = Tree([])
-    assert empty.activate() is False and empty.move(1) is False
+    assert empty.on_action("activate") is False and empty.move(1) is False
     assert empty.selected is None and list(empty.render(Constraints(width=10))) == []
 
 
 def test_collapsing_re_clamps_the_cursor_into_the_new_rows():
     tree = Tree([sample()])
-    tree.activate()
+    tree.on_action("activate")
     lib = tree.root_nodes[0].children[1]
     lib.expanded = True
     tree.move(2)
-    assert tree.activate() is True and tree.selected is lib
+    assert tree.on_action("activate") is True and tree.selected is lib
     assert len(tree.render(Constraints(width=30))) == 3
     lib.expanded = True
     tree.move(4)
@@ -767,7 +768,7 @@ def test_filter_never_rewrites_the_users_expansion_flags():
     assert texts(tree, 30) == before
 
 
-def test_jump_walks_the_next_visible_label_and_wraps():
+def test_jump_steps_to_the_next_visible_label_and_wraps():
     tree = Tree([sample()])
     src = tree.root_nodes[0]
     src.expanded = True
@@ -784,17 +785,17 @@ def test_the_fold_glyphs_come_from_the_vocabulary():
     custom = Tree(
         [sample()], glyphs=replace(GLYPHS, fold_open="v", fold_closed=">")
     )
-    custom.activate()
+    custom.on_action("activate")
     assert texts(custom, 30) == ["v src", "    app.py", "  > lib"]
     bare = Tree(
         [sample()], glyphs=replace(GLYPHS, fold_open="", fold_closed="")
     )
-    bare.activate()
+    bare.on_action("activate")
     assert texts(bare, 30) == ["src", "  app.py", "  lib"]
     wide = Tree(
         [sample()], glyphs=replace(GLYPHS, fold_open="\u5f00", fold_closed="\u5173")
     )
-    wide.activate()
+    wide.on_action("activate")
     assert texts(wide, 30) == ["\u5f00 src", "     app.py", "  \u5173 lib"]
 
 
@@ -807,17 +808,17 @@ def test_disabled_nodes_are_skipped_and_refused():
         ]
     )
     assert tree.move(1) is True and tree.selected.label == "c"
-    assert tree.click(1, 0) is False
+    assert tree.on_click(Pos(x=0, y=1)) is False
     tree.move(-9)
-    assert tree.activate() is False  # a leaf, and the first row is enabled
+    assert tree.on_action("activate") is False  # a leaf, and the first row is enabled
     dead = Tree([sample()], disabled=True)
-    assert dead.move(1) is False and dead.click(0, 0) is False
-    assert dead.activate() is False
+    assert dead.move(1) is False and dead.on_click(Pos(x=0, y=0)) is False
+    assert dead.on_action("activate") is False
 
 
 def test_tree_answers_a_surface_and_honours_the_height_budget():
     tree = Tree([sample()])
-    tree.activate()
+    tree.on_action("activate")
     surface = tree.render(Constraints(width=30, max_height=2))
     assert isinstance(surface, Surface)
     assert [row.text for row in surface] == ["\u25be src", "    app.py"]
@@ -842,24 +843,24 @@ def test_the_tree_keymap_folds_and_moves_through_named_actions():
     assert tree.on_action("prev") is True and tree.selected.label == "src"
     assert tree.on_action("prev") is False  # clamped at the first visible row
     assert tree.on_action("nope") is False
-    assert Tree.handle is Tree.on_key
+    assert not hasattr(Tree, "handle")
     assert tree.take() is None
 
 
 def test_an_instance_tree_keymap_rebind_is_private_to_the_instance():
     tree = Tree([sample()])
     other = Tree([sample()])
-    tree.activate()  # the root opens, so a step has somewhere to land
+    tree.on_action("activate")  # the root opens, so a step has somewhere to land
     tree.keymap["j"] = "next"
     assert "j" not in Tree.keymap
     assert "j" not in other.keymap
-    assert tree.handle(key("j", "j")) is True and tree.selected.label == "app.py"
-    assert other.handle(key("j", "j")) is False and other.selected.label == "src"
+    assert tree.on_key(key("j", "j")) is True and tree.selected.label == "app.py"
+    assert other.on_key(key("j", "j")) is False and other.selected.label == "src"
 
 
 def test_the_tree_typed_hooks_forward_to_click_and_hover():
     tree = Tree([sample()])
-    tree.activate()
+    tree.on_action("activate")
     assert tree.on_click(Pos(y=1, x=0)) is True and tree.selected.label == "app.py"
     assert tree.on_hover(Pos(y=1, x=0)) is True
     assert tree.on_hover(Pos(y=1, x=0)) is False

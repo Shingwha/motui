@@ -54,13 +54,13 @@ def typed(palette: CommandPalette, text: str) -> list[bool]:
 def test_closed_palette_renders_zero_rows_and_consumes_nothing():
     palette_ = palette()
     assert palette_.is_open is False
-    assert palette_.take_result() is None
+    assert palette_.take() is None
     assert list(palette_.render(Constraints(width=40))) == []
     for name in ("up", "down", "enter", "escape", "a", "/", "backspace"):
         assert palette_.handle(key(name)) is False
     assert palette_.handle(PasteEvent("text")) is False
     assert palette_.handle(MouseEvent("left", x=1, y=0, kind="press")) is False
-    assert palette_.is_open is False and palette_.take_result() is None
+    assert palette_.is_open is False and palette_.take() is None
 
 
 def test_open_shows_the_query_row_over_every_command():
@@ -135,14 +135,14 @@ def test_a_press_outside_dismisses_and_a_press_inside_is_consumed():
     palette_.open()
     tui.paint()
     assert palette_.handle(MouseEvent("left", x=20, y=0, kind="press")) is True
-    assert palette_.is_open is False and palette_.take_result() is None
+    assert palette_.is_open is False and palette_.take() is None
     assert list(palette_.render(Constraints(width=40))) == []
 
     palette_.open()
     tui.paint()
     top = len(tui.rows) - len(palette_.render(Constraints(width=40)))
     assert palette_.handle(MouseEvent("left", x=1, y=top, kind="press")) is True
-    assert palette_.is_open is True and palette_.take_result() is None
+    assert palette_.is_open is True and palette_.take() is None
 
 
 def test_detach_unmounts_and_close_only_hides():
@@ -194,7 +194,7 @@ def test_navigation_wraps_the_ends():
         palette_.open()
         for _ in range(steps):
             assert palette_.handle(key("down")) is True
-        assert palette_.take_result() is None
+        assert palette_.take() is None
         assert marked_label(palette_) == expected
         for _ in range(steps):
             assert palette_.handle(key("up")) is True
@@ -212,7 +212,7 @@ def test_enter_and_escape_close_the_palette_with_a_result():
         if typed_text:
             typed(palette_, typed_text)
         assert palette_.handle(key(name)) is True
-        assert palette_.take_result() == expected
+        assert palette_.take() == expected
         assert palette_.is_open is False
         assert list(palette_.render(Constraints(width=40))) == []
-        assert palette_.take_result() is None
+        assert palette_.take() is None

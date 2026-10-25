@@ -9,6 +9,7 @@ from dataclasses import replace
 
 import pytest
 
+from motui.kernel.geom import Pos
 from motui.kernel.keymap import DEFAULT_EDITOR_KEYMAP, DEFAULT_INPUT_KEYMAP
 from motui.kernel.cell import Surface
 from motui.kernel.layout import Constraints
@@ -46,15 +47,15 @@ def flat(field) -> int:
 @pytest.mark.parametrize("make", FIELDS)
 def test_printables_insert_at_the_cursor(make):
     field = make()
-    assert field.handle(key("a", "a")) is True
-    assert field.handle(key("space", " ")) is True
+    assert field.on_key(key("a", "a")) is True
+    assert field.on_key(key("space", " ")) is True
     assert field.text == "a " and field.cursor == (0, 2)
 
 
 @pytest.mark.parametrize("make, consumed, expected", [(Input, False, ""), (Editor, True, "\n")])
 def test_enter_is_the_editors_newline_and_the_inputs_submit_gesture(make, consumed, expected):
     field = make()
-    assert field.handle(key("enter")) is consumed
+    assert field.on_key(key("enter")) is consumed
     assert field.text == expected
 
 
@@ -62,28 +63,28 @@ def test_enter_is_the_editors_newline_and_the_inputs_submit_gesture(make, consum
 def test_unbound_keys_are_declined_and_change_nothing(name):
     field = Input("ab")
     park(field, 2)
-    assert field.handle(key(name)) is False
+    assert field.on_key(key(name)) is False
     assert field.text == "ab" and flat(field) == 2
 
 
 def test_a_custom_keymap_rebinds_and_drops_a_key():
     field = Input("ab", keymap={"c-j": "clear"})
-    assert field.handle(key("c-j")) is True and field.text == ""
+    assert field.on_key(key("c-j")) is True and field.text == ""
     editor = Editor("ab", keymap={"c-j": "newline"})
     park(editor, 2)
-    assert editor.handle(key("c-j")) is True and editor.text == "ab\n"
+    assert editor.on_key(key("c-j")) is True and editor.text == "ab\n"
 
 
 def test_input_folds_every_newline_run_of_a_paste_into_one_space():
     field = Input()
-    assert field.handle(paste("a\r\n\r\nb\nc")) is True
+    assert field.on_paste(paste("a\r\n\r\nb\nc")) is True
     assert field.text == "a b c" and field.cursor == (0, 5)
     assert texts(field, 30) == ["\u276f a b c "]
 
 
 def test_editor_keeps_the_newlines_of_a_paste():
     editor = Editor()
-    assert editor.handle(paste("a\r\nb\nc")) is True
+    assert editor.on_paste(paste("a\r\nb\nc")) is True
     assert editor.text == "a\r\nb\nc"
     assert len(editor.render(Constraints(width=10))) == 3
 
@@ -178,7 +179,7 @@ def test_undo_and_redo_round_trip_a_change():
 def test_runs_of_single_character_inserts_merge_into_one_step():
     field = Input()
     for char in "abc":
-        assert field.handle(key(char, char)) is True
+        assert field.on_key(key(char, char)) is True
     assert field.undo() is True and field.text == ""
     assert field.redo() is True and field.text == "abc"
 
@@ -250,7 +251,7 @@ def test_plain_moves_and_clicks_clear_the_selection():
     field.move_left()
     assert field.selection_range() is None
     field.select_left()
-    field.click(0, 4)
+    field.on_click(Pos(x=4, y=0))
     assert field.selection_range() is None
 
 
@@ -421,10 +422,10 @@ def test_the_hover_flag_merges_the_theme_band_over_the_whole_row():
 def test_click_places_the_cursor_between_the_prompt_and_the_text():
     field = Input()
     field.insert("abcdef")
-    assert field.click(0, 4) is True and field.cursor == (0, 2)
-    assert field.click(0, 1) is True and field.cursor == (0, 0)
-    assert field.click(0, 99) is True and field.cursor == (0, 6)
-    assert field.click(1, 0) is False and field.cursor == (0, 6)
+    assert field.on_click(Pos(x=4, y=0)) is True and field.cursor == (0, 2)
+    assert field.on_click(Pos(x=1, y=0)) is True and field.cursor == (0, 0)
+    assert field.on_click(Pos(x=99, y=0)) is True and field.cursor == (0, 6)
+    assert field.on_click(Pos(x=0, y=1)) is False and field.cursor == (0, 6)
 
 
 def test_editor_click_maps_a_windowed_row_back_to_its_buffer_row():
@@ -433,19 +434,19 @@ def test_editor_click_maps_a_windowed_row_back_to_its_buffer_row():
     for _ in range(4):
         editor.move_down()
     assert texts(editor, 20) == ["row 3", "row 4 ", "row 5"]
-    assert editor.click(2, 2) is True and editor.cursor == (5, 2)
-    assert editor.click(3, 0) is False and editor.cursor == (5, 2)
+    assert editor.on_click(Pos(x=2, y=2)) is True and editor.cursor == (5, 2)
+    assert editor.on_click(Pos(x=0, y=3)) is False and editor.cursor == (5, 2)
 
 
 @pytest.mark.parametrize("make", FIELDS)
 def test_read_only_declines_routed_events_until_the_host_clears_the_flag(make):
     field = make("keep", read_only=True)
-    assert field.handle(key("x", "x")) is False
-    assert field.handle(paste("paste")) is False
+    assert field.on_key(key("x", "x")) is False
+    assert field.on_paste(paste("paste")) is False
     assert field.text == "keep"
     field.read_only = False
     park(field, len(field.text))
-    assert field.handle(key("x", "x")) is True and field.text == "keepx"
+    assert field.on_key(key("x", "x")) is True and field.text == "keepx"
 
 
 def test_the_text_setter_replaces_the_buffer_and_clears_history():
@@ -515,7 +516,7 @@ def test_a_truncated_field_keeps_the_buffer_wrap_geometry():
     # The budget shapes the returned rows only: the buffer's visual geometry
     # still comes from the constrained width, so the second wrapped row exists
     # for the click mapping even though it was not painted.
-    assert field.click(1, 0) is True
+    assert field.on_click(Pos(x=0, y=1)) is True
     assert field.cursor == (0, 6)
 
 
@@ -579,9 +580,9 @@ def test_editor_overflow_moves_between_logical_lines():
 
 def test_editor_overflow_click_maps_logical_rows_and_columns():
     editor = Editor("abc\ndefgh", wrap=WrapMode.OVERFLOW)
-    assert editor.click(1, 3) is True
+    assert editor.on_click(Pos(x=3, y=1)) is True
     assert editor.cursor == (1, 3)
-    assert editor.click(2, 0) is False
+    assert editor.on_click(Pos(x=0, y=2)) is False
 
 
 def test_editor_overflow_keeps_the_mask_and_selection_on_logical_rows():
@@ -720,13 +721,13 @@ def test_the_fields_declare_focus_click_and_hover(make):
 
 
 @pytest.mark.parametrize("make", FIELDS)
-def test_on_key_is_the_typed_spelling_of_handle(make):
-    typed, legacy = make(), make()
+def test_on_key_routes_the_editing_keys(make):
+    field = make()
 
-    assert typed.on_key(key("a", "a")) is True
-    assert legacy.handle(key("a", "a")) is True
-    assert typed.text == legacy.text == "a"
-    assert typed.on_key(key("enter")) is legacy.handle(key("enter"))
+    assert field.on_key(key("a", "a")) is True
+    assert field.text == "a"
+    # ``enter`` is the host's on an Input; an Editor inserts a newline.
+    assert field.on_key(key("enter")) is isinstance(field, Editor)
 
 
 def test_on_paste_folds_newlines_in_an_input_and_keeps_them_in_an_editor():
@@ -740,7 +741,7 @@ def test_on_paste_folds_newlines_in_an_input_and_keeps_them_in_an_editor():
 
     # The 1.x handle keeps the same folding policy.
     legacy = Input()
-    assert legacy.handle(paste("a\n\nb")) is True
+    assert legacy.on_paste(paste("a\n\nb")) is True
     assert legacy.text == "a b"
 
 

@@ -172,7 +172,7 @@ def test_a_theme_assignment_repaints_the_next_render():
 def test_click_places_the_cursor_on_the_option_under_the_row(row, index, hit):
     select = Select([Option("one"), Option("two")], title="pick")
     select.index = 1
-    assert select.click(row, 0) is hit
+    assert select.on_click(Pos(x=0, y=row)) is hit
     assert select.index == index
 
 
@@ -180,48 +180,48 @@ def test_click_ignores_the_column_and_maps_through_the_window():
     select = Select([Option("one"), Option("two")], title="pick")
     for col in (0, 3, 400):
         select.index = 1
-        assert select.click(1, col) is True and select.index == 0
+        assert select.on_click(Pos(x=col, y=1)) is True and select.index == 0
     menu = Select([Option(f"item{i}") for i in range(10)], max_rows=3)
     menu.index = 5
-    assert menu.click(0, 0) is True and menu.index == 3
+    assert menu.on_click(Pos(x=0, y=0)) is True and menu.index == 3
     menu.index = 5
-    assert menu.click(2, 0) is True and menu.index == 5
+    assert menu.on_click(Pos(x=0, y=2)) is True and menu.index == 5
     menu.index = 5
-    assert menu.click(3, 0) is False and menu.index == 5
+    assert menu.on_click(Pos(x=0, y=3)) is False and menu.index == 5
 
 
 def test_activate_leaves_the_cursor_option_pending_once():
     menu = Select(THREE)
     menu.index = 1
-    assert menu.activate() is True
-    assert menu.take_result() == Option("two")
-    assert menu.take_result() is None
+    assert menu.on_action("activate") is True
+    assert menu.take() == Option("two")
+    assert menu.take() is None
 
 
 def test_an_empty_menu_activates_to_nothing():
     empty = Select([])
-    assert empty.activate() is False
-    assert empty.take_result() is None
+    assert empty.on_action("activate") is False
+    assert empty.take() is None
 
 
 def test_moving_the_cursor_clears_a_pending_pick():
     menu = Select(THREE)
-    assert menu.activate() is True
+    assert menu.on_action("activate") is True
     assert menu.move(1) is True
-    assert menu.take_result() is None
+    assert menu.take() is None
 
 
 def test_a_committing_select_writes_the_row_it_landed_on():
     form = Select(THREE, commit=True)
-    assert form.take_result() is None
-    assert form.move(1) is True and form.take_result() == Option("two")
-    assert form.click(2, 0) is True and form.take_result() == Option("three")
+    assert form.take() is None
+    assert form.move(1) is True and form.take() == Option("two")
+    assert form.on_click(Pos(x=0, y=2)) is True and form.take() == Option("three")
 
 
 def test_a_disabled_select_refuses_every_gesture_but_still_renders():
     menu = Select(THREE, disabled=True)
     assert menu.move(1) is False and menu.select(1) is False
-    assert menu.click(0, 0) is False and menu.activate() is False
+    assert menu.on_click(Pos(x=0, y=0)) is False and menu.on_action("activate") is False
     assert menu.home() is False and menu.end() is False
     assert menu.render(Constraints(width=20))[0].segments[1].style.fg == DEFAULT_THEME.text.faint.fg
 
@@ -235,9 +235,9 @@ def test_disabled_items_are_skipped_refused_and_painted_dim():
     assert menu.move(1) is True and menu.index == 2
     assert menu.move(-1) is True and menu.index == 0
     assert menu.render(Constraints(width=20))[1].segments[1].style == Style(italic=True)
-    assert menu.click(1, 0) is False
+    assert menu.on_click(Pos(x=0, y=1)) is False
     menu.index = 1
-    assert menu.activate() is False
+    assert menu.on_action("activate") is False
 
 
 # -- RadioGroup ---------------------------------------------------------------
@@ -264,35 +264,35 @@ def test_radio_index_clamps_and_selected_reads_the_label():
 
 def test_radio_move_clamps_and_leaves_the_new_selection_pending():
     group = RadioGroup(["one", "two", "three"])
-    assert group.take_result() is None
+    assert group.take() is None
     assert group.move(1) is True
-    assert (group.index, group.take_result()) == (1, "two")
+    assert (group.index, group.take()) == (1, "two")
     assert group.move(-9) is True
-    assert (group.index, group.take_result()) == (0, "one")
-    assert group.move(-1) is False and group.take_result() is None
+    assert (group.index, group.take()) == (0, "one")
+    assert group.move(-1) is False and group.take() is None
 
 
 def test_radio_click_selects_the_row_and_ignores_the_column():
     group = RadioGroup(["one", "two", "three"])
     for col in (0, 3, 40):
-        assert group.click(2, col) is True and group.take_result() == "three"
-    assert group.click(2, 0) is True and group.take_result() == "three"
+        assert group.on_click(Pos(x=col, y=2)) is True and group.take() == "three"
+    assert group.on_click(Pos(x=0, y=2)) is True and group.take() == "three"
     for row in (-1, 3, 9):
-        assert group.click(row, 0) is False and group.take_result() is None
+        assert group.on_click(Pos(x=0, y=row)) is False and group.take() is None
 
 
 def test_radio_takes_option_payloads_and_falls_back_to_the_label():
     group = RadioGroup([Option("alpha", 1), Option("beta", 2), Option("plain")])
     assert group.labels == ["alpha", "beta", "plain"]
-    assert group.click(1, 0) is True and group.take_result() == 2
-    assert group.click(2, 0) is True and group.take_result() == "plain"
+    assert group.on_click(Pos(x=0, y=1)) is True and group.take() == 2
+    assert group.on_click(Pos(x=0, y=2)) is True and group.take() == "plain"
 
 
 def test_radio_skips_and_refuses_disabled_items():
     radio = RadioGroup(["one", "two", "three"], disabled_items=(1,))
     assert radio.move(1) is True and radio.index == 2
-    assert radio.take_result() == "three"
-    assert radio.click(1, 0) is False and radio.take_result() is None
+    assert radio.take() == "three"
+    assert radio.on_click(Pos(x=0, y=1)) is False and radio.take() is None
 
 
 def test_the_focused_group_carries_the_active_band_under_its_pick():
@@ -310,34 +310,34 @@ def test_the_focused_group_carries_the_active_band_under_its_pick():
 def test_check_group_toggles_marks_and_reads_the_marked_values():
     group = CheckboxGroup(["apples", "pears", "plums"], marked=(2,))
     assert texts(group, 30) == ["\u2192 [ ] apples", "  [ ] pears", "  [x] plums"]
-    assert group.take_result() == ["plums"]
+    assert group.take() == ["plums"]
     assert group.toggle() is True
-    assert group.take_result() == ["apples", "plums"]
+    assert group.take() == ["apples", "plums"]
     group.move(1)
-    assert group.activate() is True
-    assert group.take_result() == ["apples", "pears", "plums"]
+    assert group.on_action("activate") is True
+    assert group.take() == ["apples", "pears", "plums"]
 
 
 def test_check_group_click_moves_the_cursor_and_toggles_the_row():
     group = CheckboxGroup(["one", "two", "three"])
-    assert group.click(2, 0) is True
-    assert group.index == 2 and group.take_result() == ["three"]
-    assert group.click(2, 0) is True and group.take_result() is None
-    assert group.click(0, 5) is True and group.take_result() == ["one"]
-    assert group.click(9, 0) is False
+    assert group.on_click(Pos(x=0, y=2)) is True
+    assert group.index == 2 and group.take() == ["three"]
+    assert group.on_click(Pos(x=0, y=2)) is True and group.take() is None
+    assert group.on_click(Pos(x=5, y=0)) is True and group.take() == ["one"]
+    assert group.on_click(Pos(x=0, y=9)) is False
 
 
 def test_a_disabled_check_group_refuses_every_gesture():
     checks = CheckboxGroup(["one", "two"], disabled=True)
-    assert checks.click(0, 0) is False and checks.toggle() is False
-    assert checks.activate() is False and checks.take_result() is None
+    assert checks.on_click(Pos(x=0, y=0)) is False and checks.toggle() is False
+    assert checks.on_action("activate") is False and checks.take() is None
 
 
 def test_a_multi_select_keeps_the_mark_column_before_the_label():
     menu = MultiSelect([Option("one", description="first"), Option("two")], marked=(1,))
     assert texts(menu, 30) == ["\u2192 [ ] one  first", "  [x] two"]
-    assert menu.take_result() == ["two"]
-    assert menu.move(1) is True and menu.take_result() is None
+    assert menu.take() == ["two"]
+    assert menu.move(1) is True and menu.take() is None
 
 
 @pytest.mark.parametrize("group", [RadioGroup, CheckboxGroup])
@@ -396,7 +396,7 @@ def test_the_choice_keymap_routes_its_keys_through_named_actions():
     assert menu.on_action("nope") is False
     assert menu.on_key(key("right")) is True and menu.index == 1
     assert menu.on_key(key("enter")) is True and menu.take() == THREE[1]
-    assert Select.handle is Select.on_key
+    assert not hasattr(Select, "handle")
     assert Select.keymap["down"] == "next" and Select.keymap["enter"] == "activate"
 
 
@@ -412,8 +412,8 @@ def test_an_instance_keymap_rebind_is_private_to_the_instance():
     menu.keymap["j"] = "next"
     assert "j" not in Select.keymap
     assert "j" not in other.keymap
-    assert menu.handle(key("j", "j")) is True and menu.index == 1
-    assert other.handle(key("j", "j")) is False and other.index == 0
+    assert menu.on_key(key("j", "j")) is True and menu.index == 1
+    assert other.on_key(key("j", "j")) is False and other.index == 0
 
 
 def test_the_typed_hooks_forward_to_click_and_hover():
@@ -425,12 +425,12 @@ def test_the_typed_hooks_forward_to_click_and_hover():
     assert menu.on_click(Pos(y=0, x=0)) is False  # the title row
 
 
-def test_take_is_the_result_door_and_the_alias_answers_the_same():
+def test_take_reads_the_result_once():
     menu = Select(THREE)
     assert menu.take() is None
-    assert menu.activate() is True and menu.take() == Option("one")
+    assert menu.on_action("activate") is True and menu.take() == Option("one")
     assert menu.take() is None
-    assert menu.activate() is True and menu.take_result() == Option("one")
+    assert menu.on_action("activate") is True and menu.take() == Option("one")
 
 
 def test_a_multi_select_binds_activate_to_its_toggle():

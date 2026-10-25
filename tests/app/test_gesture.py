@@ -274,7 +274,7 @@ def test_holding_the_other_edge_flips_the_scroll_direction():
     assert tui.viewport.offset == down - 2
 
 
-def test_the_head_walk_crosses_a_block_boundary():
+def test_the_head_advance_crosses_a_block_boundary():
     tui = headless_tui(80, 4)
     tui.add(Rows(*many(100)))
     tui.add(Rows(*many(100)))

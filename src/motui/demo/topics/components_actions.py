@@ -45,8 +45,8 @@ class _MenuHost:
                 self.menu.move(-1)
                 return True
             if event.key == "enter":
-                if self.menu.activate():
-                    self.modal.close(self.menu.take_result())
+                if self.menu.on_action("activate"):
+                    self.modal.close(self.menu.take())
                 else:
                     self.modal.close()
                 return True
@@ -55,8 +55,8 @@ class _MenuHost:
                 return True
         return self.modal.handle(event)
 
-    def take_result(self) -> object | None:
-        return self.modal.take_result()
+    def take(self) -> object | None:
+        return self.modal.take()
 
 
 def _button(b) -> None:

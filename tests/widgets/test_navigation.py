@@ -75,7 +75,7 @@ def test_a_disabled_tab_is_visible_but_not_selectable():
         disabled_items={1},
         styles=Styles(text=replace(DEFAULT_THEME.text, faint=disabled)),
     )
-    assert tabs.click(0, 5) is False and tabs.index == 0
+    assert tabs.on_click(Pos(x=5, y=0)) is False and tabs.index == 0
     assert tabs.select(1) is False
     assert tabs.move(1) is True and tabs.index == 2
     assert tabs.render(Constraints(width=20))[0].segments[3].text == "b"
@@ -91,27 +91,27 @@ def test_an_over_wide_strip_truncates_instead_of_wrapping():
 def test_click_maps_the_column_to_the_tab_under_it():
     tabs = Tabs(["a", "b", "c"])
     tabs.render(Constraints(width=20))
-    assert tabs.click(0, 5) is True and tabs.index == 1
-    assert tabs.click(0, 9) is True and tabs.index == 2
+    assert tabs.on_click(Pos(x=5, y=0)) is True and tabs.index == 1
+    assert tabs.on_click(Pos(x=9, y=0)) is True and tabs.index == 2
     for col in (0, 2, 3, 4, 6, 7, 8, 10, 11, 99, -1):
-        assert tabs.click(0, col) is False
+        assert tabs.on_click(Pos(x=col, y=0)) is False
     for row in (-1, 1, 9):
-        assert tabs.click(row, 5) is False
+        assert tabs.on_click(Pos(x=5, y=row)) is False
 
 
 def test_click_measures_wide_labels_by_display_width():
     tabs = Tabs(["\u4e2d\u6587", "ab"])
     tabs.render(Constraints(width=20))
-    assert tabs.click(0, 1) is True and tabs.index == 0
-    assert tabs.click(0, 4) is True
-    assert tabs.click(0, 5) is False
-    assert tabs.click(0, 8) is True and tabs.index == 1
+    assert tabs.on_click(Pos(x=1, y=0)) is True and tabs.index == 0
+    assert tabs.on_click(Pos(x=4, y=0)) is True
+    assert tabs.on_click(Pos(x=5, y=0)) is False
+    assert tabs.on_click(Pos(x=8, y=0)) is True and tabs.index == 1
 
 
 def test_an_empty_strip_renders_one_empty_row_and_misses_every_cell():
     empty = Tabs([])
     assert texts(empty, 40) == [""]
-    assert empty.click(0, 0) is False
+    assert empty.on_click(Pos(x=0, y=0)) is False
     assert empty.index == 0
 
 
@@ -123,7 +123,7 @@ def test_tabs_answers_a_surface_and_honours_the_height_budget():
     assert surface.width == 20 and surface.height == 1
     # A zero height budget paints no row; the width still feeds the hits.
     assert tabs.render(Constraints(width=20, max_height=0)).height == 0
-    assert tabs.click(0, 1) is True and tabs.index == 0
+    assert tabs.on_click(Pos(x=1, y=0)) is True and tabs.index == 0
 
 
 # -- NavList ------------------------------------------------------------------
@@ -163,7 +163,7 @@ def test_a_disabled_navlist_item_is_visible_but_not_selectable():
         disabled_items={1},
         styles=Styles(text=replace(DEFAULT_THEME.text, faint=Style(italic=True))),
     )
-    assert nav.click(1, 0) is False and nav.index == 0
+    assert nav.on_click(Pos(x=0, y=1)) is False and nav.index == 0
     assert nav.select(1) is False
     assert nav.move(1) is True and nav.index == 2
     assert nav.render(Constraints(width=20))[1].segments[1].style.italic is True
@@ -171,10 +171,10 @@ def test_a_disabled_navlist_item_is_visible_but_not_selectable():
 
 def test_navlist_click_resolves_the_row_and_ignores_the_column():
     nav = NavList(["a", "b", "c"])
-    assert nav.click(2, 0) is True and nav.index == 2
-    assert nav.click(1, 99) is True and nav.index == 1
+    assert nav.on_click(Pos(x=0, y=2)) is True and nav.index == 2
+    assert nav.on_click(Pos(x=99, y=1)) is True and nav.index == 1
     for row in (-1, 3, 9):
-        assert nav.click(row, 0) is False
+        assert nav.on_click(Pos(x=0, y=row)) is False
     assert nav.index == 1
 
 
@@ -187,8 +187,8 @@ def test_group_rows_render_verbatim_and_refuse_every_verb():
         "  shell",
         "  c",
     ]
-    assert nav.click(0, 0) is False and nav.index == 0
-    assert nav.click(2, 0) is True and nav.index == 1
+    assert nav.on_click(Pos(x=0, y=0)) is False and nav.index == 0
+    assert nav.on_click(Pos(x=0, y=2)) is True and nav.index == 1
     assert nav.select(0) is True
     assert nav.move(9) is True and nav.index == 2
     assert nav.move(1) is False
@@ -216,7 +216,7 @@ def test_an_empty_rail_glyph_collapses_the_gutter():
 def test_an_empty_navlist_renders_zero_rows():
     nav = NavList([])
     assert list(nav.render(Constraints(width=20))) == []
-    assert nav.click(0, 0) is False
+    assert nav.on_click(Pos(x=0, y=0)) is False
     assert nav.move(1) is False
 
 
@@ -233,7 +233,7 @@ def test_navlist_answers_a_surface_and_honours_the_height_budget():
 def test_a_disabled_navlist_refuses_every_gesture_but_still_renders():
     nav = NavList(["a", "b"], disabled=True)
     assert nav.select(0) is False and nav.move(1) is False
-    assert nav.click(0, 0) is False
+    assert nav.on_click(Pos(x=0, y=0)) is False
     assert texts(nav, 20) == ["\u258c a", "  b"]
 
 
@@ -251,7 +251,7 @@ def test_the_navlist_keymap_moves_through_named_actions():
     assert nav.on_action("activate") is False
     assert nav.on_action("nope") is False
     assert nav.on_key(key("enter")) is False
-    assert NavList.handle is NavList.on_key
+    assert not hasattr(NavList, "handle")
     assert nav.take() is None
 
 
@@ -261,8 +261,8 @@ def test_an_instance_navlist_keymap_rebind_is_private_to_the_instance():
     nav.keymap["j"] = "next"
     assert "j" not in NavList.keymap
     assert "j" not in other.keymap
-    assert nav.handle(key("j", "j")) is True and nav.index == 1
-    assert other.handle(key("j", "j")) is False and other.index == 0
+    assert nav.on_key(key("j", "j")) is True and nav.index == 1
+    assert other.on_key(key("j", "j")) is False and other.index == 0
 
 
 def test_the_navlist_typed_hooks_forward_to_click_and_hover():
@@ -296,7 +296,7 @@ def test_the_tabs_keymap_steps_through_named_actions():
     assert tabs.on_action("next") is True and tabs.index == 1
     assert tabs.on_action("activate") is False
     assert tabs.on_action("nope") is False
-    assert Tabs.handle is Tabs.on_key
+    assert not hasattr(Tabs, "handle")
     assert tabs.take() is None
 
 
@@ -306,8 +306,8 @@ def test_an_instance_tabs_keymap_rebind_is_private_to_the_instance():
     tabs.keymap["j"] = "next"
     assert "j" not in Tabs.keymap
     assert "j" not in other.keymap
-    assert tabs.handle(key("j", "j")) is True and tabs.index == 1
-    assert other.handle(key("j", "j")) is False and other.index == 0
+    assert tabs.on_key(key("j", "j")) is True and tabs.index == 1
+    assert other.on_key(key("j", "j")) is False and other.index == 0
 
 
 def test_the_tabs_typed_hooks_forward_to_click_and_hover():

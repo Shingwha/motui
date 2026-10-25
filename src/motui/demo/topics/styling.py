@@ -5,6 +5,7 @@ from __future__ import annotations
 from dataclasses import replace
 
 from motui import DEFAULT_THEME, Button, List, Segment, Style, Text
+from motui.kernel.geom import Pos
 from motui.kernel.glyphs import GLYPHS, seat_width
 from motui.kernel.theme import Styles
 from motui.widgets import Column, Table
@@ -131,7 +132,7 @@ def _row_bands(b) -> None:
     )
     banded.index = 1
     banded.render(Constraints(width=60))  # establish the row geometry hover_at resolves against
-    banded.hover_at(2, 0)  # paint the pointer's row without a pointer
+    banded.on_hover(Pos(x=0, y=2))  # paint the pointer's row without a pointer
     plain = List(items, window=4, theme=b.theme)
     b.preview(
         Column(

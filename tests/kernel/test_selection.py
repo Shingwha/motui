@@ -186,7 +186,7 @@ def test_the_highlight_follows_the_document_when_the_view_scrolls():
     assert _marked(highlight(view.layout(80, 3), selection)) == ["ec", "", ""]
 
 
-def test_extract_walks_blocks_in_order_and_slices_the_edges():
+def test_extract_crosses_blocks_in_order_and_slices_the_edges():
     document = Document()
     document.add(Rows("aa0", "aa1", "aa2"))
     document.add(Rows("bb0", "bb1", "bb2"))

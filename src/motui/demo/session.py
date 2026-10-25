@@ -232,7 +232,7 @@ class Session(App):
         seen: set[int] = set()
         for block in body.blocks:
             for component in walk_objects(block):
-                take = getattr(component, "take_result", None)
+                take = getattr(component, "take", None)
                 if take is None or id(component) in seen:
                     continue
                 seen.add(id(component))
@@ -246,7 +246,7 @@ class Session(App):
         modal = None if body is None else body.modal
         open_now = bool(modal is not None and getattr(modal, "is_open", False))
         if self._modal_was_open and not open_now and modal is not None:
-            value = modal.take_result()
+            value = modal.take()
             self.last_pick = display("closed" if value is None else value)
             if body is not None and body.note is not None:
                 body.note(Report(modal, "closed" if value is None else value))
@@ -264,7 +264,7 @@ class Session(App):
         if not self._palette_was_open:
             return
         self._palette_was_open = False
-        command = palette.take_result()
+        command = palette.take()
         if command is None:
             self._toast("palette closed")
             return
