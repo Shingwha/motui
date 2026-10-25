@@ -75,15 +75,15 @@ from ..kernel.events import Event, KeyEvent, MouseEvent, ResizeEvent
 from ..kernel.geom import Axis, Pos
 from ..kernel.hit import Hit
 from ..kernel.layout import Scrollable, ScrollableX
-from ..terminal.screen import MouseMode, Screen, TerminalOptions
+from ..terminal.screen import TerminalOptions
 from ..terminal.terminal import Terminal
 from ..kernel.selection import Selection
-from ..kernel.style import ColorMode, Style
+from ..kernel.style import Style
 from ..kernel.theme import DEFAULT_THEME, Theme
 from ..widgets.base import Widget
 from .command_palette import CommandPalette
 from .commands import CommandRegistry
-from .runtime import Runtime, Timer
+from .runtime import Runtime, Timer, _stdin_isatty
 from .find import Find
 from .focus import FocusManager, focus_targets, iter_widgets
 from .gesture import SelectionGesture
@@ -110,19 +110,6 @@ SCROLL_KEYS = {
 _BUTTONS = ("left", "middle", "right")
 
 
-def _mouse_mode(mouse: bool, hover: bool) -> MouseMode:
-    """Fold the legacy ``mouse``/``hover`` switches into one :class:`MouseMode`.
-
-    ``mouse=False`` is :attr:`MouseMode.OFF` regardless of ``hover``;
-    otherwise ``hover=True`` asks for all-motion reporting
-    (:attr:`MouseMode.MOVE`, the historical 1003) and ``hover=False`` keeps
-    the button-event tracking (:attr:`MouseMode.DRAG`, the historical 1002).
-    """
-    if not mouse:
-        return MouseMode.OFF
-    return MouseMode.MOVE if hover else MouseMode.DRAG
-
-
 def _nodes(component: Component) -> Iterator[Component]:
     """Every node of ``component``'s explicit tree, depth first.
 
@@ -142,24 +129,18 @@ class App:
 
     ``theme`` is the application theme (``DEFAULT_THEME`` when omitted) --
     handed to the runtime's chrome and assigned to mounted widgets that did
-    not take an explicit one.  ``terminal=`` is the 2.0 configuration: a
-    :class:`~motui.terminal.screen.TerminalOptions` from which the App
+    not take an explicit one.  ``terminal=`` is the one configuration door:
+    a :class:`~motui.terminal.screen.TerminalOptions` from which the App
     builds one :class:`~motui.terminal.terminal.Terminal` and hands it to
-    the runtime; the legacy ``mouse``/``hover``/``color_mode``/``screen``/
-    ``keys``/``focus_events``/``sync`` arguments are then ignored.  Without
-    ``terminal=`` those arguments are folded into an equivalent
-    ``TerminalOptions`` (the old ``mouse``/``hover`` pair becomes one
-    :class:`~motui.terminal.screen.MouseMode`), so :attr:`terminal` is
-    always the endpoint the runtime uses.  ``title`` is set through the
-    runtime's OSC 2 surface when non-empty.
+    the runtime; with none given the defaults build a live terminal screen.
+    ``title`` is set through the runtime's OSC 2 surface when non-empty.
     ``auto=True`` mounts the default controllers; ``auto=False`` mounts
     none, leaving :attr:`runtime`/``workspace`` and the caller's own loop
-    (the ``Runtime`` is still fully usable).  ``keys=`` is the event source,
-    ``throttle`` the pump's flush interval.
-    ``interactive``/``focus_events``/``sync`` are the runtime's own
-    switches, forwarded verbatim.  ``on_selection`` replaces the selection
-    gesture's ``on_end`` (the default is
-    :func:`~motui.app.gesture.copy_on_select`).
+    (the ``Runtime`` is still fully usable).  ``throttle`` is the pump's
+    flush interval.  ``on_selection`` replaces the selection gesture's
+    ``on_end`` (the default is
+    :func:`~motui.app.gesture.copy_on_select`).  ``handlers`` is the host's
+    ordered handler list; ``None`` keeps the built-in dispatch order.
     """
 
     def __init__(
@@ -167,42 +148,24 @@ class App:
         *,
         theme: Theme | None = None,
         terminal: TerminalOptions | None = None,
-        mouse: bool = True,
-        hover: bool = True,
-        color_mode: ColorMode | None = None,
-        title: str = "",
-        auto: bool = True,
-        screen: Screen | None = None,
-        keys: "EventSource | None" = None,
         throttle: float = 0.030,
-        interactive: bool | None = None,
-        focus_events: bool = False,
-        sync: bool = True,
+        auto: bool = True,
+        title: str = "",
         on_selection: Callable[["Runtime", Selection], object] | None = None,
+        handlers: tuple[object, ...] | None = None,
     ) -> None:
         self._theme = DEFAULT_THEME if theme is None else theme
-        if terminal is not None:
-            endpoint = Terminal(terminal)
-        else:
-            endpoint = Terminal(
-                TerminalOptions(
-                    input=keys,
-                    mouse=_mouse_mode(mouse, hover),
-                    focus_events=focus_events,
-                    color_mode="auto" if color_mode is None else color_mode,
-                    sync=sync,
-                ),
-                screen=screen,
-            )
+        endpoint = Terminal(TerminalOptions() if terminal is None else terminal)
         self.runtime: Runtime = Runtime(
-            terminal=endpoint,
+            endpoint,
             throttle=throttle,
+            interactive=endpoint.live and _stdin_isatty(),
             theme=self._theme,
-            interactive=interactive,
         )
         self.workspace: Workspace = self.runtime.workspace
         self.terminal: Terminal = endpoint
         self.auto = auto
+        self.handlers: tuple[object, ...] = () if handlers is None else tuple(handlers)
         self._components: list[Component] = []
         self._bindings: dict[str, Callable[[], object]] = {}
         self._modals: list[Modal] = []

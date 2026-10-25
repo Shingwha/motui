@@ -11,7 +11,9 @@ from motui import KeyEvent, Text, Theme
 from motui.app import App, Scrollbar, Stats
 from motui.app.commands import Command, CommandRegistry
 from motui.kernel import FocusEvent, Selection, extract
+from motui.kernel.document import Placement
 from motui.kernel.document import Section as DocumentSection
+from motui.kernel.geom import Axis
 from motui.terminal import ScreenClipboard
 
 from .assets import THEMES
@@ -40,9 +42,9 @@ class Session(App):
         self._stage_ids: list[DocumentSection] = []
         self._modal_was_open = self._palette_was_open = self._in_show = False
         # The frame: two docks outside the split, catalog | stage inside.
-        self.dock(Text(""), edge="top", size=1)
-        self.dock(Text(""), edge="bottom", size=2)
-        self.catalog_pane, self.stage = self.split("vertical", ratios=CATALOG_RATIOS)
+        self.dock(Text(""), placement=Placement.TOP, size=1)
+        self.dock(Text(""), placement=Placement.BOTTOM, size=2)
+        self.catalog_pane, self.stage = self.split(Axis.X, weights=CATALOG_RATIOS)
         self.stage.focus()
         self.scrollbar = Scrollbar(self.runtime, pane=self.stage.id, theme=self.theme)
         self.mount(self.scrollbar)
@@ -163,7 +165,7 @@ class Session(App):
         elif name in ("]", "["):
             self.show_section(self.section_index + (1 if name == "]" else -1))
         elif name in ("/", "c-k"):
-            super().open_palette(self.commands.options(), max_rows=10)
+            super().open_palette(self.commands, max_rows=10)
         elif name == "c-f":
             self.find()
         elif name == "c-t":

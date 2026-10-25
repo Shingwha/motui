@@ -17,7 +17,7 @@ fails with :class:`AnchorError` instead of clicking a neighbour.
 from __future__ import annotations
 
 from motui import KeyEvent, MouseEvent
-from motui.terminal import HeadlessScreen
+from motui.terminal import HeadlessScreen, TerminalOptions
 
 from .registry import BY_KEY, SECTION_BY_KEY, TOPICS
 from .session import Session
@@ -36,7 +36,9 @@ class Anchors:
     """The replay's symbolic label anchors, resolved against a live frame."""
 
     def __init__(self, width: int = HEADLESS_W, height: int = HEADLESS_H) -> None:
-        self.session = Session(screen=HeadlessScreen(width, height), interactive=False)
+        self.session = Session(
+            terminal=TerminalOptions(screen=HeadlessScreen(width, height))
+        )
         self.runtime = self.session.runtime
         self._topic: str | None = None
 

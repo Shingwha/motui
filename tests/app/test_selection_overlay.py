@@ -9,7 +9,7 @@ import pytest
 from motui.app import Runtime
 from motui.kernel import DEFAULT_THEME, Selection, Style
 from motui.widgets.text import Text
-from motui.terminal import HeadlessScreen
+from motui.terminal import HeadlessScreen, Terminal, TerminalOptions
 from tests.testing import Rows, headless_tui, many, marked, snapshot
 
 
@@ -56,7 +56,7 @@ def test_a_block_style_round_trips_under_the_selection_merge():
 def test_the_overlay_paints_with_the_drivers_theme():
     band = Style(underline=True)
     tui = Runtime(
-        screen=HeadlessScreen(20, 3),
+        Terminal(TerminalOptions(screen=HeadlessScreen(20, 3))),
         theme=replace(DEFAULT_THEME, text=replace(DEFAULT_THEME.text, selection=band)),
         interactive=False,
     )

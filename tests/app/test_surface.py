@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import motui
 from motui.app import Runtime
-from motui.terminal import HeadlessScreen
+from motui.terminal import HeadlessScreen, Terminal, TerminalOptions
 from tests.testing import headless_tui
 
 
@@ -22,7 +22,7 @@ class ClipboardScreen(HeadlessScreen):
 
 def test_copy_to_clipboard_delegates_to_the_screen():
     screen = ClipboardScreen()
-    runtime = Runtime(screen=screen)
+    runtime = Runtime(Terminal(TerminalOptions(screen=screen)))
     assert runtime.copy_to_clipboard("copied") is True
     assert screen.copied == ["copied"]
 

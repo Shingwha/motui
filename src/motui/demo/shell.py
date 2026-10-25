@@ -20,6 +20,7 @@ from typing import TYPE_CHECKING, Sequence
 
 from motui import Line, Text, Theme
 from motui.kernel import Component, Constraints, Surface, WrapMode
+from motui.kernel.document import Placement
 from motui.widgets import Column, MenuBar, NavList, ShortcutBar, StatusLine
 
 from .assets import THEMES
@@ -165,19 +166,19 @@ def mount_shell(session: "Session") -> None:
     catalog is re-added to its pane; the undocked components leave the
     session's theme walk with them.
     """
-    for edge in ("top", "bottom"):
-        session.undock(edge)
+    for placement in (Placement.TOP, Placement.BOTTOM):
+        session.undock(placement)
     session.header = mount_header(
         theme=session.theme,
         sections=SECTIONS,
         index=session.section_index,
         theme_name=THEMES[session.theme_index][0],
     )
-    session.dock(session.header, edge="top", size=1)
+    session.dock(session.header, placement=Placement.TOP, size=1)
     footer, session.footer_bar, session.footer_status = mount_footer(
         theme=session.theme, left=status_left(session), right=status_right(session)
     )
-    session.dock(footer, edge="bottom", size=2)
+    session.dock(footer, placement=Placement.BOTTOM, size=2)
     if session.catalog_section is not None:
         try:
             session.remove(session.catalog_section)

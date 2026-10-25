@@ -19,7 +19,7 @@ import asyncio
 import sys
 
 from motui.app import Runtime
-from motui.terminal import HeadlessScreen
+from motui.terminal import HeadlessScreen, MouseMode, TerminalOptions
 from motui.testing import ScriptedEvents
 
 from .assets import THEMES
@@ -51,7 +51,9 @@ def render_topic(
     session at the replay's geometry, ``show_topic``, one ``paint``.
     """
     value = topic if isinstance(topic, Topic) else BY_KEY[topic]
-    session = Session(screen=HeadlessScreen(width, height), interactive=False)
+    session = Session(
+        terminal=TerminalOptions(screen=HeadlessScreen(width, height))
+    )
     session.show_topic(value.key, toast=False)
     session.runtime.paint()
     header = f"\u2500\u2500 /{value.section}/{value.key} "
@@ -72,9 +74,10 @@ def _utf8_stdout() -> None:
 def _headless() -> None:
     """Replay the scripted session headless, then print the final screen."""
     session = Session(
-        screen=HeadlessScreen(HEADLESS_W, HEADLESS_H),
-        keys=ScriptedEvents(script()),
-        interactive=False,
+        terminal=TerminalOptions(
+            screen=HeadlessScreen(HEADLESS_W, HEADLESS_H),
+            input=ScriptedEvents(script()),
+        )
     )
     asyncio.run(session.run_async())
     if session.tooltip is not None:
@@ -101,7 +104,10 @@ def main() -> None:
         _headless()  # piped: scripted replay + plain-text dump
         return
     # a real terminal: the alt screen, hover (1003) and focus events (1004) on
-    session = Session(theme=THEMES[0][1], hover=True, focus_events=True)
+    session = Session(
+        theme=THEMES[0][1],
+        terminal=TerminalOptions(mouse=MouseMode.MOVE, focus_events=True),
+    )
     asyncio.run(session.run_async())
 
 

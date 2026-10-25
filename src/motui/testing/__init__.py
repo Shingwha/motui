@@ -68,12 +68,8 @@ def headless_tui(
     readable from ``tui.screen.output``.
     """
     source = keys if keys is not None else ScriptedEvents(script or ())
-    return Runtime(
-        terminal=Terminal(
-            TerminalOptions(screen=HeadlessScreen(width, height), input=source)
-        ),
-        interactive=False,
-    )
+    terminal = Terminal(TerminalOptions(screen=HeadlessScreen(width, height), input=source))
+    return Runtime(terminal, interactive=False)
 
 
 def snapshot(tui: Runtime) -> str:

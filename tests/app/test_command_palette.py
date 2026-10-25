@@ -6,7 +6,7 @@ from motui.app import App, Command, CommandRegistry, FocusManager, CommandPalett
 from motui.kernel.events import MouseEvent, PasteEvent
 from motui.widgets.text import Text
 from motui.widgets.choice import Option
-from motui.terminal import HeadlessScreen
+from motui.terminal import HeadlessScreen, TerminalOptions
 from tests.testing import ScriptedEvents, headless_tui, key
 from motui.kernel.layout import Constraints
 
@@ -226,7 +226,11 @@ def test_the_app_opens_a_palette_straight_from_a_registry():
             Command(name="quit", group="App", description="Leave"),
         ]
     )
-    app = App(screen=HeadlessScreen(40, 8), keys=ScriptedEvents(()))
+    app = App(
+        terminal=TerminalOptions(
+            screen=HeadlessScreen(40, 8), input=ScriptedEvents(())
+        )
+    )
 
     palette_ = app.open_palette(registry)
 

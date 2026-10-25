@@ -77,10 +77,9 @@ from ..kernel.hit import Hit, RowRange
 from ..kernel.cell import Line
 from ..widgets.text import Text
 from ..terminal.paint import Painter
-from ..terminal.screen import MouseMode, Screen, TerminalScreen
+from ..terminal.screen import MouseMode, Screen
 from ..terminal.terminal import Terminal
 from ..kernel.selection import Selection, highlight
-from ..kernel.style import ColorMode
 from ..kernel.theme import DEFAULT_THEME, Theme
 from ..kernel.layout import ScreenLayout, Viewport
 from ..terminal import RawTerminalKeys
@@ -255,58 +254,23 @@ def _body_address(viewport: Viewport, block: Section, row: int, width: int) -> i
 class Runtime:
     """A full-screen application driver.
 
-    ``screen`` defaults to a :class:`~motui.terminal.screen.TerminalScreen`
-    (pass ``mouse=False`` to leave mouse tracking off), ``keys`` to no
-    source at all (``read_event`` then returns ``None``).  ``mouse`` and
-    ``hover`` apply only to
-    the default screen and the :class:`RawTerminalKeys` source
-    :meth:`run` attaches: a custom ``screen`` brings its own tracking
-    settings (a host driving hover passes ``HeadlessScreen(hover=True)`` /
-    ``TerminalScreen(hover=True)`` itself -- the default screen is built
-    with the switches here, ``hover`` opening DECSET 1003 for a
-    :class:`~motui.app.pointer.Pointer`), and the attached source's
-    Windows console-record path opens its button-free motion under the same
-    switch (its 1003 counterpart; an explicit ``keys=`` source is the
-    caller's own contract).
-    ``focus_events`` (off by default) adds DECSET 1004 to the default
-    screen's enter/leave bracket, so a live session is told when its window
-    gains or loses focus and the decoder reports it as a
-    :class:`~motui.kernel.events.FocusEvent`; the reports are the **host's**
-    to interpret -- the
-    :class:`~motui.app.pointer.Pointer` tier still watches mouse reports
-    only, and scrubbing a hover or pausing an animation on a lost focus is
-    the host's own loop.
-    ``sync`` (the default) hands the painter the synchronized-update bracket
-    (DECSET 2026): every non-empty frame leaves as one write wrapped in the
-    pair, so a terminal that knows the mode swaps the frame in whole and one
-    that does not ignores the bytes; an unchanged frame still writes zero
-    bytes, switch or no switch.
-    ``color_mode`` is forwarded to the default screen only when set: left
-    ``None`` the screen's own ``"auto"`` stands (the environment probe --
-    ``NO_COLOR``/``TERM=dumb`` mean no color, ``COLORTERM`` truecolor and a
-    ``256color`` ``TERM`` pick their modes, anything else stays truecolor),
-    and an explicit :data:`~motui.kernel.style.ColorMode` overrides the
-    probe.  The painter reads the mode off the screen and renders its rows
-    for that capability.
+    ``terminal`` is the one configuration door: a
+    :class:`~motui.terminal.terminal.Terminal` brings its own screen (with
+    the mouse mode already mapped), input source and clipboard, and the
+    driver enters, leaves and reads through it.  The input source defaults
+    to none (``read_event`` then returns ``None``); a screen's tracking
+    switches live on its :class:`~motui.terminal.screen.TerminalOptions`,
+    never here.
+
+    ``interactive`` says whether :meth:`run` may attach a
+    :class:`RawTerminalKeys` source when the session is live and no source
+    was supplied; it is off by default, so a test-driven runtime never
+    touches the real input.  ``throttle`` is the pump's flush interval.
     ``theme`` is the driver's own theme (default
     :data:`~motui.kernel.theme.DEFAULT_THEME`), read by the chrome the
     driver composes -- the split's divider
     (:class:`~motui.kernel.frame.Separator`); widgets are never themed
     from here, they each take ``theme=`` themselves.
-    ``interactive`` overrides the derived value; when left ``None`` it is
-    ``screen.live and sys.stdin.isatty()``.  An interactive live session
-    without an explicit key source gets a :class:`RawTerminalKeys` attached
-    (and closed) by :meth:`run`; an explicit ``keys=`` source is always used
-    as given.
-
-    ``terminal=`` is the 2.0 door: a :class:`~motui.terminal.terminal.Terminal`
-    brings its own screen (with the mouse mode already mapped), input source
-    and clipboard, and the driver enters, leaves and reads through it.  When
-    it is given it wins over ``screen``/``keys`` and every screen-shaped
-    switch (``mouse``/``hover``/``focus_events``/``sync``/``color_mode``);
-    the legacy arguments stay for hosts that hand the driver a screen
-    directly.  Either path paints through the same :class:`Painter` and
-    stays byte-identical on a live screen.
 
     Internally the driver holds one
     :class:`~motui.kernel.frame.Frame` whose primary pane is
@@ -323,45 +287,20 @@ class Runtime:
 
     def __init__(
         self,
+        terminal: Terminal,
         *,
-        screen: Screen | None = None,
-        keys: EventSource | None = None,
         throttle: float = 0.030,
-        interactive: bool | None = None,
-        mouse: bool = True,
-        hover: bool = False,
-        focus_events: bool = False,
-        sync: bool = True,
-        color_mode: ColorMode | None = None,
+        interactive: bool = False,
         theme: Theme | None = None,
-        terminal: Terminal | None = None,
     ) -> None:
-        if terminal is not None:
-            # The terminal owns the screen's switches and its input; the
-            # legacy screen/keys/mouse/hover arguments are not consulted.
-            self._terminal: Terminal | None = terminal
-            self._screen = terminal.screen
-            keys = terminal.input
-            self._hover = terminal.options.mouse is MouseMode.MOVE
-            sync = terminal.options.sync
-        else:
-            self._terminal = None
-            if screen is not None:
-                self._screen = screen
-            else:
-                # A switch left at its default is not forwarded: the screen's own
-                # default (color_mode="auto" -> the env probe) is the contract.
-                extra = {} if color_mode is None else {"color_mode": color_mode}
-                self._screen = TerminalScreen(
-                    mouse=mouse,
-                    hover=hover,
-                    focus_events=focus_events,
-                    **extra,
-                )
-            #: The hover switch :meth:`run` hands the default key source: it
-            #: gates the record path's button-free motion (see the class
-            #: docstring).  An explicit ``keys=`` source is used as given.
-            self._hover = hover
+        self._terminal = terminal
+        self._screen = terminal.screen
+        #: The event source the runtime reads; :meth:`run` may replace it with
+        #: a server-owned raw source when the session is interactive.
+        self.keys = terminal.input
+        #: The hover switch the attached raw source opens: the terminal's
+        #: mouse mode is the one configuration point.
+        self._hover = terminal.options.mouse is MouseMode.MOVE
         self._document = Document()
         self._viewport = Viewport(self._document)
         #: The theme the driver's own chrome reads (the split's divider);
@@ -376,12 +315,9 @@ class Runtime:
         # Structural frame changes (split/close/chrome/dock/overlay) mark the
         # driver dirty by themselves: a host never follows them with refresh().
         self._frame.on_change = self.refresh
-        self.painter = Painter(self._screen, sync=sync)
-        self.keys = keys
+        self.painter = Painter(self._screen, sync=terminal.options.sync)
         self.throttle = throttle
-        self.interactive = bool(
-            self.screen.live and _stdin_isatty() if interactive is None else interactive
-        )
+        self.interactive = interactive
         self._dirty = True
         self._stopped = False
         self._last_paint = float("-inf")
@@ -426,11 +362,12 @@ class Runtime:
         return self._screen
 
     @property
-    def terminal(self) -> Terminal | None:
+    def terminal(self) -> Terminal:
         """The terminal endpoint this runtime enters, leaves and reads through.
 
-        ``None`` for the legacy construction that hands the runtime a screen
-        directly; a terminal-attached runtime reads and copies through it.
+        The one configuration door: the terminal owns the screen, its input
+        source and its clipboard, so the runtime never builds or replaces a
+        screen by itself.
         """
         return self._terminal
 
@@ -448,18 +385,14 @@ class Runtime:
     # -- clipboard ---------------------------------------------------------------
 
     def copy_to_clipboard(self, text: str) -> bool:
-        """Put ``text`` on the terminal's clipboard through the screen (OSC 52).
+        """Put ``text`` on the terminal's clipboard through the terminal (OSC 52).
 
-        A terminal-attached driver goes through the terminal's
-        :class:`~motui.terminal.clipboard.ScreenClipboard`; either path
-        writes the same OSC 52 bytes.  A non-live screen answers ``False``
-        without touching the stream, exactly as
-        :meth:`Screen.copy_to_clipboard
+        The terminal's :class:`~motui.terminal.clipboard.ScreenClipboard`
+        writes the bytes; a non-live screen answers ``False`` without
+        touching the stream, exactly as :meth:`Screen.copy_to_clipboard
         <motui.terminal.screen.Screen.copy_to_clipboard>` does.
         """
-        if self._terminal is not None:
-            return self._terminal.clipboard.copy(text)
-        return self._screen.copy_to_clipboard(text)
+        return self._terminal.clipboard.copy(text)
 
     @property
     def document(self) -> Document:
@@ -1144,15 +1077,9 @@ class Runtime:
         """
         if not self.screen.live:
             return None
-        if self._terminal is not None:
-            if self._terminal.input is None:
-                return None
-            read = self._terminal.read_event
-        else:
-            source = self.keys
-            if source is None:
-                return None
-            read = source.read
+        if self._terminal.input is None:
+            return None
+        read = self._terminal.read_event
         exit_event = self._exit_event
         if exit_event is None:
             self._exit_event = exit_event = asyncio.Event()
@@ -1482,13 +1409,9 @@ class Runtime:
             source.start()
             self.keys = source
             self._owned_source = source
-            if self._terminal is not None:
-                self._terminal.attach(source)
+            self._terminal.attach(source)
         if self.screen.live:
-            if self._terminal is not None:
-                self._terminal.enter()
-            else:
-                self.screen.enter()
+            self._terminal.enter()
         # Every run starts from a blank screen: the alternate screen starts
         # blank, and a non-live run still paints its final frame from scratch.
         self.painter.reset()
@@ -1571,17 +1494,13 @@ class Runtime:
             self._owned_source.close()
             if self.keys is self._owned_source:
                 self.keys = None  # the next run attaches a fresh source
-            if self._terminal is not None:
-                self._terminal.attach(None)
+            self._terminal.attach(None)
             self._owned_source = None
         # The final frame: painted rows before the live screen leaves, a
         # zero-write logical frame (the dump reads it) on a piped one.
         self._paint_at(self.clock())
         if self.screen.live:
-            if self._terminal is not None:
-                self._terminal.leave()
-            else:
-                self.screen.leave()
+            self._terminal.leave()
             self.screen.flush()
         else:
             self._dump_final_screen()
@@ -1612,6 +1531,6 @@ class Runtime:
 
     def __repr__(self) -> str:
         return (
-            f"Runtime(screen={self.screen!r}, blocks={len(self.document)}, "
+            f"Runtime(terminal={self._terminal!r}, blocks={len(self.document)}, "
             f"interactive={self.interactive})"
         )

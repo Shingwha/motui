@@ -326,8 +326,17 @@ async def test_a_button_press_comes_back_for_the_host_to_hit_test():
 
 
 def test_read_event_answers_none_without_a_source_or_on_a_non_live_screen():
-    assert asyncio.run(Runtime(screen=HeadlessScreen()).read_event()) is None
-    tui = Runtime(screen=TerminalScreen(io.StringIO()), keys=ScriptedEvents([key("a", "a")]))
+    assert asyncio.run(
+        Runtime(Terminal(TerminalOptions(screen=HeadlessScreen()))).read_event()
+    ) is None
+    tui = Runtime(
+        Terminal(
+            TerminalOptions(
+                screen=TerminalScreen(io.StringIO()),
+                input=ScriptedEvents([key("a", "a")]),
+            )
+        )
+    )
     assert asyncio.run(tui.read_event()) is None
 
 
@@ -349,7 +358,10 @@ class _BlockingSource:
 
 async def test_exit_unblocks_a_pending_read_event_immediately():
     source = _BlockingSource()
-    tui = Runtime(screen=HeadlessScreen(), keys=source, interactive=False)
+    tui = Runtime(
+        Terminal(TerminalOptions(screen=HeadlessScreen(), input=source)),
+        interactive=False,
+    )
     pending = asyncio.create_task(tui.read_event())
     tui.exit()
     assert await asyncio.wait_for(pending, 1) is None
@@ -363,7 +375,7 @@ async def test_a_terminal_driver_reads_through_the_terminal_source():
     screen = HeadlessScreen(20, 4)
     source = ScriptedEvents([key("a", "a"), None])
     terminal = Terminal(TerminalOptions(screen=screen, input=source))
-    tui = Runtime(terminal=terminal, interactive=False)
+    tui = Runtime(terminal, interactive=False)
 
     assert tui.screen is screen
     assert tui.keys is source
@@ -375,14 +387,14 @@ def test_a_terminal_driver_on_a_non_live_screen_reads_nothing():
     terminal = Terminal(
         TerminalOptions(stream=io.StringIO(), input=ScriptedEvents([key("a", "a")]))
     )
-    tui = Runtime(terminal=terminal, interactive=False)
+    tui = Runtime(terminal, interactive=False)
     assert asyncio.run(tui.read_event()) is None
 
 
 async def test_a_terminal_run_brackets_the_session_through_the_terminal():
     screen = HeadlessScreen(20, 3)
     tui = Runtime(
-        terminal=Terminal(TerminalOptions(screen=screen)), interactive=False
+        Terminal(TerminalOptions(screen=screen)), interactive=False
     )
 
     async def body(app: Runtime) -> None:
@@ -397,7 +409,7 @@ async def test_a_terminal_run_brackets_the_session_through_the_terminal():
 async def test_a_non_live_terminal_run_stays_silent_and_dumps_plain_text():
     stream = io.StringIO()
     tui = Runtime(
-        terminal=Terminal(TerminalOptions(stream=stream)), interactive=False
+        Terminal(TerminalOptions(stream=stream)), interactive=False
     )
     seen: list[str] = []
 
@@ -411,23 +423,24 @@ async def test_a_non_live_terminal_run_stays_silent_and_dumps_plain_text():
     assert enter_alt_screen() not in stream.getvalue()
 
 
-def test_the_terminal_wins_over_the_legacy_screen_and_keys():
-    legacy = HeadlessScreen(10, 2)
+def test_the_runtime_takes_the_terminal_as_its_only_endpoint():
     chosen = HeadlessScreen(20, 5)
     source = ScriptedEvents(())
     tui = Runtime(
-        screen=legacy,
-        keys=ScriptedEvents(()),
-        terminal=Terminal(TerminalOptions(screen=chosen, input=source)),
+        Terminal(TerminalOptions(screen=chosen, input=source)),
         interactive=False,
     )
     assert tui.screen is chosen
     assert tui.keys is source
+    with pytest.raises(TypeError):
+        Runtime(screen=chosen)  # type: ignore[call-arg]
+    with pytest.raises(TypeError):
+        Runtime(Terminal(TerminalOptions(screen=chosen)), keys=source)  # type: ignore[call-arg]
 
 
 def test_a_terminal_driver_copies_through_the_terminal_clipboard():
     screen = HeadlessScreen()
-    tui = Runtime(terminal=Terminal(TerminalOptions(screen=screen)), interactive=False)
+    tui = Runtime(Terminal(TerminalOptions(screen=screen)), interactive=False)
     assert tui.copy_to_clipboard("copied") is True
     assert screen.output == copy_clipboard("copied")
 
@@ -452,7 +465,10 @@ async def test_exit_ends_run_async_and_a_second_session_starts_clean():
 
 def test_run_is_a_synchronous_entry_that_returns_when_the_session_exits():
     screen = RecordingScreen(20, 3, live=True)
-    tui = Runtime(screen=screen, keys=ScriptedEvents(()), interactive=False)
+    tui = Runtime(
+        Terminal(TerminalOptions(screen=screen, input=ScriptedEvents(()))),
+        interactive=False,
+    )
     tui.add(Text("hi"))
     # A host may end the session from inside the screen bracket; the sync
     # entry must still return once the session is over.
@@ -507,7 +523,7 @@ async def test_a_frame_mutation_after_a_session_does_not_raise():
 
 def _piped_tui() -> tuple[Runtime, io.StringIO]:
     stream = io.StringIO()
-    return Runtime(screen=TerminalScreen(stream)), stream
+    return Runtime(Terminal(TerminalOptions(screen=TerminalScreen(stream)))), stream
 
 
 async def test_a_non_live_run_stays_silent_and_dumps_plain_text():
@@ -527,7 +543,7 @@ async def test_a_non_live_run_stays_silent_and_dumps_plain_text():
 
 async def test_a_non_live_dump_degrades_on_a_stream_that_cannot_carry_the_frame():
     stream = io.TextIOWrapper(io.BytesIO(), encoding="cp1252")
-    tui = Runtime(screen=TerminalScreen(stream))
+    tui = Runtime(Terminal(TerminalOptions(screen=TerminalScreen(stream))))
     tui.add(Rows("\u2588 block"))
 
     async def body(app: Runtime) -> None:

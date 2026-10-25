@@ -257,7 +257,8 @@ sys.path.insert(0, str(ROOT / "src"))
 
 from motui import Markdown, Table, Text
 from motui.app import Runtime, Scrollbar
-from motui.terminal import HeadlessScreen
+from motui.kernel.geom import Axis
+from motui.terminal import HeadlessScreen, Terminal, TerminalOptions
 
 FIXTURE = (ROOT / "src" / "motui" / "demo" / "fixture.md").read_text(
     encoding="utf-8"
@@ -265,13 +266,21 @@ FIXTURE = (ROOT / "src" / "motui" / "demo" / "fixture.md").read_text(
 LINES = FIXTURE.split("\n")
 
 
+def _headless_runtime(width: int, height: int) -> Runtime:
+    """A runtime over a headless terminal (the benchmark's only endpoint)."""
+    return Runtime(
+        Terminal(TerminalOptions(screen=HeadlessScreen(width, height))),
+        interactive=False,
+    )
+
+
 def _tui(split: bool) -> tuple[Runtime, Markdown | None]:
-    tui = Runtime(screen=HeadlessScreen(180, 45), interactive=False)
+    tui = _headless_runtime(180, 45)
     Scrollbar(tui, pane="primary")
     tui.add(Markdown(FIXTURE))
     stream = None
     if split:
-        _, right = tui.split("vertical", ratios=(2, 1))
+        _, right = tui.split(Axis.X, weights=(2, 1))
         stream = Markdown("")
         right.document.add(stream)
     tui.paint()
@@ -317,7 +326,7 @@ def text_open_workload(frames: int) -> float:
     measured paints hit it -- before the cache lived on the block every one
     of them re-wrapped all 3000 lines.
     """
-    tui = Runtime(screen=HeadlessScreen(180, 45), interactive=False)
+    tui = _headless_runtime(180, 45)
     text = Text(
         "\n".join(
             f"line {i} with some words in it, wrapped by the renderer as it goes"
@@ -371,7 +380,7 @@ def table_open_workload(frames: int) -> float:
     one of them re-normalized, banded, measured, padded and fused all 1440
     cells.
     """
-    tui = Runtime(screen=HeadlessScreen(180, 45), interactive=False)
+    tui = _headless_runtime(180, 45)
     table = Table(
         [f"col {c}" for c in range(6)],
         [[f"cell {r}.{c}" for c in range(6)] for r in range(240)],
@@ -407,7 +416,7 @@ def stream_paragraph_workload(frames: int) -> float:
     paragraph per frame pays for every line landed, this one for the line
     that arrived.
     """
-    tui = Runtime(screen=HeadlessScreen(180, 45), interactive=False)
+    tui = _headless_runtime(180, 45)
     stream = Markdown("")
     tui.add(stream)
     tui.paint()
@@ -455,11 +464,11 @@ def hash_workload() -> str:
     """
     import hashlib
 
-    tui = Runtime(screen=HeadlessScreen(100, 30), interactive=False)
+    tui = _headless_runtime(100, 30)
     Scrollbar(tui, pane="primary")
     tui.add(Markdown(FIXTURE))
     tui.paint()
-    _, right = tui.split("vertical", ratios=(2, 1))
+    _, right = tui.split(Axis.X, weights=(2, 1))
     right.document.add(Markdown(FIXTURE))
     tui.paint()
     for step in range(12):
