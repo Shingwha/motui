@@ -7,8 +7,8 @@ import io
 
 import pytest
 
-from motui.app import TUI
-from motui.app.driver import Timer
+from motui.app import Runtime
+from motui.app.runtime import Timer
 from motui.kernel import DEFAULT_THEME, EveryHandle, Rect, RowRange
 from motui.kernel.document import Placement, Sizing
 from motui.widgets.text import Text
@@ -216,7 +216,7 @@ def test_scroll_facade_moves_the_focused_window():
     assert rows(tui) == many(30)[20:]
 
 
-def _three_blocks(tui: TUI) -> None:
+def _three_blocks(tui: Runtime) -> None:
     for name, prefix in (("head", "h"), ("body", "b"), ("tail", "t")):
         tui.add(Rows(*(f"{prefix}{i}" for i in range(10))), id=name)
 
@@ -300,8 +300,8 @@ async def test_a_button_press_comes_back_for_the_host_to_hit_test():
 
 
 def test_read_event_answers_none_without_a_source_or_on_a_non_live_screen():
-    assert asyncio.run(TUI(screen=HeadlessScreen()).read_event()) is None
-    tui = TUI(screen=TerminalScreen(io.StringIO()), keys=ScriptedEvents([key("a", "a")]))
+    assert asyncio.run(Runtime(screen=HeadlessScreen()).read_event()) is None
+    tui = Runtime(screen=TerminalScreen(io.StringIO()), keys=ScriptedEvents([key("a", "a")]))
     assert asyncio.run(tui.read_event()) is None
 
 
@@ -323,7 +323,7 @@ class _BlockingSource:
 
 async def test_exit_unblocks_a_pending_read_event_immediately():
     source = _BlockingSource()
-    tui = TUI(screen=HeadlessScreen(), keys=source, interactive=False)
+    tui = Runtime(screen=HeadlessScreen(), keys=source, interactive=False)
     pending = asyncio.create_task(tui.read_event())
     tui.exit()
     assert await asyncio.wait_for(pending, 1) is None
@@ -337,7 +337,7 @@ async def test_a_terminal_driver_reads_through_the_terminal_source():
     screen = HeadlessScreen(20, 4)
     source = ScriptedEvents([key("a", "a"), None])
     terminal = Terminal(TerminalOptions(screen=screen, input=source))
-    tui = TUI(terminal=terminal, interactive=False)
+    tui = Runtime(terminal=terminal, interactive=False)
 
     assert tui.screen is screen
     assert tui.keys is source
@@ -349,17 +349,17 @@ def test_a_terminal_driver_on_a_non_live_screen_reads_nothing():
     terminal = Terminal(
         TerminalOptions(stream=io.StringIO(), input=ScriptedEvents([key("a", "a")]))
     )
-    tui = TUI(terminal=terminal, interactive=False)
+    tui = Runtime(terminal=terminal, interactive=False)
     assert asyncio.run(tui.read_event()) is None
 
 
 async def test_a_terminal_run_brackets_the_session_through_the_terminal():
     screen = HeadlessScreen(20, 3)
-    tui = TUI(
+    tui = Runtime(
         terminal=Terminal(TerminalOptions(screen=screen)), interactive=False
     )
 
-    async def body(app: TUI) -> None:
+    async def body(app: Runtime) -> None:
         app.add(Text("hi"))
 
     await tui.run_session(body)
@@ -370,12 +370,12 @@ async def test_a_terminal_run_brackets_the_session_through_the_terminal():
 
 async def test_a_non_live_terminal_run_stays_silent_and_dumps_plain_text():
     stream = io.StringIO()
-    tui = TUI(
+    tui = Runtime(
         terminal=Terminal(TerminalOptions(stream=stream)), interactive=False
     )
     seen: list[str] = []
 
-    async def body(app: TUI) -> None:
+    async def body(app: Runtime) -> None:
         app.add(Text("hello"))
         seen.append(stream.getvalue())
 
@@ -389,7 +389,7 @@ def test_the_terminal_wins_over_the_legacy_screen_and_keys():
     legacy = HeadlessScreen(10, 2)
     chosen = HeadlessScreen(20, 5)
     source = ScriptedEvents(())
-    tui = TUI(
+    tui = Runtime(
         screen=legacy,
         keys=ScriptedEvents(()),
         terminal=Terminal(TerminalOptions(screen=chosen, input=source)),
@@ -401,7 +401,7 @@ def test_the_terminal_wins_over_the_legacy_screen_and_keys():
 
 def test_a_terminal_driver_copies_through_the_terminal_clipboard():
     screen = HeadlessScreen()
-    tui = TUI(terminal=Terminal(TerminalOptions(screen=screen)), interactive=False)
+    tui = Runtime(terminal=Terminal(TerminalOptions(screen=screen)), interactive=False)
     assert tui.copy_to_clipboard("copied") is True
     assert screen.output == copy_clipboard("copied")
 
@@ -415,7 +415,7 @@ async def test_exit_ends_run_async_and_a_second_session_starts_clean():
     asyncio.get_running_loop().call_soon(tui.exit)
     await tui.run_async()
 
-    async def body(app: TUI) -> None:
+    async def body(app: Runtime) -> None:
         app.add(Text("second run"))
         app.exit()
 
@@ -426,7 +426,7 @@ async def test_exit_ends_run_async_and_a_second_session_starts_clean():
 
 def test_run_is_a_synchronous_entry_that_returns_when_the_session_exits():
     screen = RecordingScreen(20, 3, live=True)
-    tui = TUI(screen=screen, keys=ScriptedEvents(()), interactive=False)
+    tui = Runtime(screen=screen, keys=ScriptedEvents(()), interactive=False)
     tui.add(Text("hi"))
     # A host may end the session from inside the screen bracket; the sync
     # entry must still return once the session is over.
@@ -436,22 +436,22 @@ def test_run_is_a_synchronous_entry_that_returns_when_the_session_exits():
 
 
 def test_run_brackets_enter_and_leave_on_every_exit_path():
-    async def returns(app: TUI) -> None:
+    async def returns(app: Runtime) -> None:
         app.add(Text("hi"))
 
-    async def stops(app: TUI) -> None:
+    async def stops(app: Runtime) -> None:
         app.add(Text("hi"))
         app.exit()
 
-    async def raises(app: TUI) -> None:
+    async def raises(app: Runtime) -> None:
         app.add(Text("hi"))
         raise ValueError("boom")
 
-    async def interrupts(app: TUI) -> None:
+    async def interrupts(app: Runtime) -> None:
         app.add(Text("hi"))
         raise KeyboardInterrupt
 
-    async def run_one(body) -> TUI:
+    async def run_one(body) -> Runtime:
         tui = headless_tui(80, 6)
         if body is raises:
             with pytest.raises(ValueError, match="boom"):
@@ -470,7 +470,7 @@ def test_run_brackets_enter_and_leave_on_every_exit_path():
 async def test_a_frame_mutation_after_a_session_does_not_raise():
     tui = headless_tui()
 
-    async def body(app: TUI) -> None:
+    async def body(app: Runtime) -> None:
         app.exit()
 
     await tui.run_session(body)
@@ -479,16 +479,16 @@ async def test_a_frame_mutation_after_a_session_does_not_raise():
     assert tui.rows
 
 
-def _piped_tui() -> tuple[TUI, io.StringIO]:
+def _piped_tui() -> tuple[Runtime, io.StringIO]:
     stream = io.StringIO()
-    return TUI(screen=TerminalScreen(stream)), stream
+    return Runtime(screen=TerminalScreen(stream)), stream
 
 
 async def test_a_non_live_run_stays_silent_and_dumps_plain_text():
     tui, stream = _piped_tui()
     seen: list[str] = []
 
-    async def body(app: TUI) -> None:
+    async def body(app: Runtime) -> None:
         app.add(Text("hello"))
         app.add(Text("world"))
         seen.append(stream.getvalue())
@@ -501,10 +501,10 @@ async def test_a_non_live_run_stays_silent_and_dumps_plain_text():
 
 async def test_a_non_live_dump_degrades_on_a_stream_that_cannot_carry_the_frame():
     stream = io.TextIOWrapper(io.BytesIO(), encoding="cp1252")
-    tui = TUI(screen=TerminalScreen(stream))
+    tui = Runtime(screen=TerminalScreen(stream))
     tui.add(Rows("\u2588 block"))
 
-    async def body(app: TUI) -> None:
+    async def body(app: Runtime) -> None:
         app.paint()
 
     await tui.run_session(body)
@@ -646,7 +646,7 @@ async def test_a_timer_registered_before_the_run_survives_enter():
     calls: list[int] = []
     handle = tui.every(0.5, lambda: calls.append(1))
 
-    async def body(tui: TUI) -> None:
+    async def body(tui: Runtime) -> None:
         clock.advance(0.5)
         tui.tick(clock())
         tui.exit()

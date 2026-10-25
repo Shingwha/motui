@@ -48,7 +48,7 @@ def _modal(b) -> None:
         ["Cancel", ButtonSpec("Ship", "shipped")],
         theme=b.theme,
     )
-    modal = Modal(b.session.tui, dialog, theme=b.theme)
+    modal = Modal(b.session.runtime, dialog, theme=b.theme)
     opener = Button("Open modal", theme=b.theme)
     opener.hint = "raise the panel over the scrim"
     b.preview(opener)
@@ -67,7 +67,7 @@ def _modal(b) -> None:
 
 def _palette(b) -> None:
     palette = CommandPalette(
-        b.session.tui,
+        b.session.runtime,
         [
             Option("say hello", "say hello"),
             Option("open settings", "open settings"),

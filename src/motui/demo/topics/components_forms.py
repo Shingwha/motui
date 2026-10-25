@@ -173,7 +173,7 @@ def _combobox(b) -> None:
     combo = ComboBox(options, theme=b.theme, max_rows=4)
     opener = Button("Open dropdown", theme=b.theme)
     opener.hint = "open the combo list"
-    modal = Modal(b.session.tui, combo.list, anchor=(7, 4), theme=b.theme)
+    modal = Modal(b.session.runtime, combo.list, anchor=(7, 4), theme=b.theme)
     host = _ComboHost(combo, modal)
     b.preview(combo, opener)
     b.modal(host)

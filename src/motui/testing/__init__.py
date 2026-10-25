@@ -24,6 +24,7 @@ from ..app import Runtime
 from ..kernel.events import Event, EventSource
 from ..kernel.layout import Constraints
 from ..terminal.screen import HeadlessScreen, TerminalOptions
+from ..terminal.terminal import Terminal
 from .emulator import Emulator
 
 __all__ = ["Emulator", "ScriptedEvents", "headless_tui", "snapshot"]
@@ -68,7 +69,9 @@ def headless_tui(
     """
     source = keys if keys is not None else ScriptedEvents(script or ())
     return Runtime(
-        terminal=TerminalOptions(screen=HeadlessScreen(width, height), input=source),
+        terminal=Terminal(
+            TerminalOptions(screen=HeadlessScreen(width, height), input=source)
+        ),
         interactive=False,
     )
 

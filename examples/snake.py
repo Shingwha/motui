@@ -107,10 +107,10 @@ def main(argv: list[str] | None = None) -> int:
     def tick() -> None:
         game.step()
         if not game.alive:
-            app.tui.exit()
-        app.tui.refresh()
+            app.runtime.exit()
+        app.runtime.refresh()
 
-    app.tui.every(0.12, tick)
+    app.runtime.every(0.12, tick)
     app.run()
     return 0
 

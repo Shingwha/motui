@@ -126,7 +126,7 @@ def _context_menu(b) -> None:
         title="Actions",
         theme=b.theme,
     )
-    host = _MenuHost(menu, Modal(b.session.tui, menu, anchor=(8, 6), theme=b.theme))
+    host = _MenuHost(menu, Modal(b.session.runtime, menu, anchor=(8, 6), theme=b.theme))
     opener = Button("Open context menu", theme=b.theme)
     opener.hint = "mount the menu over a modal"
     b.preview(menu, opener)

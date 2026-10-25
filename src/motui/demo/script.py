@@ -37,7 +37,7 @@ class Anchors:
 
     def __init__(self, width: int = HEADLESS_W, height: int = HEADLESS_H) -> None:
         self.session = Session(screen=HeadlessScreen(width, height), interactive=False)
-        self.tui = self.session.tui
+        self.runtime = self.session.runtime
         self._topic: str | None = None
 
     def showing(self, key: str) -> Session:
@@ -45,7 +45,7 @@ class Anchors:
             raise AnchorError(f"no topic named {key!r}")
         if self._topic != key:
             self.session.show_topic(key, toast=False)
-            self.tui.paint()
+            self.runtime.paint()
             self._topic = key
         return self.session
 
@@ -53,11 +53,11 @@ class Anchors:
         """The cell of the catalog row whose label is ``key``'s title."""
         topic = BY_KEY[key]
         session = self.showing(key)
-        region = self.tui.frame.region(session.catalog_pane.id)
+        region = self.runtime.frame.region(session.catalog_pane.id)
         if region is None:
             raise AnchorError(f"{key}: the catalog has no region")
         for y in range(region.y, region.bottom):
-            row = self.tui.rows[y].text
+            row = self.runtime.rows[y].text
             col = row.find(topic.title, region.x, region.right)
             if col >= 0:
                 return (col + 1, y)
@@ -68,12 +68,12 @@ class Anchors:
         section_value = SECTION_BY_KEY.get(section)
         if section_value is None:
             raise AnchorError(f"no section named {section!r}")
-        self.tui.paint()
-        top = self.tui.dock_region("top")
+        self.runtime.paint()
+        top = self.runtime.dock_region("top")
         if top is None:
             raise AnchorError(f"{section}: the frame has no top dock")
         for y in range(top.y, top.bottom):
-            row = self.tui.rows[y].text
+            row = self.runtime.rows[y].text
             col = row.find(section_value.title, top.x, top.right)
             if col >= 0:
                 return (col + 1, y)
@@ -82,11 +82,11 @@ class Anchors:
     def stage_cell(self, needle: str) -> tuple[int, int]:
         """The first stage cell whose painted row contains ``needle``."""
         session = self.showing(self._topic or TOPICS[0].key)
-        region = self.tui.frame.region(session.stage.id)
+        region = self.runtime.frame.region(session.stage.id)
         if region is None:
             raise AnchorError(f"{needle!r}: the stage has no region")
         for y in range(region.y, region.bottom):
-            row = self.tui.rows[y].text
+            row = self.runtime.rows[y].text
             col = row.find(needle, region.x, region.right)
             if col >= 0:
                 return (col, y)
@@ -94,7 +94,7 @@ class Anchors:
 
     def corner(self) -> tuple[int, int]:
         """The toast stack's corner cell: the frame's top-right, two cells in."""
-        rect = self.tui.frame.rect
+        rect = self.runtime.frame.rect
         if rect is None or rect.width < 4:
             raise AnchorError("the frame has no room for the toast stack")
         return (rect.right - 2, rect.y)
