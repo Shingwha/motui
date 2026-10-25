@@ -13,7 +13,7 @@ document unit is a `Section`, the driver is split into
 `Runtime`/`Workspace`/`Terminal`, content invalidation is `touch()` /
 `generation`, scroll is an immutable value, and `python -m motui` is a
 five-scene showcase. The migration table is in
-[`docs/MIGRATION.md`](docs/MIGRATION.md); the local release note is
+[`docs/MIGRATION.md`](docs/MIGRATION.md); the release note is
 [`docs/releases/2.0.0.md`](docs/releases/2.0.0.md).
 
 ### Breaking
@@ -35,11 +35,14 @@ five-scene showcase. The migration table is in
 
 ### Added
 
-- The five-scene showcase: `splash`, `menu`, `breakout`, `dashboard` and
+- The five-scene showcase: `splash`, `menu`, `snake`, `dashboard` and
   `gallery`; `--pages` prints all five, `--scene NAME` starts on one, and
   `--headless` prints a deterministic frame.
-- Breakout (Canvas, levels, lives, pause, game over) and Dashboard
+- Snake (Canvas, food, growth, pause, game over) and Dashboard
   (streaming Sparkline, ProgressBars, Table, event log) as real scenes.
+- A persistent MOTUI splash: four rotating style packs (Neon, Plasma,
+  Retro CRT, Starfield), glyph and color morphs, and a key/click to enter
+  the menu.
 - `app/router.py`: `DEFAULT_HANDLERS` / `Handler` and
   `App(handlers=(...))` for a custom first-claim-wins chain.
 - `Widget.touch()` / `generation` as the one invalidation path; `Section`
@@ -62,7 +65,17 @@ five-scene showcase. The migration table is in
   growth uses `ScrollAxis.clamp(previous_extent)`.
 - The demo entry point is one interactive page, not a topic tour.
 - `docs/` now describes only the 2.0 surface: ARCHITECTURE, CONTRACT,
-  WIDGETS, MIGRATION, the ADRs and the local release note.
+  WIDGETS, MIGRATION, the ADRs and the release note.
+
+### Fixed
+
+- Ctrl+C is a quiet quit: `App.run` / `Runtime.run` swallow the
+  `KeyboardInterrupt` raised after the cancelled session's teardown, so the
+  demo exits without a traceback.
+- Gallery clicks reach the clicked widget; clicking a Tree branch folds or
+  unfolds it (the demo previously only moved the gallery's own focus).
+- Snake cells use half-block glyphs at two logical rows per screen row, so
+  horizontal and vertical runs are made of the same square units.
 
 ### Removed
 
