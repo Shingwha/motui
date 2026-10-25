@@ -131,7 +131,8 @@ uv run python tools/growth.py
 | W2c1 | ✅ 2026-10-25 @ `2.0/w2c1-canvas`（1115 passed / Canvas 0.5ms / golden 不变） |
 | W2c2a | ✅ 2026-10-25 @ `2.0/w2c2-signatures`（1113 passed / 签名收口） |
 | W2c2b | ✅ 2026-10-25 @ `2.0/w2c2-semantic`（57 语义快照；lead 修 ZWJ 与 growth） |
-| W2.5 | ⏳ |
+| W2.5a | ✅ 2026-10-25 @ `2.0/w2.5a-wrap`（1337 passed / fit 清零 / golden 不变） |
+| W2.5b | ✅ 2026-10-25 @ `2.0/w2.5b-defaults`（1352 passed / Input 单行 / 新 hash e7ca544b…） |
 | W2.6 | ⏳ |
 | W3a | ⏳ |
 | W3b | ⏳ |
