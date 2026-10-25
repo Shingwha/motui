@@ -775,3 +775,49 @@ def test_tree_answers_a_surface_and_honours_the_height_budget():
         "    app.py",
         "  \u25b8 lib",
     ]
+
+
+def test_the_tree_keymap_folds_and_moves_through_named_actions():
+    tree = Tree([sample()])
+    assert tree.on_key(key("enter")) is True
+    assert texts(tree, 30)[0] == "\u25be src"
+    assert tree.on_action("collapse") is True
+    assert texts(tree, 30) == ["\u25b8 src"]
+    assert tree.on_action("collapse") is False
+    assert tree.on_action("expand") is True
+    assert tree.on_action("next") is True and tree.selected.label == "app.py"
+    assert tree.on_action("prev") is True and tree.selected.label == "src"
+    assert tree.on_action("prev") is False  # clamped at the first visible row
+    assert tree.on_action("nope") is False
+    assert Tree.handle is Tree.on_key
+    assert tree.take() is None
+
+
+def test_an_instance_tree_keymap_rebind_is_private_to_the_instance():
+    tree = Tree([sample()])
+    other = Tree([sample()])
+    tree.activate()  # the root opens, so a step has somewhere to land
+    tree.keymap["j"] = "next"
+    assert "j" not in Tree.keymap
+    assert "j" not in other.keymap
+    assert tree.handle(key("j", "j")) is True and tree.selected.label == "app.py"
+    assert other.handle(key("j", "j")) is False and other.selected.label == "src"
+
+
+def test_the_tree_typed_hooks_forward_to_click_and_hover():
+    tree = Tree([sample()])
+    tree.activate()
+    assert tree.on_click(Pos(y=1, x=0)) is True and tree.selected.label == "app.py"
+    assert tree.on_hover(Pos(y=1, x=0)) is True
+    assert tree.on_hover(Pos(y=1, x=0)) is False
+    assert tree.on_hover(None) is True
+
+
+def test_the_tree_declares_its_capabilities():
+    tree = Tree([sample()])
+    assert (tree.focusable, tree.clickable, tree.hoverable, tree.activatable) == (
+        True,
+        True,
+        True,
+        True,
+    )

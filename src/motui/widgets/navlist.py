@@ -90,6 +90,7 @@ from __future__ import annotations
 from typing import Iterable, Sequence
 
 from ..widgets.cursor import Cursor
+from ..kernel.events import KeyEvent
 from ..kernel.glyphs import GLYPHS, Glyphs, seat_width
 from ..kernel.cell import Line, Segment, Surface, rest
 from ..kernel.layout import Constraints
@@ -97,7 +98,7 @@ from ..kernel.style import Style
 from ..kernel.text import visible_width
 from ..kernel.theme import Styles, Theme
 from ..widgets.base import Widget
-from .strip import ClampedCursor
+from .strip import ClampedCursor, Keymap
 
 __all__ = ["NavList"]
 
@@ -137,10 +138,28 @@ class NavList(ClampedCursor, Widget):
         "_groups",
         "_hover_index",
         "_index",
+        "_keymap",
         "_separator",
         "disabled",
         "glyphs",
         "items",
+    )
+
+    #: The rail owns the keyboard, clicks and the pointer's row; it has no
+    #: activation verb (a navigation row is a destination, not a command).
+    focusable = True
+    clickable = True
+    hoverable = True
+    activatable = False
+
+    #: The default key table (a per-instance copy backs ``self.keymap``).
+    keymap = Keymap(
+        {
+            "up": "prev",
+            "down": "next",
+            "left": "prev",
+            "right": "next",
+        }
     )
 
     def __init__(
@@ -157,6 +176,9 @@ class NavList(ClampedCursor, Widget):
         styles: Styles | None = None,
     ) -> None:
         super().__init__(theme, styles)
+        # The instance's own key table: rebinding one entry never reaches
+        # the class default (see :class:`~motui.widgets.strip.Keymap`).
+        self._keymap = dict(type(self).keymap)
         self.items = list(items)
         self.glyphs = glyphs
         bar = glyphs.rail
@@ -224,6 +246,38 @@ class NavList(ClampedCursor, Widget):
         if current:
             return rows.active
         return rows.base
+
+    # -- the keyboard -----------------------------------------------------------
+
+    def on_action(self, name: str) -> bool:
+        """Run one named rail action; ``False`` for an unknown name.
+
+        ``prev`` / ``next`` step the selection one item through
+        :meth:`move` and answer its result -- an edge with nowhere to go
+        answers ``False``, the old focus router's rule.  The rail binds no
+        activation action: a navigation row selects, it does not activate.
+        """
+        if name == "prev":
+            return self.move(-1)
+        if name == "next":
+            return self.move(1)
+        return False
+
+    def on_key(self, event: KeyEvent) -> bool:
+        """Route a key through :attr:`keymap` to :meth:`on_action`.
+
+        The default table binds the four arrows; a key no entry names is
+        declined so the host keeps it.  A disabled rail answers ``False``.
+        """
+        if self.disabled or not isinstance(event, KeyEvent):
+            return False
+        action = self.keymap.get(event.key)
+        if action is None:
+            return False
+        return self.on_action(action)
+
+    #: The 1.x routing door stays until W3b3 removes it.
+    handle = on_key
 
     @property
     def _entries(self) -> list[str]:
