@@ -11,7 +11,7 @@ that renders rows: the :class:`~motui.app.command_palette.CommandPalette`'s own
 query-over-list panel, a ComboBox dropdown, a context menu.
 
 The panel is a structural duck, not a class: anything with
-``render(width) -> list[Line]``, a ``click(row, col) -> bool`` over its own
+``render(c) -> Surface``, a ``click(row, col) -> bool`` over its own
 rendered cells, a ``handle(event) -> bool`` for the keyboard and the
 library's one-shot result (``take_result()`` -- a decision is a take, so a
 ``None``-valued button is a decision too; a panel that can decide ``None``
@@ -84,6 +84,7 @@ from ..kernel.theme import DEFAULT_THEME, Theme
 from ..kernel.layout import ScreenLayout
 from ..widgets.base import Widget
 from .focus import FocusManager
+from ..kernel.layout import Constraints
 
 if TYPE_CHECKING:
     from .driver import TUI
@@ -421,7 +422,7 @@ class Modal:
         rect = self._tui.frame.rect
         if rect is None or rect.width <= 0 or rect.height <= 0:
             return None
-        rows = [row.fit(rect.width) for row in self._dialog.render(rect.width)]
+        rows = [row.fit(rect.width) for row in self._dialog.render(Constraints(width=rect.width))]
         height = min(len(rows), rect.height)
         width = min(max((row.width for row in rows), default=0), rect.width)
         if height <= 0 or width <= 0:

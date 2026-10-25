@@ -27,6 +27,7 @@ from ...kernel.theme import Theme
 from ..decor import Divider
 from .inline import inline_segments
 from ..syntax import Highlighter, RegexHighlighter, default_highlighter
+from ...kernel.layout import Constraints
 
 if TYPE_CHECKING:  # annotations only: rendering happens through a ctx
     from .context import RenderContext
@@ -212,7 +213,7 @@ class ThematicBreakRule:
             theme=ctx.theme,
             glyphs=ctx.glyphs,
             max_width=ctx.divider_max_width,
-        ).render(width)
+        ).render(Constraints(width=width))
 
 
 def _paragraph_text(lines: list[str]) -> str:

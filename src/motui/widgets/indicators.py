@@ -31,7 +31,7 @@ from __future__ import annotations
 
 from ..kernel.glyphs import GLYPHS, Glyphs
 from ..kernel.cell import Line, Segment, Surface
-from ..kernel.layout import Constraints, as_constraints
+from ..kernel.layout import Constraints
 from ..kernel.style import NONE
 from ..kernel.theme import Styles, Theme
 from ..widgets.base import Widget
@@ -107,16 +107,14 @@ class ProgressBar(Widget):
             self.styles,
         )
 
-    def render(self, c: Constraints | int) -> Surface:
+    def render(self, c: Constraints) -> Surface:
         """The label-plus-track row, under the render constraints.
 
-        A bare ``int`` is the 1.x width spelling and is normalized through
-        :func:`~motui.kernel.layout.as_constraints`; a ``max_height`` budget
-        truncates the single row (``0`` paints nothing).  The answer is
+        A ``max_height`` budget truncates the single row (``0`` paints
+        nothing).  The answer is
         :meth:`~motui.kernel.cell.Surface.clipped`, not padded, so the bytes
         match the old list answer.
         """
-        c = as_constraints(c)
         done_style = self.group("status").success
         todo_style = self.group("text").faint
         lead = f"{self.label} " if self.label else ""
@@ -395,16 +393,13 @@ class Slider(Widget):
             self.styles,
         )
 
-    def render(self, c: Constraints | int) -> Surface:
+    def render(self, c: Constraints) -> Surface:
         """The track row, under the render constraints.
 
         ``_last_width`` is the constrained width :meth:`click` maps a column
-        against (seeded even by a zero height budget).  A bare ``int`` is the
-        1.x width spelling and is normalized through
-        :func:`~motui.kernel.layout.as_constraints`; ``max_height`` truncates
-        the single row and the surface is clipped, not padded.
+        against (seeded even by a zero height budget).  ``max_height``
+        truncates the single row and the surface is clipped, not padded.
         """
-        c = as_constraints(c)
         width = c.width
         self._last_width = width  # the geometry ``click`` maps a column against
         text = self.group("text")
@@ -461,7 +456,7 @@ class Slider(Widget):
 class Spinner(Widget):
     """A frame-cycling activity indicator with an optional label.
 
-    ``render(width)`` is the current ``frame`` followed by ``text``, ``fit``
+    ``render(c)`` is the current ``frame`` followed by ``text``, ``fit``
     to the painting width -- the spinner is a component like every other,
     so ``tui.add(Spinner(...))`` paints it.  ``advance`` steps the cycle;
     the pump's clock decides when.  The frame and text carry
@@ -504,14 +499,12 @@ class Spinner(Widget):
         """The row cache's snapshot: the frame, the text, theme and styles."""
         return (self.frame, self.text, self.theme, self.styles)
 
-    def render(self, c: Constraints | int) -> Surface:
+    def render(self, c: Constraints) -> Surface:
         """One fitted row: the current frame followed by the label.
 
-        A bare ``int`` is the 1.x width spelling and is normalized through
-        :func:`~motui.kernel.layout.as_constraints`; ``max_height`` truncates
-        the single row and the surface is clipped, not padded.
+        ``max_height`` truncates the single row and the surface is clipped,
+        not padded.
         """
-        c = as_constraints(c)
         style = self.group("content").accent
         rows = [Line.from_text(self.frame + self.text, style).fit(c.width)]
         if c.max_height is not None:

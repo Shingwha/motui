@@ -6,7 +6,8 @@ from motui.app import TUI
 from motui.app import FocusManager, Pointer, SelectionGesture
 from motui.terminal import HeadlessScreen
 from motui.kernel.events import MouseEvent
-from motui.kernel.cell import Line
+from motui.kernel.cell import Line, Surface
+from motui.kernel.layout import Constraints
 from motui.widgets import Padding
 from tests.testing import ScriptedEvents, motion, press, release
 
@@ -19,8 +20,10 @@ class Leaf:
         self.clicks: list[tuple[int, int]] = []
         self.rows = rows
 
-    def render(self, width: int) -> list[Line]:
-        return [Line.from_text(f"leaf{i}") for i in range(self.rows)]
+    def render(self, c: Constraints) -> Surface:
+        return Surface.clipped(
+            [Line.from_text(f"leaf{i}") for i in range(self.rows)], c.width
+        )
 
     def click(self, row: int, col: int) -> bool:
         self.clicks.append((row, col))

@@ -7,6 +7,7 @@ from motui.kernel.events import MouseEvent, PasteEvent
 from motui.widgets.text import Text
 from motui.widgets.choice import Option
 from tests.testing import headless_tui, key
+from motui.kernel.layout import Constraints
 
 _MENU = [
     Option("/help", value="help", description="What this demo can do"),
@@ -23,7 +24,9 @@ def palette(commands: list[Option] | None = None, **knobs) -> CommandPalette:
 
 
 def list_rows(palette: CommandPalette, width: int = 40) -> list:
-    return palette.render(width)[len(palette.input.render(width)) :]
+    rendered = palette.render(Constraints(width=width))
+    input_rows = palette.input.render(Constraints(width=width))
+    return list(rendered)[len(input_rows) :]
 
 
 def option_rows(palette: CommandPalette, width: int = 40) -> list:
@@ -52,7 +55,7 @@ def test_closed_palette_renders_zero_rows_and_consumes_nothing():
     palette_ = palette()
     assert palette_.is_open is False
     assert palette_.take_result() is None
-    assert palette_.render(40) == []
+    assert list(palette_.render(Constraints(width=40))) == []
     for name in ("up", "down", "enter", "escape", "a", "/", "backspace"):
         assert palette_.handle(key(name)) is False
     assert palette_.handle(PasteEvent("text")) is False
@@ -65,9 +68,9 @@ def test_open_shows_the_query_row_over_every_command():
     palette_.open()
     assert palette_.is_open is True
     assert palette_.input.text == "" and palette_.list.query == ""
-    rows = palette_.render(40)
-    input_rows = list(palette_.input.render(40))
-    assert rows[: len(input_rows)] == input_rows
+    rows = palette_.render(Constraints(width=40))
+    input_rows = list(palette_.input.render(Constraints(width=40)))
+    assert list(rows[: len(input_rows)]) == input_rows
     assert labels(palette_) == ["/help", "/model", "/clear", "/quit"]
     assert marked_label(palette_) == "/help"
 
@@ -119,7 +122,7 @@ def test_open_scrims_the_frame_and_parks_the_panel_at_the_foot():
     rows = tui.rows
     assert rows[0].text.startswith("under the veil")
     assert rows[0].segments[0].style == Style(dim=True)
-    panel = palette_.render(40)
+    panel = palette_.render(Constraints(width=40))
     top = len(rows) - len(panel)
     for index, row in enumerate(panel):
         assert rows[top + index].text.startswith(row.text)
@@ -133,11 +136,11 @@ def test_a_press_outside_dismisses_and_a_press_inside_is_consumed():
     tui.paint()
     assert palette_.handle(MouseEvent("left", x=20, y=0, kind="press")) is True
     assert palette_.is_open is False and palette_.take_result() is None
-    assert palette_.render(40) == []
+    assert list(palette_.render(Constraints(width=40))) == []
 
     palette_.open()
     tui.paint()
-    top = len(tui.rows) - len(palette_.render(40))
+    top = len(tui.rows) - len(palette_.render(Constraints(width=40)))
     assert palette_.handle(MouseEvent("left", x=1, y=top, kind="press")) is True
     assert palette_.is_open is True and palette_.take_result() is None
 
@@ -211,5 +214,5 @@ def test_enter_and_escape_close_the_palette_with_a_result():
         assert palette_.handle(key(name)) is True
         assert palette_.take_result() == expected
         assert palette_.is_open is False
-        assert palette_.render(40) == []
+        assert list(palette_.render(Constraints(width=40))) == []
         assert palette_.take_result() is None

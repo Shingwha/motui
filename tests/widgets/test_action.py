@@ -16,24 +16,24 @@ from tests.testing import texts
 
 def test_button_renders_one_fitted_row_in_the_accent_band():
     button = Button("Run")
-    row = button.render(20)[0]
+    row = button.render(Constraints(width=20))[0]
     assert row.text == " Run "
     assert row.segments[0].style == DEFAULT_THEME.content.accent
-    assert button.render(3)[0].text == " R\u2026"
+    assert button.render(Constraints(width=3))[0].text == " R\u2026"
 
 
 def test_button_hover_and_focus_merge_their_bands():
     button = Button("Run")
     button.hover = True
-    assert button.render(20)[0].segments[0].style == DEFAULT_THEME.content.accent.merge(
+    assert button.render(Constraints(width=20))[0].segments[0].style == DEFAULT_THEME.content.accent.merge(
         DEFAULT_THEME.surfaces.hover
     )
     button.hover = False
     button.focused = True
-    assert button.render(20)[0].segments[0].style == DEFAULT_THEME.content.accent.merge(
+    assert button.render(Constraints(width=20))[0].segments[0].style == DEFAULT_THEME.content.accent.merge(
         DEFAULT_THEME.controls.focus
     )
-    assert button.render(20)[0].text == " Run "
+    assert button.render(Constraints(width=20))[0].text == " Run "
 
 
 def test_button_click_and_activate_land_in_the_one_shot_result():
@@ -53,7 +53,7 @@ def test_a_disabled_button_refuses_its_doors_and_paints_the_disabled_band():
     )
     assert button.click(0, 0) is False and button.activate() is False
     assert button.take_result() is None
-    assert button.render(20)[0].segments[0].style == Style(italic=True)
+    assert button.render(Constraints(width=20))[0].segments[0].style == Style(italic=True)
 
 
 def test_explicit_styles_beat_the_theme_fields():
@@ -70,19 +70,19 @@ def test_explicit_styles_beat_the_theme_fields():
         ),
         theme=theme,
     )
-    assert button.render(20)[0].segments[0].style == Style(underline=True)
+    assert button.render(Constraints(width=20))[0].segments[0].style == Style(underline=True)
     button.hover = True
-    assert button.render(20)[0].segments[0].style == Style(underline=True).merge(
+    assert button.render(Constraints(width=20))[0].segments[0].style == Style(underline=True).merge(
         Style(italic=True)
     )
 
 
 def test_checkbox_flips_its_mark_and_leaves_the_new_state_pending():
     box = Checkbox("Bold")
-    assert box.render(20)[0].text == "[ ] Bold"
+    assert box.render(Constraints(width=20))[0].text == "[ ] Bold"
     assert box.activate() is True
     assert (box.checked, box.take_result()) == (True, True)
-    assert box.render(20)[0].text == "[x] Bold"
+    assert box.render(Constraints(width=20))[0].text == "[x] Bold"
     assert box.click(0, 0) is True
     assert (box.checked, box.take_result()) == (False, False)
 
@@ -97,10 +97,10 @@ def test_checkbox_takes_a_custom_glyph_pair_and_its_style_surface():
             text=replace(DEFAULT_THEME.text, base=underline),
         ),
     )
-    assert box.render(20)[0].text == "( ) Bold"
+    assert box.render(Constraints(width=20))[0].text == "( ) Bold"
     box.checked = True
-    assert box.render(20)[0].text == "(x) Bold"
-    assert box.render(20)[0].segments[0].style == underline
+    assert box.render(Constraints(width=20))[0].text == "(x) Bold"
+    assert box.render(Constraints(width=20))[0].segments[0].style == underline
 
 
 def test_a_disabled_checkbox_refuses_both_doors():
@@ -111,8 +111,8 @@ def test_a_disabled_checkbox_refuses_both_doors():
 
 def test_link_follows_a_click_and_wears_the_link_band():
     link = Link("docs/COMPONENTS.md")
-    assert link.render(30)[0].text == "docs/COMPONENTS.md"
-    assert link.render(30)[0].segments[0].style == DEFAULT_THEME.content.link
+    assert link.render(Constraints(width=30))[0].text == "docs/COMPONENTS.md"
+    assert link.render(Constraints(width=30))[0].segments[0].style == DEFAULT_THEME.content.link
     assert link.take_result() is None
     assert link.click(0, 3) is True and link.take_result() is True
     assert link.take_result() is None
@@ -127,10 +127,10 @@ def test_link_focus_and_disabled_flags_shape_the_row():
         ),
     )
     link.focused = True
-    assert link.render(20)[0].segments[0].style == DEFAULT_THEME.content.link.merge(Style(bold=True))
+    assert link.render(Constraints(width=20))[0].segments[0].style == DEFAULT_THEME.content.link.merge(Style(bold=True))
     link.disabled = True
     assert link.activate() is False
-    assert link.render(20)[0].segments[0].style == Style(italic=True)
+    assert link.render(Constraints(width=20))[0].segments[0].style == Style(italic=True)
 
 
 @pytest.mark.parametrize(
@@ -153,7 +153,7 @@ def test_hover_at_marks_and_clears_one_row_across_components(build, row, col):
     plain = texts(component, 30)
     assert component.hover_at(row, col) is True
     assert any(
-        seg.style.underline for line in component.render(30) for seg in line.segments
+        seg.style.underline for line in component.render(Constraints(width=30)) for seg in line.segments
     )
     assert component.hover_at(row, col) is False
     assert component.hover_at(-1, -1) is True
@@ -162,13 +162,13 @@ def test_hover_at_marks_and_clears_one_row_across_components(build, row, col):
 
 def test_a_theme_assignment_repaints_the_next_render():
     button = Button("Run")
-    assert button.render(20)[0].segments[0].style == DEFAULT_THEME.controls.base
+    assert button.render(Constraints(width=20))[0].segments[0].style == DEFAULT_THEME.controls.base
     other = replace(
         DEFAULT_THEME,
         controls=replace(DEFAULT_THEME.controls, base=Style(fg="#ff0000")),
     )
     button.theme = other
-    assert button.render(20)[0].segments[0].style == Style(fg="#ff0000")
+    assert button.render(Constraints(width=20))[0].segments[0].style == Style(fg="#ff0000")
 
 
 def test_the_action_hints_default_to_no_tooltip():
@@ -183,16 +183,16 @@ def test_the_action_hints_default_to_no_tooltip():
 def test_the_action_primitives_render_into_clipped_surfaces():
     button = Button("Run")
     assert isinstance(button.render(Constraints(width=20)), Surface)
-    assert button.render(20) == button.render(Constraints(width=20))
+    assert button.render(Constraints(width=20)) == button.render(Constraints(width=20))
     assert [row.text for row in button.render(Constraints(width=3))] == [" R\u2026"]
 
     box = Checkbox("Bold")
     assert isinstance(box.render(Constraints(width=20)), Surface)
-    assert box.render(Constraints(width=20)) == box.render(20)
+    assert box.render(Constraints(width=20)) == box.render(Constraints(width=20))
 
     link = Link("docs/COMPONENTS.md")
     assert isinstance(link.render(Constraints(width=30)), Surface)
-    assert link.render(Constraints(width=30)) == link.render(30)
+    assert link.render(Constraints(width=30)) == link.render(Constraints(width=30))
 
 
 def test_the_action_primitives_honour_the_height_budget():

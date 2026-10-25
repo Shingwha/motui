@@ -12,7 +12,7 @@ def button_row(dialog: Dialog, width: int = 40, *labels: str) -> int:
     wanted = labels or ("Yes", "No")
     return next(
         index
-        for index, row in enumerate(dialog.render(width))
+        for index, row in enumerate(dialog.render(Constraints(width=width)))
         if all(label in row.text for label in wanted)
     )
 
@@ -54,12 +54,12 @@ def test_a_dangerous_dialog_opens_on_its_cancel_button():
 def test_click_presses_the_button_under_the_cell():
     dialog = confirm_dialog("Continue?")
     row = button_row(dialog)
-    col = dialog.render(40)[row].text.index("Yes")
+    col = dialog.render(Constraints(width=40))[row].text.index("Yes")
     assert dialog.click(row, col) is True
     assert dialog.index == 0
     assert dialog.take_result() is True
     row = button_row(dialog)
-    col = dialog.render(40)[row].text.index("No")
+    col = dialog.render(Constraints(width=40))[row].text.index("No")
     assert dialog.click(row, col) is True
     assert dialog.take_result() is False
 
@@ -87,11 +87,11 @@ def test_a_pinned_width_sets_the_box_width():
 
 def test_child_at_maps_the_body_and_the_buttons():
     dialog = prompt_dialog("Name")
-    dialog.render(40)
+    dialog.render(Constraints(width=40))
     body = dialog.body
     assert dialog.child_at(1, 2) == (body, 0, 0)
     row = button_row(dialog, 40, "OK", "Cancel")
-    col = dialog.render(40)[row].text.index("OK")
+    col = dialog.render(Constraints(width=40))[row].text.index("OK")
     hit = dialog.child_at(row, col)
     assert isinstance(hit[0], Button)
 
@@ -118,15 +118,15 @@ def test_prompt_dialog_carries_an_input_body_and_takes_ok():
 def test_a_dialog_takes_constraints_and_honours_the_height_budget():
     dialog = confirm_dialog("Continue?")
     assert isinstance(dialog.render(Constraints(width=40)), Surface)
-    assert dialog.render(40) == dialog.render(Constraints(width=40))
+    assert dialog.render(Constraints(width=40)) == dialog.render(Constraints(width=40))
     assert list(dialog.render(Constraints(width=40, max_height=0))) == []
     surface = dialog.render(Constraints(width=40, max_height=2))
     assert isinstance(surface, Surface)
-    assert surface.rows == tuple(dialog.render(40))[:2]
+    assert surface.rows == tuple(dialog.render(Constraints(width=40)))[:2]
 
 
 def test_a_squeezed_dialog_never_exceeds_the_constraint_width():
     dialog = confirm_dialog("Continue?")
     surface = dialog.render(Constraints(width=7))
     assert all(row.width <= 7 for row in surface)
-    assert surface.height == len(dialog.render(7))
+    assert surface.height == len(dialog.render(Constraints(width=7)))

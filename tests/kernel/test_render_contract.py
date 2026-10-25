@@ -10,7 +10,7 @@ write onto the next line and every row below it is displaced.
 
 from __future__ import annotations
 
-from motui.kernel.cell import Line
+from motui.kernel.cell import Line, Surface
 from motui.kernel.document import Document
 from motui.kernel.layout import Constraints
 from motui.testing import Emulator, headless_tui
@@ -18,15 +18,15 @@ from tests.testing import rows
 
 
 class _Oversized:
-    """A legacy component that answers one row twice as wide as the screen."""
+    """A component that answers one row twice as wide as the screen."""
 
     def __init__(self, char: str = "A") -> None:
         self.char = char
 
-    def render(self, width: int) -> list[Line]:
-        # Deliberately ignores ``width``: the guards, not the component,
+    def render(self, c: Constraints) -> Surface:
+        # Deliberately ignores ``c``: the guards, not the component,
         # enforce the contract.
-        return [Line.from_text(self.char * 40)]
+        return Surface(width=c.width, rows=(Line.from_text(self.char * 40),))
 
 
 def test_a_section_clips_an_oversized_component_to_the_constraints():

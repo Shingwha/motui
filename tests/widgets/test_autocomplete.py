@@ -23,7 +23,7 @@ def test_prefix_matches_rank_before_substring_matches(query, matched):
     auto.set_query(query)
     if not matched:
         assert auto.is_empty is True and auto.selected is None
-        assert list(auto.render(30)) == [] and auto.move(1) is False
+        assert list(auto.render(Constraints(width=30))) == [] and auto.move(1) is False
         return
     assert texts(auto, 30) == ["\u2192 " + matched[0], *("  " + label for label in matched[1:])]
 
@@ -107,7 +107,7 @@ def test_set_query_clears_the_pointer_mark():
 def test_autocomplete_takes_constraints_and_honours_the_height_budget():
     auto = Autocomplete([Option("alpha"), Option("beta"), Option("gamma")])
     assert isinstance(auto.render(Constraints(width=30)), Surface)
-    assert auto.render(30) == auto.render(Constraints(width=30))
+    assert auto.render(Constraints(width=30)) == auto.render(Constraints(width=30))
     surface = auto.render(Constraints(width=30, max_height=2))
     assert [row.text for row in surface] == ["\u2192 alpha", "  beta"]
     assert list(auto.render(Constraints(width=30, max_height=0))) == []

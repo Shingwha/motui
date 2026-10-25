@@ -38,7 +38,8 @@ from typing import TYPE_CHECKING
 
 from ..kernel.events import Event, KeyEvent
 from ..kernel.glyphs import GLYPHS, Glyphs
-from ..kernel.cell import Line
+from ..kernel.cell import Surface
+from ..kernel.layout import Constraints
 from ..kernel.theme import Theme
 from ..widgets.autocomplete import Autocomplete
 from ..widgets.textfield import Input
@@ -105,9 +106,13 @@ class _CommandPalettePanel:
         self.list.set_query("")
         self._pending = _NO_RESULT
 
-    def render(self, width: int) -> list[Line]:
-        """The query row followed by the list's rows."""
-        return [*self.input.render(width), *self.list.render(width)]
+    def render(self, c: Constraints) -> Surface:
+        """The query row followed by the list's rows, as a clipped surface."""
+        inner = Constraints(width=c.width)
+        rows = [*self.input.render(inner), *self.list.render(inner)]
+        if c.max_height is not None:
+            rows = rows[: c.max_height]
+        return Surface.clipped(rows, c.width)
 
     def click(self, row: int, col: int) -> bool:
         """No click gesture: the modal's duck, declining every cell.
@@ -267,7 +272,7 @@ class CommandPalette:
         """
         return self._modal.handle(event)
 
-    def render(self, width: int) -> list[Line]:
+    def render(self, c: Constraints) -> Surface:
         """The query row followed by the list's rows; zero rows while closed.
 
         The rows the modal paints in its panel -- and the rows a host may
@@ -275,8 +280,8 @@ class CommandPalette:
         the answer is empty, exactly as the palette always rendered.
         """
         if not self._modal.is_open:
-            return []
-        return self._panel.render(width)
+            return Surface(width=c.width, rows=())
+        return self._panel.render(c)
 
     def __repr__(self) -> str:
         return (

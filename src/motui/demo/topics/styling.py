@@ -11,6 +11,7 @@ from motui.widgets import Column, Table
 
 from ..assets import THEMES
 from ..stage import topic
+from ...kernel.layout import Constraints
 
 _TOKEN_ROWS = [
     ("content.accent", lambda t: t.content.accent, "active labels and bars"),
@@ -129,7 +130,7 @@ def _row_bands(b) -> None:
         theme=_rows_theme(b.theme, **_BAND_OVERRIDES),
     )
     banded.index = 1
-    banded.render(60)  # establish the row geometry hover_at resolves against
+    banded.render(Constraints(width=60))  # establish the row geometry hover_at resolves against
     banded.hover_at(2, 0)  # paint the pointer's row without a pointer
     plain = List(items, window=4, theme=b.theme)
     b.preview(

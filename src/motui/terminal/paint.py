@@ -29,7 +29,7 @@ values.
 
 from __future__ import annotations
 
-from ..kernel.cell import Line, cut_line
+from ..kernel.cell import Line, Surface, cut_line
 from ..kernel.layout import ScreenLayout
 from .ansi import (
     CLEAR_LINE,
@@ -135,33 +135,44 @@ class Painter:
         row, col = self._anchor
         return (max(0, min(row, height - 1)), max(0, min(col, width - 1)))
 
-    def paint(self, layout: ScreenLayout) -> None:
+    def paint(self, target: ScreenLayout | Surface) -> None:
         """Paint one frame: full repaint on (re)size, row diff otherwise.
 
-        The painted target is normalized to the screen first: a layout with
-        more rows than the screen is truncated, a shorter one is blank-padded
-        with empty :class:`Line` values, so :attr:`rows` is exactly
-        ``screen.height`` rows after every paint (see the property).
+        The target is either a composed :class:`ScreenLayout` or a
+        :class:`Surface`; both answer rows and a width.  A surface is
+        clipped to its own declared width (the width it was rendered for);
+        a layout is clipped to the screen width, exactly as before.
 
-        Every row is then hard-clipped to the screen width before any bytes
-        are built.  An over-wide row would make the terminal wrap the write
-        onto the next line, corrupting every row after it; this is the final
-        guard that keeps the byte stream row-addressed even when a component
-        outgrows the width it was rendered for (the cut adds no ellipsis, so
-        a row that already fits is untouched).
+        The painted rows are normalized to the screen first: more rows than
+        the screen are truncated, fewer are blank-padded with empty
+        :class:`Line` values, so :attr:`rows` is exactly ``screen.height``
+        rows after every paint (see the property).
+
+        Every row is then hard-clipped before any bytes are built.  An
+        over-wide row would make the terminal wrap the write onto the next
+        line, corrupting every row after it; this is the final guard that
+        keeps the byte stream row-addressed even when a component outgrows
+        the width it was rendered for (the cut adds no ellipsis, so a row
+        that already fits is untouched).
         """
         self.frames += 1
         self._screen.refresh_size()
         width, height = self._screen.width, self._screen.height
         full = (width, height) != (self._width, self._height)
 
-        rows = list(layout.rows)
+        if isinstance(target, Surface):
+            rows = list(target.rows)
+            clip_width = target.width
+        else:
+            rows = list(target.rows)
+            clip_width = width
         if len(rows) > height:
             del rows[height:]
         elif len(rows) < height:
             rows.extend(Line() for _ in range(height - len(rows)))
         rows = [
-            cut_line(row, 0, width) if row.width > width else row for row in rows
+            cut_line(row, 0, clip_width) if row.width > clip_width else row
+            for row in rows
         ]
         if self._screen.live:
             # The capability the rows are rendered for: the screen's own, and

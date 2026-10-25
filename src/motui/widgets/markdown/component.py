@@ -15,7 +15,7 @@ from dataclasses import replace
 
 from ...kernel.glyphs import GLYPHS, Glyphs
 from ...kernel.cell import Line, Segment, Surface, slice_line
-from ...kernel.layout import Constraints, as_constraints
+from ...kernel.layout import Constraints
 from ...kernel.text import _normalize_tabs, wrap_spans
 from ...kernel.theme import Styles, Theme
 from ...widgets.base import Widget
@@ -581,7 +581,7 @@ class Markdown(Widget):
     """A Markdown document rendered as rows, rule-registry driven.
 
     ``text`` is a mutable attribute (streaming text assigns to it);
-    ``render(width)`` is a pure function of ``text`` and ``width`` and never
+    ``render(c)`` is a pure function of ``text`` and ``c.width`` and never
     returns a row wider than ``width``.  The last answer lives in one
     :class:`_StreamCache` entry keyed on the ``(text, width)`` pair, so a
     document re-rendered every frame (the viewport re-renders an open block
@@ -819,11 +819,10 @@ class Markdown(Widget):
         self._cache = _StreamCache()
         self._stamp_key = None
 
-    def render(self, c: Constraints | int) -> Surface:
+    def render(self, c: Constraints) -> Surface:
         """The document's rows at the constrained width: a pure function of inputs.
 
-        A bare ``int`` is the 1.x width spelling and is normalized through
-        :func:`~motui.kernel.layout.as_constraints`.  The answer comes from
+        The answer comes from
         the component's one-entry stream cache (:class:`_StreamCache`): an
         unchanged ``(text, width)`` is served as a copy, a text that only
         grew past a sealed block boundary re-renders just its tail (for a
@@ -858,7 +857,6 @@ class Markdown(Widget):
         hover-free and unstamped by the hover, so the cache's key and the
         streaming splice are exactly what they were.
         """
-        c = as_constraints(c)
         self._sync_theme()
         paint = (
             c.width if self.max_width is None else max(0, min(c.width, self.max_width))
@@ -885,7 +883,7 @@ class Markdown(Widget):
     def revision(self) -> object:
         """The :class:`~motui.kernel.document.Revisioned` snapshot for the rows.
 
-        Every mutable input ``render(width)`` reads besides the width: the
+        Every mutable input ``render(c)`` reads besides the width: the
         text, ``max_width`` (the P0 this wave fixed -- the clamp runs before
         the cache, so a moved cap must move the snapshot), the ``glyphs``
         vocabulary the task boxes, bullets and quote bar are drawn from, the

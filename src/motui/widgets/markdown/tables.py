@@ -14,6 +14,7 @@ from typing import TYPE_CHECKING
 from ...kernel.cell import Line
 from .inline import inline_segments
 from ..table import Table
+from ...kernel.layout import Constraints
 
 if TYPE_CHECKING:  # annotations only: rendering happens through a ctx
     from .context import RenderContext
@@ -74,7 +75,7 @@ class TableRule:
             aligns=aligns,
             theme=ctx.theme,
         )
-        return table.render(width)
+        return table.render(Constraints(width=width))
 
 
 def _split_row(line: str) -> list[str] | None:

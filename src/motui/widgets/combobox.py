@@ -27,7 +27,7 @@ from ..kernel.document import Component
 from ..kernel.events import Event, KeyEvent, MouseEvent
 from ..kernel.glyphs import GLYPHS, Glyphs
 from ..kernel.cell import Surface
-from ..kernel.layout import Constraints, as_constraints
+from ..kernel.layout import Constraints
 from ..kernel.theme import Styles, Theme
 from ..widgets.base import Widget
 from .autocomplete import Autocomplete
@@ -56,7 +56,7 @@ class ComboBox(Widget):
     doors).  A :class:`~motui.kernel.events.PasteEvent` is never read as a
     key: the open dropdown hands it straight to the field (the P0 this wave
     fixed).  The result is read once through :meth:`take_result`.
-    ``render(width)`` is the field's rows; the dropdown paints through a
+    ``render(c)`` is the field's rows; the dropdown paints through a
     host-mounted :class:`~motui.app.modal.Modal` -- a widget lays
     out rows, the modal owns the screen:
 
@@ -304,20 +304,17 @@ class ComboBox(Widget):
 
     # -- the render ---------------------------------------------------------------
 
-    def render(self, c: Constraints | int) -> Surface:
+    def render(self, c: Constraints) -> Surface:
         """The field's rows -- the dropdown paints through the host's modal.
 
-        A bare ``int`` is the 1.x width spelling and is normalized through
-        :func:`~motui.kernel.layout.as_constraints`; the field still renders
-        at that int width.  ``_last_count`` keeps the untruncated row count
+        The field renders at the constraint's width.  ``_last_count`` keeps the untruncated row count
         :meth:`child_at` maps through (the W2a container precedent), while a
         ``max_height`` budget truncates only the returned rows.  The surface
         is clipped, not padded.
         """
-        c = as_constraints(c)
         self._skin()
         self._last_width = c.width
-        rows = list(self.input.render(c.width))
+        rows = list(self.input.render(Constraints(width=c.width)))
         self._last_count = len(rows)
         if c.max_height is not None:
             rows = rows[: c.max_height]

@@ -83,6 +83,7 @@ from ..kernel.style import ColorMode
 from ..kernel.theme import DEFAULT_THEME, Theme
 from ..kernel.layout import ScreenLayout, Viewport
 from ..terminal import RawTerminalKeys
+from ..kernel.layout import Constraints
 
 __all__ = ["TUI"]
 
@@ -163,8 +164,8 @@ def _body_address(viewport: Viewport, block: Section, row: int, width: int) -> i
         if held is block:
             break
         if held.pin is None:
-            address += held.row_count(width)
-    count = block.row_count(width)
+            address += held.row_count(Constraints(width=width))
+    count = block.row_count(Constraints(width=width))
     row = max(0, min(row, count - 1)) if count else 0
     return address + row
 
@@ -603,7 +604,7 @@ class TUI:
         placement = self._frame.region(pane.id)
         if layout is None or placement is None or not layout.body_rows:
             return False  # no composition has run, or no window to show it in
-        count = block.row_count(placement.width)
+        count = block.row_count(Constraints(width=placement.width))
         row = max(0, min(row, count - 1)) if count else 0
         if layout.offset == viewport.offset and (bid, row) in layout.row_blocks:
             return True  # the layout already shows exactly this row
@@ -1112,7 +1113,7 @@ class TUI:
             self._set_selection(None, None)
         layout = self._frame.compose(width, height)
         layout = self._frame.apply_overlays(layout)
-        self.painter.paint(layout)
+        self.painter.paint(layout.surface)
         self._last_paint = now
         self._dirty = False
 

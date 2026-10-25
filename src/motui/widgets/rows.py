@@ -38,7 +38,7 @@ from typing import Sequence
 
 from ..kernel.glyphs import GLYPHS, Glyphs, seat
 from ..kernel.cell import Line, Segment, Surface, fuse
-from ..kernel.layout import Constraints, as_constraints
+from ..kernel.layout import Constraints
 from ..kernel.style import NONE, Style
 from ..kernel.text import visible_width
 from ..kernel.theme import Styles, Theme
@@ -120,15 +120,12 @@ class StatusLine(Widget):
         """
         return (self.left, self.right, self.theme, self.styles)
 
-    def render(self, c: Constraints | int) -> Surface:
+    def render(self, c: Constraints) -> Surface:
         """The one status row, fitted to the constraint width.
 
-        A bare ``int`` is the 1.x spelling and is normalized through
-        :func:`motui.kernel.layout.as_constraints`; the row is
-        :meth:`Surface.clipped`, so short rows keep the bytes they always
-        had, and a ``max_height`` of zero paints no row.
+        The row is :meth:`Surface.clipped`, so short rows keep the bytes
+        they always had, and a ``max_height`` of zero paints no row.
         """
-        c = as_constraints(c)
         default = self.group("text").faint
         gap_style = default
         used = _width(self.left, default) + _width(self.right, default)
@@ -187,15 +184,12 @@ class ShortcutBar(Widget):
             self.styles,
         )
 
-    def render(self, c: Constraints | int) -> Surface:
+    def render(self, c: Constraints) -> Surface:
         """The one hint row, fitted to the constraint width.
 
-        A bare ``int`` is the 1.x spelling and is normalized through
-        :func:`motui.kernel.layout.as_constraints`; the row is
-        :meth:`Surface.clipped`, so short rows keep the bytes they always
-        had, and a ``max_height`` of zero paints no row.
+        The row is :meth:`Surface.clipped`, so short rows keep the bytes
+        they always had, and a ``max_height`` of zero paints no row.
         """
-        c = as_constraints(c)
         key_style = self.group("content").accent
         label_style = self.group("text").faint
         segments: list[Segment] = []
@@ -263,15 +257,12 @@ class Notice(Widget):
             return self.glyphs.notice_error, self.group("status").danger
         return self.glyphs.notice_info, self.group("text").base
 
-    def render(self, c: Constraints | int) -> Surface:
+    def render(self, c: Constraints) -> Surface:
         """The one message row, fitted to the constraint width.
 
-        A bare ``int`` is the 1.x spelling and is normalized through
-        :func:`motui.kernel.layout.as_constraints`; the row is
-        :meth:`Surface.clipped`, so short rows keep the bytes they always
-        had, and a ``max_height`` of zero paints no row.
+        The row is :meth:`Surface.clipped`, so short rows keep the bytes
+        they always had, and a ``max_height`` of zero paints no row.
         """
-        c = as_constraints(c)
         glyph, style = self._level_style()
         prefix = seat(glyph)
         if not prefix:

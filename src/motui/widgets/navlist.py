@@ -92,7 +92,7 @@ from typing import Iterable, Sequence
 from ..widgets.cursor import Cursor
 from ..kernel.glyphs import GLYPHS, Glyphs, seat_width
 from ..kernel.cell import Line, Segment, Surface, rest
-from ..kernel.layout import Constraints, as_constraints
+from ..kernel.layout import Constraints
 from ..kernel.style import Style
 from ..kernel.text import visible_width
 from ..kernel.theme import Styles, Theme
@@ -302,7 +302,7 @@ class NavList(ClampedCursor, Widget):
             self.styles,
         )
 
-    def render(self, c: Constraints | int) -> Surface:
+    def render(self, c: Constraints) -> Surface:
         """One row per item **and group row** (``[]`` for an empty list), each on its band.
 
         An item row is ``bar + separator + label`` on the selected item --
@@ -325,7 +325,6 @@ class NavList(ClampedCursor, Widget):
         :meth:`Surface.clipped` and a ``max_height`` budget truncates the
         leading rows.
         """
-        c = as_constraints(c)
         if not self.items:
             return Surface.clipped([], c.width)
         # The roles resolve once per render; the focus rule drops the active

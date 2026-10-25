@@ -5,12 +5,13 @@ from __future__ import annotations
 import pytest
 
 from motui.app import FocusManager
-from motui.kernel import Section, Document, Pane, Rect, Viewport
+from motui.kernel import Constraints, Document, Pane, Rect, Section, Surface, Viewport
 from motui.kernel.document import Activable, Focusable, descend_chain
 from motui.kernel.events import KeyEvent
 from motui.kernel.hit import Hit
 from motui.kernel.cell import Line
 from motui.widgets import Padding
+from motui.kernel.layout import Constraints
 
 
 class Plain:
@@ -19,8 +20,8 @@ class Plain:
     def __init__(self) -> None:
         self.focused = True
 
-    def render(self, width: int) -> list[Line]:
-        return [Line.from_text("plain").fit(width)]
+    def render(self, c: Constraints) -> Surface:
+        return Surface.clipped([Line.from_text("plain").fit(c.width)], c.width)
 
 
 class Cursor(Plain):
@@ -352,7 +353,7 @@ def test_a_click_through_a_container_lands_on_the_leaf_target():
     menu = Select([Option("one"), Option("two")])
     other = Select([Option("x")])
     padded = Padding(menu, left=2, top=1)
-    padded.render(20)
+    padded.render(Constraints(width=20))
     manager = FocusManager([other, menu])
     manager.focus_next()
     assert manager.click(hit(padded, row=1, col=2)) is True

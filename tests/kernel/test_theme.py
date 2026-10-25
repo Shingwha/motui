@@ -13,6 +13,7 @@ from dataclasses import FrozenInstanceError, replace
 import pytest
 
 from motui import DEFAULT_THEME, Button, Input, List, Markdown, Theme
+from motui.kernel.layout import Constraints
 from motui.kernel.style import NONE, Style
 from motui.kernel.theme import DARK_PALETTE, Styles
 from motui.widgets import Divider
@@ -86,9 +87,9 @@ def test_explicit_style_beats_the_theme_field():
     row = Divider(
         styles=Styles(borders=replace(theme.borders, base=Style(fg="#ff0000"))),
         theme=theme,
-    ).render(10)[0]
+    ).render(Constraints(width=10))[0]
     assert all(segment.style == Style(fg="#ff0000") for segment in row.segments)
-    themed = Divider(theme=theme).render(10)[0]
+    themed = Divider(theme=theme).render(Constraints(width=10))[0]
     assert all(segment.style == Style(fg="#001100") for segment in themed.segments)
 
 
@@ -101,7 +102,7 @@ def test_components_take_their_styles_from_the_theme():
             code=Style(fg="#666666"),
         ),
     )
-    markdown = Markdown("# H\n\n```\nx = 1\n```", theme=theme).render(80)
+    markdown = Markdown("# H\n\n```\nx = 1\n```", theme=theme).render(Constraints(width=80))
     assert markdown[0].segments[0].style == Style(fg="#555555", underline=True)
     assert markdown[-2].segments[0].style == Style(fg="#666666")
 
@@ -110,13 +111,13 @@ def test_the_default_theme_is_the_dark_visual():
     assert Theme.dark() == DEFAULT_THEME
     assert DEFAULT_THEME.text.inverse == Style(fg="#0d1117")
     assert DEFAULT_THEME.overlays.toast == DARK_PALETTE.surface_raised
-    head = Markdown("# Title").render(40)[0].segments[0].style
+    head = Markdown("# Title").render(Constraints(width=40))[0].segments[0].style
     assert head == DARK_PALETTE.heading.merge(Style(underline=True))
-    assert Button("ok").render(40)[0].segments[0].style == DARK_PALETTE.accent
+    assert Button("ok").render(Constraints(width=40))[0].segments[0].style == DARK_PALETTE.accent
     field = Input()
     field.insert("hello")
-    assert field.render(40)[0].segments[0].text == "\u276f "
+    assert field.render(Constraints(width=40))[0].segments[0].text == "\u276f "
     cursor = List(["alpha"])
     cursor.focused = True
-    cursor = cursor.render(40)[0]
+    cursor = cursor.render(Constraints(width=40))[0]
     assert any(seg.style.bg == DARK_PALETTE.surface_active.bg for seg in cursor.segments)

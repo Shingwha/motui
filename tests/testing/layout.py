@@ -2,12 +2,14 @@
 
 from __future__ import annotations
 
+from motui.kernel.layout import Constraints
+
 __all__ = ["marked", "rows", "texts"]
 
 
 def texts(component, width: int) -> list[str]:
     """The plain-text rows ``component`` renders at ``width``."""
-    return [row.text for row in component.render(width)]
+    return [row.text for row in component.render(Constraints(width=width))]
 
 
 def rows(tui) -> list[str]:

@@ -12,7 +12,7 @@ from collections import deque
 
 from motui import App, headless_tui
 from motui.kernel.cell import Surface
-from motui.kernel.layout import Constraints, as_constraints
+from motui.kernel.layout import Constraints
 from motui.kernel.style import Style
 from motui.widgets import Canvas
 
@@ -66,9 +66,8 @@ class Snake:
         """The row cache's snapshot: every input ``render`` reads."""
         return (self.steps, self.alive, self.score, tuple(self.body), self.food)
 
-    def render(self, c: Constraints | int) -> Surface:
+    def render(self, c: Constraints) -> Surface:
         """Draw the board into a canvas no larger than the constraints."""
-        c = as_constraints(c)
         budget = self.height if c.max_height is None else c.max_height
         width, height = min(c.width, self.width), max(0, min(budget, self.height))
         canvas = Canvas(width, height)

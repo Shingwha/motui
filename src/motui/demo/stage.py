@@ -24,7 +24,7 @@ from typing import TYPE_CHECKING
 
 from motui import Option, Text, Theme
 from motui.app import FocusManager
-from motui.kernel import Component, Line
+from motui.kernel import Component, Constraints, Line, Surface
 from motui.kernel.text import visible_width
 from motui.widgets import Column, Divider, Panel
 
@@ -91,8 +91,10 @@ class Echo:
     def clear(self) -> None:
         self._line.text = ""
 
-    def render(self, width: int) -> list[Line]:
-        return [] if not self._line.text else self._line.render(width)
+    def render(self, c: Constraints) -> Surface:
+        if not self._line.text:
+            return Surface(width=c.width, rows=())
+        return self._line.render(c)
 
     def revision(self) -> object:
         return self._line.text

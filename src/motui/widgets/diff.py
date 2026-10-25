@@ -58,7 +58,7 @@ from dataclasses import replace
 
 from ..kernel.glyphs import GLYPHS, Glyphs
 from ..kernel.cell import Line, Segment, Surface
-from ..kernel.layout import Constraints, as_constraints
+from ..kernel.layout import Constraints
 from ..kernel.style import NONE, Style
 from ..kernel.theme import Styles, Theme
 from ..widgets.base import Widget
@@ -358,7 +358,7 @@ class Diff(Widget):
     the context, ``-`` and ``+``
     rows all read weight-neutral, and bold stays what it is everywhere else
     in the toolkit -- the markdown ``**...**`` syntax (the rule
-    ``kernel/style.py``'s palette note spells out).  ``render(width)`` fits
+    ``kernel/style.py``'s palette note spells out).  ``render(c)`` fits
     every row to the width, so a long line is truncated with ``\u2026`` like
     anywhere else, and caches the fitted rows for that width: a repaint
     answers from the cache, a resize rebuilds it.
@@ -580,7 +580,7 @@ class Diff(Widget):
             self.styles,
         )
 
-    def render(self, c: Constraints | int) -> Surface:
+    def render(self, c: Constraints) -> Surface:
         """The diff rows, each fitted to the width (``fit`` truncates).
 
         One render is cached, the way :class:`~.markdown.Markdown` caches its
@@ -593,9 +593,7 @@ class Diff(Widget):
         the cache: the rows are immutable, but the caller's copy is its own,
         because the viewport treats a returned sequence as its own.
 
-        A bare ``int`` is the 1.x width spelling and is normalized through
-        :func:`~motui.kernel.layout.as_constraints`; the cache key stays the
-        width (never ``max_height``), so a smaller budget truncates the
+        The cache key stays the width (never ``max_height``), so a smaller budget truncates the
         returned rows without rebuilding them.  The surface is
         :meth:`~motui.kernel.cell.Surface.clipped`, not padded.  Long lines
         still truncate through ``fit`` exactly as before (the W2.5 decision).
@@ -606,7 +604,6 @@ class Diff(Widget):
         ``numbers`` left at ``False`` the rows are the single-segment lines
         they have always been, byte for byte.
         """
-        c = as_constraints(c)
         key = (c.width, self.theme, self.styles)
         if self._rendered_rows is None or self._rendered_key != key:
             # The deletion band loses its weight here: the ``status.danger``

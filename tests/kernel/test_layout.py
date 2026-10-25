@@ -29,9 +29,9 @@ class _Counting:
         self.texts = list(texts)
         self.renders = 0
 
-    def render(self, width: int) -> list[Line]:
+    def render(self, c: Constraints) -> Surface:
         self.renders += 1
-        return [Line.from_text(t) for t in self.texts]
+        return Surface.clipped([Line.from_text(t) for t in self.texts], c.width)
 
     def revision(self) -> object:
         return tuple(self.texts)
@@ -43,11 +43,15 @@ class _WidthShaped:
     def __init__(self) -> None:
         self.renders = 0
 
-    def render(self, width: int) -> list[Line]:
+    def render(self, c: Constraints) -> Surface:
         self.renders += 1
-        return [
-            Line.from_text(f"w{width} row {i}") for i in range(max(1, width // 10))
-        ]
+        return Surface.clipped(
+            [
+                Line.from_text(f"w{c.width} row {i}")
+                for i in range(max(1, c.width // 10))
+            ],
+            c.width,
+        )
 
     def revision(self) -> object:
         return "stable"  # the same snapshot at every width
@@ -60,9 +64,9 @@ class _Open:
         self.texts = list(texts)
         self.renders = 0
 
-    def render(self, width: int) -> list[Line]:
+    def render(self, c: Constraints) -> Surface:
         self.renders += 1
-        return [Line.from_text(t) for t in self.texts]
+        return Surface.clipped([Line.from_text(t) for t in self.texts], c.width)
 
 
 def test_initial_state_is_an_empty_attached_viewport():
@@ -211,11 +215,15 @@ def test_the_window_equals_a_full_materialization():
                 view.layout(width, height)
                 view.scroll_up(scrolled)
                 layout = view.layout(width, height)
-                rendered = [row for block in doc.blocks() for row in block.render(width)]
+                rendered = [
+                    row
+                    for block in doc.blocks()
+                    for row in block.render(Constraints(width=width))
+                ]
                 owners = [
                     (block.id, row)
                     for block in doc.blocks()
-                    for row in range(len(block.render(width)))
+                    for row in range(len(block.render(Constraints(width=width))))
                 ]
                 offset = view.offset
                 window = rendered[offset : offset + len(layout.body_rows)]

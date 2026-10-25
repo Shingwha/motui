@@ -99,7 +99,7 @@ def test_an_empty_form_submits_an_empty_mapping():
     form = Form([])
     assert form.activate() is True and form.take_result() == {}
     assert form.handle(key("tab")) is False
-    assert list(form.render(20)) == []
+    assert list(form.render(Constraints(width=20))) == []
 
 
 def test_child_at_maps_component_rows_and_owns_labels_gaps_and_errors():
@@ -108,7 +108,7 @@ def test_child_at_maps_component_rows_and_owns_labels_gaps_and_errors():
         [Field("a", field, label="One", validate=lambda v: "bad"), Field("b", Checkbox("y"))],
         gap=1,
     )
-    form.render(20)
+    form.render(Constraints(width=20))
     assert form.child_at(1, 0) == (field, 0, 0)
     assert form.child_at(0, 0) is None
     form.activate()
@@ -127,7 +127,7 @@ def test_a_form_takes_constraints_and_honours_the_height_budget():
         gap=1,
     )
     assert isinstance(form.render(Constraints(width=20)), Surface)
-    assert form.render(20) == form.render(Constraints(width=20))
+    assert form.render(Constraints(width=20)) == form.render(Constraints(width=20))
     surface = form.render(Constraints(width=20, max_height=2))
     assert [row.text for row in surface] == ["One", "[ ] x"]
     assert list(form.render(Constraints(width=20, max_height=0))) == []

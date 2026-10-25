@@ -82,6 +82,7 @@ from ..kernel.hit import EveryHandle, Hit
 from ..kernel.cell import Line
 from ..kernel.selection import Selection, SelectionAnchor, extract
 from ..kernel.text import visible_width
+from ..kernel.layout import Constraints
 
 if TYPE_CHECKING:
     from .driver import TUI
@@ -378,7 +379,7 @@ class SelectionGesture:
         """
         pane = self._tui.frame.pane(hit.pane_id)
         width = self._pane_width(pane) if pane is not None else self._tui.screen.width
-        rows = hit.block.rows_view(width)
+        rows = hit.block.rows_view(Constraints(width=width))
         if not 0 <= hit.row < len(rows):
             return None  # the document moved since the layout: nothing to select
         return rows[hit.row]
@@ -614,7 +615,7 @@ class SelectionGesture:
         if rows > 0:
             remaining = rows
             while True:
-                count = blocks[index].row_count(width)
+                count = blocks[index].row_count(Constraints(width=width))
                 if row + remaining < count:
                     return (blocks[index].id, row + remaining, col)
                 remaining -= count - row  # the rest of this block is consumed
@@ -630,4 +631,4 @@ class SelectionGesture:
             if index == 0:
                 return (blocks[index].id, 0, col)
             index -= 1
-            row = blocks[index].row_count(width) - 1
+            row = blocks[index].row_count(Constraints(width=width)) - 1

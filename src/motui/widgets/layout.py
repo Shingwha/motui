@@ -1,7 +1,7 @@
 """Layout containers: :class:`Row` and :class:`Column`.
 
 Both are ordinary components of the component library
-(``render(Constraints | int) -> Surface``) that arrange child components
+(``render(Constraints) -> Surface``) that arrange child components
 instead of drawing: a ``Row`` places children side by side in columns of
 fixed or shared width, a ``Column`` stacks them vertically with optional
 blank rows between.  They nest one level deep (a ``Row`` child may be a
@@ -23,7 +23,7 @@ from __future__ import annotations
 
 from ..kernel.document import Component, Revisioned
 from ..kernel.cell import Line, Segment, Surface
-from ..kernel.layout import Constraints, as_constraints
+from ..kernel.layout import Constraints
 from ..kernel.style import NONE, Style
 from ..kernel.theme import Styles, Theme
 from ..widgets.base import Widget
@@ -110,15 +110,13 @@ class Row:
             self.gap,
         )
 
-    def render(self, c: Constraints | int) -> Surface:
+    def render(self, c: Constraints) -> Surface:
         """Lay the children out side by side and answer a clipped surface.
 
-        ``c`` may be the 1.x bare width; children still receive that width as
-        an int (they may be on either side of the migration), and the
-        composed rows are fitted to it as before.  ``max_height`` truncates
+        Children receive the constraint's inner widths and the composed
+        rows are fitted to ``c.width`` as before.  ``max_height`` truncates
         the final rows.
         """
-        c = as_constraints(c)
         width = c.width
         count = len(self.children)
         if count == 0:
@@ -140,7 +138,7 @@ class Row:
         cell_rows: list[int] = []
         for child, col_width in zip(self.children, col_widths):
             inner = max(0, col_width)
-            raw = list(child.render(inner))
+            raw = list(child.render(Constraints(width=inner)))
             raw_cells.append(raw)
             geometry.append((x, inner))
             cell_rows.append(len(raw))
@@ -234,13 +232,12 @@ class Column:
             self.gap,
         )
 
-    def render(self, c: Constraints | int) -> Surface:
+    def render(self, c: Constraints) -> Surface:
         """Stack the children and answer a clipped surface.
 
-        The 1.x bare width is accepted and forwarded to the children as an
-        int; ``max_height`` truncates the final rows.
+        Children render at their inner widths; ``max_height`` truncates the
+        final rows.
         """
-        c = as_constraints(c)
         width = c.width
         raw_cells: list[list[Line]] = []
         offsets: list[tuple[int, int]] = []
@@ -248,7 +245,7 @@ class Column:
         for i, child in enumerate(self.children):
             if i and self.gap > 0:
                 y += self.gap
-            raw = list(child.render(width))
+            raw = list(child.render(Constraints(width=width)))
             raw_cells.append(raw)
             offsets.append((y, len(raw)))
             y += len(raw)
@@ -304,9 +301,8 @@ class Spacer:
         """The :class:`~motui.kernel.document.Revisioned` snapshot: the row count."""
         return (self.rows,)
 
-    def render(self, c: Constraints | int) -> Surface:
+    def render(self, c: Constraints) -> Surface:
         """``rows`` blank rows as a clipped surface (the budget may shorten it)."""
-        c = as_constraints(c)
         count = max(0, self.rows)
         if c.max_height is not None:
             count = min(count, c.max_height)
@@ -400,14 +396,12 @@ class Padding(Widget):
             self.styles,
         )
 
-    def render(self, c: Constraints | int) -> Surface:
+    def render(self, c: Constraints) -> Surface:
         """Pad the child and answer a clipped surface.
 
-        The 1.x bare width is accepted and the child still receives the inner
-        width as an int; ``max_height`` truncates the final rows (the memo
-        keeps the untruncated ones).
+        The child renders at the inner width; ``max_height`` truncates the
+        final rows (the memo keeps the untruncated ones).
         """
-        c = as_constraints(c)
         width = c.width
         left = max(0, self.left)
         top = max(0, self.top)
@@ -415,7 +409,7 @@ class Padding(Widget):
         bottom = max(0, self.bottom)
         inner = max(0, width - left - right)
         fill = self.group("surfaces").base
-        child_rows = list(self.child.render(inner))
+        child_rows = list(self.child.render(Constraints(width=inner)))
         self._child_rows = len(child_rows)
         self._inner = inner
         self._left = left

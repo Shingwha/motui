@@ -22,6 +22,7 @@ from collections.abc import Iterable
 
 from ..app import TUI
 from ..kernel.events import Event, EventSource
+from ..kernel.layout import Constraints
 from ..terminal.screen import HeadlessScreen
 from .emulator import Emulator
 
@@ -85,5 +86,5 @@ def snapshot(tui: TUI) -> str:
             out.append(f"[{block.id}]")
         else:
             out.append(f"[{block.id} | {block.pin}]")
-        out.extend("  |" + row.text for row in block.render(width))
+        out.extend("  |" + row.text for row in block.render(Constraints(width=width)))
     return "\n".join(out)

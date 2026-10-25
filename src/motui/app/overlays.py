@@ -64,6 +64,7 @@ from ..widgets.text import Text
 from ..kernel.style import Style
 from ..kernel.theme import DEFAULT_THEME, Theme, Themed
 from ..kernel.layout import ScreenLayout
+from ..kernel.layout import Constraints
 
 if TYPE_CHECKING:
     from .driver import TUI
@@ -128,7 +129,7 @@ def _stack(
         return []
     measured: list[tuple[_Toast, int, list[Line]]] = []
     for toast in toasts:
-        rendered = [row.fit(ceiling) for row in toast.component.render(ceiling)]
+        rendered = [row.fit(ceiling) for row in toast.component.render(Constraints(width=ceiling))]
         # An empty component renders no rows, which measures to zero width.
         width = min(max((row.width for row in rendered), default=0), ceiling)
         if width <= 0:

@@ -14,7 +14,7 @@ controller methods, no callbacks)::
       Body line two
 
 The body is any component (:class:`~motui.widgets.decor.Panel`'s child
-protocol): it renders through the same ``render(width)`` -- at
+protocol): it renders through the same ``render(c)`` -- at
 ``width`` minus the marker's columns, the width the inset leaves it -- so a
 nested ``Panel``, a field or a layout works unchanged.  The component is a
 :class:`~motui.kernel.document.Container`: a title-row cell answers ``None``
@@ -40,7 +40,7 @@ from __future__ import annotations
 from ..kernel.document import Component, Revisioned
 from ..kernel.glyphs import GLYPHS, Glyphs, seat
 from ..kernel.cell import Line, Segment, Surface
-from ..kernel.layout import Constraints, as_constraints
+from ..kernel.layout import Constraints
 from ..kernel.text import visible_width
 from ..kernel.theme import Styles, Theme
 from ..widgets.base import Widget
@@ -231,12 +231,11 @@ class Collapsible(Widget):
             body_snapshot,
         )
 
-    def render(self, c: Constraints | int) -> Surface:
+    def render(self, c: Constraints) -> Surface:
         """The title row and, while open, the body's inset rows.
 
-        A bare ``int`` is the 1.x width spelling and is normalized through
-        :func:`~motui.kernel.layout.as_constraints`.  The body still renders
-        at its int width (``width`` minus the marker's columns) and the memo
+        The body renders at the inner width (``width`` minus the marker's
+        columns) and the memo
         key stays the width alone -- a smaller ``max_height`` truncates the
         assembled rows after the memo is consulted, never repaints the body.
         ``_body_count`` keeps the untruncated body geometry :meth:`child_at`
@@ -244,7 +243,6 @@ class Collapsible(Widget):
         :meth:`~motui.kernel.cell.Surface.clipped`, not padded: short rows
         keep their natural width, so the painted bytes are unchanged.
         """
-        c = as_constraints(c)
         width = c.width
         if self.disabled:
             style = self.group("text").faint
@@ -260,7 +258,7 @@ class Collapsible(Widget):
         out = [Line((Segment(mark, style), Segment(self.title, style))).fit(width)]
         if self.open:
             indent = visible_width(mark)
-            body_rows = list(self.body.render(max(0, width - indent)))
+            body_rows = list(self.body.render(Constraints(width=max(0, width - indent))))
             self._body_count = len(body_rows)
             key = (tuple(map(id, body_rows)), width, indent)
             memo = self._body_memo

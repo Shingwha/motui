@@ -9,7 +9,7 @@ stays in :mod:`motui.kernel.text`; the row model stays in
 from __future__ import annotations
 
 from ..kernel.cell import Line, Surface, action_at
-from ..kernel.layout import Constraints, as_constraints
+from ..kernel.layout import Constraints
 from ..kernel.style import Style
 from ..kernel.text import wrap_text
 from ..kernel.theme import Theme, Themed
@@ -139,11 +139,10 @@ class Text(Themed):
         """
         return self._revision()
 
-    def render(self, c: Constraints | int) -> Surface:
+    def render(self, c: Constraints) -> Surface:
         """Wrap ``text`` to the constraints and return a clipped surface.
 
-        A bare ``int`` is the 1.x spelling and is normalized through
-        :func:`motui.kernel.layout.as_constraints`; a ``max_height`` budget
+        A ``max_height`` budget
         truncates the wrapped rows (a text block never grows past the height
         it was offered).  The surface is :meth:`Surface.clipped`, not padded:
         short rows keep their natural width, so the bytes a layout paints are
@@ -163,7 +162,6 @@ class Text(Themed):
         merged onto the span -- a copy, so the last-render row itself stays
         hover-free.
         """
-        c = as_constraints(c)
         rows = self._rows_for(c.width)
         if c.max_height is not None:
             rows = rows[: c.max_height]

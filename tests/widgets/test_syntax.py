@@ -14,6 +14,7 @@ from motui.widgets.syntax import (
     default_highlighter,
     highlight,
 )
+from motui.kernel.layout import Constraints
 
 
 
@@ -46,7 +47,7 @@ def test_python_keywords_carry_the_accent_hue():
 
 
 def test_a_fence_highlights_its_tagged_body_row_by_row():
-    rows = Markdown("```python\nx = 1\n```").render(80)
+    rows = Markdown("```python\nx = 1\n```").render(Constraints(width=80))
     assert rows[0].text == "```python"
     assert [seg.text for seg in rows[1].segments] == ["x = ", "1"]
     assert rows[1].segments[1].style == DEFAULT_THEME.status.warning

@@ -32,7 +32,7 @@ def test_progress_bar_clamps_and_can_lead_with_a_label():
 
 
 def test_progress_bar_styles_the_filled_and_empty_runs():
-    row = ProgressBar(0.5, width_chars=4).render(20)[0]
+    row = ProgressBar(0.5, width_chars=4).render(Constraints(width=20))[0]
     assert row.segments[2].style == DEFAULT_THEME.status.success
     assert row.segments[3].style == DEFAULT_THEME.text.faint
 
@@ -67,7 +67,7 @@ def test_slider_move_steps_and_clamps_and_clears_a_pending_value():
 
 def test_slider_click_maps_the_track_to_the_value():
     slider = Slider(0, maximum=10)
-    slider.render(14)
+    slider.render(Constraints(width=14))
     assert slider.click(0, 1) is True and slider.value == 0
     assert slider.click(0, 11) is True and slider.value == 10
     assert slider.click(1, 1) is False
@@ -84,7 +84,7 @@ def test_slider_activate_takes_the_value_once_and_disabled_refuses():
     )
     assert dead.move(1) is False and dead.click(0, 1) is False
     assert dead.activate() is False and dead.take_result() is None
-    assert dead.render(14)[0].segments[0].style.italic is True
+    assert dead.render(Constraints(width=14))[0].segments[0].style.italic is True
 
 
 def test_slider_hover_and_focus_merge_their_bands():
@@ -94,13 +94,13 @@ def test_slider_hover_and_focus_merge_their_bands():
         controls=replace(DEFAULT_THEME.controls, focus=Style(bold=True)),
     )
     slider = Slider(2, theme=theme)
-    plain = slider.render(14)
+    plain = slider.render(Constraints(width=14))
     assert slider.hover_at(0, 0) is True
-    assert all(seg.style.underline for seg in slider.render(14)[0].segments)
+    assert all(seg.style.underline for seg in slider.render(Constraints(width=14))[0].segments)
     assert slider.hover_at(1, 0) is True
-    assert slider.render(14) == plain
+    assert slider.render(Constraints(width=14)) == plain
     slider.focused = True
-    assert all(seg.style.bold for seg in slider.render(14)[0].segments)
+    assert all(seg.style.bold for seg in slider.render(Constraints(width=14))[0].segments)
 
 
 def test_spinner_advances_through_its_frames_and_wraps():
@@ -121,7 +121,7 @@ def test_spinner_advances_through_its_frames_and_wraps():
 def test_the_indicators_take_constraints_and_honour_the_height_budget():
     for component in (ProgressBar(0.5, width_chars=4), Slider(5), Spinner("x")):
         assert isinstance(component.render(Constraints(width=14)), Surface)
-        assert component.render(14) == component.render(Constraints(width=14))
+        assert component.render(Constraints(width=14)) == component.render(Constraints(width=14))
         assert list(component.render(Constraints(width=14, max_height=0))) == []
         assert component.render(Constraints(width=14, max_height=1)).height == 1
 
