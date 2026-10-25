@@ -8,7 +8,7 @@ and the determinism a headless replay relies on.
 from __future__ import annotations
 
 from motui.demo import render_scene
-from motui.demo.showcase import BreakoutScene
+from motui.demo.showcase import BreakoutScene, DashboardScene
 from motui.kernel.events import KeyEvent
 from motui.kernel.layout import Constraints
 from motui.kernel.theme import Theme
@@ -80,3 +80,40 @@ def test_breakout_renders_deterministically():
 def test_breakout_returns_to_the_menu():
     assert _breakout().on_key(KeyEvent("escape")) == "menu"
     assert _breakout().on_key(KeyEvent("q")) == "menu"
+
+
+def _dashboard() -> DashboardScene:
+    return DashboardScene(Theme.dark())
+
+
+def test_dashboard_pushes_a_sample_every_tick():
+    scene = _dashboard()
+    before = scene.samples[-1]
+    scene.tick(1)
+    assert scene.samples[-1] != before
+    assert len(scene.samples) == 48
+    assert scene.log
+
+
+def test_dashboard_is_deterministic_and_reflows_at_both_sizes():
+    for width, height in ((80, 24), (100, 30)):
+        first = render_scene("dashboard", width=width, height=height, phase=30)
+        second = render_scene("dashboard", width=width, height=height, phase=30)
+        assert first == second
+        lines = first.splitlines()
+        assert len(lines) <= height
+        assert all(len(line) <= width for line in lines)
+        for label in ("throughput", "pressure", "metrics", "events"):
+            assert label in first
+
+
+def test_dashboard_clock_is_derived_from_phase():
+    one = render_scene("dashboard", phase=30)
+    two = render_scene("dashboard", phase=60)
+    assert "00:01.0" in one and "tick 0030" in one
+    assert "00:02.0" in two and "tick 0060" in two
+
+
+def test_dashboard_returns_to_the_menu():
+    assert _dashboard().on_key(KeyEvent("escape")) == "menu"
+    assert _dashboard().on_key(KeyEvent("q")) == "menu"

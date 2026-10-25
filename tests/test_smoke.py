@@ -14,7 +14,7 @@ from motui.demo import SCENES, main, render_scene, scene_output
 
 
 def test_every_scene_renders_a_bounded_frame():
-    assert SCENES == ("splash", "menu", "breakout", "gallery")
+    assert SCENES == ("splash", "menu", "breakout", "dashboard", "gallery")
     for name in SCENES:
         for width, height in ((80, 24), (100, 30)):
             text = render_scene(name, width=width, height=height, phase=8)
@@ -35,6 +35,7 @@ def test_pages_entry_prints_every_scene(monkeypatch, capsys):
     assert "Breakout" in out
     assert "2.0 in one page" in out
     assert "score" in out and "paddle" in out
+    assert "motui dashboard" in out and "requests" in out
 
 
 def test_the_piped_entry_prints_the_menu(monkeypatch, capsys):
@@ -69,6 +70,13 @@ def test_breakout_replays_headless(capsys):
     assert "breakout" in out and "score" in out
     assert "\u2584" in out  # the brick wall is painted
     assert "paddle" in out
+
+
+def test_dashboard_replays_headless(capsys):
+    assert main(["--scene", "dashboard", "--frames", "30", "--headless"]) == 0
+    out = capsys.readouterr().out
+    assert "motui dashboard" in out and "tick 0030" in out
+    assert "throughput" in out and "requests" in out and "events" in out
 
 
 def test_unknown_scene_is_a_usage_error(capsys):
