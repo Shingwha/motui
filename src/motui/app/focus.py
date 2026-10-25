@@ -12,8 +12,7 @@ The target tuple is the mounted tree's focus ring: the App re-derives it
 with :func:`focus_targets` and hands it over through
 :meth:`FocusManager.sync` before every focus verb, so mounting or removing
 a block needs no registration bookkeeping.  The constructor still takes an
-explicit tuple, which is what a trap, a modal and the demo's per-topic ring
-use.  A target is a node of the explicit widget tree -- ``focusable``, or a
+explicit tuple, which is what a trap and a modal use.  A target is a node of the explicit widget tree -- ``focusable``, or a
 ``focus_scope`` container (a ``Form`` routes its fields itself, so the ring
 stops at it).  A target without a ``focused`` attribute is a pure routing
 target (a plain ``Component`` handed to a trap); it is focused by identity
@@ -45,12 +44,12 @@ from ..kernel.geom import Pos
 from ..kernel.hit import Hit
 
 if TYPE_CHECKING:
-    from .runtime import Runtime
+    from .workspace import Workspace
 
 __all__ = ["FocusManager"]
 
 
-def _document_roots(tui: "Runtime") -> Iterator[Component]:
+def _document_roots(workspace: "Workspace") -> Iterator[Component]:
     """Every block root of every pane and dock, in paint order.
 
     The focus ring is derived from what is mounted, so it must see the
@@ -58,14 +57,14 @@ def _document_roots(tui: "Runtime") -> Iterator[Component]:
     frame's own paint order).  A dock holds a one-block document like a
     pane, so the same ``blocks()`` walk serves both.
     """
-    frame = tui.frame
+    frame = workspace.frame
     panes = (*frame.panes, *frame.docks.values())
     for pane in panes:
         for section in pane.viewport.document.blocks():
             yield section.widget
 
 
-def iter_widgets(tui: "Runtime") -> Iterator[Component]:
+def iter_widgets(workspace: "Workspace") -> Iterator[Component]:
     """Every mounted node once, depth first, in frame order.
 
     The flat tree walk ``App`` uses for broadcasts (a resize reaches every
@@ -73,7 +72,7 @@ def iter_widgets(tui: "Runtime") -> Iterator[Component]:
     yielded alone; a shared node is yielded at its first position only.
     """
     seen: set[int] = set()
-    for root in _document_roots(tui):
+    for root in _document_roots(workspace):
         walk = getattr(root, "walk", None)
         nodes = walk() if callable(walk) else (root,)
         for node in nodes:
@@ -83,7 +82,7 @@ def iter_widgets(tui: "Runtime") -> Iterator[Component]:
             yield node
 
 
-def focus_targets(tui: "Runtime") -> tuple[Component, ...]:
+def focus_targets(workspace: "Workspace") -> tuple[Component, ...]:
     """The focus ring: the mounted tree's preorder ``focusable``/scope nodes.
 
     A ``focus_scope`` node (a ``Form`` or a ``ComboBox`` routes its own
@@ -94,7 +93,7 @@ def focus_targets(tui: "Runtime") -> tuple[Component, ...]:
     """
     targets: list[Component] = []
     seen: set[int] = set()
-    for root in _document_roots(tui):
+    for root in _document_roots(workspace):
         stack: list[Component] = [root]
         while stack:
             node = stack.pop()
@@ -184,7 +183,7 @@ class FocusManager:
     binds nothing; the host routes ``tab`` to :meth:`focus_next`); no mouse
     drag (press-motion-release is :class:`~motui.app.gesture.SelectionGesture`'s);
     no pane or window focus (that is the frame's -- :class:`~motui.kernel.frame.Frame`
-    and ``Runtime.pane_at`` own which pane gets input).
+    and ``Workspace.pane_at`` own which pane gets input).
     """
 
     __slots__ = ("_focused", "_on_change", "_targets", "_traps", "_wrap")

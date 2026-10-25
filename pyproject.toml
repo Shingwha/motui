@@ -102,8 +102,8 @@ select = ["E", "F", "I", "UP", "B", "SIM", "RUF"]
 
 [tool.pyright]
 include = ["src/motui/kernel", "src/motui/testing", "tools"]
-# The two 1.x benchmark/golden tools are pinned files; their wave is later.
-ignore = ["tools/golden.py", "tools/framebench.py"]
+# The benchmark tool is a pinned file; its wave is later.
+ignore = ["tools/framebench.py"]
 # The migrated 1.x kernel code is checked at basic; W0b's strict files stay
 # strict, and W2/W3 tighten the migrated modules as they rewrite them.
 typeCheckingMode = "basic"

@@ -319,7 +319,7 @@ class Runtime:
         contract -- always on a non-live screen, even when a source is
         attached.
 
-        Escape hatch: ``await tui.keys.read()`` reads the raw source
+        Escape hatch: ``await runtime.keys.read()`` reads the raw source
         directly, bypassing the non-live guard.  A pending read returns
         ``None`` immediately when :meth:`exit` runs: the read task is
         cancelled and the source itself is closed by teardown.
