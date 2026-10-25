@@ -21,7 +21,7 @@ from dataclasses import replace
 import motui.widgets as widgets
 from motui import Text
 from motui.app import CommandPalette
-from motui.kernel import Component, visible_width
+from motui.kernel import Component, Constraints, Surface, visible_width
 from motui.kernel.glyphs import GLYPHS, Border
 from motui.testing import headless_tui
 from motui.widgets import (
@@ -181,3 +181,11 @@ def test_render_is_bounded_idempotent_and_drift_free():
             other = 80 if width != 80 else 1
             component.render(other)
             assert component.render(width) == first, f"{name}@{width}: drifted"
+
+
+def test_text_renders_under_constraints_with_a_height_budget():
+    surface = Text(_WIDE).render(Constraints(width=20, max_height=2))
+    assert isinstance(surface, Surface)
+    assert surface.width == 20
+    assert surface.height <= 2
+    assert all(row.width <= 20 for row in surface)

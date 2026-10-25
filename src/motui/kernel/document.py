@@ -10,13 +10,15 @@ otherwise.
 
 from __future__ import annotations
 
+import inspect
 from collections.abc import Sequence
 from typing import TYPE_CHECKING, Protocol, cast, runtime_checkable
 
-from .cell import Line
+from .cell import Line, Surface
 
 if TYPE_CHECKING:  # the protocol names the event model; no runtime import needed
     from .events import Event
+    from .layout import Constraints
 
 __all__ = [
     "Activable",
@@ -37,15 +39,15 @@ __all__ = [
 
 @runtime_checkable
 class Component(Protocol):
-    """Anything that renders itself into rows: ``render(width) -> list[Line]``.
+    """Anything that renders itself into a surface: ``render(c) -> Surface``.
 
     The one protocol the document model knows: a component is handed the
-    columns available to it (the screen width in full-screen mode) and
-    answers with the rows it wants painted there.  Nothing else about its
+    constraints available to it (the width, and an optional height budget)
+    and answers with the rows it wants painted there.  Nothing else about its
     host is promised, and nothing about its own state is assumed.
     """
 
-    def render(self, width: int) -> list[Line]:
+    def render(self, c: Constraints) -> Surface:
         ...
 
 
@@ -269,6 +271,93 @@ def descend(component: Component, row: int, col: int) -> tuple[Component, int, i
     return descend_chain(component, row, col)[-1]
 
 
+class _LegacyComponent(Protocol):
+    """A 1.x component: the temporary render shape this wave bridges.
+
+    W2a migrates the component protocol to ``render(Constraints) -> Surface``
+    but leaves most of the library on ``render(width) -> list[Line]`` until
+    W2c.  This protocol exists only so the bridge can name that old shape
+    without a cast to ``Any`` -- it is deleted with the bridge.
+    """
+
+    def render(self, width: int) -> Sequence[Line]:
+        ...
+
+
+#: Per-class answer to "does this component's ``render`` take Constraints?".
+#: The signature is fixed by the type (a class cannot change it per instance),
+#: so the inspection cost is paid once per class rather than per render.
+_TAKES_CONSTRAINTS: dict[type, bool] = {}
+
+
+def _render_takes_constraints(component: Component) -> bool:
+    """Whether ``component``'s render takes a single Constraints argument.
+
+    The temporary bridge decides from the class's ``render`` signature: the
+    second parameter's name (``c`` / ``constraints``, the 2.0 spelling) or its
+    annotation naming ``Constraints``.  A 1.x component names its parameter
+    ``width`` and annotates it ``int``.  An unreadable signature falls back to
+    the old shape, which every pre-W2 component supports.
+    """
+    cls = type(component)
+    known = _TAKES_CONSTRAINTS.get(cls)
+    if known is not None:
+        return known
+    takes = False
+    try:
+        parameters = list(inspect.signature(cls.render).parameters.values())
+    except (TypeError, ValueError):  # builtins / C-implemented render
+        parameters = []
+    if len(parameters) >= 2:
+        parameter = parameters[1]
+        if parameter.name in ("c", "constraints"):
+            takes = True
+        elif parameter.annotation is not inspect.Parameter.empty:
+            annotation = parameter.annotation
+            takes = "Constraints" in (
+                annotation if isinstance(annotation, str) else str(annotation)
+            )
+    _TAKES_CONSTRAINTS[cls] = takes
+    return takes
+
+
+def _as_constraints(value: Constraints | int) -> Constraints:
+    """Normalize a Section argument without a module-level import cycle.
+
+    ``layout`` imports this module for ``Document``/``Section``, so the
+    conversion helper can only be imported when a call is made; by then both
+    modules are loaded.
+    """
+    from .layout import as_constraints
+
+    return as_constraints(value)
+
+
+def _render_component(component: Component, c: Constraints) -> Surface:
+    """Render one component under ``c``: the temporary 1.x/2.0 bridge.
+
+    A migrated component receives ``c`` and answers a :class:`Surface`; a
+    legacy one receives ``c.width`` and answers rows, which are wrapped in a
+    clipped surface (clipping never pads, so the bytes a legacy component
+    produced are unchanged).  ``c.max_height`` is enforced here for both
+    shapes: a legacy component cannot see it, and a migrated one may answer
+    more rows than its budget.  **W2c deletes this function** -- every
+    component will take Constraints and return a Surface.
+    """
+    if _render_takes_constraints(component):
+        rendered: object = component.render(c)
+        if isinstance(rendered, Surface):
+            surface = rendered
+        else:  # tolerance while components migrate: rows are acceptable too
+            surface = Surface.clipped(cast("Sequence[Line]", rendered), c.width)
+    else:
+        legacy = cast(_LegacyComponent, component)
+        surface = Surface.clipped(legacy.render(c.width), c.width)
+    if c.max_height is not None and surface.height > c.max_height:
+        surface = Surface(width=surface.width, rows=surface.rows[: c.max_height])
+    return surface
+
+
 class Section:
     """One addressable row-producing unit inside a :class:`Document`.
 
@@ -279,10 +368,10 @@ class Section:
     layout side had to be pruned by id every frame -- a per-frame walk of the
     whole document to catch a removed block or an id reused by a new one; a
     cache on the block dies with the block and nothing reuses it.  The cache
-    is keyed ``(width, revision)``, and only a component that implements
-    :class:`Revisioned` and answers a non-``None`` snapshot is cached: an
-    unrevisioned component re-renders on every call, because the block has no
-    way to see that its content changed.
+    is keyed ``(width, max_height, revision)``, and only a component that
+    implements :class:`Revisioned` and answers a non-``None`` snapshot is
+    cached: an unrevisioned component re-renders on every call, because the
+    block has no way to see that its content changed.
     """
 
     __slots__ = (
@@ -291,6 +380,7 @@ class Section:
         "_id",
         "_pin",
         "_rows_cache",
+        "_rows_max_height",
         "_rows_revision",
         "_rows_width",
     )
@@ -312,6 +402,7 @@ class Section:
         # so it cannot double as the empty marker.
         self._rows_cache: list[Line] | None = None
         self._rows_width: int | None = None
+        self._rows_max_height: int | None = None
         self._rows_revision: object = None
 
     @property
@@ -343,22 +434,25 @@ class Section:
             return cast("Revisioned", self._component).revision()
         return None
 
-    def render(self, width: int) -> list[Line]:
+    def render(self, width: Constraints | int) -> list[Line]:
         """Forward rendering to the block's component: the *fresh-rows* door.
 
         Deliberately uncached: this is "render it again, now".  The cached
-        door every layout-side caller wants is :meth:`rows`.
+        door every layout-side caller wants is :meth:`rows`.  A bare ``int``
+        is accepted as the 1.x spelling (:func:`motui.kernel.layout.as_constraints`
+        normalizes it); the answer stays ``list[Line]`` for the existing
+        callers, though the component protocol now answers a Surface.
         """
-        return self._component.render(width)
+        return self.rows(width)
 
-    def rows(self, width: int) -> list[Line]:
+    def rows(self, width: Constraints | int) -> list[Line]:
         """The block's rows at ``width``, cached when the component allows it.
 
         The one door for "a list of this block's rows the caller owns" --
         the door to reach for whenever the rows (or the list holding them)
         might be kept or changed -- and the cache it answers from is the
-        block's own, keyed ``(width, revision())``.  The caching rule is one
-        line:
+        block's own, keyed ``(width, max_height, revision())``.  The caching
+        rule is one line:
 
         * a component that implements :class:`Revisioned` **and** answers a
           snapshot is cached until the width or the snapshot moves;
@@ -376,7 +470,7 @@ class Section:
         """
         return list(self._refresh(width))
 
-    def rows_view(self, width: int) -> Sequence[Line]:
+    def rows_view(self, width: Constraints | int) -> Sequence[Line]:
         """The block's rows at ``width``, borrowed from the cache: read-only.
 
         The door for "read the rows, keep nothing, change nothing" -- the
@@ -396,7 +490,7 @@ class Section:
         """
         return self._refresh(width)
 
-    def row_count(self, width: int) -> int:
+    def row_count(self, width: Constraints | int) -> int:
         """How many rows the block occupies at ``width``.
 
         The door for callers that need the count alone -- height walks,
@@ -409,7 +503,7 @@ class Section:
         """
         return len(self._refresh(width))
 
-    def _refresh(self, width: int) -> list[Line]:
+    def _refresh(self, width: Constraints | int) -> list[Line]:
         """The one hit-or-miss decision every rows door shares.
 
         Answers the block's rows at ``width``, rendering and filling the
@@ -419,24 +513,31 @@ class Section:
         fresh render (a component without a usable snapshot: never cached,
         the caller owns it).  Doors that hand the list out copy it
         (:meth:`rows`); doors that only read take it as is.
+
+        The cache key is ``(width, max_height, revision)``: a height budget
+        changes the rows a component answers, so it must miss exactly like a
+        width change does.
         """
+        c = _as_constraints(width)
         if not self._cacheable:
-            return list(self._component.render(width))  # no snapshot: never cached
+            return list(_render_component(self._component, c))  # no snapshot
         revision = cast("Revisioned", self._component).revision()
         if revision is None:
             # A component with the protocol switched its memory off (``None``
             # is "no snapshot"): the block must not cache what it cannot
             # invalidate.
-            return list(self._component.render(width))
+            return list(_render_component(self._component, c))
         if (
             self._rows_cache is not None
-            and self._rows_width == width
+            and self._rows_width == c.width
+            and self._rows_max_height == c.max_height
             and self._rows_revision == revision
         ):
             return self._rows_cache
-        rows = list(self._component.render(width))
+        rows = list(_render_component(self._component, c))
         self._rows_cache = rows
-        self._rows_width = width
+        self._rows_width = c.width
+        self._rows_max_height = c.max_height
         self._rows_revision = revision
         return rows
 

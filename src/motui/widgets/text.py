@@ -8,7 +8,8 @@ stays in :mod:`motui.kernel.text`; the row model stays in
 
 from __future__ import annotations
 
-from ..kernel.cell import Line, action_at
+from ..kernel.cell import Line, Surface, action_at
+from ..kernel.layout import Constraints, as_constraints
 from ..kernel.style import Style
 from ..kernel.text import wrap_text
 from ..kernel.theme import Theme, Themed
@@ -138,8 +139,15 @@ class Text(Themed):
         """
         return self._revision()
 
-    def render(self, width: int) -> list[Line]:
-        """Wrap ``text`` to ``width`` and return the rows (always a fresh list).
+    def render(self, c: Constraints | int) -> Surface:
+        """Wrap ``text`` to the constraints and return a clipped surface.
+
+        A bare ``int`` is the 1.x spelling and is normalized through
+        :func:`motui.kernel.layout.as_constraints`; a ``max_height`` budget
+        truncates the wrapped rows (a text block never grows past the height
+        it was offered).  The surface is :meth:`Surface.clipped`, not padded:
+        short rows keep their natural width, so the bytes a layout paints are
+        the same ones the 1.x list answer produced.
 
         The render is pure: every call runs :meth:`_rows_for`, and the one
         row cache in the stack is :meth:`motui.kernel.document.Section.rows`
@@ -155,16 +163,19 @@ class Text(Themed):
         merged onto the span -- a copy, so the last-render row itself stays
         hover-free.
         """
-        rows = self._rows_for(width)
+        c = as_constraints(c)
+        rows = self._rows_for(c.width)
+        if c.max_height is not None:
+            rows = rows[: c.max_height]
         self._rows = rows
         span = self._hover_span
         if span is None:
-            return list(rows)
+            return Surface.clipped(rows, c.width)
         index, start, end = span
         out = list(rows)
         if 0 <= index < len(out):
             out[index] = out[index].merge_span(start, end, self._hover_style)
-        return out
+        return Surface.clipped(out, c.width)
 
     def hover_at(self, row: int, col: int) -> bool:
         """Mark the cell under the pointer; answer whether the render changed.

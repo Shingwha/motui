@@ -5,6 +5,8 @@ from dataclasses import replace
 import pytest
 
 from motui.widgets.text import Text
+from motui.kernel.cell import Line, Surface
+from motui.kernel.layout import Constraints
 from motui.kernel.style import Style
 from motui.kernel.theme import DEFAULT_THEME, Styles
 from motui.widgets import Collapsible, Column, Divider, Padding, Panel, Row, Spacer
@@ -91,8 +93,8 @@ def test_containers_nest_one_level():
 
 def test_a_spacer_renders_blank_rows():
     assert texts(Spacer(3), 10) == ["", "", ""]
-    assert Spacer(0).render(10) == []
-    assert Spacer(-2).render(10) == []
+    assert list(Spacer(0).render(10)) == []
+    assert list(Spacer(-2).render(10)) == []
 
 
 def test_padding_surrounds_the_child_with_plain_spaces():
@@ -213,3 +215,57 @@ def test_a_disabled_collapsible_refuses_both_doors_and_nested_content_fits():
     assert section.activate() is False and section.click(0, 0) is False
     nested = Collapsible("outer", Collapsible("inner", Text("a long body line to wrap")))
     assert all(row.width <= 12 for row in nested.render(12))
+
+
+# -- the 2.0 render contract -------------------------------------------------
+
+
+def test_a_row_takes_constraints_and_honours_the_height_budget():
+    row = Row([Rows("a", "b"), Rows("x")], widths=[2, None], gap=1)
+    surface = row.render(Constraints(width=10, max_height=1))
+    assert isinstance(surface, Surface)
+    assert [row_.text for row_ in surface] == ["a  x      "]
+    assert row.render(10) == row.render(Constraints(width=10))
+
+
+def test_a_column_takes_constraints_and_honours_the_height_budget():
+    column = Column([Rows("a", "b"), Rows("c")], gap=1)
+    surface = column.render(Constraints(width=5, max_height=2))
+    assert isinstance(surface, Surface)
+    assert [row.text for row in surface] == ["a", "b"]
+    assert [row.text for row in column.render(5)] == ["a", "b", "", "c"]
+
+
+def test_padding_takes_constraints_and_honours_the_height_budget():
+    padded = Padding(Rows("ab"), left=1, right=1, top=1, bottom=1)
+    surface = padded.render(Constraints(width=6, max_height=2))
+    assert isinstance(surface, Surface)
+    assert [row.text for row in surface] == ["", " ab "]
+    assert all(row.width <= 6 for row in surface)
+
+
+def test_a_spacer_takes_constraints_and_honours_the_height_budget():
+    surface = Spacer(3).render(Constraints(width=10, max_height=2))
+    assert isinstance(surface, Surface)
+    assert surface.height == 2
+    assert all(row == Line() for row in surface)
+
+
+def test_a_divider_takes_constraints_and_honours_the_height_budget():
+    divider = Divider(char="-", label="load")
+    surface = divider.render(Constraints(width=10, max_height=1))
+    assert isinstance(surface, Surface)
+    assert [row.text for row in surface] == ["-- load --"]
+    assert divider.render(10) == divider.render(Constraints(width=10))
+    assert list(Divider(char="-").render(Constraints(width=5, max_height=0))) == []
+
+
+def test_a_panel_takes_constraints_and_honours_the_height_budget():
+    panel = Panel(Rows("body"), title="T")
+    surface = panel.render(Constraints(width=10, max_height=2))
+    assert isinstance(surface, Surface)
+    assert [row.text for row in surface] == [
+        "\u250c\u2500 T \u2500\u2500\u2500\u2500\u2510",
+        "\u2502 body   \u2502",
+    ]
+    assert [row.text for row in panel.render(10)][-1] == "\u2514" + "\u2500" * 8 + "\u2518"

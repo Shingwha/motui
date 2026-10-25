@@ -29,7 +29,7 @@ values.
 
 from __future__ import annotations
 
-from ..kernel.cell import Line
+from ..kernel.cell import Line, cut_line
 from ..kernel.layout import ScreenLayout
 from .ansi import (
     CLEAR_LINE,
@@ -142,6 +142,13 @@ class Painter:
         more rows than the screen is truncated, a shorter one is blank-padded
         with empty :class:`Line` values, so :attr:`rows` is exactly
         ``screen.height`` rows after every paint (see the property).
+
+        Every row is then hard-clipped to the screen width before any bytes
+        are built.  An over-wide row would make the terminal wrap the write
+        onto the next line, corrupting every row after it; this is the final
+        guard that keeps the byte stream row-addressed even when a component
+        outgrows the width it was rendered for (the cut adds no ellipsis, so
+        a row that already fits is untouched).
         """
         self.frames += 1
         self._screen.refresh_size()
@@ -153,6 +160,9 @@ class Painter:
             del rows[height:]
         elif len(rows) < height:
             rows.extend(Line() for _ in range(height - len(rows)))
+        rows = [
+            cut_line(row, 0, width) if row.width > width else row for row in rows
+        ]
         if self._screen.live:
             # The capability the rows are rendered for: the screen's own, and
             # the full-precision path for a screen that names none (the

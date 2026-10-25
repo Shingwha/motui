@@ -5,10 +5,29 @@ from __future__ import annotations
 
 import pytest
 
-from motui.kernel.cell import Line
+from motui.kernel.cell import Line, Surface
 from motui.kernel.document import Document, Section
+from motui.kernel.layout import Constraints
 from motui.widgets.text import Text
 from tests.testing import Rows
+
+
+class _SurfaceRows:
+    """A component already on the 2.0 render shape: Constraints -> Surface."""
+
+    def __init__(self, *texts: str) -> None:
+        self.texts = list(texts)
+        self.constraints: list[Constraints] = []
+
+    def render(self, c: Constraints) -> Surface:
+        self.constraints.append(c)
+        rows = [Line.from_text(text) for text in self.texts]
+        if c.max_height is not None:
+            rows = rows[: c.max_height]
+        return Surface.clipped(rows, c.width)
+
+    def revision(self) -> object:
+        return tuple(self.texts)
 
 
 def test_block_render_forwards_to_its_component():
@@ -129,3 +148,39 @@ def test_pin_is_validated_and_exposed():
         Section("x", Rows(), pin="middle")
     with pytest.raises(AttributeError):
         Section("x", Rows()).pin = "bottom"  # type: ignore[misc]
+
+
+# -- the Constraints seam ----------------------------------------------------
+
+
+def test_a_section_takes_constraints_and_forwards_them_to_a_surface_component():
+    component = _SurfaceRows("alpha", "beta", "gamma")
+    block = Section("b", component)
+    constraints = Constraints(width=7, max_height=2)
+    rows = block.rows(constraints)
+    assert [row.text for row in rows] == ["alpha", "beta"]
+    assert component.constraints[-1] is constraints  # passed through unchanged
+
+
+def test_the_height_budget_is_part_of_the_section_cache_key():
+    component = _SurfaceRows("a", "b", "c")
+    block = Section("b", component)
+    assert len(block.rows(Constraints(width=5, max_height=1))) == 1
+    assert len(block.rows(Constraints(width=5, max_height=2))) == 2
+    assert len(block.rows(Constraints(width=5, max_height=1))) == 1
+    assert len(component.constraints) == 3  # the third call missed the cache
+
+
+def test_a_legacy_component_is_wrapped_in_a_clipped_surface():
+    block = Section("b", Rows("x" * 40, "short"))
+    rows = block.rows(Constraints(width=20))
+    assert [row.width for row in rows] == [20, 5]
+    assert rows[0].text == "x" * 20
+
+
+def test_section_render_stays_a_list_convenience_door():
+    block = Section("b", Rows("hello"))
+    rendered = block.render(Constraints(width=10))
+    assert isinstance(rendered, list)
+    assert rendered == [Line.from_text("hello")]
+    assert block.render(10) == rendered
