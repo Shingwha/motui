@@ -12,7 +12,7 @@ from __future__ import annotations
 import pytest
 
 from motui.kernel.cell import Line, Surface
-from motui.kernel.document import Document
+from motui.kernel.document import Document, Sizing
 from motui.kernel.layout import Constraints, Viewport
 from motui.widgets.text import Text
 from tests.testing import Rows, document, many
@@ -342,3 +342,104 @@ def test_a_surface_component_lays_out_through_the_bridge():
     assert layout.total_rows == 2
     assert component.constraints == [Constraints(width=20)]
     assert doc.get("b0").rows(Constraints(width=20)) == [Line.from_text("a"), Line.from_text("b")]
+
+
+# -- the FILL path -----------------------------------------------------------
+
+
+def test_a_fill_section_takes_the_height_the_flow_leaves():
+    doc = Document()
+    doc.add(Rows("a", "b"))
+    fill = doc.add(Rows("F"), sizing=Sizing.FILL)
+    view = Viewport(doc)
+    layout = view.layout(10, 5)
+    assert _texts(layout.rows) == ["a", "b", "F", "", ""]
+    assert layout.row_blocks == (("b0", 0), ("b0", 1), (fill.id, 0), None, None)
+    assert layout.body_rows == tuple(layout.rows)
+    assert (layout.offset, layout.total_rows) == (0, 2)
+
+
+def test_a_fill_gets_zero_height_when_the_flow_fills_the_pane():
+    doc = Document()
+    doc.add(Rows(*many(8)))
+    fill = doc.add(Rows("F"), sizing=Sizing.FILL)
+    view = Viewport(doc)
+    layout = view.layout(10, 4)
+    assert _texts(layout.rows) == many(8)[4:]
+    assert layout.row_blocks == (("b0", 4), ("b0", 5), ("b0", 6), ("b0", 7))
+    assert layout.total_rows == 8
+    assert fill.id not in [owner[0] for owner in layout.row_blocks if owner]
+
+
+def test_pinned_regions_and_a_fill_share_the_screen():
+    doc = Document()
+    top = doc.add(Rows("T"), pin="top")
+    flow = doc.add(Rows("flow"))
+    fill = doc.add(Rows("F"), sizing=Sizing.FILL)
+    bottom = doc.add(Rows("B"), pin="bottom")
+    layout = Viewport(doc).layout(10, 6)
+    assert _texts(layout.rows) == ["T", "flow", "F", "", "", "B"]
+    assert layout.row_blocks == (
+        (top.id, 0),
+        (flow.id, 0),
+        (fill.id, 0),
+        None,
+        None,
+        (bottom.id, 0),
+    )
+    assert (layout.viewport_start, layout.total_rows) == (1, 1)
+
+
+class _FillRows:
+    """A fill double that records the constraints it was handed."""
+
+    def __init__(self, *texts: str) -> None:
+        self.texts = list(texts)
+        self.constraints: list[Constraints] = []
+
+    def render(self, c: Constraints) -> Surface:
+        self.constraints.append(c)
+        return Surface.clipped([Line.from_text(text) for text in self.texts], c.width)
+
+
+def test_a_fill_is_rendered_with_its_residual_budget_and_padded():
+    doc = Document()
+    doc.add(Rows("a"))
+    component = _FillRows("x", "y")
+    doc.add(component, sizing=Sizing.FILL)
+    layout = Viewport(doc).layout(5, 4)
+    assert _texts(layout.rows) == ["a", "x", "y", ""]
+    assert component.constraints == [Constraints(width=5, max_height=3)]
+    assert layout.row_blocks == (("b0", 0), ("b1", 0), ("b1", 1), None)
+
+
+def test_the_fill_budget_under_a_pinned_region_is_the_screen_remainder():
+    doc = Document()
+    doc.add(Rows("T"), pin="top")
+    doc.add(Rows("B"), pin="bottom")
+    fill = _FillRows("x")
+    doc.add(fill, sizing=Sizing.FILL)
+    layout = Viewport(doc).layout(5, 4)
+    assert _texts(layout.rows) == ["T", "x", "", "B"]
+    assert fill.constraints == [Constraints(width=5, max_height=2)]
+
+
+def test_natural_height_ignores_the_fill_and_counts_natural_sections():
+    doc = Document()
+    doc.add(Rows("a", "b"))
+    doc.add(Rows("top"), pin="top")
+    doc.add(Rows("fill"), sizing=Sizing.FILL)
+    assert Viewport(doc).natural_height(10) == 3
+
+
+def test_removing_the_fill_restores_the_indexed_body():
+    doc = Document()
+    doc.add(Rows("a", "b"))
+    fill = doc.add(Rows("F"), sizing=Sizing.FILL)
+    view = Viewport(doc)
+    assert _texts(view.layout(5, 4).rows) == ["a", "b", "F", ""]
+    doc.remove(fill.id)
+    layout = view.layout(5, 4)
+    assert _texts(layout.rows) == ["a", "b", "", ""]
+    assert layout.row_blocks == (("b0", 0), ("b0", 1), None, None)
+    assert layout.total_rows == 2

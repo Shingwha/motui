@@ -32,7 +32,7 @@ from dataclasses import dataclass, field, replace
 from typing import Protocol, runtime_checkable
 
 from .cell import Line
-from .document import Document, Section
+from .document import Document, Placement, Section, Sizing
 
 __all__ = [
     "Constraints",
@@ -568,7 +568,14 @@ class Viewport:
         same result, an overlay painted at the composition root resolves a
         row back to its document address without reaching into the
         viewport, and chrome renders from the layout alone.
+
+        A document with a ``FILL`` section takes
+        :meth:`_layout_with_fill` instead: the natural flow keeps its own
+        window and the fill takes the residual height.
         """
+        fill = self._document.fill()
+        if fill is not None:
+            return self._layout_with_fill(fill, width, height)
         index = self._index
         c = Constraints(width=width)
         index.ensure(c)
@@ -637,6 +644,91 @@ class Viewport:
             viewport_start=len(top_kept),
         )
 
+    def _layout_with_fill(self, fill: Section, width: int, height: int) -> ScreenLayout:
+        """Lay out a document whose last flow section fills the remainder.
+
+        The index is deliberately not consulted: a fill section would enter
+        it as an ordinary body block (its natural height is meaningless)
+        and pollute the prefix sums every later layout would bisect.  This
+        path walks the sections directly instead -- the flow is exactly the
+        natural content above the fill, so it is materialized here anyway.
+
+        Pinned regions keep the normal priority (bottom first, then top,
+        each clamped to the screen).  The flow is windowed against the
+        space left, with the same :class:`ScrollState` clamp the indexed
+        path uses, so scrolling and tail-follow behave identically; the
+        fill then renders under a ``max_height`` of the residual rows and
+        is blank-padded to it (a surface that answers fewer rows leaves the
+        rest unowned).  ``total_rows`` counts the natural flow only: the
+        fill never scrolls.
+        """
+        blocks = self._document.blocks()
+        c = Constraints(width=width)
+        top_rows: list[Line] = []
+        top_owners: list[tuple[str, int]] = []
+        bottom_rows: list[Line] = []
+        bottom_owners: list[tuple[str, int]] = []
+        flow_rows: list[Line] = []
+        flow_owners: list[tuple[str, int]] = []
+        for block in blocks:
+            if block is fill:
+                continue
+            rendered = block.rows_view(c)
+            if block.placement is Placement.TOP:
+                top_rows.extend(rendered)
+                top_owners.extend((block.id, i) for i in range(len(rendered)))
+            elif block.placement is Placement.BOTTOM:
+                bottom_rows.extend(rendered)
+                bottom_owners.extend((block.id, i) for i in range(len(rendered)))
+            else:
+                flow_rows.extend(rendered)
+                flow_owners.extend((block.id, i) for i in range(len(rendered)))
+
+        bottom_kept = bottom_rows[:height]
+        top_kept = top_rows[: max(0, height - len(bottom_kept))]
+        available = max(0, height - len(top_kept) - len(bottom_kept))
+        flow_natural = len(flow_rows)
+        flow_visible = min(available, flow_natural)
+
+        state = self._state
+        state.content_height = flow_natural
+        state.viewport_height = flow_visible
+        state.clamp()
+        start = state.offset
+        visible = flow_rows[start : start + flow_visible]
+        visible_owners = flow_owners[start : start + flow_visible]
+
+        fill_budget = available - flow_visible
+        fill_rows: list[Line] = []
+        fill_owners: list[tuple[str, int] | None] = []
+        if fill_budget > 0:
+            rendered = list(
+                fill.rows_view(Constraints(width=width, max_height=fill_budget))
+            )[:fill_budget]
+            fill_rows = rendered + [Line() for _ in range(fill_budget - len(rendered))]
+            fill_owners = [(fill.id, i) for i in range(len(rendered))]
+            fill_owners += [None] * (fill_budget - len(rendered))
+
+        body_rows = visible + fill_rows
+        rows = top_kept + body_rows + bottom_kept
+        row_blocks = [
+            *top_owners[: len(top_kept)],
+            *visible_owners,
+            *fill_owners,
+            *bottom_owners[: len(bottom_kept)],
+        ]
+        return ScreenLayout(
+            rows=tuple(rows),
+            body_rows=tuple(body_rows),
+            row_blocks=tuple(row_blocks),
+            block_order=tuple(block.id for block in blocks),
+            offset=state.offset,
+            total_rows=flow_natural,
+            width=width,
+            height=height,
+            viewport_start=len(top_kept),
+        )
+
     def natural_height(self, width: int) -> int:
         """The rows this document occupies at ``width``: every block's rows.
 
@@ -649,7 +741,21 @@ class Viewport:
         the length of its cache; nothing here materializes rows).  A band
         laid out at exactly this height holds its whole content and no
         blank fill, so it hugs the edge it is reserved against.
+
+        A ``FILL`` block has no natural height (it takes what is left), so
+        a document that holds one is measured as pinned rows plus natural
+        flow rows -- never through the body index, which would count the
+        fill's own render at the constraint height and make the band grow
+        to fill itself.
         """
+        blocks = self._document.blocks()
+        if self._document.fill() is not None:
+            c = Constraints(width=width)
+            return sum(
+                block.row_count(c)
+                for block in blocks
+                if block.sizing is not Sizing.FILL
+            )
         index = self._index
         c = Constraints(width=width)
         index.ensure(c)
