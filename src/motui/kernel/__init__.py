@@ -33,7 +33,7 @@ from .events import (
 from .frame import Chrome, Frame, Pane, Separator, Split
 from .geom import Axis, Pos, Rect, Size
 from .glyphs import GLYPHS, Border, Glyphs
-from .hit import EveryHandle, Hit, RowRange
+from .hit import Hit, RowRange
 from .keymap import (
     DEFAULT_EDITOR_KEYMAP,
     DEFAULT_INPUT_KEYMAP,
@@ -69,7 +69,6 @@ __all__ = [
     "Document",
     "Event",
     "EventSource",
-    "EveryHandle",
     "FocusEvent",
     "Frame",
     "Glyphs",

@@ -83,7 +83,7 @@ from ..kernel.theme import DEFAULT_THEME, Theme
 from ..widgets.base import Widget
 from .command_palette import CommandPalette
 from .commands import CommandRegistry
-from .runtime import Runtime
+from .runtime import Runtime, Timer
 from .find import Find
 from .focus import FocusManager, focus_targets, iter_widgets
 from .gesture import SelectionGesture
@@ -417,6 +417,44 @@ class App:
             held for held in self._components if held is not component
         ]
         self._sync_focus()
+
+    # -- runtime proxies ----------------------------------------------------------
+
+    def every(
+        self,
+        period: float,
+        fn: Callable[[], object],
+        *,
+        catch_up: str = "skip",
+    ) -> Timer:
+        """Call ``fn`` every ``period`` seconds; answer the cancellable timer.
+
+        The :meth:`Runtime.every <motui.app.runtime.Runtime.every>` schedule:
+        the first run lands one period from now and every run adds exactly
+        one period.  ``catch_up`` is ``"skip"`` or ``"coalesce"``.
+        """
+        return self.runtime.every(period, fn, catch_up=catch_up)
+
+    def animation(self, hz: float, draw: Callable[[], object]) -> Timer:
+        """Call ``draw`` at ``hz`` frames per second; answer the timer."""
+        return self.runtime.animation(hz, draw)
+
+    def invalidate(self) -> None:
+        """Mark the frame dirty (the next pump paint shows the change)."""
+        self.runtime.invalidate()
+
+    def paint_now(self) -> None:
+        """Paint one frame now, bypassing the throttle."""
+        self.runtime.paint_now()
+
+    def walk(self) -> Iterator[Component]:
+        """Every mounted node once, depth first, in frame order.
+
+        The tree the App itself derives the focus ring and the resize
+        broadcast from: every pane and dock document root, each walked
+        explicitly (``Widget.walk``), shared nodes yielded once.
+        """
+        yield from iter_widgets(self.runtime)
 
     # -- focus ------------------------------------------------------------------
 

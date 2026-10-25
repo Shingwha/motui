@@ -1,10 +1,11 @@
 """hit: the value types the controllers pass around.
 
 The controllers in :mod:`motui.app` act on addresses the driver resolves:
-:class:`Hit` (a hit-test result), :class:`RowRange` (a pane's visible body
-rows as screen rows) and :class:`EveryHandle` (the cancellable handle a
-repeating callback returns).  They are plain values with no dependency on
-the driver, so they live in the core and both layers can name them.
+:class:`Hit` (a hit-test result) and :class:`RowRange` (a pane's visible
+body rows as screen rows).  They are plain values with no dependency on
+the driver, so they live in the core and both layers can name them; the
+cancellable timer handle lives with the runtime
+(:class:`motui.app.runtime.Timer`), where the pump owns it.
 """
 
 from __future__ import annotations
@@ -14,28 +15,7 @@ from dataclasses import dataclass
 from .document import Component, Section
 from .frame import Pane
 
-__all__ = ["EveryHandle", "Hit", "RowRange"]
-
-
-class EveryHandle:
-    """Cancellable handle returned by the driver's ``every``."""
-
-    __slots__ = ("_cancelled",)
-
-    def __init__(self) -> None:
-        self._cancelled = False
-
-    @property
-    def cancelled(self) -> bool:
-        """Whether :meth:`cancel` has been called."""
-        return self._cancelled
-
-    def cancel(self) -> None:
-        """Stop future invocations (a callback already running finishes)."""
-        self._cancelled = True
-
-    def __repr__(self) -> str:
-        return f"EveryHandle(cancelled={self._cancelled})"
+__all__ = ["Hit", "RowRange"]
 
 
 @dataclass(frozen=True)

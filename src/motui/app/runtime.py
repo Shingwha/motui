@@ -73,7 +73,7 @@ from ..kernel.geom import Axis, Pos
 from ..kernel.frame import Separator
 from ..kernel.events import Event, EventSource
 from ..kernel.frame import DOCK_EDGES, Frame, Pane, Rect
-from ..kernel.hit import EveryHandle, Hit, RowRange
+from ..kernel.hit import Hit, RowRange
 from ..kernel.cell import Line
 from ..widgets.text import Text
 from ..terminal.paint import Painter
@@ -90,7 +90,7 @@ from .workspace import Workspace
 __all__ = ["Runtime"]
 
 
-class Timer(EveryHandle):
+class Timer:
     """One periodic callback scheduled on the driver's clock.
 
     ``next_run`` is an **absolute deadline**, not a delay: each firing adds
@@ -102,14 +102,13 @@ class Timer(EveryHandle):
     it is in the future, preserving the phase.  Either way one tick invokes a
     callback at most once.
 
-    The class subclasses the 1.x
-    :class:`~motui.kernel.hit.EveryHandle` so old annotations and
-    ``isinstance`` checks keep working; ``cancelled`` and ``cancel`` are the
-    inherited members and keep their meaning.  ``every`` is the only
-    constructor a host needs.
+    The value is its own cancellable handle: ``cancelled`` answers whether
+    :meth:`cancel` has run, and a cancelled timer never fires again.  The
+    1.x separate handle class is gone; ``every`` is the only constructor a
+    host needs.
     """
 
-    __slots__ = ("catch_up", "fn", "next_run", "period")
+    __slots__ = ("_cancelled", "catch_up", "fn", "next_run", "period")
 
     def __init__(
         self,
@@ -119,17 +118,26 @@ class Timer(EveryHandle):
         *,
         catch_up: str = "skip",
     ) -> None:
-        super().__init__()
         if period <= 0:
             raise ValueError(f"timer period must be positive, got {period!r}")
         if catch_up not in ("skip", "coalesce"):
             raise ValueError(
                 f"catch_up must be 'skip' or 'coalesce', got {catch_up!r}"
             )
+        self._cancelled = False
         self.period = period
         self.fn = fn
         self.next_run = next_run
         self.catch_up = catch_up
+
+    @property
+    def cancelled(self) -> bool:
+        """Whether :meth:`cancel` has been called."""
+        return self._cancelled
+
+    def cancel(self) -> None:
+        """Stop future invocations (a callback already running finishes)."""
+        self._cancelled = True
 
     def __repr__(self) -> str:
         return (

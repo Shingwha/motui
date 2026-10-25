@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from motui.app import App, Runtime, Workspace
+from motui.app.runtime import Timer
 from motui.kernel import Theme
 from motui.kernel.cell import Line, Surface
 from motui.kernel.document import Placement, Sizing
@@ -193,6 +194,41 @@ def test_remove_accepts_the_section_the_demo_keeps():
 
     assert app.remove(section) is section
     assert app.runtime.document.blocks() == ()
+
+
+def test_app_proxies_the_runtime_schedule_and_paint():
+    app = App(screen=HeadlessScreen(20, 3), keys=ScriptedEvents(()))
+    app.runtime._clock = lambda: 0.0
+    calls: list[str] = []
+    timer = app.every(0.05, lambda: calls.append("tick"))
+    animation = app.animation(20, lambda: calls.append("draw"))
+
+    assert isinstance(timer, Timer) and timer.period == 0.05
+    assert isinstance(animation, Timer) and animation.period == 0.05
+    app.runtime.advance(0.11)
+    assert calls.count("tick") == 2
+    assert calls.count("draw") == 2
+
+    app.add(Rows("x"))
+    app.invalidate()
+    app.paint_now()
+    assert rows(app.runtime)[0] == "x"
+
+
+def test_walk_visits_each_mounted_node_once_in_frame_order():
+    app = App(screen=HeadlessScreen(30, 6), keys=ScriptedEvents(()))
+    button = Button("Go")
+    row = Row([button])
+    section = app.add(row)
+    docked = Button("Dock")
+    app.dock(docked, placement=Placement.BOTTOM)
+
+    nodes = list(app.walk())
+
+    assert section.widget is row
+    assert nodes[0] is row and nodes[1] is button
+    assert docked in nodes
+    assert len(nodes) == len({id(node) for node in nodes})
 
 
 def test_set_focus_targets_is_gone():

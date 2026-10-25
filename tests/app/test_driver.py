@@ -9,7 +9,7 @@ import pytest
 
 from motui.app import Runtime
 from motui.app.runtime import Timer
-from motui.kernel import DEFAULT_THEME, EveryHandle, Rect, RowRange
+from motui.kernel import DEFAULT_THEME, Rect, RowRange
 from motui.kernel.document import Placement, Sizing
 from motui.kernel.geom import Axis
 from motui.widgets.text import Text
@@ -784,11 +784,11 @@ def test_cancelling_a_timer_stops_every_future_run():
     assert timer.cancelled is True
 
 
-def test_timer_is_the_every_handle_and_validates_its_configuration():
+def test_timer_is_its_own_cancellable_handle_and_validates_its_configuration():
     tui = headless_tui()
     timer = tui.every(0.05, lambda: None)
     assert isinstance(timer, Timer)
-    assert isinstance(timer, EveryHandle)
+    assert timer.cancelled is False
     with pytest.raises(ValueError, match="period must be positive"):
         tui.every(0.0, lambda: None)
     with pytest.raises(ValueError, match="catch_up"):
