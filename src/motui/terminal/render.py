@@ -1,6 +1,6 @@
 """SGR and OSC 8 rendering: the row model's byte path for a terminal.
 
-The kernel's :class:`~motui.core.lines.Line` is a pure value and builds no
+The kernel's :class:`~motui.kernel.cell.Line` is a pure value and builds no
 terminal bytes.  This module is the one boundary where a row becomes bytes:
 ``styled_line(line, mode)`` renders the row for a terminal capability, with
 the same RESET discipline and OSC 8 pairing the 1.x ``Line.styled`` always
@@ -10,15 +10,15 @@ a line is immutable.
 
 The truecolor path is byte-for-byte the old cached rendering (each segment's
 own cached ``Style.prefix()``); a downgraded mode resolves each prefix
-through :func:`~motui.core.style.sgr_prefix` instead.
+through :func:`~motui.kernel.style.sgr_prefix` instead.
 """
 
 from __future__ import annotations
 
 from functools import lru_cache
 
-from ..core.lines import Line, Segment
-from ..core.style import RESET, ColorMode, sgr_prefix
+from ..kernel.cell import Line, Segment
+from ..kernel.style import RESET, ColorMode, sgr_prefix
 from .ansi import hyperlink_close, hyperlink_open
 
 __all__ = ["styled_line"]
@@ -62,7 +62,7 @@ def styled_line(line: Line, mode: ColorMode = "truecolor") -> str:
     OSC 8 pair, which is closed inside the segment so no hyperlink crosses a
     boundary.  ``"truecolor"`` resolves each segment through its own cached
     ``Style.prefix()``; the downgraded modes go through
-    :func:`~motui.core.style.sgr_prefix`, and the answer is cached per
+    :func:`~motui.kernel.style.sgr_prefix`, and the answer is cached per
     ``(line, mode)`` because a line is a value.
     """
     return _styled_line(line, mode)

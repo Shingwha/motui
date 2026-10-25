@@ -1,9 +1,9 @@
 """Widget: the base every interactive component shares.
 
 A widget owns the four mutable inputs the runtime writes -- its theme, its
-:class:`~motui.core.theme.Styles` overrides, and the ``focused`` / ``hover``
+:class:`~motui.kernel.theme.Styles` overrides, and the ``focused`` / ``hover``
 flags -- and answers the interaction verbs with their no-op defaults.  It
-deliberately is **not** :class:`~motui.core.theme.Themed`: the older base
+deliberately is **not** :class:`~motui.kernel.theme.Themed`: the older base
 resolves every style at construction, while a widget keeps the theme value
 and reads the role group it paints when it renders, so assigning a new
 ``theme`` repaints a mounted widget without rebuilding it.
@@ -15,9 +15,9 @@ one ``render(width)`` -- remains the rendering obligation.
 
 from __future__ import annotations
 
-from .events import Event
-from .lines import Line
-from .theme import DEFAULT_THEME, Styles, Theme
+from ..kernel.events import Event
+from ..kernel.cell import Line
+from ..kernel.theme import DEFAULT_THEME, Styles, Theme
 
 __all__ = ["Widget"]
 

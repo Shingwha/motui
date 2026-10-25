@@ -30,7 +30,7 @@ from .ansi import (
     leave_alt_screen,
     show_cursor,
 )
-from ..core.style import ColorMode
+from ..kernel.style import ColorMode
 from .capability import detect_color_mode, terminal_size
 
 __all__ = ["HeadlessScreen", "Screen", "TerminalScreen"]
@@ -134,12 +134,12 @@ class TerminalScreen(Screen):
     instead of the 1002 button-event tracking a drag consumes; the leave
     bytes disable every mode either way.  ``focus_events=True`` adds DECSET
     1004 to the bracket (last in, first out), so the terminal reports
-    :class:`~motui.core.events.FocusEvent` gains and losses; off by default,
+    :class:`~motui.kernel.events.FocusEvent` gains and losses; off by default,
     because the reports are the host's to interpret -- the pointer tier still
     watches mouse reports only, and a host scrubs its hover and animation on
     a lost focus itself.
     ``color_mode`` is the capability the painter renders rows for:
-    ``"auto"`` (the default) resolves :func:`~motui.core.style.detect_color_mode`
+    ``"auto"`` (the default) resolves :func:`~motui.kernel.style.detect_color_mode`
     once, at construction, and the answer stands -- ``NO_COLOR``/``TERM=dumb``
     mean no color, ``COLORTERM`` truecolor and a ``256color`` ``TERM`` pick
     their modes, anything else stays truecolor.  A concrete mode is taken as

@@ -1,8 +1,8 @@
 """Style value type: a frozen SGR-style builder over a named + truecolor palette.
 
 This module is the single place that knows how a :class:`Style` turns into SGR
-escape bytes.  Terminal-width measurement lives in :mod:`motui.core.text`;
-line assembly lives in :mod:`motui.core.lines`.
+escape bytes.  Terminal-width measurement lives in :mod:`motui.kernel.text`;
+line assembly lives in :mod:`motui.kernel.cell`.
 """
 
 from __future__ import annotations

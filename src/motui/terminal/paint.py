@@ -1,8 +1,8 @@
 """The painter: full-screen row-diff rendering onto a :class:`~motui.terminal.screen.Screen`.
 
 The painter owns no document and no scroll state: every frame arrives as a
-:class:`~motui.core.viewport.ScreenLayout` the caller laid out (the
-driver owns the :class:`~motui.core.viewport.Viewport` that carries the
+:class:`~motui.kernel.layout.ScreenLayout` the caller laid out (the
+driver owns the :class:`~motui.kernel.layout.Viewport` that carries the
 scroll position), and the painter writes only what changed -- a full repaint
 when the screen size changes (or on the very first frame, prefixed by an
 erase), otherwise a per-row cursor-addressed rewrite of the rows that differ
@@ -36,10 +36,10 @@ from .ansi import (
     cursor_position,
     end_sync_update,
 )
-from ..core.lines import Line
+from ..kernel.cell import Line
 from .render import styled_line
 from .screen import Screen
-from ..core.viewport import ScreenLayout
+from ..kernel.layout import ScreenLayout
 
 __all__ = ["Painter"]
 

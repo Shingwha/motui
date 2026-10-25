@@ -21,7 +21,7 @@ from __future__ import annotations
 
 import codecs
 
-from ..core.events import (
+from ..kernel.events import (
     Event,
     FocusEvent,
     KeyEvent,

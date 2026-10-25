@@ -1,6 +1,6 @@
 """Document model: addressable blocks rendered by components.
 
-The toolkit's unit of content is a :class:`Block`: a stable id, a
+The toolkit's unit of content is a :class:`Section`: a stable id, a
 :class:`Component` that knows how to render itself at a given width, and a
 row cache that follows the component's own revision snapshot.  There is no
 lifecycle flag: a block caches exactly when its component can prove the rows
@@ -12,14 +12,14 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, Protocol, Sequence, runtime_checkable
 
-from .lines import Line
+from .cell import Line
 
 if TYPE_CHECKING:  # the protocol names the event model; no runtime import needed
     from .events import Event
 
 __all__ = [
     "Activable",
-    "Block",
+    "Section",
     "Clickable",
     "Component",
     "Container",
@@ -183,7 +183,7 @@ class Revisioned(Protocol):
     value: while two calls answer **equal** snapshots the component promises
     that ``render(width)`` answers equal rows at any one width -- so a cache
     keyed on the pair ``(width, revision())`` may hand the older rows back.
-    The row cache on :meth:`Block.rows` is exactly that cache, and the
+    The row cache on :meth:`Section.rows` is exactly that cache, and the
     promise is what makes it safe to keep a block's rows between frames: a
     hover that moves, a streamed assignment, a toggled mark changes the
     snapshot, so the next ``rows()`` misses and re-renders.
@@ -205,7 +205,7 @@ class Revisioned(Protocol):
     render; a snapshot that re-wraps the text it guards has moved the cost,
     not removed it.
 
-    ``None`` is the off switch, not a snapshot: :meth:`Block.rows` never
+    ``None`` is the off switch, not a snapshot: :meth:`Section.rows` never
     caches a block whose revision answers ``None`` (no snapshot, no
     invalidation), and ``Text._revision`` returning ``None`` closes that
     component's own row memory the same way.  A block whose component does
@@ -240,7 +240,7 @@ def descend_chain(
     and depth-guarded like :func:`descend` (``_DESCEND_LIMIT``).
 
     The chain is the value a host routes with: a wheel finds the nearest
-    :class:`~motui.core.scroll.Scrollable` by walking it backwards, and a
+    :class:`~motui.kernel.scroll.Scrollable` by walking it backwards, and a
     click can address any ancestor without a second hit test.
     """
     chain: list[tuple[Component, int, int]] = [(component, row, col)]
@@ -268,7 +268,7 @@ def descend(component: Component, row: int, col: int) -> "tuple[Component, int, 
     return descend_chain(component, row, col)[-1]
 
 
-class Block:
+class Section:
     """One addressable row-producing unit inside a :class:`Document`.
 
     Besides the id and the component, a block owns its own **row cache**
@@ -440,15 +440,15 @@ class Block:
         return rows
 
     def __repr__(self) -> str:
-        return f"Block(id={self._id!r}, pin={self._pin!r})"
+        return f"Section(id={self._id!r}, pin={self._pin!r})"
 
 
 class Document:
     """An ordered collection of blocks, addressable by id."""
 
     def __init__(self) -> None:
-        self._blocks: list[Block] = []
-        self._by_id: dict[str, Block] = {}
+        self._blocks: list[Section] = []
+        self._by_id: dict[str, Section] = {}
         self._auto_index = -1  # first generated id is "b0"
         # Monotone count of content mutations: ``add``/``remove`` each bump
         # it and nothing ever resets it, so an equal count proves the block
@@ -457,7 +457,7 @@ class Document:
         self._mutation = 0
         # The last snapshot ``blocks`` handed out, keyed by the mutation
         # count it was taken at; ``None`` means "none taken yet".
-        self._blocks_cache: tuple[int, tuple[Block, ...]] | None = None
+        self._blocks_cache: tuple[int, tuple[Section, ...]] | None = None
 
     def _next_auto_id(self) -> str:
         """The first ``b{n}`` id past the last one handed out that is free.
@@ -479,7 +479,7 @@ class Document:
         *,
         id: str | None = None,
         pin: str | None = None,
-    ) -> Block:
+    ) -> Section:
         """Append a block; auto id ``b{n}`` when ``id`` is None. Duplicate ids raise.
 
         ``pin`` places the block in a fixed region -- ``"top"`` or
@@ -490,7 +490,7 @@ class Document:
             id = self._next_auto_id()
         elif id in self._by_id:
             raise ValueError(f"duplicate block id: {id!r}")
-        block = Block(id, component, pin=pin)
+        block = Section(id, component, pin=pin)
         self._blocks.append(block)
         self._by_id[id] = block
         self._mutation += 1
@@ -508,14 +508,14 @@ class Document:
         """
         return self._mutation
 
-    def get(self, id: str) -> Block:
+    def get(self, id: str) -> Section:
         """The block with ``id``; missing id raises KeyError with a message."""
         try:
             return self._by_id[id]
         except KeyError:
             raise KeyError(f"no block with id {id!r}") from None
 
-    def remove(self, id: str) -> Block:
+    def remove(self, id: str) -> Section:
         """Detach the block with ``id`` and return it; missing id raises KeyError."""
         block = self.get(id)
         self._blocks.remove(block)
@@ -523,7 +523,7 @@ class Document:
         self._mutation += 1
         return block
 
-    def blocks(self) -> tuple[Block, ...]:
+    def blocks(self) -> tuple[Section, ...]:
         """Snapshot of the blocks in document order (immune to later mutation).
 
         The tuple is cached against :attr:`mutation`: calls between two

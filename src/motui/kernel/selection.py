@@ -8,7 +8,7 @@ time, or policy: :func:`highlight` is a pure overlay a composition root
 applies to an already laid-out frame (D2), and :func:`extract` is the
 plain text that overlay covers.
 
-Two ordering facts shape the model.  Block ids carry no document order --
+Two ordering facts shape the model.  Section ids carry no document order --
 ``"b10"`` sorts before ``"b2"`` and user ids are arbitrary strings -- so
 direction can only be normalized where the order is known, at use time:
 both use sites order the pair against a walk of block ids (the document
@@ -16,7 +16,7 @@ for extraction, the layout's document order for the overlay).  And an
 address whose block was removed resolves to nothing (D8), which makes a
 range with a missing endpoint resolve to nothing rather than guess.
 
-Column cutting is the kernel's, not a copy: :func:`motui.core.lines.cut_line`
+Column cutting is the kernel's, not a copy: :func:`motui.kernel.lines.cut_line`
 cuts by display columns through the same per-segment slicer word wrapping
 uses, and clamps lazily -- an anchor column past a short row reaches that
 row's end.
@@ -27,10 +27,10 @@ from __future__ import annotations
 from collections.abc import Sequence
 from dataclasses import replace
 
-from .block import Document
-from .lines import Line, cut_line
+from .document import Document
+from .cell import Line, cut_line
 from .style import Style
-from .viewport import ScreenLayout
+from .layout import ScreenLayout
 
 __all__ = ["Selection", "SelectionAnchor", "extract", "highlight"]
 #: One cell address: the block id, the row within that block, the column.
@@ -109,7 +109,7 @@ class _ResolvedRange:
     """A selection ordered against one walk of block ids, ready to apply.
 
     ``order`` is the walk: the layout's
-    :attr:`~motui.core.viewport.ScreenLayout.block_order` for
+    :attr:`~motui.kernel.viewport.ScreenLayout.block_order` for
     :func:`highlight`, the document's block ids for :func:`extract` --
     both document order, which is what lets the overlay and the text
     agree on which address starts the range.
@@ -204,7 +204,7 @@ def highlight(
     """The selection overlay (D2): one pure pass over a laid-out frame.
 
     Every screen row whose ``(block_id, row_in_block)`` -- from the
-    layout's :attr:`~motui.core.viewport.ScreenLayout.row_blocks` --
+    layout's :attr:`~motui.kernel.viewport.ScreenLayout.row_blocks` --
     is in range gets its segments cut at the range's column boundaries and
     ``style`` merged onto the cut pieces.  The default is plain reverse
     video (so a segment's own hue becomes the highlight's background and
@@ -270,7 +270,7 @@ def extract(document: Document, selection: Selection | None, *, width: int) -> s
     like the visible rows, and an ``OPEN`` block yields what is there now
     (D8's grid semantics: addresses point at cells, not identity).  The
     rows come from each block's own cache
-    (:meth:`~motui.core.block.Block.rows_view`, the borrowed, read-only
+    (:meth:`~motui.kernel.document.Section.rows_view`, the borrowed, read-only
     view of it), which cannot go stale: a block that can be cached carries
     the revision of the content it cached, so a live block's rows are
     still the ones its content renders to.

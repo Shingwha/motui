@@ -15,8 +15,8 @@ import os
 import shutil
 from collections.abc import Mapping
 
-from ..core.style import ColorMode
-from ..core.theme import Theme
+from ..kernel.style import ColorMode
+from ..kernel.theme import Theme
 
 __all__ = ["auto_theme", "detect_color_mode", "terminal_size"]
 

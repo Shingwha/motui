@@ -41,10 +41,14 @@ from collections.abc import Callable, Iterable, Mapping, Sequence
 from dataclasses import dataclass, field, replace
 from typing import Protocol
 
-from .block import Block, Document
-from .lines import Line, cut_line, slice_line
+from .cell import Line, cut_line, slice_line
+from .document import Document, Section
+from .geom import Rect
+from .layout import ScreenLayout, Viewport
+from .overlay import LAYERS, Overlay, apply_overlays
+from .style import Style
 from .text import index_bounds_at_columns
-from .viewport import ScreenLayout, Viewport
+from .theme import Theme
 
 __all__ = [
     "Chrome",
@@ -55,22 +59,10 @@ __all__ = [
     "Overlay",
     "Pane",
     "Rect",
+    "Separator",
     "Split",
     "splice_row",
 ]
-
-#: The overlay layers, back to front.  An overlay registered on a frame owns
-#: one of these names; same-layer overlays paint in registration order.
-LAYERS = (
-    "background",
-    "content",
-    "selection",
-    "chrome",
-    "overlay",
-    "modal",
-    "tooltip",
-    "toast",
-)
 
 #: What a split divides: ``"vertical"`` tiles the width into side-by-side
 #: panes (a vertical divider between them), ``"horizontal"`` tiles the
@@ -105,7 +97,7 @@ DOCK_EDGES = ("top", "bottom")
 #: stacks outermost whatever else the pane registered and whenever, and a
 #: close strips it by name (:meth:`Pane.close`), so the band that divides
 #: two panes dies with the adjacency it divides.  The kernel's themed
-#: :class:`~motui.core.chrome.Separator` is the one divider implementation
+#: :class:`~motui.kernel.chrome.Separator` is the one divider implementation
 #: and registers under this mark; the kernel owns the mark because
 #: negotiation and teardown are the kernel's.
 SEPARATOR_CHROME_NAME = "separator"
@@ -128,7 +120,7 @@ class Chrome:
     sharing them, so it cannot sit on the window.
 
     ``paint`` renders the band: it takes the pane's own layout -- the scroll
-    state among it, :attr:`~motui.core.viewport.ScreenLayout.offset` and
+    state among it, :attr:`~motui.kernel.viewport.ScreenLayout.offset` and
     ``total_rows`` -- and the strip's length along the band's other axis (the
     pane's height for a pane-scoped left/right band, the window's height for
     a body-scoped one; the pane's width for a top/bottom band), and hands
@@ -146,7 +138,7 @@ class Chrome:
     ``name`` is an optional mark for *teardown* and for *stacking*, not for
     lookup: a close (:meth:`Pane.close`) strips a divider by it -- the one
     divider implementation, the kernel's themed
-    :class:`~motui.core.chrome.Separator`, registers under
+    :class:`~motui.kernel.chrome.Separator`, registers under
     :data:`SEPARATOR_CHROME_NAME` -- so the band that divides
     two panes dies with the adjacency it divides instead of being guessed at
     by its size or edge, and the same mark puts it first in negotiation
@@ -179,61 +171,6 @@ class Chrome:
                 "a body-scoped chrome shares the window's rows; "
                 f"edge {self.edge!r} owns its rows instead"
             )
-
-
-class Overlay(Protocol):
-    """One overlay of the frame's pipeline: a pure ``paint(frame) -> layout``.
-
-    An overlay claims nothing -- it paints last, over the composed frame, so
-    it needs no budget negotiation.  The frame hands it the composed value:
-    :attr:`Frame.layout` is the rows as they stand (an earlier overlay's
-    rows when the registry already ran one), :meth:`Frame.pane_layout` one
-    pane's own layout, :attr:`Frame.table` the ownership table, and
-    :attr:`Frame.rect` the frame's bounds -- a toast paints a corner off the
-    bounds, a highlight rewrites a pane's rows.  What comes back is the
-    layout to paint: the frame's layout with its rows rewritten, a
-    pane-relative edit spliced back through :meth:`Frame.with_pane_rows`.
-
-    Overlays register with :meth:`Frame.add_overlay`, naming one of
-    :data:`LAYERS`; they paint back to front by layer and in registration
-    order within one layer, and their lifecycle and their input live in the
-    controller that owns them, never in the kernel.  The registry runs
-    after a composition (:meth:`Frame.apply_overlays`), where
-    ``frame.layout`` is the layout being painted.
-    """
-
-    def paint(self, frame: Frame) -> ScreenLayout: ...
-
-
-@dataclass(frozen=True)
-class Rect:
-    """One rectangle of the screen: a 0-based origin and a size in cells.
-
-    Width and height are non-negative -- an empty rectangle is legal, a
-    negative one is not -- and the origin may sit anywhere.  Rectangles are
-    values: a split hands back new ones instead of editing what it divided.
-    """
-
-    x: int
-    y: int
-    width: int
-    height: int
-
-    def __post_init__(self) -> None:
-        if self.width < 0 or self.height < 0:
-            raise ValueError(
-                f"rect size must be non-negative, got {self.width}x{self.height}"
-            )
-
-    @property
-    def right(self) -> int:
-        """The first column past the rectangle (``x + width``)."""
-        return self.x + self.width
-
-    @property
-    def bottom(self) -> int:
-        """The first row past the rectangle (``y + height``)."""
-        return self.y + self.height
 
 
 def _ratio_sizes(span: int, ratios: Sequence[float], min_size: int) -> list[int]:
@@ -361,9 +298,9 @@ class Split:
         for size in sizes:
             taken = max(0, min(size, span - at))
             if self.orientation == "vertical":
-                rects.append(Rect(rect.x + at, rect.y, taken, rect.height))
+                rects.append(Rect(x=rect.x + at, y=rect.y, width=taken, height=rect.height))
             else:
-                rects.append(Rect(rect.x, rect.y + at, rect.width, taken))
+                rects.append(Rect(x=rect.x, y=rect.y + at, width=rect.width, height=taken))
             at += taken
         return tuple(rects)
 
@@ -431,7 +368,7 @@ class Pane:
     def scroll_to(self, offset: int) -> bool:
         """Scroll the pane's viewport to ``offset``; whether it moved.
 
-        The write half of :class:`~motui.core.scroll.Scrollable`, delegated
+        The write half of :class:`~motui.kernel.scroll.Scrollable`, delegated
         to the viewport -- so a pane is a scroll target wherever a viewport
         is (the App's wheel fallback and the scrollbar's ``Scrollable``
         door).
@@ -450,15 +387,15 @@ class Pane:
         *,
         id: str | None = None,
         pin: str | None = None,
-    ) -> Block:
+    ) -> Section:
         """Append a block to this pane's document (``Document.add``'s arguments)."""
         return self.document.add(component, id=id, pin=pin)
 
-    def get(self, id: str) -> Block:
+    def get(self, id: str) -> Section:
         """The block with ``id`` in this pane's document (``KeyError`` when missing)."""
         return self.document.get(id)
 
-    def remove(self, id: str) -> Block:
+    def remove(self, id: str) -> Section:
         """Detach the block with ``id`` from this pane's document."""
         return self.document.remove(id)
 
@@ -472,7 +409,7 @@ class Pane:
         rewrites the pane's rectangle in place (:meth:`Pane._place`) rather
         than rebuilding the pane, so the registration rides a resize with
         nothing to carry, and the frame's
-        :attr:`~motui.core.frame.Frame.revision` bumps so an owner
+        :attr:`~motui.kernel.frame.Frame.revision` bumps so an owner
         caching its retile recomposes.
         """
         self.chrome = self.chrome + (chrome,)
@@ -490,7 +427,7 @@ class Pane:
         the wrong band (``Document.remove`` raises for a missing block the
         same way).  A controller that may detach twice tests membership
         first, keeping its own detach idempotent.  The frame's
-        :attr:`~motui.core.frame.Frame.revision` bumps, so an owner
+        :attr:`~motui.kernel.frame.Frame.revision` bumps, so an owner
         caching its retile recomposes.
         """
         kept = tuple(c for c in self.chrome if c is not chrome)
@@ -593,12 +530,12 @@ class Pane:
         pane's frame (when it has one) from birth -- the frame's own
         adoption walk re-marks every pane it holds at the next retile -- and
         the split bumps the frame's
-        :attr:`~motui.core.frame.Frame.revision`, so a driver caching
+        :attr:`~motui.kernel.frame.Frame.revision`, so a driver caching
         its retile re-divides the tree on the next frame.
 
         The children **abut** -- no cell is left between them; a divider is
         chrome, not a gap, and the one implementation is the kernel's themed
-        :class:`~motui.core.chrome.Separator`, which
+        :class:`~motui.kernel.chrome.Separator`, which
         :meth:`~motui.app.TUI.split` registers on the pane before each
         gap under :data:`SEPARATOR_CHROME_NAME` when its caller asks for a
         separator.  Splitting an already-split pane raises ``RuntimeError``.
@@ -645,7 +582,7 @@ class Pane:
 
         Rectangles are rewritten in place (``_place``-style, the parent's
         division trimmed rather than the tree rebuilt) and the frame's
-        :attr:`~motui.core.frame.Frame.revision` bumps, so a driver
+        :attr:`~motui.kernel.frame.Frame.revision` bumps, so a driver
         caching its tiling re-runs its retile and the next composition
         paints the new tiling: a collapsed pane takes the whole
         rectangle the split held, and the single-pane pass-through composes
@@ -825,14 +762,14 @@ def splice_row(base: Line, line: Line, x: int, width: int, frame_width: int) -> 
     frame's end -- are resolved in **one** walk, and each piece is cut with
     :func:`slice_line` at the resolved indices: a cut *is* ``slice_line`` at
     resolved indices, so the pieces are the very ones
-    :func:`motui.core.lines.cut_line` hands back, and the row's prefix
+    :func:`motui.kernel.lines.cut_line` hands back, and the row's prefix
     is walked once instead of three times.
 
     Three shapes are handed through without a cut, which is what keeps a
     chrome column beside a fitting row from walking the row at all: a
     base that ends at or before the window leaves *both* pieces beside it
     plain padding (no cell of the base is inside the window's span, and
-    :meth:`~motui.core.lines.Line.fill` grows it to the same cells a
+    :meth:`~motui.kernel.lines.Line.fill` grows it to the same cells a
     slice would), and a line that already fits the window is its own
     middle piece ``fill``-ed to the window -- ``slice_line`` over the
     whole row would hand back the same segments.  Either shortcut is taken
@@ -867,7 +804,7 @@ def _whole_cut(line: Line) -> bool:
 
     * a segment whose text came out empty is **dropped**;
     * a tab is normalized to spaces (the rule
-      :func:`~motui.core.lines.wrap_line` shares);
+      :func:`~motui.kernel.lines.wrap_line` shares);
     * the cut's boundaries are answered in **cells**, so a character
       carrying no cell of its own -- a combining mark, a zero-width joiner,
       a control -- would pull the boundary back before the text's end and
@@ -936,12 +873,7 @@ def _negotiate(
         else:  # "bottom"
             offset, bottom = bottom, bottom + take
         granted.append((chrome, take, offset))
-    inner = Rect(
-        rect.x + left,
-        rect.y + top,
-        rect.width - left - right,
-        rect.height - top - bottom,
-    )
+    inner = Rect(x=rect.x + left, y=rect.y + top, width=rect.width - left - right, height=rect.height - top - bottom)
     return inner, granted
 
 
@@ -954,12 +886,12 @@ def _band_of(rect: Rect, edge: str, take: int, offset: int) -> Rect:
     construction, whatever else the pane stacked on that edge.
     """
     if edge == "left":
-        return Rect(rect.x + offset, rect.y, take, rect.height)
+        return Rect(x=rect.x + offset, y=rect.y, width=take, height=rect.height)
     if edge == "right":
-        return Rect(rect.right - offset - take, rect.y, take, rect.height)
+        return Rect(x=rect.right - offset - take, y=rect.y, width=take, height=rect.height)
     if edge == "top":
-        return Rect(rect.x, rect.y + offset, rect.width, take)
-    return Rect(rect.x, rect.bottom - offset - take, rect.width, take)
+        return Rect(x=rect.x, y=rect.y + offset, width=rect.width, height=take)
+    return Rect(x=rect.x, y=rect.bottom - offset - take, width=rect.width, height=take)
 
 
 def _body_band(band: Rect, layout: ScreenLayout) -> Rect | None:
@@ -977,7 +909,7 @@ def _body_band(band: Rect, layout: ScreenLayout) -> Rect | None:
     height = max(0, min(len(layout.body_rows), band.height - start))
     if height == 0:
         return None
-    return Rect(band.x, band.y + start, band.width, height)
+    return Rect(x=band.x, y=band.y + start, width=band.width, height=height)
 
 
 def _plan_chrome(
@@ -1073,7 +1005,7 @@ class Frame:
     """A tiling of panes over one screen, composed into a painting target.
 
     The frame holds its panes and, after a :meth:`compose`, what that
-    composition produced: the :class:`~motui.core.viewport.ScreenLayout`
+    composition produced: the :class:`~motui.kernel.viewport.ScreenLayout`
     to paint, the per-pane layouts an overlay composes over, and the
     ownership table a hit test routes through.  An ordered overlay registry
     (:meth:`add_overlay`) paints over the composed frame last, through
@@ -1264,7 +1196,7 @@ class Frame:
         top = min(pane.rect.y for pane in regions)
         right = max(pane.rect.right for pane in regions)
         bottom = max(pane.rect.bottom for pane in regions)
-        return Rect(left, top, right - left, bottom - top)
+        return Rect(x=left, y=top, width=right - left, height=bottom - top)
 
     def next_pane_id(self) -> str:
         """Allocate the next ``pane-N`` id; ids are monotonic and never reused."""
@@ -1353,7 +1285,7 @@ class Frame:
             pane._place(rect)
         for edge, dock in self._docks.items():
             placement = None if docks is None else docks.get(edge)
-            dock._place(placement if placement is not None else Rect(0, 0, 0, 0))
+            dock._place(placement if placement is not None else Rect(x=0, y=0, width=0, height=0))
         self._adopt()
 
     def region(self, pane_id: str) -> Rect | None:
@@ -1483,7 +1415,7 @@ class Frame:
         # very object its viewport returned.
         passthrough = (
             len(regions) == 1
-            and regions[0].rect == Rect(0, 0, width, height)
+            and regions[0].rect == Rect(x=0, y=0, width=width, height=height)
             and not banded
         )
         if passthrough:
@@ -1611,20 +1543,11 @@ class Frame:
         """Run the overlay registry over ``layout``, back to front by layer.
 
         The composition root's last step: each overlay paints over the
-        composed frame and hands back the layout to paint, which becomes the
-        frame's :attr:`layout` for the next one -- a later overlay composes
-        over the rows an earlier one painted.  The registry is walked in a
-        **stable sort** by layer index, so same-layer overlays keep their
-        registration order and an explicitly lower layer always paints
-        first.  The painting target is written back once, when the registry
-        has run.  An empty registry, like an overlay that rewrites nothing,
-        hands ``layout`` through unchanged.
+        composed frame and hands back the layout to paint.  The mechanism
+        lives in :func:`motui.kernel.overlay.apply_overlays`; the frame keeps
+        the method as its registry's front door.
         """
-        for _layer, overlay in sorted(self._overlays, key=lambda entry: entry[0]):
-            self._painting = layout  # the running target the overlay reads
-            layout = overlay.paint(self)
-        self._painting = layout
-        return layout
+        return apply_overlays(self, layout)
 
     def pane_layout(self, pane_id: str) -> ScreenLayout | None:
         """The layout :meth:`compose` laid out for the pane, or ``None``.
@@ -1675,3 +1598,88 @@ class Frame:
     def __repr__(self) -> str:
         docks = f", docks={sorted(self._docks)}" if self._docks else ""
         return f"Frame({len(self._leaves())} panes{docks})"
+
+
+class _ChromeHost(Protocol):
+    """The two live values the separator reads (the driver satisfies this)."""
+
+    @property
+    def frame(self) -> Frame: ...
+
+    @property
+    def theme(self) -> Theme: ...
+
+
+class Separator:
+    """The 1-cell divider between two split panes: chrome, themed by focus.
+
+    The tmux convention (D4): the divider cell belongs to the pane before
+    it -- registered as that pane's right-edge (vertical split) or
+    bottom-edge (horizontal) chrome, so it is budgeted, never a gap -- and
+    it reads in the host's theme: ``content.accent`` while either pane it
+    divides is the focused one, ``borders.base`` otherwise.  The style is
+    read at paint time from the frame's focus and the host's theme, so one
+    chrome object serves every focus change and follows a re-themed host,
+    and it rides a retile without re-registration.  The chrome registers
+    under
+    :data:`~motui.kernel.frame.SEPARATOR_CHROME_NAME`, the mark a
+    :meth:`~motui.kernel.frame.Pane.close` strips it by when the
+    adjacency it divides goes.  ``TUI.split`` is the one registration path;
+    a host wanting a different look registers its own chrome on the pane
+    instead (``split(separator=False)``, then ``pane.add_chrome(...)``).
+    """
+
+    __slots__ = ("_after_id", "_before_id", "chrome", "_strip_cache", "_host")
+
+    def __init__(
+        self, host: _ChromeHost, before_id: str, after_id: str, edge: str
+    ) -> None:
+        self._host = host
+        self._before_id = before_id
+        self._after_id = after_id
+        self.chrome = Chrome(edge, 1, self._paint, name=SEPARATOR_CHROME_NAME)
+        # The last strip painted and the state it was painted from: the memo
+        # of :meth:`_paint`, keyed by the edge, the length and the style.
+        self._strip_cache: tuple[tuple, tuple[Line, ...]] | None = None
+
+    def _accent(self) -> bool:
+        """Whether either pane this divider separates is the focused one."""
+        focused = self._host.frame.focused_pane
+        return focused is not None and focused.id in (self._before_id, self._after_id)
+
+    def _paint(self, layout: ScreenLayout, length: int) -> list[Line]:
+        """The strip: one accent or border cell per cell of the pane's edge.
+
+        Edge-aware the way the paint protocol needs: a left/right divider is
+        the pane's height in one-column rows, a bottom one one row of the
+        pane's width -- either way the strip fills its band's own cells, so a
+        horizontal split's divider never paints a one-column row over the
+        content it was budgeted beside.
+
+        The strip is the resolved style repeated, and the style is read
+        here, every paint -- focus and the host's theme are live -- so
+        the memo is keyed on where it landed besides the edge and the
+        length: a focus change or a re-skin resolves a different style and
+        rebuilds, and the frame invalidation that follows focus needs no
+        separate signal.  A fresh list comes back every call, as it always
+        has.
+        """
+        style = self._resolve()
+        key = (self.chrome.edge, length, style)
+        cached = self._strip_cache
+        if cached is not None and cached[0] == key:
+            return list(cached[1])
+        if self.chrome.edge in ("left", "right"):
+            strip = tuple(Line.filled(1, style) for _ in range(length))
+        else:
+            strip = (Line.filled(length, style),)
+        self._strip_cache = (key, strip)
+        return list(strip)
+
+    def _resolve(self) -> Style:
+        """The cell's style: the host theme's accent beside focus, else its border."""
+        theme = self._host.theme
+        return theme.content.accent if self._accent() else theme.borders.base
+
+    def __repr__(self) -> str:
+        return f"Separator({self._before_id!r}|{self._after_id!r})"

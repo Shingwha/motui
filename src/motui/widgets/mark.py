@@ -5,17 +5,17 @@ raw row indices -- the view's own data-row numbering, never rendered rows --
 and the mark survives re-sorting or re-filtering because the host owns the
 reorder and can re-map the set.  Two glyphs carry the mark: ``[x]`` marked,
 ``[ ]`` unmarked -- the vocabulary's
-:attr:`~motui.core.glyphs.Glyphs.check_on` /
-:attr:`~motui.core.glyphs.Glyphs.check_off` pair, which the views prefix
+:attr:`~motui.kernel.glyphs.Glyphs.check_on` /
+:attr:`~motui.kernel.glyphs.Glyphs.check_off` pair, which the views prefix
 to the row's own text through ``mark_prefix`` as one seat
-(:func:`~motui.core.glyphs.seat`: the glyph plus its separator).
+(:func:`~motui.kernel.glyphs.seat`: the glyph plus its separator).
 """
 
 from __future__ import annotations
 
 from collections.abc import Iterable, Iterator
 
-from .glyphs import GLYPHS, seat
+from ..kernel.glyphs import GLYPHS, seat
 
 __all__ = ["MarkSet", "mark_prefix"]
 
@@ -77,12 +77,12 @@ def mark_prefix(
     """The marked or unmarked seat: ``"[x] "`` / ``"[ ] "`` by default.
 
     The glyph pair is the vocabulary's checkbox pair
-    (:attr:`~motui.core.glyphs.Glyphs.check_on` /
-    :attr:`~motui.core.glyphs.Glyphs.check_off`); a host may pass its own pair,
-    and each answer is :func:`~motui.core.glyphs.seat` -- the glyph plus
+    (:attr:`~motui.kernel.glyphs.Glyphs.check_on` /
+    :attr:`~motui.kernel.glyphs.Glyphs.check_off`); a host may pass its own pair,
+    and each answer is :func:`~motui.kernel.glyphs.seat` -- the glyph plus
     one separator column, ``""`` for a disabled glyph.  A pair whose
     members differ in width is padded by the component through
-    :func:`~motui.core.glyphs.pair_seat`, not here: this helper answers
+    :func:`~motui.kernel.glyphs.pair_seat`, not here: this helper answers
     one glyph's own seat.
     """
     return seat(marked_glyph if marked else unmarked_glyph)

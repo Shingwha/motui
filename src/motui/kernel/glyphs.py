@@ -2,7 +2,7 @@
 
 **Glyphs are content, not style** -- a cursor, a rail bar, a tree fold, a
 radio pair, a checkbox pair, a counter arrow -- so they never enter
-:class:`~motui.core.theme.Theme`: a host that wants other marks passes
+:class:`~motui.kernel.theme.Theme`: a host that wants other marks passes
 them to the component, and the theme keeps carrying only colors and
 attributes.  One home for every shipped mark means the components agree on
 the vocabulary and a reader finds "what is the cursor glyph" in one place.
@@ -11,7 +11,7 @@ Three helpers write the one seat rule the components share:
 
 * :func:`seat` -- a glyph plus one separator column, ``""`` for no glyph;
 * :func:`seat_width` -- the same seat's display width, measured through
-  :func:`~motui.core.text.visible_width` (never ``len``: a CJK glyph is
+  :func:`~motui.kernel.text.visible_width` (never ``len``: a CJK glyph is
   two columns), ``0`` for no glyph;
 * :func:`pair_seat` -- one member of a state pair padded to the wider
   member's seat, so the two states keep one column whichever is shown.
@@ -220,7 +220,7 @@ def seat_width(glyph: str) -> int:
     """Display width of :func:`seat`: ``visible_width(glyph) + 1``.
 
     ``""`` answers ``0``.  The measure is
-    :func:`~motui.core.text.visible_width`, never ``len``, so a wide
+    :func:`~motui.kernel.text.visible_width`, never ``len``, so a wide
     glyph (a CJK character) takes its two columns plus the separator.
     """
     return visible_width(glyph) + 1 if glyph else 0

@@ -3,7 +3,7 @@
 The 2.0 theme is a tree of ten **role groups** -- ``text``, ``surfaces``,
 ``borders``, ``controls``, ``rows``, ``status``, ``content``, ``chrome``,
 ``overlays`` and ``syntax`` -- each a frozen, keyword-only value whose fields
-are :class:`~motui.core.style.Style` tokens.  A component reads the token
+are :class:`~motui.kernel.style.Style` tokens.  A component reads the token
 it paints with (``theme.content.accent``, ``theme.rows.hover`` ...) instead
 of a flat palette name, so a role can change without every call site
 changing with it.
@@ -36,7 +36,6 @@ each style with :meth:`Themed.pick`.
 
 from __future__ import annotations
 
-import os
 from collections.abc import Mapping
 from dataclasses import dataclass, field, replace
 
@@ -408,17 +407,17 @@ class Theme:
         )
 
     @classmethod
-    def auto(cls, env: Mapping[str, str] | None = None) -> "Theme":
-        """Pick light or dark from the environment; unknown falls back to dark.
+    def auto(cls, env: Mapping[str, str]) -> "Theme":
+        """Pick light or dark from ``env``; unknown falls back to dark.
 
         ``TERM_BACKGROUND`` (``light``/``white`` or ``dark``/``black``) wins;
         otherwise a numeric ``COLORFGBG`` background slot is read -- ``7``
         or a bright value (``9``..``15``) is a light background, everything
-        else is dark.  The function only reads ``env`` (defaulting to
-        :data:`os.environ`) and never changes global state.
+        else is dark.  The environment is an explicit argument: the kernel
+        never reads :data:`os.environ`, and
+        :func:`motui.terminal.capability.auto_theme` is the convenience that
+        passes it.
         """
-        if env is None:
-            env = os.environ
         background = env.get("TERM_BACKGROUND", "").strip().lower()
         if background in ("light", "white"):
             return cls.light()

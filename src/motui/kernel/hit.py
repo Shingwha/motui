@@ -11,7 +11,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-from .block import Block, Component
+from .document import Component, Section
 from .frame import Pane
 
 __all__ = ["EveryHandle", "Hit", "RowRange"]
@@ -57,7 +57,7 @@ class Hit:
     when a split holds several.
 
     ``chain`` is the ancestor walk
-    :func:`~motui.core.block.descend_chain` resolved: one
+    :func:`~motui.kernel.block.descend_chain` resolved: one
     ``(component, row, col)`` per level, outermost first, in each
     component's own coordinate space.  The leaf views are derived
     properties over its tail, so a host that only needs the deepest
@@ -69,11 +69,11 @@ class Hit:
     * :attr:`pane_id` -- the id-only view selection and gestures hold.
 
     The chain is also what a wheel routes with: walk it backwards for the
-    nearest :class:`~motui.core.scroll.Scrollable`.
+    nearest :class:`~motui.kernel.scroll.Scrollable`.
     """
 
     pane: Pane
-    block: Block
+    block: Section
     row: int
     col: int
     chain: tuple[tuple[Component, int, int], ...] = ()
