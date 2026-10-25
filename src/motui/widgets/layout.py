@@ -1,15 +1,19 @@
 """Layout containers: :class:`Row` and :class:`Column`.
 
 Both are ordinary components of the component library
-(``render(width) -> list[Line]``) that arrange child components instead of
-drawing: a ``Row`` places children side by side in columns of fixed or
-shared width, a ``Column`` stacks them vertically with optional blank
-rows between.  They nest one level deep (a ``Row`` child may be a
+(``render(Constraints | int) -> Surface``) that arrange child components
+instead of drawing: a ``Row`` places children side by side in columns of
+fixed or shared width, a ``Column`` stacks them vertically with optional
+blank rows between.  They nest one level deep (a ``Row`` child may be a
 ``Column``); beyond that, prefer building blocks and padding by hand.
 Only the kernel is imported: :class:`~motui.kernel.document.Component` for the
 protocol, :class:`~motui.kernel.cell.Line` for assembly.  Import the
 containers from :mod:`motui.widgets.layout` or from
 :mod:`motui.widgets` / the package root.
+
+Children still receive a bare width int while the library migrates (they may
+be 1.x components); the composed rows are clipped into a Surface, and a
+``max_height`` budget truncates them.
 
 :class:`Spacer` and :class:`Padding` complete the set: blank rows, and
 whitespace around a child (optionally filled into a solid band).
@@ -18,7 +22,8 @@ whitespace around a child (optionally filled into a solid band).
 from __future__ import annotations
 
 from ..kernel.document import Component, Revisioned
-from ..kernel.cell import Line, Segment
+from ..kernel.cell import Line, Segment, Surface
+from ..kernel.layout import Constraints, as_constraints
 from ..kernel.style import NONE, Style
 from ..kernel.theme import Styles, Theme
 from ..widgets.base import Widget
@@ -31,6 +36,19 @@ def _child_key(child: object) -> object:
     if isinstance(child, Revisioned):
         return (id(child), child.revision())
     return id(child)
+
+
+def _answer(rows: list[Line], c: Constraints) -> Surface:
+    """The composed rows as the 2.0 answer, honouring the height budget.
+
+    ``Surface.clipped`` only truncates, so a container's rows -- already
+    fitted to the width -- pass through byte-for-byte.  The height budget
+    slices a copy; the container's own memo keeps the untruncated rows, so a
+    later call with a larger budget can still answer from it.
+    """
+    if c.max_height is not None:
+        rows = rows[: c.max_height]
+    return Surface.clipped(rows, c.width)
 
 
 class Row:
@@ -92,10 +110,19 @@ class Row:
             self.gap,
         )
 
-    def render(self, width: int) -> list[Line]:
+    def render(self, c: Constraints | int) -> Surface:
+        """Lay the children out side by side and answer a clipped surface.
+
+        ``c`` may be the 1.x bare width; children still receive that width as
+        an int (they may be on either side of the migration), and the
+        composed rows are fitted to it as before.  ``max_height`` truncates
+        the final rows.
+        """
+        c = as_constraints(c)
+        width = c.width
         count = len(self.children)
         if count == 0:
-            return []
+            return _answer([], c)
         columns = [
             self.widths[i] if self.widths is not None and i < len(self.widths) else None
             for i in range(count)
@@ -128,7 +155,7 @@ class Row:
         )
         memo = self._memo
         if memo is not None and memo[0] == key:
-            return list(memo[1])
+            return _answer(list(memo[1]), c)
 
         cells = [
             [row.fit(inner).fill(inner) for row in raw]
@@ -149,7 +176,7 @@ class Row:
                     line = line + Line.from_text(" " * max(0, col_widths[i]))
             out.append(line.fit(width))
         self._memo = (key, out, raw_cells)
-        return list(out)
+        return _answer(out, c)
 
     def child_at(self, row: int, col: int) -> tuple[Component, int, int] | None:
         """The child owning a cell of the last render, in the child's coords.
@@ -207,7 +234,14 @@ class Column:
             self.gap,
         )
 
-    def render(self, width: int) -> list[Line]:
+    def render(self, c: Constraints | int) -> Surface:
+        """Stack the children and answer a clipped surface.
+
+        The 1.x bare width is accepted and forwarded to the children as an
+        int; ``max_height`` truncates the final rows.
+        """
+        c = as_constraints(c)
+        width = c.width
         raw_cells: list[list[Line]] = []
         offsets: list[tuple[int, int]] = []
         y = 0
@@ -222,7 +256,7 @@ class Column:
         key = (tuple(tuple(map(id, rows)) for rows in raw_cells), self.gap, width)
         memo = self._memo
         if memo is not None and memo[0] == key:
-            return list(memo[1])
+            return _answer(list(memo[1]), c)
 
         out: list[Line] = []
         for i, raw in enumerate(raw_cells):
@@ -230,7 +264,7 @@ class Column:
                 out.extend(Line() for _ in range(self.gap))
             out.extend(row.fit(width) for row in raw)
         self._memo = (key, out, raw_cells)
-        return list(out)
+        return _answer(out, c)
 
     def child_at(self, row: int, col: int) -> tuple[Component, int, int] | None:
         """The child owning a row of the last render, in the child's coords.
@@ -270,8 +304,13 @@ class Spacer:
         """The :class:`~motui.kernel.document.Revisioned` snapshot: the row count."""
         return (self.rows,)
 
-    def render(self, width: int) -> list[Line]:
-        return [Line() for _ in range(max(0, self.rows))]
+    def render(self, c: Constraints | int) -> Surface:
+        """``rows`` blank rows as a clipped surface (the budget may shorten it)."""
+        c = as_constraints(c)
+        count = max(0, self.rows)
+        if c.max_height is not None:
+            count = min(count, c.max_height)
+        return Surface.clipped([Line() for _ in range(count)], c.width)
 
     def __repr__(self) -> str:
         return f"Spacer(rows={self.rows})"
@@ -361,7 +400,15 @@ class Padding(Widget):
             self.styles,
         )
 
-    def render(self, width: int) -> list[Line]:
+    def render(self, c: Constraints | int) -> Surface:
+        """Pad the child and answer a clipped surface.
+
+        The 1.x bare width is accepted and the child still receives the inner
+        width as an int; ``max_height`` truncates the final rows (the memo
+        keeps the untruncated ones).
+        """
+        c = as_constraints(c)
+        width = c.width
         left = max(0, self.left)
         top = max(0, self.top)
         right = max(0, self.right)
@@ -376,7 +423,7 @@ class Padding(Widget):
         key = (tuple(map(id, child_rows)), left, right, top, bottom, fill, width)
         memo = self._memo
         if memo is not None and memo[0] == key:
-            return list(memo[1])
+            return _answer(list(memo[1]), c)
 
         left_pad = Line.from_text(" " * left, fill)
         out: list[Line] = []
@@ -387,7 +434,7 @@ class Padding(Widget):
         for _ in range(bottom):
             out.append(Line.filled(width, fill) if fill != NONE else Line())
         self._memo = (key, out, child_rows)
-        return list(out)
+        return _answer(out, c)
 
     def child_at(self, row: int, col: int) -> tuple[Component, int, int] | None:
         """The child owning a cell of the last render, in the child's coords.
