@@ -42,13 +42,13 @@ class Session(App):
         self.dock(Text(""), edge="bottom", size=2)
         self.catalog_pane, self.stage = self.split("vertical", ratios=CATALOG_RATIOS)
         self.stage.focus()
-        self.scrollbar = Scrollbar(self.tui, pane=self.stage.id, theme=self.theme)
+        self.scrollbar = Scrollbar(self.runtime, pane=self.stage.id, theme=self.theme)
         self.mount(self.scrollbar)
-        self.clipboard = ScreenClipboard(self.tui.screen)
+        self.clipboard = ScreenClipboard(self.runtime.screen)
         self.commands = self._build_commands()
-        self.tui.every(TICK, self._tick)
+        self.runtime.every(TICK, self._tick)
         self.show_topic(TOPICS[0].key, toast=False)
-        self.tui.paint()
+        self.runtime.paint()
 
     def show(self, section: "str | Section", topic: "str | Topic") -> None:
         """Switch to ``section``/``topic`` (either keys or values)."""
@@ -77,13 +77,13 @@ class Session(App):
             self._build_ring()
             self.stage.viewport.scroll_to(0)
             self.stage.focus()
-            self.tui.set_title(f"motui \u00b7 {topic.section}/{topic.key}")
+            self.runtime.set_title(f"motui \u00b7 {topic.section}/{topic.key}")
             refresh_status(self)
         finally:
             self._in_show = False
         if toast:
             self._toast(f"{SECTION_BY_KEY[topic.section].title} \u00b7 {topic.title}")
-        self.tui.refresh()
+        self.runtime.refresh()
 
     def show_section(self, index: int) -> None:
         topics = topics_for(SECTIONS[index % len(SECTIONS)])
@@ -112,13 +112,13 @@ class Session(App):
     def toggle_stats(self) -> None:
         """``c-g``: mount or unmount the dev stats overlay."""
         if self.stats is None:
-            self.stats = Stats(self.tui, pointer=self.pointer, theme=self.theme)
+            self.stats = Stats(self.runtime, pointer=self.pointer, theme=self.theme)
             self.mount(self.stats, dispatch=False)  # the session feeds it itself
         else:
             self.unmount(self.stats)
             self.stats.detach()
             self.stats = None
-        self.tui.refresh()
+        self.runtime.refresh()
 
     def dispatch(self, event) -> bool:
         """The demo's pre-tiers, then the App's tiers, then the round's picks."""
@@ -186,7 +186,7 @@ class Session(App):
         self._read_modal_result()
         self._read_palette_result()
         refresh_status(self)
-        self.tui.refresh()
+        self.runtime.refresh()
 
     def _build_ring(self) -> None:
         targets = [] if self.catalog is None else [self.catalog]
@@ -289,7 +289,7 @@ class Session(App):
     def _tick(self) -> None:
         if self.body is not None and self.body.tick is not None:
             self.body.tick()
-            self.tui.refresh()
+            self.runtime.refresh()
 
     def _copy_toast(self, tui, selection: Selection) -> None:
         pane = tui.selection_pane or tui.frame.focused_pane

@@ -1,6 +1,6 @@
-"""The TUI driver: full-screen lifecycle, document facade, pump, and dump.
+"""The runtime: full-screen lifecycle, document facade, pump, and dump.
 
-:class:`TUI` ties the kernel together -- a
+:class:`Runtime` ties the kernel together -- a
 :class:`~motui.kernel.document.Document`, the
 :class:`~motui.kernel.layout.Viewport` over it, a
 :class:`~motui.terminal.paint.Painter` and a
@@ -10,46 +10,46 @@ full-screen application needs:
 * a **document facade** (``add``/``get``/``remove``/``system``) where every
   mutation invalidates the frame, addressing components rather than blocks:
   ``add`` answers the block id, ``get``/``remove`` the component itself;
-* **scroll facades** -- the directed moves in :meth:`TUI.scroll_up` /
-  :meth:`TUI.scroll_down` / :meth:`TUI.scroll_to_bottom`, and
-  :meth:`TUI.reveal`, which brings a document address on screen
+* **scroll facades** -- the directed moves in :meth:`Runtime.scroll_up` /
+  :meth:`Runtime.scroll_down` / :meth:`Runtime.scroll_to_bottom`, and
+  :meth:`Runtime.reveal`, which brings a document address on screen
   (centered, clamped at the edges) on the same focused-pane rule;
-* a **mouse hit test** (:meth:`TUI.hit`) that resolves a report's
+* a **mouse hit test** (:meth:`Runtime.hit`) that resolves a report's
   coordinates to the block and cell under them -- routed through the
   frame's ownership table, with the ancestor chain
   (:func:`~motui.kernel.document.descend_chain`) carried on the result -- and
-  :meth:`TUI.hit_leaf` for the deepest component alone.  The driver never
+  :meth:`Runtime.hit_leaf` for the deepest component alone.  The driver never
   dispatches a click: the host routes the event;
-* one optional **document-space selection** (:attr:`TUI.selection` /
-  :meth:`TUI.set_selection`) painted by the frame's first overlay between
+* one optional **document-space selection** (:attr:`Runtime.selection` /
+  :meth:`Runtime.set_selection`) painted by the frame's first overlay between
   layout and paint, so the highlight follows its text through scrolls
   (D1-D2) -- the range carries the pane its addresses live in
-  (:attr:`TUI.selection_pane`), since block ids are numbered per document;
-* the **split and focus surface** -- :meth:`TUI.split` (one code path with
+  (:attr:`Runtime.selection_pane`), since block ids are numbered per document;
+* the **split and focus surface** -- :meth:`Runtime.split` (one code path with
   :meth:`~motui.kernel.frame.Pane.split`) and the pane a press focuses
-  (:attr:`TUI.frame`'s own focus record; the default press policy now
+  (:attr:`Runtime.frame`'s own focus record; the default press policy now
   lives in :class:`~motui.app.application.App`);
-* one optional **dock pair** (:meth:`TUI.dock`) -- frame-level regions
+* one optional **dock pair** (:meth:`Runtime.dock`) -- frame-level regions
   above and below the pane area, each holding its own viewport built
   around the component handed over, where the assembly tier parks a
   header and a footer (D6);
-* a small **protocol surface** -- :meth:`TUI.set_title` (OSC 2) and
-  :meth:`TUI.set_cursor_shape` (DECSCUSR): the two host-owned window
+* a small **protocol surface** -- :meth:`Runtime.set_title` (OSC 2) and
+  :meth:`Runtime.set_cursor_shape` (DECSCUSR): the two host-owned window
   gestures, written through the screen; the library declares (``Input`` /
   ``Editor`` carry ``cursor_shape="beam"``), the host decides;
 * a **pump** (``tick``/``clock``/``_wake_up``/``_pump``) that repaints on a
   throttle and runs cancellable periodic callbacks, with the clock as a seam
   tests can inject -- the library itself never builds an event loop, never
   sleeps, and never touches a sink outside the painter;
-* :meth:`TUI.run_session` / :meth:`TUI.run_async` / :meth:`TUI.run`, which
+* :meth:`Runtime.run_session` / :meth:`Runtime.run_async` / :meth:`Runtime.run`, which
   bracket ``enter``/``leave`` around the body (even on exceptions and
   ``exit()``), stay completely silent on a non-live screen, and dump the
   final screen as plain text when piped.
 
-:meth:`TUI.read_event` is a **pure read**: it returns the next event or
+:meth:`Runtime.read_event` is a **pure read**: it returns the next event or
 ``None`` and owns no scroll or focus policy.  The default orchestration
 (wheel routing, focus-on-press, modal/toast/gesture/pointer/focus tiers)
-lives one level up in :class:`~motui.app.application.App`; a host driving ``TUI``
+lives one level up in :class:`~motui.app.application.App`; a host driving ``Runtime``
 directly keeps its own loop.
 
 **The dispatch order**, one rule everywhere: a composition paints each
@@ -85,8 +85,9 @@ from ..kernel.theme import DEFAULT_THEME, Theme
 from ..kernel.layout import ScreenLayout, Viewport
 from ..terminal import RawTerminalKeys
 from ..kernel.layout import Constraints
+from .workspace import Workspace
 
-__all__ = ["TUI"]
+__all__ = ["Runtime"]
 
 
 class Timer(EveryHandle):
@@ -153,18 +154,18 @@ class _SelectionOverlay:
     overlay protocol -- the frame hands it the composed rows, it marks the
     layout of the pane the selection lives in and the marked rows are spliced
     back where that pane's came from.  The stored selection is read off the
-    driver at paint time, so :meth:`TUI.set_selection` stays the one write on
+    driver at paint time, so :meth:`Runtime.set_selection` stays the one write on
     that surface and a ``None`` paints the rows exactly as they were composed.
 
     The pane matters more than it looks: block ids are numbered per document,
     so a split's second child holds a ``b0`` exactly as the first does, and an
     overlay that guessed a pane from the focus would mark a *neighbour's* rows
-    at those colliding addresses.  :meth:`TUI.set_selection` therefore records
+    at those colliding addresses.  :meth:`Runtime.set_selection` therefore records
     the pane alongside the range, and a pane the frame no longer holds paints
     nothing -- its document went with it (D8's vanished addresses).
     """
 
-    def __init__(self, tui: TUI) -> None:
+    def __init__(self, tui: Runtime) -> None:
         self._tui = tui
 
     def paint(self, frame: Frame) -> ScreenLayout:
@@ -194,7 +195,7 @@ def _body_address(viewport: Viewport, block: Section, row: int, width: int) -> i
     (:meth:`~motui.kernel.document.Section.row_count`): the layout just filled
     the same cache, so the walk reads counts instead of re-wrapping rows,
     and a block whose content moved carries a moved revision, so no count
-    is stale.  The half of :meth:`TUI.reveal` that is pure arithmetic over
+    is stale.  The half of :meth:`Runtime.reveal` that is pure arithmetic over
     the document; the caller has already resolved the block out of the
     document, so the walk is total.
     """
@@ -209,7 +210,7 @@ def _body_address(viewport: Viewport, block: Section, row: int, width: int) -> i
     return address + row
 
 
-class TUI:
+class Runtime:
     """A full-screen application driver.
 
     ``screen`` defaults to a :class:`~motui.terminal.screen.TerminalScreen`
@@ -351,6 +352,9 @@ class TUI:
         self._selection_pane_id: str | None = None
         self._layout_width: int | None = None
         self._timers: list[Timer] = []
+        #: The cached Workspace facade (created on first access); it delegates
+        #: every member back here and holds no state of its own.
+        self._workspace: Workspace | None = None
         #: The clock the driver adds its virtual offset to.  A test may swap
         #: this (or replace ``clock`` outright) to control time.
         self._clock: Callable[[], float] = time.monotonic
@@ -378,6 +382,26 @@ class TUI:
     def screen(self) -> Screen:
         """The driver's screen; a host never replaces it mid-run."""
         return self._screen
+
+    @property
+    def terminal(self) -> Terminal | None:
+        """The terminal endpoint this runtime enters, leaves and reads through.
+
+        ``None`` for the legacy construction that hands the runtime a screen
+        directly; a terminal-attached runtime reads and copies through it.
+        """
+        return self._terminal
+
+    @property
+    def workspace(self) -> Workspace:
+        """The cached :class:`~motui.app.workspace.Workspace` facade over self.
+
+        One facade per runtime: it holds no state of its own, so every read
+        and write answers from this object and the two views can never drift.
+        """
+        if self._workspace is None:
+            self._workspace = Workspace(self)
+        return self._workspace
 
     # -- clipboard ---------------------------------------------------------------
 
@@ -1034,7 +1058,7 @@ class TUI:
         reported it -- a wheel report, a page key and a button press are
         all the host's to route.  The driver runs no scroll or focus policy
         here (the default orchestration is
-        :class:`~motui.app.application.App`'s; a host driving ``TUI`` directly owns
+        :class:`~motui.app.application.App`'s; a host driving ``Runtime`` directly owns
         its loop).  The result is ``None`` when there is no key source,
         when the source reports EOF, and -- per the toolkit's non-live
         contract -- always on a non-live screen, even when a source is
@@ -1425,7 +1449,7 @@ class TUI:
         if pump_error is not None:
             raise pump_error
 
-    async def run_session(self, body: Callable[["TUI"], Awaitable[None]]) -> None:
+    async def run_session(self, body: Callable[["Runtime"], Awaitable[None]]) -> None:
         """Run ``body(self)`` inside a full-screen session.
 
         The body is an ordinary coroutine function -- the library never
@@ -1515,6 +1539,6 @@ class TUI:
 
     def __repr__(self) -> str:
         return (
-            f"TUI(screen={self.screen!r}, blocks={len(self.document)}, "
+            f"Runtime(screen={self.screen!r}, blocks={len(self.document)}, "
             f"interactive={self.interactive})"
         )

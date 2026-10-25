@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from motui.app import TUI
+from motui.app import Runtime
 from motui.app import FocusManager, Pointer, SelectionGesture
 from motui.terminal import HeadlessScreen
 from motui.kernel.events import MouseEvent
@@ -48,8 +48,8 @@ class RowLeaf(Leaf):
         return changed
 
 
-def _tui(*components, width: int = 40, height: int = 8) -> TUI:
-    tui = TUI(screen=HeadlessScreen(width, height, hover=True), interactive=False)
+def _tui(*components, width: int = 40, height: int = 8) -> Runtime:
+    tui = Runtime(screen=HeadlessScreen(width, height, hover=True), interactive=False)
     for component in components:
         tui.add(component)
     tui.paint()
@@ -174,7 +174,7 @@ def test_detach_is_an_idempotent_inert_unmount():
 
 async def test_the_gesture_owns_the_reports_and_the_pointer_watches_them():
     leaf = Leaf()
-    tui = TUI(
+    tui = Runtime(
         screen=HeadlessScreen(40, 8, hover=True),
         keys=ScriptedEvents([motion(0, 0), press(0, 0), release(0, 0), None]),
         interactive=False,

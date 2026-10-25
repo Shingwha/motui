@@ -108,8 +108,8 @@ def _modal_stack(b) -> None:
         [ButtonSpec("Done", "done")],
         theme=b.theme,
     )
-    first = Modal(b.session.tui, first_dialog, theme=b.theme)
-    second = Modal(b.session.tui, second_dialog, theme=b.theme)
+    first = Modal(b.session.runtime, first_dialog, theme=b.theme)
+    second = Modal(b.session.runtime, second_dialog, theme=b.theme)
     opener = Button("Open first panel", theme=b.theme)
     opener.hint = "the first of two stacked modals"
     b.preview(opener)

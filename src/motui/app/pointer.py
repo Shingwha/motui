@@ -7,7 +7,7 @@ kernel stays pure (the ``child_at`` coordinate route, the
 :func:`~motui.kernel.document.descend` walk and the DECSET 1003 bytes), the
 focus tier keeps its click policy (:class:`~motui.app.focus.FocusManager`), and
 the driver exposes the minimal imperative surface the pointer reads:
-:meth:`~motui.app.TUI.hit`, which resolves a report's 0-based cell
+:meth:`~motui.app.Runtime.hit`, which resolves a report's 0-based cell
 through the frame's ownership table.
 
 :class:`Pointer` turns mouse reports into hover state and click dispatch.  It
@@ -18,7 +18,7 @@ hover where a component implements ``on_hover``, and completing a stationary
 click through the mounted :class:`~motui.app.focus.FocusManager` (or dispatching
 the deepest clickable leaf itself when there is none).  A host mounts it
 explicitly, the same rule the gesture and the ring follow, and opens 1003 with
-``TUI(hover=True)`` -- a pointer without 1003 never sees a motion report::
+``Runtime(hover=True)`` -- a pointer without 1003 never sees a motion report::
 
     gesture = SelectionGesture(tui)      # the drag selection
     pointer = Pointer(tui, ring=ring)    # the hover and the click
@@ -39,7 +39,7 @@ from ..kernel.hit import Hit
 from .focus import FocusManager
 
 if TYPE_CHECKING:
-    from .driver import TUI
+    from .runtime import Runtime
 
 __all__ = ["Pointer"]
 
@@ -65,7 +65,7 @@ class Pointer:
     **Three contracts hold the tier together.**
 
     *Hover needs the terminal's any-event tracking.*  The host must open
-    DECSET 1003 (``TUI(hover=True)`` / ``TerminalScreen(hover=True)`` /
+    DECSET 1003 (``Runtime(hover=True)`` / ``TerminalScreen(hover=True)`` /
     ``HeadlessScreen(hover=True)``): under the default 1002 the terminal
     reports motion only while a button is held, and a pointer that only
     moves is never heard -- the pointer cannot ask for the mode itself.
@@ -84,7 +84,7 @@ class Pointer:
 
     *The host owns the repaint.*  ``handle`` answers whether what it tracks
     changed -- the hovered leaf entered, left or moved rows, or a click was
-    consumed -- and never calls :meth:`~motui.app.TUI.invalidate`
+    consumed -- and never calls :meth:`~motui.app.Runtime.invalidate`
     itself, the same consume-one-event cue the gesture and the chrome return
     (``if pointer.handle(event): tui.refresh()``).  A motion that changes
     nothing answers ``False``: no change, no bytes.
@@ -94,7 +94,7 @@ class Pointer:
 
     def __init__(
         self,
-        tui: TUI,
+        tui: Runtime,
         *,
         ring: FocusManager | None = None,
         hover: bool = True,

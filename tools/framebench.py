@@ -255,8 +255,8 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT / "src"))
 
-from motui import Markdown, TUI, Table, Text
-from motui.app import Scrollbar
+from motui import Markdown, Table, Text
+from motui.app import Runtime, Scrollbar
 from motui.terminal import HeadlessScreen
 
 FIXTURE = (ROOT / "src" / "motui" / "demo" / "fixture.md").read_text(
@@ -265,8 +265,8 @@ FIXTURE = (ROOT / "src" / "motui" / "demo" / "fixture.md").read_text(
 LINES = FIXTURE.split("\n")
 
 
-def _tui(split: bool) -> tuple[TUI, Markdown | None]:
-    tui = TUI(screen=HeadlessScreen(180, 45), interactive=False)
+def _tui(split: bool) -> tuple[Runtime, Markdown | None]:
+    tui = Runtime(screen=HeadlessScreen(180, 45), interactive=False)
     Scrollbar(tui, pane="primary")
     tui.add(Markdown(FIXTURE))
     stream = None
@@ -317,7 +317,7 @@ def text_open_workload(frames: int) -> float:
     measured paints hit it -- before the cache lived on the block every one
     of them re-wrapped all 3000 lines.
     """
-    tui = TUI(screen=HeadlessScreen(180, 45), interactive=False)
+    tui = Runtime(screen=HeadlessScreen(180, 45), interactive=False)
     text = Text(
         "\n".join(
             f"line {i} with some words in it, wrapped by the renderer as it goes"
@@ -371,7 +371,7 @@ def table_open_workload(frames: int) -> float:
     one of them re-normalized, banded, measured, padded and fused all 1440
     cells.
     """
-    tui = TUI(screen=HeadlessScreen(180, 45), interactive=False)
+    tui = Runtime(screen=HeadlessScreen(180, 45), interactive=False)
     table = Table(
         [f"col {c}" for c in range(6)],
         [[f"cell {r}.{c}" for c in range(6)] for r in range(240)],
@@ -407,7 +407,7 @@ def stream_paragraph_workload(frames: int) -> float:
     paragraph per frame pays for every line landed, this one for the line
     that arrived.
     """
-    tui = TUI(screen=HeadlessScreen(180, 45), interactive=False)
+    tui = Runtime(screen=HeadlessScreen(180, 45), interactive=False)
     stream = Markdown("")
     tui.add(stream)
     tui.paint()
@@ -455,7 +455,7 @@ def hash_workload() -> str:
     """
     import hashlib
 
-    tui = TUI(screen=HeadlessScreen(100, 30), interactive=False)
+    tui = Runtime(screen=HeadlessScreen(100, 30), interactive=False)
     Scrollbar(tui, pane="primary")
     tui.add(Markdown(FIXTURE))
     tui.paint()

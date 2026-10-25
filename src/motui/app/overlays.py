@@ -8,7 +8,7 @@ dev box reads -- over a mechanism the kernel owns: the frame's ordered
 overlay registry (:meth:`~motui.kernel.frame.Frame.add_overlay`), where an
 overlay paints over the composed frame, in registration order.  The
 time- and input-shaped halves ride the driver's
-:meth:`~motui.app.TUI.every` handles and the host's own dispatch.
+:meth:`~motui.app.Runtime.every` handles and the host's own dispatch.
 
 :class:`Toasts` is the reference overlay (D3): a corner-anchored stack of
 transient bands painted over the composed frame.  Constructing one
@@ -43,9 +43,9 @@ the event before any hit test runs, or a press would anchor a selection
 under the band.
 
 The seam this module reads rather than owns is documented where it lives:
-the driver's **frame**, through its public :attr:`~motui.app.TUI.frame`
+the driver's **frame**, through its public :attr:`~motui.app.Runtime.frame`
 property -- the tiling, its overlay registry and the composed rows -- and
-the driver's **pump**, through the public :meth:`~motui.app.TUI.every`
+the driver's **pump**, through the public :meth:`~motui.app.Runtime.every`
 handle the expiry ticker rides.
 """
 
@@ -68,7 +68,7 @@ from ..kernel.layout import Constraints
 from ..kernel.text import WrapMode
 
 if TYPE_CHECKING:
-    from .driver import TUI
+    from .runtime import Runtime
     from .pointer import Pointer
 
 __all__ = ["Stats", "Toasts", "Tooltip"]
@@ -224,7 +224,7 @@ class Toasts:
 
     def __init__(
         self,
-        tui: TUI,
+        tui: Runtime,
         *,
         ttl: float = 4.0,
         max_shown: int = 3,
@@ -439,7 +439,7 @@ class _MountedOverlay(Themed):
 
     __slots__ = ("_detached", "_tui")
 
-    def __init__(self, tui: TUI, *, layer: str, theme: Theme | None = None) -> None:
+    def __init__(self, tui: Runtime, *, layer: str, theme: Theme | None = None) -> None:
         super().__init__(theme)
         self._tui = tui
         self._detached = False
@@ -504,7 +504,7 @@ class Tooltip(_MountedOverlay):
 
     def __init__(
         self,
-        tui: TUI,
+        tui: Runtime,
         pointer: Pointer,
         *,
         theme: Theme | None = None,
@@ -623,7 +623,7 @@ class Stats(_MountedOverlay):
 
     def __init__(
         self,
-        tui: TUI,
+        tui: Runtime,
         *,
         pointer: Pointer | None = None,
         theme: Theme | None = None,

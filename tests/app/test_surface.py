@@ -1,9 +1,9 @@
-"""The driver surface the controllers read: the clipboard and the root exports."""
+"""The runtime surface the controllers read: the clipboard and the layer exports."""
 
 from __future__ import annotations
 
 import motui
-from motui import TUI
+from motui.app import Runtime
 from motui.terminal import HeadlessScreen
 from tests.testing import headless_tui
 
@@ -22,14 +22,21 @@ class ClipboardScreen(HeadlessScreen):
 
 def test_copy_to_clipboard_delegates_to_the_screen():
     screen = ClipboardScreen()
-    tui = TUI(screen=screen)
-    assert tui.copy_to_clipboard("copied") is True
+    runtime = Runtime(screen=screen)
+    assert runtime.copy_to_clipboard("copied") is True
     assert screen.copied == ["copied"]
 
 
-def test_the_root_hands_out_the_driver_and_the_app_hands_out_the_focus_manager():
-    from motui.app import FocusManager
+def test_headless_tui_answers_a_runtime():
+    runtime = headless_tui()
+    assert isinstance(runtime, Runtime)
 
-    assert motui.TUI is TUI
+
+def test_the_root_hands_out_the_app_and_the_app_layer_the_runtime():
+    from motui.app import FocusManager, Workspace
+
+    assert not hasattr(motui, "TUI")  # the 1.x root name is gone
     assert motui.App is not None
+    assert Runtime.__module__ == "motui.app.runtime"
+    assert Workspace.__module__ == "motui.app.workspace"
     assert FocusManager.__module__ == "motui.app.focus"

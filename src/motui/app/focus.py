@@ -45,12 +45,12 @@ from ..kernel.geom import Pos
 from ..kernel.hit import Hit
 
 if TYPE_CHECKING:
-    from .driver import TUI
+    from .runtime import Runtime
 
 __all__ = ["FocusManager"]
 
 
-def _document_roots(tui: "TUI") -> Iterator[Component]:
+def _document_roots(tui: "Runtime") -> Iterator[Component]:
     """Every block root of every pane and dock, in paint order.
 
     The focus ring is derived from what is mounted, so it must see the
@@ -65,7 +65,7 @@ def _document_roots(tui: "TUI") -> Iterator[Component]:
             yield section.widget
 
 
-def iter_widgets(tui: "TUI") -> Iterator[Component]:
+def iter_widgets(tui: "Runtime") -> Iterator[Component]:
     """Every mounted node once, depth first, in frame order.
 
     The flat tree walk ``App`` uses for broadcasts (a resize reaches every
@@ -83,7 +83,7 @@ def iter_widgets(tui: "TUI") -> Iterator[Component]:
             yield node
 
 
-def focus_targets(tui: "TUI") -> tuple[Component, ...]:
+def focus_targets(tui: "Runtime") -> tuple[Component, ...]:
     """The focus ring: the mounted tree's preorder ``focusable``/scope nodes.
 
     A ``focus_scope`` node (a ``Form`` or a ``ComboBox`` routes its own
@@ -178,12 +178,12 @@ class FocusManager:
 
     **Out of scope, deliberately**: no hover of its own (the manager reads no
     motion report and flips no hover flag: hover is the
-    :mod:`motui.app.pointer` tier's, with ``TUI(hover=True)`` opening
+    :mod:`motui.app.pointer` tier's, with ``Runtime(hover=True)`` opening
     DECSET 1003); no hotkey beyond ``tab`` (the manager
     binds nothing; the host routes ``tab`` to :meth:`focus_next`); no mouse
     drag (press-motion-release is :class:`~motui.app.gesture.SelectionGesture`'s);
     no pane or window focus (that is the frame's -- :class:`~motui.kernel.frame.Frame`
-    and ``TUI.pane_at`` own which pane gets input).
+    and ``Runtime.pane_at`` own which pane gets input).
     """
 
     __slots__ = ("_focused", "_on_change", "_targets", "_traps", "_wrap")

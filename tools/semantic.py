@@ -79,7 +79,7 @@ def frame(topic, width: int = HEADLESS_W, height: int = HEADLESS_H) -> Emulator:
     screen = HeadlessScreen(width, height)
     session = Session(screen=screen, interactive=False)
     session.show_topic(topic.key, toast=False)
-    session.tui.paint()
+    session.runtime.paint()
     emulator = Emulator(width, height)
     emulator.feed(screen.output)
     return emulator

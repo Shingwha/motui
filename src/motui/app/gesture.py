@@ -8,15 +8,15 @@ which it may extend downward: the kernel
 (the :class:`~motui.kernel.selection.Selection` model, the
 :func:`~motui.kernel.selection.highlight` overlay, the
 :func:`~motui.kernel.selection.extract` text), and the driver
-(:class:`~motui.app.TUI`) exposes the minimal imperative surface the
-gesture needs: :attr:`~motui.app.TUI.selection` (read),
-:meth:`~motui.app.TUI.set_selection` (write + invalidate), the
-:meth:`~motui.app.TUI.hit` cell resolution, the
-:meth:`~motui.app.TUI.visible_range` edge zone, the scroll facades
-and the pump's :meth:`~motui.app.TUI.every` handles.
+(:class:`~motui.app.Runtime`) exposes the minimal imperative surface the
+gesture needs: :attr:`~motui.app.Runtime.selection` (read),
+:meth:`~motui.app.Runtime.set_selection` (write + invalidate), the
+:meth:`~motui.app.Runtime.hit` cell resolution, the
+:meth:`~motui.app.Runtime.visible_range` edge zone, the scroll facades
+and the pump's :meth:`~motui.app.Runtime.every` handles.
 
 :class:`SelectionGesture` turns mouse reports into that state.  A host opts
-in with one explicit line -- ``TUI`` never attaches a gesture itself, the
+in with one explicit line -- ``Runtime`` never attaches a gesture itself, the
 same explicit-mounting rule the other controllers follow -- and dispatches
 every event through it::
 
@@ -46,7 +46,7 @@ The two time-driven behaviors ride the pump instead of adding any mechanism
 of their own.  Drag-to-edge auto-scroll (D4/D5): a motion that lands on the
 first or last row of the *viewport region* -- the scrolling window, never the
 pinned rows -- arms a
-:meth:`~motui.app.TUI.every` ticker that scrolls ``scroll_rows`` rows per
+:meth:`~motui.app.Runtime.every` ticker that scrolls ``scroll_rows`` rows per
 ``scroll_tick`` and extends the head by the same number of **document** rows.
 The head arithmetic is one identity: scrolling ``n`` rows shifts the content
 under a fixed screen row by exactly ``n`` document rows, so the ticker moves
@@ -85,24 +85,24 @@ from ..kernel.text import visible_width
 from ..kernel.layout import Constraints
 
 if TYPE_CHECKING:
-    from .driver import TUI
+    from .runtime import Runtime
 
 __all__ = ["SelectionGesture", "copy_on_select"]
 
 #: The ``on_end`` hook: the gesture's selection-end action.  It receives the
 #: driver and the finished :class:`~motui.kernel.selection.Selection`; its
 #: return value is ignored.  ``None`` disables the effect.
-_OnEnd = Callable[["TUI", Selection], object] | None
+_OnEnd = Callable[["Runtime", Selection], object] | None
 
 
-def copy_on_select(tui: TUI, selection: Selection) -> bool:
+def copy_on_select(tui: Runtime, selection: Selection) -> bool:
     """The shipped ``on_end`` default: extract the range and OSC 52 it (D6).
 
     Still three lines -- every mechanism (the range walk of
     :func:`~motui.kernel.selection.extract`, the clipboard primitive
     :meth:`Screen.copy <motui.terminal.screen.Screen.copy>`) lives in the
     kernel, and the whole policy is "which text, which screen, once".  The
-    text comes from the pane the selection lives in (:attr:`TUI.selection_pane`
+    text comes from the pane the selection lives in (:attr:`Runtime.selection_pane`
     -- D7: selection is single-document, and block ids are numbered per
     document), read at the pane's own laid-out width -- the width its rows
     were wrapped at, chrome budget and split half included -- because a
@@ -137,7 +137,7 @@ class SelectionGesture:
 
     The gesture owns its own anchor and head addresses (document space, D1)
     and mirrors the drag into the driver through
-    :meth:`~motui.app.TUI.set_selection`; it keeps no copy of the text,
+    :meth:`~motui.app.Runtime.set_selection`; it keeps no copy of the text,
     the rows, or the layout.  It is single-pointer by construction: the left
     button anchors and extends, and a second press while a drag is in flight
     re-anchors from the new cell.
@@ -172,7 +172,7 @@ class SelectionGesture:
 
     def __init__(
         self,
-        tui: TUI,
+        tui: Runtime,
         *,
         on_end: _OnEnd = copy_on_select,
         scroll_rows: int = 2,
@@ -514,7 +514,7 @@ class SelectionGesture:
 
         The rows that pane's window occupies in the *frame* -- chrome
         subtracted and the top-pin offset included -- as
-        :meth:`~motui.app.TUI.visible_range` reports them.  Asking the
+        :meth:`~motui.app.Runtime.visible_range` reports them.  Asking the
         driver rather than walking the ownership table keeps every fixed
         region out of the edge zone: the pinned rows a host still pins in
         its document, and the frame's docks (pinned footers), which live

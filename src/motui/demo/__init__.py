@@ -18,7 +18,7 @@ from __future__ import annotations
 import asyncio
 import sys
 
-from motui import TUI
+from motui.app import Runtime
 from motui.terminal import HeadlessScreen
 from motui.testing import ScriptedEvents
 
@@ -31,9 +31,9 @@ from .session import Session
 __all__ = ["main", "render_topic"]
 
 
-def _dump(tui: TUI) -> str:
+def _dump(runtime: Runtime) -> str:
     """The screen as plain text, trailing blank rows trimmed."""
-    lines = [row.text.rstrip() for row in tui.rows]
+    lines = [row.text.rstrip() for row in runtime.rows]
     while lines and not lines[-1].strip():
         lines.pop()  # trailing blank rows below the content are not content
     return "\n".join(lines)
@@ -53,9 +53,9 @@ def render_topic(
     value = topic if isinstance(topic, Topic) else BY_KEY[topic]
     session = Session(screen=HeadlessScreen(width, height), interactive=False)
     session.show_topic(value.key, toast=False)
-    session.tui.paint()
+    session.runtime.paint()
     header = f"\u2500\u2500 /{value.section}/{value.key} "
-    return f"{header}{'\u2500' * max(0, width - len(header))}\n{_dump(session.tui)}\n"
+    return f"{header}{'\u2500' * max(0, width - len(header))}\n{_dump(session.runtime)}\n"
 
 
 def _utf8_stdout() -> None:
@@ -79,8 +79,8 @@ def _headless() -> None:
     asyncio.run(session.run_async())
     if session.tooltip is not None:
         session.tooltip.detach()
-        session.tui.paint()
-    sys.stdout.write(_dump(session.tui) + "\n")
+        session.runtime.paint()
+    sys.stdout.write(_dump(session.runtime) + "\n")
 
 
 def _pages() -> None:

@@ -48,7 +48,7 @@ from .focus import FocusManager
 from .modal import Modal
 
 if TYPE_CHECKING:
-    from .driver import TUI
+    from .runtime import Runtime
 
 __all__ = ["CommandPalette"]
 
@@ -204,7 +204,7 @@ class CommandPalette:
 
     def __init__(
         self,
-        tui: TUI,
+        tui: Runtime,
         commands: list[object],
         *,
         theme: Theme | None = None,

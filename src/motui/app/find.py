@@ -8,7 +8,7 @@ them, and an overlay that paints them over the composed frame.  Opening
 resets the query; typing re-addresses the matches; ``enter``/``down`` step to
 the next match and ``up`` to the previous one -- the ends wrap -- and
 ``escape`` closes.  Every change **reveals** the current match through the
-driver (:meth:`~motui.app.TUI.reveal`), so the tier owns no scrolling of
+driver (:meth:`~motui.app.Runtime.reveal`), so the tier owns no scrolling of
 its own; "bring this address on screen" is the kernel-side ability
 (``Viewport.scroll_to``), not a hole opened for search.
 
@@ -60,7 +60,7 @@ from ..widgets.textfield import Input
 from ..kernel.layout import Constraints
 
 if TYPE_CHECKING:
-    from .driver import TUI
+    from .runtime import Runtime
 
 __all__ = ["Find"]
 
@@ -77,7 +77,7 @@ class Find(Themed):
     ``tui`` is the driver whose focused pane's document is searched and whose
     frame the overlay registers on (at construction -- the ``Toasts``
     lifecycle, so ``detach()`` is the one unmount) and whose
-    :meth:`~motui.app.TUI.reveal` puts the current match on screen.
+    :meth:`~motui.app.Runtime.reveal` puts the current match on screen.
     ``theme`` (default :data:`~motui.kernel.theme.DEFAULT_THEME`) skins
     the query row and the highlight bands; ``set_theme`` rebuilds the row on
     a new one, carrying an open query's text over.
@@ -99,18 +99,18 @@ class Find(Themed):
         "glyphs",
         "input",
         "matches",
-        "tui",
+        "runtime",
     )
 
     def __init__(
         self,
-        tui: TUI,
+        tui: Runtime,
         *,
         theme: Theme | None = None,
         glyphs: Glyphs = GLYPHS,
     ) -> None:
         super().__init__(theme)
-        self.tui = tui
+        self.runtime = tui
         self.glyphs = glyphs
         self.input = Input(
             prompt=f"find {glyphs.prompt} ", glyphs=glyphs, theme=theme
@@ -164,7 +164,7 @@ class Find(Themed):
         self.input.clear()
         self._recompute()
         self._open = True
-        self.tui.refresh()
+        self.runtime.refresh()
 
     def close(self) -> None:
         """Hide the tier: it consumes nothing and paints nothing.
@@ -173,7 +173,7 @@ class Find(Themed):
         visibility's); the next :meth:`open` starts over from an empty query.
         """
         self._open = False
-        self.tui.refresh()
+        self.runtime.refresh()
 
     def detach(self) -> None:
         """Unregister the overlay and go inert (the controller convention).
@@ -186,8 +186,8 @@ class Find(Themed):
         which only hides an attached tier.
         """
         self._detached = True
-        if self in self.tui.frame.overlays:
-            self.tui.frame.remove_overlay(self)
+        if self in self.runtime.frame.overlays:
+            self.runtime.frame.remove_overlay(self)
 
     def set_theme(self, theme: Theme) -> None:
         """Rebuild the query row on ``theme``, the rest of the skin following.
@@ -259,7 +259,7 @@ class Find(Themed):
         if not self.matches:
             return
         bid, row, _, _ = self.matches[self.index]
-        self.tui.reveal(bid, row)
+        self.runtime.reveal(bid, row)
 
     # -- matching --------------------------------------------------------------
 
@@ -278,7 +278,7 @@ class Find(Themed):
         moved revision, so a hit is never stale.  The cursor restarts at
         the first match: a new query addresses a new set (D10).
         """
-        pane = self.tui.frame.focused_pane
+        pane = self.runtime.frame.focused_pane
         self._pane_id = None if pane is None else pane.id
         self._width = self._pane_width()
         self.matches = []
@@ -313,12 +313,12 @@ class Find(Themed):
         placement yet) the screen width stands in, the best a frame that was
         never laid out has.
         """
-        pane = self.tui.frame.focused_pane
+        pane = self.runtime.frame.focused_pane
         if pane is not None:
-            region = self.tui.frame.region(pane.id)
+            region = self.runtime.frame.region(pane.id)
             if region is not None:
                 return region.width
-        return self.tui.screen.width
+        return self.runtime.screen.width
 
     def _counter(self) -> str:
         """The row's right-hand readout: the current match over the total."""
