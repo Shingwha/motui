@@ -25,7 +25,7 @@
 | `uv run python tools/framebench.py` | render-hash `a82f7968ed986ef2fa99bb9ec25e724b99ca03e26aa75f607e6219ee25a4f379` |
 | `uv run python -m motui < /dev/null` | exit 0 |
 | `uv run python -m motui --pages` | exit 0，4059 行 |
-| `ruff` / `pyright` / `lint-imports` | **尚未安装**（W0 引入） |
+| `ruff` / `pyright` / `lint-imports` | W0b 引入；ruff 有显式 ratchet（见 handoff） |
 
 实测计数（与规格的对应）：`def render(` 48（规格 38 处 `render(width)` 指组件实现，含重载/协议，W2 逐个清点）；`.fit(` 59；`revision(` 79；`Revisioned` 44；`take_result` 119；`isinstance` 125；`def handle(` 22；`_CHILD_ATTRS` 3；`from .*core` 222。
 
@@ -124,7 +124,7 @@ uv run python tools/growth.py
 | 波 | 状态 |
 |---|---|
 | W0a | ✅ 2026-10-25 @ `2.0/w0a-values`（1002 passed / golden 不变） |
-| W0b | ⏳ |
+| W0b | ✅ 2026-10-25 @ `2.0/w0b-harness`（1017 passed / 工具与护栏全绿） |
 | W1 | ⏳ |
 | W2a | ⏳ |
 | W2b | ⏳ |
