@@ -7,11 +7,12 @@ from dataclasses import replace
 import pytest
 
 from motui.app import Scrollbar
-from motui.kernel import Style, Theme
+from motui.kernel import Axis, Style, Theme
 from motui.kernel.events import MouseEvent, PasteEvent
 from motui.kernel.frame import SEPARATOR_CHROME_NAME, Chrome
 from motui.kernel.glyphs import GLYPHS
-from motui.kernel.cell import Line
+from motui.kernel.cell import Line, Surface
+from motui.widgets import ScrollPanel
 from motui.widgets.text import Text
 from tests.testing import (
     Clock,
@@ -24,6 +25,13 @@ from tests.testing import (
     release,
     tick,
 )
+
+
+class Wide:
+    """A component whose one row is 200 columns wide (an OVERFLOW producer)."""
+
+    def render(self, c):
+        return Surface.of([Line.from_text("x" * 200)], 200, pad=False)
 
 
 def strip_texts(tui, width: int = 1) -> list[str]:
@@ -361,3 +369,77 @@ def test_the_release_stops_the_held_page():
     assert strip.handle(release(19, 9)) is True
     tick(tui, clock, 5)
     assert tui.viewport.offset == 65
+
+
+# -- the horizontal bar (axis=Axis.X) ----------------------------------------
+
+
+def test_a_horizontal_bar_paints_the_targets_x_geometry():
+    tui = headless_tui(80, 6)
+    panel = ScrollPanel(Wide(), axis="x", height=3)
+    tui.add(panel)
+    tui.paint()
+    strip = Scrollbar(tui, axis=Axis.X)
+    tui.paint()
+    # 80-column viewport over 200 columns: a 32-cell thumb with 48 cells of
+    # travel, at the left edge first and the right edge at the end.
+    assert tui.rows[-1].text == "\u2588" * 32 + "\u2591" * 48
+    assert panel.scroll_x_to_end() is True
+    tui.paint()
+    assert tui.rows[-1].text == "\u2591" * 48 + "\u2588" * 32
+    strip.detach()
+
+
+def test_the_horizontal_bar_resolves_an_explicit_or_unique_target():
+    empty = headless_tui(20, 4)
+    empty.add(Text("abc"))
+    empty.paint()
+    with pytest.raises(ValueError):
+        Scrollbar(empty, axis=Axis.X)
+
+    ambiguous = headless_tui(20, 4)
+    ambiguous.add(ScrollPanel(Text("a"), axis="x"))
+    ambiguous.add(ScrollPanel(Text("b"), axis="x"))
+    ambiguous.paint()
+    with pytest.raises(ValueError):
+        Scrollbar(ambiguous, axis=Axis.X)
+
+    # An explicit target answers even when it is not in the pane's document;
+    # before its first render it has no extent, so the strip is plain track.
+    target = ScrollPanel(Wide(), axis="x", height=1)
+    tui = headless_tui(20, 4)
+    tui.add(Text("abc"))
+    tui.paint()
+    strip = Scrollbar(tui, axis=Axis.X, target=target)
+    tui.paint()
+    assert tui.rows[-1].text == "\u2591" * 20
+    strip.detach()
+
+
+def test_the_horizontal_bar_declines_every_event():
+    tui = headless_tui(20, 4)
+    tui.add(ScrollPanel(Wide(), axis="x", height=1))
+    tui.paint()
+    strip = Scrollbar(tui, axis=Axis.X)
+    tui.paint()
+    for event in (
+        press(0, 3),
+        motion(0, 2, "left"),
+        release(0, 3),
+        key("a", "a"),
+        MouseEvent("wheel_down", x=0, y=3, kind="wheel"),
+    ):
+        assert strip.handle(event) is False
+    assert repr(strip).endswith("axis=x)")
+
+
+def test_the_horizontal_bar_gives_its_row_back_on_detach():
+    tui = headless_tui(20, 6)
+    tui.add(Rows(*many(20)))
+    tui.paint()
+    strip = Scrollbar(tui, axis=Axis.X, target=ScrollPanel(Wide(), axis="x"))
+    tui.paint()
+    assert tui.rows[-1].text == "\u2591" * 20
+    strip.detach()
+    tui.paint()
+    assert tui.rows[-1].text == "r19"
