@@ -110,7 +110,8 @@ from typing import NamedTuple
 
 from ..widgets.cursor import Cursor
 from ..kernel.glyphs import GLYPHS, Border, Glyphs, pair_seat, seat_width
-from ..kernel.cell import Line, Segment, fuse, overlay, rest, wrap_line
+from ..kernel.cell import Line, Segment, Surface, fuse, overlay, rest, wrap_line
+from ..kernel.layout import Constraints, as_constraints
 from ..widgets.mark import MarkSet
 from ..kernel.style import NONE, Style
 from ..kernel.text import visible_width
@@ -730,8 +731,8 @@ class Table(Widget):
                 def __init__(self, table):
                     self.table = table
 
-                def render(self, width):
-                    return self.table.header_lines(width)
+                def render(self, c):
+                    return Surface.clipped(self.table.header_lines(c.width), c.width)
 
             tui.add(StickyHeader(table), pin="top")
             tui.add(table)                      # the grid scrolls under the pin
@@ -805,18 +806,29 @@ class Table(Widget):
         """
         return self._revision()
 
-    def render(self, width: int) -> list[Line]:
-        """The grid at ``width``, remembered while the snapshot holds.
+    def render(self, c: Constraints | int) -> Surface:
+        """The grid at the constraint width, remembered while the snapshot holds.
+
+        A bare ``int`` is the 1.x spelling and is normalized through
+        :func:`motui.kernel.layout.as_constraints`; a ``max_height`` budget
+        truncates the leading grid rows, so a table inside a shorter pane
+        never paints past its slot.  The budget is deliberately not part of
+        the memory's key: the full grid at the width is remembered once and
+        every budget slices the same rows, so alternating budgets cannot
+        thrash the build.
 
         While the width and :meth:`_revision` are unchanged, the remembered
         rows of the last grid come back as a list copy -- no cell
         normalization, banding, measuring, wrapping, padding or fusing (the
         component's memory, see the class docstring).  A miss builds the
         grid, remembers it together with its natural widths and visual-row
-        layout and moves the key; the returned list is always the caller's
+        layout and moves the key; the returned rows are always the caller's
         own.  Either way the visual-row layout is recorded for
-        :meth:`click` / :meth:`hover_at`.
+        :meth:`click` / :meth:`hover_at` -- the last render's full layout,
+        which also describes the untruncated rows a host may have pinned.
         """
+        c = as_constraints(c)
+        width = c.width
         revision = self._revision()
         rows = self._memo_rows
         if (
@@ -834,7 +846,11 @@ class Table(Widget):
             if layout is None:  # a memo from before the layout slot existed
                 layout = self._layout(width)
         self._last_layout = layout
-        return list(rows)
+        if c.max_height is not None:
+            rows = rows[: c.max_height]
+        else:
+            rows = list(rows)
+        return Surface.clipped(rows, c.width)
 
     def _mark_width(self) -> int:
         """The mark column's width: the pair's wider seat in display columns."""

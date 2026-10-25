@@ -449,6 +449,26 @@ def test_disabled_rows_and_tables_refuse_their_gestures():
     assert dead.move(1) is False and dead.click(3, 0) is False
 
 
+def test_table_answers_a_surface_and_honours_the_height_budget():
+    table = Table(["A"], [["1"], ["2"], ["3"]], wrap=False)
+    surface = table.render(Constraints(width=9, max_height=5))
+    assert isinstance(surface, Surface)
+    assert [row.text for row in surface] == [
+        "\u250c\u2500\u2500\u2500\u2510",
+        "\u2502 A \u2502",
+        "\u251c\u2500\u2500\u2500\u2524",
+        "\u2502 1 \u2502",
+        "\u251c\u2500\u2500\u2500\u2524",
+    ]
+    assert surface.width == 9 and surface.height == 5
+    # The 1.x int spelling still answers the whole grid; the budget did not
+    # enter the memory's key, so the memo serves both answers.
+    full = table.render(9)
+    assert len(full) == 9
+    again = table.render(Constraints(width=9, max_height=5))
+    assert [row.text for row in again] == [row.text for row in surface]
+
+
 # -- Tree ---------------------------------------------------------------------
 
 
