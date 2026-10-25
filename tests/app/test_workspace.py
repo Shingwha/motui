@@ -169,8 +169,11 @@ def test_the_private_delegates_live_on_the_workspace():
 def test_the_workspace_exposes_the_runtime_seams_controllers_read():
     runtime = _runtime()
     workspace = runtime.workspace
+    # The clock is a seam, not a wall-clock read: pin it so the two doors
+    # cannot disagree by the microseconds between two monotonic() calls.
+    runtime._clock = lambda: 42.0
 
-    assert workspace.clock() == runtime.clock()
+    assert workspace.clock() == runtime.clock() == 42.0
     assert workspace.screen is runtime.screen
     assert workspace.painter is runtime.painter
     workspace.refresh()
