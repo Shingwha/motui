@@ -151,7 +151,7 @@ TOPICS = (
         group="Data",
         section="components",
         try_line="up/down move; home/end jump; enter takes a row; space marks the cursor row",
-        api_line="List(items, *, window, glyphs, disabled_items, bands) · move/activate/toggle",
+        api_line="List(items, *, window, glyphs, disabled_items, bands) \u00b7 move \u00b7 on_action(\"activate\") \u00b7 toggle",
         components=("List",),
         build=_list,
     ),

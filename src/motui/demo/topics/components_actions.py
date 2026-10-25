@@ -147,7 +147,7 @@ TOPICS = (
     topic(
         key="button",
         title="Button",
-        summary="The one-row action: click or activate, with hover and focus bands.",
+        summary="The one-row action: click or press enter, with hover and focus bands.",
         group="Actions",
         section="components",
         try_line="enter or click the focused button; the pending result is true",
@@ -158,7 +158,7 @@ TOPICS = (
     topic(
         key="link",
         title="Link",
-        summary="A clickable, activable text row in the link band with a pending follow.",
+        summary="A clickable, activatable text row in the link band with a pending follow.",
         group="Actions",
         section="components",
         try_line="enter or click follows the focused link; the result is true",
@@ -173,7 +173,7 @@ TOPICS = (
         group="Actions",
         section="components",
         try_line="left/right move; enter takes the active label; click a label to select it",
-        api_line="MenuBar(items, *, index, glyphs, disabled_items) · activate/take_result",
+        api_line="MenuBar(items, *, index, glyphs, disabled_items) \u00b7 on_action(\"activate\")/take()",
         components=("MenuBar",),
         build=_menu_bar,
     ),

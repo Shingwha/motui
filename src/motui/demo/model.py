@@ -9,7 +9,7 @@ this module owns the shapes.
 ``TopicBody`` is what a topic builder answers: the blocks to mount, the
 focus targets, the optional modal controller, the optional tick hook, and
 the report/enter/leave hooks.  ``Report`` is one one-shot value read from a
-component (``take_result()``), handed to the topic's ``note`` hook.
+component (``take()``), handed to the topic's ``note`` hook.
 """
 
 from __future__ import annotations
@@ -63,7 +63,7 @@ class Topic:
 
 @dataclass(frozen=True, slots=True)
 class Report:
-    """One value read from a component's ``take_result()`` door."""
+    """One value read from a component's ``take()`` door."""
 
     source: object
     value: object

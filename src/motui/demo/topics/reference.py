@@ -12,7 +12,7 @@ _LAYER_ROWS = [
     ["keys", "motui.keys", "byte decoder, keymaps, terminal sources", "kernel"],
     ["widgets", "motui.widgets", "every component and the Markdown engine", "kernel, keys.keymap"],
     ["interaction", "motui.interaction", "focus, pointer, gesture, find, modal, overlays", "kernel + Host"],
-    ["app", "motui.app", "TUI driver and composition root", "everything above"],
+    ["app", "motui.app", "App/Runtime driver and composition root", "everything above"],
 ]
 
 _KEY_ROWS = [
@@ -21,7 +21,7 @@ _KEY_ROWS = [
     ["[ / ]", "previous / next section", "demo"],
     ["tab", "cycle the focus ring (or the form's fields)", "demo / FocusManager"],
     ["arrows", "move the focused cursor or scroll a view", "FocusManager"],
-    ["enter", "activate the focused component", "FocusManager"],
+    ["enter", "run the focused component's action", "FocusManager"],
     ["space", "toggle the focused row's mark", "demo"],
     ["/ or c-k", "open the command palette", "demo"],
     ["c-f", "open Find over the stage", "Find"],
@@ -79,7 +79,7 @@ def _keymap(b) -> None:
 def _component_matrix(b) -> None:
     b.preview(
         Table(
-            ["component", "click", "activate", "handle", "result"],
+            ["component", "click", "action", "handle", "result"],
             _MATRIX_ROWS,
             theme=b.theme,
         )
@@ -116,18 +116,18 @@ TOPICS = (
     topic(
         key="component-matrix",
         title="Component matrix",
-        summary="What every component answers: click, activate, handle and take_result.",
+        summary="What every component answers: click, on_action, handle and take().",
         group="Facts",
         section="reference",
         try_line="none -- a static protocol matrix; scroll the stage",
-        api_line="Clickable \u00b7 Activable \u00b7 Controller \u00b7 Resultful \u00b7 Container \u00b7 Revisioned",
+        api_line="focusable \u00b7 clickable \u00b7 hoverable \u00b7 activatable \u00b7 HasResult \u00b7 Container",
         components=("Table",),
         build=_component_matrix,
     ),
     topic(
         key="non-goals",
         title="Non-goals",
-        summary="What motui 1.2 deliberately does not build, and the ruling behind each.",
+        summary="What motui 2.0 deliberately does not build, and the ruling behind each.",
         group="Facts",
         section="reference",
         try_line="none -- the contract's non-goal list, kept where the demo can show it",

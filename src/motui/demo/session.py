@@ -11,6 +11,7 @@ from motui import KeyEvent, Text, Theme
 from motui.app import App, Scrollbar, Stats
 from motui.app.commands import Command, CommandRegistry
 from motui.kernel import FocusEvent, Selection, extract
+from motui.kernel.document import Section as DocumentSection
 from motui.terminal import ScreenClipboard
 
 from .assets import THEMES
@@ -35,7 +36,8 @@ class Session(App):
         self.stats: Stats | None = None
         self.header: Header | None = None
         self.catalog = self.footer_bar = self.footer_status = None
-        self._stage_ids: list[str] = []
+        self.catalog_section: DocumentSection | None = None
+        self._stage_ids: list[DocumentSection] = []
         self._modal_was_open = self._palette_was_open = self._in_show = False
         # The frame: two docks outside the split, catalog | stage inside.
         self.dock(Text(""), edge="top", size=1)
@@ -214,9 +216,9 @@ class Session(App):
             if body.leave is not None:
                 body.leave(self)
         self.body = None
-        for block_id in self._stage_ids:
+        for section in self._stage_ids:
             try:
-                self.remove(block_id)
+                self.remove(section)
             except KeyError:
                 pass
         self._stage_ids = []
@@ -278,7 +280,9 @@ class Session(App):
         for topic in TOPICS:
             section = SECTION_BY_KEY[topic.section]
             registry.add(Command(
-                topic.command_name(section.title), topic.group,
+                name=topic.command_name(section.title),
+                description=topic.group,
+                group=topic.group,
                 handler=lambda key=topic.key: self.show_topic(key),
             ))
         return registry

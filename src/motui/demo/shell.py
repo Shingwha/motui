@@ -178,15 +178,18 @@ def mount_shell(session: "Session") -> None:
         theme=session.theme, left=status_left(session), right=status_right(session)
     )
     session.dock(footer, edge="bottom", size=2)
-    if session.catalog is not None:
+    if session.catalog_section is not None:
         try:
-            session.remove("catalog")
+            session.remove(session.catalog_section)
         except KeyError:
             pass
+        session.catalog_section = None
     topics = topics_for(BY_KEY[session.topic_key].section)
     index = next((i for i, topic in enumerate(topics) if topic.key == session.topic_key), 0)
     session.catalog = mount_catalog(theme=session.theme, topics=topics, index=index)
-    session.add(session.catalog, id="catalog", pane=session.catalog_pane)
+    session.catalog_section = session.add(
+        session.catalog, id="catalog", pane=session.catalog_pane
+    )
 
 
 def status_left(session: "Session") -> str:

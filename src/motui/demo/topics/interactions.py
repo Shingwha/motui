@@ -8,15 +8,6 @@ from motui.widgets import ButtonSpec, Column, Notice, ScrollPanel, Table
 from ..stage import topic
 
 
-class ScrollView(ScrollPanel):
-    """Demo-only label: the topic footer's golden bytes still read "scrollview".
-
-    The library class is :class:`~motui.widgets.ScrollPanel`; the shell
-    renders the focused widget's class name, and this wave keeps the golden
-    byte until the W5 docs/golden pass renames it.
-    """
-
-
 _DISPATCH_ROWS = [
     ["1", "stats", "counts every event, consumes none"],
     ["2", "palette", "the global command palette while open"],
@@ -90,7 +81,7 @@ def _scrollbar(b) -> None:
     content = Column(
         [Text(f"line {index:02d}: the scrollbar maps this document") for index in range(1, 41)]
     )
-    view = ScrollView(content, height=8, bar=True, theme=b.theme)
+    view = ScrollPanel(content, height=8, bar=True, theme=b.theme)
     b.preview(view)
     b.focus(view)
 
@@ -145,7 +136,7 @@ TOPICS = (
         summary="FocusManager owns the cycle, the key routing and the click policy.",
         group="Focus & input",
         section="interactions",
-        try_line="tab cycles the targets; arrows drive; enter activates; esc to catalog",
+        try_line="tab cycles the targets; arrows drive; enter runs the focused action; esc to catalog",
         api_line="FocusManager([...]) \u00b7 focus_next/focus_previous \u00b7 handle(event) \u00b7 click(hit)",
         components=("FocusManager", "Button", "Checkbox", "Link"),
         build=_focus,
@@ -157,7 +148,7 @@ TOPICS = (
         group="Focus & input",
         section="interactions",
         try_line="move the pointer over a row; press and release on one cell to click it",
-        api_line="Pointer(tui, ring=focus) \u00b7 handle(event) \u2192 repaint cue \u00b7 hovered/position",
+        api_line="Pointer(runtime, ring=focus) \u00b7 handle(event) \u2192 repaint cue \u00b7 hovered/position",
         components=("Pointer", "Button", "Link"),
         build=_pointer,
     ),
@@ -168,7 +159,7 @@ TOPICS = (
         group="Focus & input",
         section="interactions",
         try_line="drag across the rows; release copies them and raises a toast",
-        api_line="SelectionGesture(tui, on_end=...) \u00b7 ScreenClipboard(screen)/MemoryClipboard()",
+        api_line="SelectionGesture(runtime, on_end=...) \u00b7 ScreenClipboard(screen)/MemoryClipboard()",
         components=("SelectionGesture", "Text"),
         build=_selection,
     ),
@@ -179,7 +170,7 @@ TOPICS = (
         group="Search & chrome",
         section="interactions",
         try_line="c-f opens the row; type to match; enter/up step; escape closes",
-        api_line="Find(tui, *, theme) \u00b7 open() \u00b7 handle(event) \u00b7 matches/index \u00b7 close()",
+        api_line="Find(runtime, *, theme) \u00b7 open() \u00b7 handle(event) \u00b7 matches/index \u00b7 close()",
         components=("Find", "Markdown"),
         build=_find,
     ),
@@ -190,8 +181,8 @@ TOPICS = (
         group="Search & chrome",
         section="interactions",
         try_line="up/down scroll the view; page keys move a window; drag the thumb",
-        api_line="Scrollbar(tui, *, pane=stage.id, size, glyphs, track, thumb, theme) \u00b7 handle(event)",
-        components=("Scrollbar", "ScrollView"),
+        api_line="Scrollbar(runtime, *, pane=stage.id, size, glyphs, track, thumb, theme) \u00b7 handle(event)",
+        components=("Scrollbar", "ScrollPanel"),
         build=_scrollbar,
     ),
     topic(
@@ -201,7 +192,7 @@ TOPICS = (
         group="Panels",
         section="interactions",
         try_line="open the first panel, choose Next, then Done; escape cancels each layer",
-        api_line="Modal(tui, dialog) \u00b7 FocusManager.push_trap/pop_trap nests per modal",
+        api_line="Modal(runtime, dialog) \u00b7 FocusManager.push_trap/pop_trap nests per modal",
         components=("Modal", "Dialog", "Button"),
         build=_modal_stack,
     ),

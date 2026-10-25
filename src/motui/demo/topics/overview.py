@@ -11,7 +11,7 @@ _LAYER_ROWS = [
     ["keys", "bytes to events, keymaps", "motui.keys"],
     ["widgets", "the component library", "motui.widgets"],
     ["interaction", "focus, pointer, find, modals", "motui.interaction"],
-    ["app", "TUI, docks, panes, the pump", "motui.app"],
+    ["app", "App/Runtime, docks, panes, the pump", "motui.app"],
 ]
 
 _INDEX_ROWS = [
@@ -26,15 +26,15 @@ _INDEX_ROWS = [
 _INTRO = """\
 # motui
 
-A full-screen TUI toolkit: five layers, one component protocol,
+A full-screen terminal toolkit: five layers, one component protocol,
 and a host that composes them.
 
 ```python
-from motui import TUI, Button
+from motui import App, Button
 
-tui = TUI(hover=True)
-tui.add(Button("Ship"), id="ship")
-tui.run()
+app = App(hover=True)
+app.add(Button("Ship"), id="ship")
+app.run()
 ```
 """
 
@@ -65,7 +65,7 @@ TOPICS = (
         group="Start",
         section="overview",
         try_line="click a section row or press c-1..c-6; c-n next topic; / opens the palette",
-        api_line="python -m motui  \u00b7  python -m motui --pages  \u00b7  TUI + widgets + interaction",
+        api_line="python -m motui  \u00b7  python -m motui --pages  \u00b7  App + widgets + interaction",
         components=("Markdown", "Table"),
         build=_build,
     ),

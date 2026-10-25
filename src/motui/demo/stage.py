@@ -291,7 +291,7 @@ def walk_objects(root: object) -> list[object]:
 
     The demo's own structural walk: it follows the containers' public (and
     one form's private) child seats, so the session's generic
-    ``take_result()`` scan and the coverage test see nested widgets, not
+    ``take()`` scan and the coverage test see nested widgets, not
     only the stage's top-level blocks.  It is deliberately shallow about
     data: options, tree nodes, button specs and row bands are values, not
     containers.
