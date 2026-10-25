@@ -31,7 +31,7 @@ from collections.abc import Sequence
 from dataclasses import dataclass, field, replace
 from typing import Protocol, runtime_checkable
 
-from .cell import Line
+from .cell import Line, Surface
 from .document import Document, Placement, Section, Sizing
 
 __all__ = [
@@ -237,6 +237,16 @@ class ScreenLayout:
             object.__setattr__(self, "row_blocks", tuple(self.row_blocks))
         if type(self.block_order) is not tuple:
             object.__setattr__(self, "block_order", tuple(self.block_order))
+
+    @property
+    def surface(self) -> Surface:
+        """The layout's rows as a :class:`Surface` at the layout width.
+
+        The one value both render paths understand: a composition is already
+        exactly the rows to paint, so the surface is a clipped view over
+        them (short rows stay short, exactly as the painter writes them).
+        """
+        return Surface.clipped(self.rows, self.width)
 
 
 class _BodyEntry:

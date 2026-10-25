@@ -55,6 +55,27 @@ def test_first_frame_erases_and_paints_every_row():
     assert [row.text for row in painter.rows] == ["a", "b", "c", "", "", ""]
 
 
+def test_a_surface_target_paints_the_same_bytes_as_its_layout():
+    doc = Document()
+    doc.add(Rows("a", "b"))
+    layout = Viewport(doc).layout(10, 4)
+    assert layout.surface.width == layout.width
+    assert layout.surface.rows == layout.rows
+
+    from_layout = RecordingScreen(width=10, height=4)
+    Painter(from_layout).paint(layout)
+    from_surface = RecordingScreen(width=10, height=4)
+    painter = Painter(from_surface)
+    painter.paint(layout.surface)
+    assert from_surface.output == from_layout.output
+
+    # The width bookkeeping still keys on the screen, so a repeated surface
+    # paint is the zero-byte frame the layout path produces.
+    from_surface.delta()
+    painter.paint(layout.surface)
+    assert from_surface.delta() == ""
+
+
 def test_sync_false_emits_the_unbracketed_bytes():
     doc = Document()
     doc.add(Rows("a"))

@@ -1113,7 +1113,7 @@ class TUI:
             self._set_selection(None, None)
         layout = self._frame.compose(width, height)
         layout = self._frame.apply_overlays(layout)
-        self.painter.paint(layout)
+        self.painter.paint(layout.surface)
         self._last_paint = now
         self._dirty = False
 
