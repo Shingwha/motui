@@ -576,10 +576,7 @@ class SelectionGesture:
         if self._head is None or rows == 0 or pane is None:
             return
         before = pane.viewport.offset
-        if rows > 0:
-            pane.viewport.scroll_down(rows)
-        else:
-            pane.viewport.scroll_up(-rows)
+        pane.scroll_by(rows)
         moved = pane.viewport.offset - before
         if moved == 0:
             return  # pinned at the document end: nothing moved under the pointer
