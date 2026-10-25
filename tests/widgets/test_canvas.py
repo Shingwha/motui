@@ -75,6 +75,12 @@ def test_a_wide_character_owns_two_columns_and_never_splits():
     assert texts(canvas) == [" \u4e2d "]
     canvas.width = 2  # cutting the continuation column blanks the lead
     assert texts(canvas) == ["  "]
+    repaired = Canvas(4, 1)
+    repaired.put(0, 0, "\u4e2d")
+    repaired.put(1, 0, "x")  # writing half a wide glyph blanks the old cluster
+    assert texts(repaired) == [" x  "]
+    repaired.put(0, 0, "y")
+    assert texts(repaired) == ["yx  "]
 
 
 def test_a_write_marks_exactly_its_row_dirty():
