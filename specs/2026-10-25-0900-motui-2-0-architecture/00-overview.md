@@ -38,7 +38,7 @@
 | W1 | 内核拆分 | `2.0/w1-kernel` | 全仓 import + `kernel/*` + `terminal/*`，删 `core/` | W0 | demo 字节不变、kernel 零 I/O |
 | W2a | Surface/Constraints 基础 | `2.0/w2a-surface` | `kernel/{cell,layout,paint,document}.py`、`kernel/frame.py`、`widgets/{text,layout,decor}.py` | W1 | 裁剪不变量 + 语义 golden |
 | W2b | 数据/编辑组件迁移 | `2.0/w2b-widgets` | `widgets/{list,tree,table,choice,navlist,tabs,menubar,rows,strip,textfield,textbuf,combobox,autocomplete,dialog,form,action,indicators,diff,syntax}.py`、`widgets/markdown/*` | W2a | 全部 `render(Constraints)` |
-| W2c | Canvas + Fill + app/overlays | `2.0/w2c-canvas` | `widgets/canvas.py`、`app/*`、`kernel/document.py`（Fill） | W2a | 80×24 ≤2.0ms、Fill 校验 |
+| W2c1/W2c2 | Canvas + Fill + app/overlays | `2.0/w2c-canvas` | `widgets/canvas.py`、`app/*`、`kernel/document.py`（Fill） | W2a | 80×24 ≤2.0ms、Fill 校验 |
 | W2.5 | WrapMode | `2.0/w2.5-wrap` | `kernel/text.py`、`kernel/cell.py`、59 处 `.fit` 的组件 | W2 | 代码块/Input 差异分类 |
 | W2.6 | 横向滚动 L1 | `2.0/w2.6-scrollx` | `kernel/layout.py`、`widgets/scroll.py`、`app/scrollbar.py`、hit | W2.5 | 宽表最右列可达 |
 | W3a | Widget 基座 | `2.0/w3a-base` | `widgets/base.py`、`kernel/events.py`、删除反射/协议 | W1 | 树/hooks/keymap/focus |
@@ -128,7 +128,7 @@ uv run python tools/growth.py
 | W1 | ✅ 2026-10-25 @ `2.0/w1-kernel`（1019 passed / core 删除 / hash 不变） |
 | W2a | ✅ 2026-10-25 @ `2.0/w2a-surface`（1045 passed / golden 不变） |
 | W2b1/W2b2 | ✅ 2026-10-25 @ `2.0/w2b1-views` + `2.0/w2b2-content`（1078 passed / golden 不变） |
-| W2c | ⏳ |
+| W2c1 | ⏳ |
 | W2.5 | ⏳ |
 | W2.6 | ⏳ |
 | W3a | ⏳ |
