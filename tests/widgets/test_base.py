@@ -375,3 +375,15 @@ def test_cursor_and_mark_set_are_reexported_from_their_own_modules():
     assert cursor.move(1) is True and cursor.index == 1
     marks = MarkSet([2])
     assert marks.toggle(2) is False and 2 not in marks
+
+
+def test_the_new_base_names_stay_out_of_the_package_facades():
+    # This wave publishes the tree and hooks from ``motui.widgets.base``
+    # only; the root facade is W5's to converge, so nothing leaks here yet.
+    import motui
+    import motui.kernel
+    import motui.widgets
+
+    for facade in (motui, motui.widgets, motui.kernel):
+        for name in ("Container", "Cursor", "HasResult", "MarkSet"):
+            assert not hasattr(facade, name), (facade.__name__, name)
