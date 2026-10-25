@@ -49,7 +49,7 @@ from __future__ import annotations
 from dataclasses import replace
 from typing import TYPE_CHECKING
 
-from ..kernel.events import Event, KeyEvent
+from ..kernel.events import Event, KeyEvent, PasteEvent
 from ..kernel.frame import splice_row
 from ..kernel.glyphs import GLYPHS, Glyphs
 from ..kernel.cell import Line, cut_line, overlay
@@ -230,7 +230,12 @@ class Find(Themed):
             if event.key == "escape":
                 self.close()
                 return True
-        if self.input.handle(event):
+            consumed = self.input.on_key(event)
+        elif isinstance(event, PasteEvent):
+            consumed = self.input.on_paste(event)
+        else:
+            consumed = False
+        if consumed:
             self._recompute()
             self._reveal_current()
             return True

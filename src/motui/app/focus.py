@@ -23,7 +23,7 @@ Cycling is the host's key: the manager binds nothing of its own -- the host
 routes ``tab`` to :meth:`FocusManager.focus_next` -- and every other key is
 dispatched to the focused target by :meth:`FocusManager.handle`.  A click
 is resolved to a cell by the host's hit test and handed to
-:meth:`FocusManager.click`, which first descends every container to the leaf
+:meth:`FocusManager.on_click`, which first descends every container to the leaf
 under the cell, then dispatches it, focuses the component it landed on, and
 activates it on the second click (the standard desktop semantic).
 
@@ -86,8 +86,8 @@ def iter_widgets(tui: "TUI") -> Iterator[Component]:
 def focus_targets(tui: "TUI") -> tuple[Component, ...]:
     """The focus ring: the mounted tree's preorder ``focusable``/scope nodes.
 
-    A ``focus_scope`` node (a ``Form`` routes its own fields) joins the
-    ring itself and stops the descent -- its subtree never becomes separate
+    A ``focus_scope`` node (a ``Form`` or a ``ComboBox`` routes its own
+    subtree) joins the ring itself and stops the descent -- its subtree never becomes separate
     targets.  Every other node joins when ``focusable`` is set.  Nodes are
     visited in the frame/document order :func:`_document_roots` yields, and
     an object appears once even when the tree shares it.
@@ -101,10 +101,7 @@ def focus_targets(tui: "TUI") -> tuple[Component, ...]:
             if id(node) in seen:
                 continue
             seen.add(id(node))
-            scope = bool(
-                getattr(node, "focus_scope", False)
-                or getattr(node, "owns_focus", False)
-            )
+            scope = bool(getattr(node, "focus_scope", False))
             if scope:
                 targets.append(node)
                 continue
@@ -144,8 +141,7 @@ class FocusManager:
     2. a :class:`~motui.kernel.events.KeyEvent` reads the target's
        :attr:`keymap <motui.widgets.base.Widget.keymap>` first: a bound
        action runs through ``on_action(name)``;
-    3. an unconsumed key goes to ``on_key(event)`` (the widget default
-       forwards to the 1.x ``handle``);
+    3. an unconsumed key goes to ``on_key(event)``;
     4. an unconsumed ``enter`` on an ``activatable`` target runs
        ``on_action("activate")`` -- the 1.x activation fallback, now opt-in
        through the capability flag instead of a hard-coded key table;
@@ -158,7 +154,7 @@ class FocusManager:
     its keymap, a text field consumes them in ``on_key``, and a widget with
     neither keeps the key for the host.
 
-    **The click policy** -- :meth:`click` runs one click through four
+    **The click policy** -- :meth:`on_click` runs one click through four
     steps, answering whether any component consumed it.  The click first
     **descends**: the hit's cell is walked through every container's
     ``child_at`` to the deepest leaf (a ``Padding(Select)`` click lands on
@@ -245,8 +241,8 @@ class FocusManager:
         A target that is not registered is left alone and answers
         ``False`` -- the current focus does not move.  A registered target
         that already holds the focus answers ``False`` (nothing changed).
-        On a move every registered ``Focusable`` target's flag is rewritten:
-        the new focus reads ``True``, all others ``False``; a non-Focusable
+        On a move every registered target that carries a ``focused`` flag is rewritten:
+        the new focus reads ``True``, all others ``False``; a target without the flag
         target is focused by identity with no flag write.
         """
         if not self._registered(target) or target is self._focused:
@@ -353,10 +349,6 @@ class FocusManager:
             on_click = getattr(leaf, "on_click", None)
             if on_click is not None:
                 consumed = bool(on_click(Pos(x=leaf_col, y=leaf_row))) or consumed
-            else:
-                click = getattr(leaf, "click", None)
-                if click is not None:
-                    consumed = bool(click(leaf_row, leaf_col)) or consumed
         for owner, owner_row, owner_col in reversed(chain[:-1]):
             focus_at = getattr(owner, "focus_at", None)
             if focus_at is not None and focus_at(owner_row, owner_col):
@@ -436,22 +428,12 @@ class FocusManager:
 
     @staticmethod
     def _hook(target: Component, name: str, event: Event) -> bool:
-        """Run ``target``'s typed hook, falling back to its 1.x ``handle``.
-
-        A widget always has the hook (its base forwards to ``handle``); the
-        fallback keeps a plain routing object handed to a trap working
-        without double-calling a widget's ``handle``.
-        """
+        """Run ``target``'s typed hook; a pure routing object declines."""
         hook = getattr(target, name, None)
-        if hook is None:
-            hook = getattr(target, "handle", None)
         return bool(hook(event)) if hook is not None else False
 
     @staticmethod
     def _activate(target: Component) -> bool:
-        """Run ``on_action("activate")``, else the 1.x ``activate()``."""
+        """Run ``on_action("activate")``; a plain object declines."""
         on_action = getattr(target, "on_action", None)
-        if on_action is not None:
-            return bool(on_action("activate"))
-        activate = getattr(target, "activate", None)
-        return bool(activate()) if activate is not None else False
+        return bool(on_action("activate")) if on_action is not None else False
