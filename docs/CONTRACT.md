@@ -10,7 +10,7 @@ match.
 
 ## 1. Values and immutability
 
-- `Size`, `Pos`, `Rect`, `Constraints`, `ScrollAxis`, `Scroll`,
+- `Size`, `Pos`, `Rect`, `Constraints`, `ScrollAxis`, `Scroll`, `RowSpan`,
   `ScreenLayout`, `Cell`, `Segment`, `Line`, `Surface`, `Style`, `Theme`,
   `Styles`, `Glyphs`, `Border` and every event are frozen values.
 - `Line`, `Selection`, `ScrollAxis`, `Scroll` and `ScreenLayout` refuse
@@ -25,14 +25,24 @@ match.
 - A layout is a snapshot: `ScreenLayout.rows`, `body_rows`, `row_blocks`
   and `block_order` are tuples.
 
-## 2. Geometry
+## 2. Geometry and scroll
 
 - Every cell coordinate is 0-based. `Rect` holds `x`, `y`, `width`,
   `height` plus `right`, `bottom`, `area`, `contains` and `intersect`.
 - `Axis.X` divides width (left/right); `Axis.Y` divides height
-  (top/bottom). `Rect.split` and `Split.rects` take the same enum.
-- `Split` uses `orientation` strings (`"vertical"` divides by width,
-  `"horizontal"` divides by height) and ratios; `min_size` is a floor.
+  (top/bottom). `Rect.split`, `Split` and every `split` door take the same
+  enum. A string axis raises `ValueError`; there are no direction strings.
+- `Split(axis, weights=(1, 1), min_size=1)` partitions a rectangle: one
+  child per weight, children abutting, `min_size` the floor each child is
+  raised to. `weights` are shares (`(2, 1)` gives the first pane twice the
+  cells), not fractions.
+- `ScrollAxis(offset, content, viewport, sticky)` is one immutable axis.
+  `max_offset` is `content - viewport` floored at 0; `clamp(previous_extent)`
+  answers a new axis, tail-following when `sticky` and the caller's previous
+  bottom was reached. `reveal(first, last)` and `thumb` are the other verbs.
+- `Scroll(x, y)` is the two-axis value. The vertical axis defaults to
+  `sticky=True`. `Viewport.scroll` and `ScrollPanel.scroll` answer it;
+  `Scroll.with_x` / `with_y` replace one axis.
 - `Viewport.layout(width, height)` produces exactly `height` rows: fixed
   top rows, the scrolling body, fixed bottom rows. Body rows are blank
   padded below the content so the fixed regions stay at the screen edges.
@@ -44,6 +54,8 @@ match.
   `Hit.col` is measured against the pane's inner rect. A hit outside the
   screen or a pane is `None`, never clamped. Section ids are unique across
   the whole frame, not only within one document.
+- `RowSpan(first, last)` is an inclusive range of screen rows: the
+  visible body rows a pane reports from its last composition.
 
 ## 3. Row model and the content gate
 
@@ -132,16 +144,17 @@ class Component(Protocol):
   pads by clearing the row); `OVERFLOW` is the one mode that may be wider.
 - Rendering is pure with respect to time: no clock reads, no I/O, no
   terminal bytes. Animation writes state and calls `touch()`.
-- A component that wants the section row cache answers `revision()`. The
-  snapshot must have value semantics and cover every input the rows read.
-  `None` means "no snapshot" and disables caching for that component.
+- Caching is automatic for a `Widget`: `Section` keys its row cache on
+  `(width, max_height, widget.generation)` and `touch()` moves the
+  generation. A pure component without a `generation` counter is rendered
+  fresh on every call.
 
 ## 6. Document and Section
 
 ```python
 class Section:
     id: str
-    widget: Component          # component is an alias
+    widget: Component
     placement: Placement       # FLOW | TOP | BOTTOM
     sizing: Sizing             # NATURAL | FILL
 ```
@@ -155,22 +168,24 @@ class Section:
   flow section may follow it. `TOP`/`BOTTOM` sections are natural height.
 - `App.add`, `Workspace.add` and `Pane.add` all answer a `Section`;
   `App.get`/`remove` and `Workspace.get`/`remove` do too.
-- The section row cache is keyed `(width, max_height, revision)` and lives
-  on the section. It dies with the section; nothing prunes it globally.
-  `rows(c)` returns a copy the caller owns, `rows_view(c)` borrows the
-  cache, and `row_count(c)` returns the height.
-- `Fill` remains a document form. `App.fill(component)` clears the pane
-  document and adds the component with `sizing=Sizing.FILL`; there is no
+- The section row cache is keyed `(width, max_height, widget.generation)`
+  and lives on the section. It dies with the section; nothing prunes it
+  globally. `rows(c)` returns a copy the caller owns, `rows_view(c)`
+  borrows the cache, and `row_count(c)` returns the height.
+- In-place mutation of a widget's list or buffer must call `touch()`; an
+  attribute assignment does it automatically.
+- `Fill` remains a document form: `sizing=Sizing.FILL`, optionally through
+  `App.fill(component)` / `Workspace.fill(component)`. There is no
   `PaneContent` union in 2.0.
 - `Placement` and `Sizing` live in `motui.kernel.document` in this
   release; they are not re-exported from `motui.kernel`.
 
 ## 7. Frame and Pane
 
-- A `Pane` is a runtime object: it has a stable id, a rectangle, a
+- A `Pane` is a workspace object: it has a stable id, a rectangle, a
   viewport and a tuple of `Chrome` bands. Split and close mutate the frame
   tree in place; pane identity survives.
-- A `Split` holds orientation, ratios and `min_size`; `Frame.retile`
+- A `Split` holds `axis`, `weights` and `min_size`; `Frame.retile`
   re-divides the same tree for a new screen size.
 - A `Chrome` names its `edge` (`"left"`, `"right"`, `"top"`,
   `"bottom"`), its size, its painter and its `scope` (`"pane"` or
@@ -180,6 +195,9 @@ class Section:
 - `Frame.compose(width, height)` is the only composition entry. It
   applies chrome budgets, pane content, granted bands and the overlay
   registry in that order.
+- `Frame.revision` counts structural mutations (split, close, chrome,
+  overlay, band) so a composition can reuse its tiling. It is not a row
+  cache; content invalidation uses `widget.generation`.
 - Overlay layers are ordered: `background`, `content`, `selection`,
   `chrome`, `overlay`, `modal`, `tooltip`, `toast`.
 
@@ -204,6 +222,7 @@ class Widget:
 
     def walk(self) -> Iterator[Widget]: ...
     def touch(self) -> None: ...
+    def group(self, name: str) -> object: ...
 
     def on_key(self, e: KeyEvent) -> bool: ...
     def on_mouse(self, e: MouseEvent) -> bool: ...
@@ -237,12 +256,24 @@ class Widget:
   cleared by `take()`.
 - There is no per-widget result callback. Collect with `walk()` plus
   `take()`.
+- Styles resolve through `Theme.group(name)` at render time. `Widget.group`
+  is the per-widget door: an explicit `styles` override wins whole, then
+  the widget's `theme`, then `DEFAULT_THEME`.
 
-## 9. Runtime, App and Terminal
+## 9. Runtime, Workspace, App and Terminal
 
-- `App(terminal=TerminalOptions(...))` is the recommended construction.
-  The 1.x arguments remain accepted and are folded into `TerminalOptions`;
-  a supplied `terminal=` wins over them.
+- `App(theme=None, terminal=None, throttle=0.03, auto=True, title="",
+  on_selection=None, handlers=None)`. `terminal` is a `TerminalOptions`;
+  there are no separate `mouse`/`hover`/`screen`/`keys` arguments.
+- `Runtime(terminal, *, throttle=0.03, interactive=False, theme=None)` owns
+  the session (terminal, painter, clock, timers, pump, dirty flag) and
+  exposes `workspace`. It has no `add`/`get`/`frame`/`hit`/`split`/`fill`/
+  `rows` of its own.
+- `Workspace` owns the document, frame, panes, docks, selection and hit
+  test: `add/fill/get/remove/system/split/dock/undock/scroll_*/reveal/
+  pane_at/visible_range/hit/hit_leaf/set_selection`. The six session
+  delegates `clock/every/refresh/screen/painter/copy_to_clipboard` are the
+  controller host seam; a host uses `App.runtime` for the session.
 - `TerminalOptions` is frozen and keyword-only: `stream`, `input`, `mouse`,
   `paste`, `focus_events`, `color_mode`, `sync`, `screen`.
 - `MouseMode` is exactly `OFF`, `BUTTON`, `DRAG`, `MOVE`. It maps to the
@@ -250,6 +281,10 @@ class Widget:
 - `App.run()` / `run_async()` / `run_session(body)` own the session. The
   runtime enters the screen, starts the pump, calls `on_start`, loops, calls
   `on_stop` and tears down exactly once.
+- `App.dispatch` runs `App.handlers`: `DEFAULT_HANDLERS` by default, an
+  explicit tuple when passed, `()` when `auto=False` and no handlers were
+  passed. Each `Handler(app, event) -> bool` returns whether it consumed
+  the event; the first `True` ends dispatch.
 - `Runtime.every(period, fn, catch_up="skip")` and
   `Runtime.animation(hz, draw)` answer a cancellable `Timer`. Deadlines are
   absolute; `catch_up` is `"skip"` or `"coalesce"`. `invalidate()` marks
@@ -275,11 +310,14 @@ class Widget:
 |---|---|
 | duplicate section id | `ValueError` |
 | missing section or command | `KeyError` |
-| `pin` and `placement` together | `ValueError` |
+| a non-`Axis` split axis, or `Axis` outside X/Y | `ValueError` |
+| a non-`Placement` dock placement, or `Placement.FLOW` | `ValueError` |
 | `FILL` outside the flow, a second `FILL`, or flow after `FILL` | `ValueError` |
 | unknown `WrapMode` / unknown scroll `axis` | `ValueError` |
 | negative width or height budget | `ValueError` |
+| `open_palette` with a non-`CommandRegistry` | `TypeError` |
 | disabled control, disabled row or a miss | `False`, never an exception |
+| twice-docked placement, duplicate pane edge | `RuntimeError` |
 | `App.toast` with `auto=False` | `RuntimeError` |
 | render failure | propagate; the painter never catches it |
 
@@ -293,14 +331,13 @@ The public facades and their current `__all__` sizes are:
 | `motui.kernel` | 61 |
 | `motui.terminal` | 17 |
 | `motui.widgets` | 46 |
-| `motui.app` | 16 |
-| `motui.testing` | 4 |
+| `motui.app` | 19 |
+| `motui.testing` | 5 |
 
-`tools/api.py --check` pins every exported name and signature (184 rows).
+`tools/api.py --check` pins every exported name and signature (188 rows).
 A name lives in exactly one facade; there are no alias modules and no
 forwarding packages. `motui.terminal.ansi` is private: it is the only place
 escape bytes are constructed, and it is not re-exported.
 
-The 2.0 removal list, the names that remain as compatibility entries and
-their replacements are in [MIGRATION](MIGRATION.md). No alias is provided
-for a removed name.
+The 2.0 removal list and the replacements are in
+[MIGRATION](MIGRATION.md). No alias is provided for a removed name.

@@ -21,7 +21,7 @@ def main(argv: list[str] | None = None) -> int:
     app.add(Text("Hello, motui."))
     app.add(Input("type here"))
     app.paint_now()
-    for row in app.runtime.rows[:3]:
+    for row in app.workspace.rows[:3]:
         print(row.text)
     return 0
 

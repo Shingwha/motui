@@ -76,7 +76,7 @@ def _dock_edge(placement: Placement) -> str:
 def _body_address(viewport: Viewport, block: Section, row: int, width: int) -> int:
     """The body-row index of ``(block, row)`` in the viewport's document.
 
-    The document order walks the blocks and sums what the unpinned ones
+    The document order walks the blocks and sums what the flow blocks
     occupy before ``block`` -- each measured at ``width``, the width the
     pane was last laid out at, exactly as the viewport counts its own body
     (fixed-region rows are not body rows) -- and ``row`` lands on that
@@ -611,8 +611,8 @@ class Workspace:
     def visible_range(self, pane: Pane | str | None = None) -> RowSpan | None:
         """A pane's visible body rows as screen rows (the focused pane by default).
 
-        ``first``/``last`` are *screen* rows and include the pane's top pin
-        offset (``ScreenLayout.viewport_start``): the range a drag-to-edge
+        ``first``/``last`` are *screen* rows and include the pane's top
+        chrome offset (``ScreenLayout.viewport_start``): the range a drag-to-edge
         gesture must not scroll past, and what a host drawing over the
         window needs.  Read off the last composition's pane layout and
         placement -- never a fresh layout.  ``None`` before the first
@@ -643,7 +643,7 @@ class Workspace:
         placement: Placement = Placement.BOTTOM,
         size: int | None = None,
     ) -> Pane:
-        """Pin ``component`` against a dock placement; return its pane.
+        """Dock ``component`` at ``placement``; return its pane.
 
         ``placement`` is :attr:`~motui.kernel.document.Placement.BOTTOM`
         (the default) or ``TOP``; ``FLOW`` raises ``ValueError`` (a dock is

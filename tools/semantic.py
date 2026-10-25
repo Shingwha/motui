@@ -7,9 +7,10 @@ Run it from the repository root::
     uv run python tools/semantic.py --update   # re-record every scene
     uv run python tools/semantic.py --check --snapshot DIR   # another set
 
-The tool pins what a terminal would *show* for each of the three showcase
-scenes (``splash``, ``menu``, ``gallery``): the bytes ``scene_output``
-paints go through :class:`~motui.testing.emulator.Emulator`, which rebuilds
+The tool pins what a terminal would *show* for each of the five showcase
+scenes (``splash``, ``menu``, ``breakout``, ``dashboard``, ``gallery``):
+the bytes ``scene_output`` paints go through
+:class:`~motui.testing.emulator.Emulator`, which rebuilds
 the cell grid, and each row is written as its text plus the styled runs
 over it.  A change that only reorders escapes stays green; a change in
 glyphs, SGR attributes, OSC 8 links or the cursor anchor moves the snapshot.

@@ -95,7 +95,7 @@ def scene_output(
     )
     showcase = Showcase(scene=name)
     showcase.phase = phase
-    runtime.fill(showcase)
+    runtime.workspace.fill(showcase)
     runtime.paint()
     return screen.output
 

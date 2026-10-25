@@ -10,36 +10,40 @@ vocabulary to the new one. The current API is described by
 | 1.x | 2.0 | Notes |
 |---|---|---|
 | `render(width: int) -> list[Line]` | `render(c: Constraints) -> Surface` | `Constraints` carries `width` and an optional `max_height` |
-| `Block` | `Section` | `Section.widget` (also `.component`), `.placement`, `.sizing` |
-| `pin="top"` / `pin="bottom"` | `placement=Placement.TOP` / `Placement.BOTTOM` | `pin=` still folds into `placement` at the document doors |
+| `Block` | `Section` | `Section.id` and `Section.widget`; there is no `.component` alias |
+| `pin="top"` / `pin="bottom"` | `placement=Placement.TOP` / `Placement.BOTTOM` | `pin=` is removed; a non-`Placement` raises `ValueError` |
 | `TUI` | `Runtime` + `Workspace` + `Terminal` | `App.runtime`, `App.workspace`, `App.terminal` |
-| `App.tui` | `App.runtime` (or `.workspace`, `.terminal`) | |
-| `Revisioned.revision()` | automatic `Widget.touch()`; an optional `revision()` snapshot | the section row cache consumes the snapshot |
-| `Themed` | `Widget` + `theme` / `styles`, resolved through `Widget.group(name)` | there is no `style()` accessor |
+| `App.tui` | `App.runtime` (session) or `App.workspace` (content) | |
+| `Revisioned.revision()` | automatic `Widget.touch()` / `widget.generation` | the section row cache reads `generation`; no snapshot method |
+| `Themed` | `Widget` + `theme` / `styles`, resolved through `Theme.group(name)` | there is no `Themed` base or `style()` accessor |
 | `take_result()` | `take()` | reading clears; `None` means nothing pending |
 | `Resultful` | `HasResult` (`motui.widgets.base`) | runtime-checkable protocol |
 | `handle(event)` | `on_key` / `on_mouse` / `on_paste` / `on_resize` / `on_focus` | typed hooks |
 | `Clickable` / `Activable` / ... | `clickable` / `activatable` / `focusable` / `hoverable` | capability attributes |
 | `Clickable.click(row, col)` | `on_click(pos: Pos)` | |
 | `ScrollView` | `ScrollPanel(axis="y" \| "x" \| "both")` | `ScrollView` is no longer shipped |
-| `ScrollState` | `Scroll` / `ScrollAxis` | `ScrollPanel.scroll_state` still exposes `ScrollState` |
-| `split("vertical")` | `split(Axis.X)` | `"vertical"` remains an accepted compatibility string |
-| `split("horizontal")` | `split(Axis.Y)` | `"horizontal"` remains accepted |
-| `ratios=` | `weights=` | `ratios` remains accepted as a fallback |
-| `dock(edge="bottom")` | `dock(placement=Placement.BOTTOM)` | `edge` remains accepted |
+| `ScrollState` | `Scroll` / `ScrollAxis` | `ScrollPanel.scroll` and `Viewport.scroll` answer `Scroll` |
+| `RowRange` | `RowSpan(first, last)` (`motui.kernel.layout`) | inclusive screen-row range |
+| `split("vertical")` | `split(Axis.X)` | strings are rejected with `ValueError` |
+| `split("horizontal")` | `split(Axis.Y)` | strings are rejected with `ValueError` |
+| `ratios=` | `weights=` | `ratios` is removed |
+| `dock(edge="bottom")` | `dock(placement=Placement.BOTTOM)` | `edge` is removed |
 | `EveryHandle` | `Timer` | returned by `Runtime.every` / `App.every` |
-| `RowRange` | planned `RowSpan` did not land; the value remains `RowRange` | visible body rows |
-| `fit` / `fill` / `fuse` / `overlay` / `rest` free functions | `Line.clip` / `reflow` / `pad` / `fill` / `merge_span` | internal `rest` remains in `motui.kernel.cell` |
-| `cut_line` / `slice_line` / `wrap_line` | `Line.clip` / `reflow` | the functions remain at the kernel seam |
+| `fit` / `fill` / `fuse` / `overlay` / `rest` free functions | `Line.clip` / `reflow` / `pad` / `fill` / `merge_span` | the old application-level functions are gone; `fuse`/`overlay`/`rest` remain kernel-private helpers |
+| `cut_line` / `slice_line` / `wrap_line` | `Line.clip` / `reflow` | the module functions remain at the kernel seam |
 | `action_at` | `action_at` (kernel) or `Text.take()` | inline payload lookup |
 | `highlight` / `extract` | `highlight` / `extract` in `motui.kernel.selection` | functions over a `Selection` |
 | `descend` / `descend_chain` | the same functions in `motui.kernel.document` | |
 | `mark_prefix` | `MarkSet` + the glyph seat helpers | `mark_prefix` is no longer facade-exported |
 | `visible_width` | `text.width` | `visible_width` remains a kernel alias |
 | `Command(name, description, ...)` | `Command(name=..., group=..., description=..., keys=..., handler=...)` | keyword-only; `group` is first-class |
-| `open_palette(list[object])` | `open_palette(registry)` | a plain option list still works |
+| `open_palette(list[object])` | `open_palette(registry: CommandRegistry)` | any other type raises `TypeError` |
 | `Table(wrap=True/False)` | `Table(cell_wrap=WrapMode.WORD)` or `WrapMode.OVERFLOW` | `OVERFLOW` for a horizontal `ScrollPanel` |
-| `App(mouse=, hover=, color_mode=, focus_events=, sync=, keys=, screen=)` | `App(terminal=TerminalOptions(...))` | the old arguments are folded into `TerminalOptions` |
+| `App(mouse=, hover=, color_mode=, focus_events=, sync=, keys=, screen=)` | `App(terminal=TerminalOptions(...))` | the old arguments are removed, not folded |
+| `App.remove(id)` | `App.remove(section)` | takes the `Section` value `add` answered |
+| `set_focus_targets(...)` | `focusable = True` on widgets | the ring is derived from the tree |
+| `ClampedCursor` | the per-view index attributes (`index`, `selected`) | no shared cursor value |
+| `handle`-style demo topics / `Topic` registry | the five-scene showcase (`demo/`) | the topic tour is gone |
 
 ## 2. Recipes
 
@@ -63,7 +67,8 @@ app = App(
 `MouseMode.OFF` replaces `mouse=False`; `MouseMode.MOVE` replaces
 `mouse=True, hover=True`; `MouseMode.DRAG` replaces `mouse=True,
 hover=False`. `focus_events`, `sync`, `color_mode`, `stream`, `input` and
-`screen` are fields of the same value.
+`screen` are fields of the same value. `App` accepts no other terminal
+arguments.
 
 ### 2.2 Document, sections and panes
 
@@ -91,6 +96,9 @@ from motui.kernel.document import Sizing
 
 app.add(game, sizing=Sizing.FILL)   # or: app.fill(game)
 ```
+
+The content doors are `App`, `Workspace` and `Pane`; `Runtime` has no
+`add`, `get`, `split`, `dock`, `fill` or `rows` of its own.
 
 ### 2.3 A custom component
 
@@ -125,7 +133,8 @@ class Counter(Widget):
 ```
 
 A pure renderer does not need `Widget`; one `render(c) -> Surface` method is
-the whole `Component` protocol.
+the whole `Component` protocol. A pure component is not cached; subclass
+`Widget` when you want `touch()`/`generation` invalidation.
 
 ### 2.4 One-shot results and tree collection
 
@@ -183,9 +192,9 @@ listing = List(items, styles=Styles(rows=rows))
 ```
 
 `Styles` replaces whole role groups; `theme` stays the inherited value. A
-widget reads a group at render time through `self.group(name)`, so a theme
-assignment repaints an already mounted UI. Build variants with
-`dataclasses.replace` or `Theme.from_palette(ColorPalette(...))`.
+widget reads a group at render time through `self.group(name)`, which calls
+`Theme.group`; a theme assignment repaints an already mounted UI. Build
+variants with `dataclasses.replace` or `Theme.from_palette(ColorPalette(...))`.
 
 ### 2.7 Tests
 
@@ -198,7 +207,7 @@ tui.paint()
 from motui import Text, headless_tui
 from motui.testing import Emulator
 
-tui = headless_tui(80, 24)     # a real Runtime over a recording screen
+tui = headless_tui(80, 24)     # a Harness: content -> workspace, session -> runtime
 tui.add(Text("hello"))
 tui.paint()
 
@@ -209,48 +218,30 @@ screen.feed(tui.screen.output)
 assert screen.cell(0, 0).char == "h"
 ```
 
-`Runtime.advance(dt)` replays time without sleeping. `ScriptedEvents`
-replays a fixed event sequence. `snapshot(tui)` renders the document as
-structured plain text.
+`tui.runtime` is the `Runtime`, `tui.workspace` the `Workspace`, and
+`tui.rows` resolves to `workspace.rows`. `Runtime.advance(dt)` replays time
+without sleeping. `ScriptedEvents` replays a fixed event sequence.
+`snapshot(tui)` renders the document as structured plain text.
 
 ## 3. Removed names
 
-These are gone from the public surface; no alias is provided.
+These are gone from the public surface and from the source; no alias is
+provided.
 
-`TUI`, `App.tui`, `take_result`, `Resultful`, `set_focus_targets`, `Themed`
-(as a public base), `Revisioned` (as a public protocol), `EveryHandle`,
-`ClampedCursor`, `mark_prefix` (facade export), `ScrollView`, `Block`, the
+`TUI`, `App.tui`, `take_result`, `Resultful`, `set_focus_targets`,
+`Themed`, `Revisioned`, `EveryHandle`, `ClampedCursor`, `mark_prefix` (as a
+facade export), `ScrollView`, `ScrollState`, `RowRange`, `Block`, the
 `core/` package, public `ansi.*` exports, the free `fit` / `fill` / `fuse` /
-`overlay` / `rest` functions as an application API, and
-`Table(wrap=bool)`.
+`overlay` / `rest` functions as an application API, `Table(wrap=bool)`,
+`pin=`, `Section.component`, `split("vertical"|"horizontal")`, `ratios=`,
+`dock(edge=...)`, `open_palette(list)`, and the 1.x `App` constructor
+arguments.
 
-Implementation names that still exist at their module for internal use
-(`Revisioned` in `motui.kernel.document`, `Themed` in
-`motui.kernel.theme`) are not facade exports and are not part of the
-application contract.
+`Frame.revision` remains, but it counts structural frame mutations (split,
+close, chrome, overlay, band); it is not a row cache and has no relation to
+the removed `Revisioned` protocol.
 
-## 4. Compatibility entries still present
-
-The release keeps a small number of aliases and string entries so existing
-calls do not break mid-migration. They are documented, not recommended:
-
-| Entry | Status |
-|---|---|
-| `pin="top"` / `pin="bottom"` | accepted by the document doors; prefer `placement=` |
-| `split("vertical" \| "horizontal")` | accepted; prefer `Axis.X` / `Axis.Y` |
-| `split(ratios=...)` | fallback when `weights` is absent |
-| `dock(edge=...)` / `undock(edge)` | accepted; prefer `placement=` |
-| `App(mouse=..., hover=..., keys=..., screen=...)` | folded into `TerminalOptions`; prefer `terminal=` |
-| `open_palette(list)` | accepted; prefer a `CommandRegistry` |
-| `RowRange` | still exported; the planned `RowSpan` rename did not land |
-| `ScrollPanel.scroll_state` | still returns the mutable `ScrollState` |
-| `visible_width`, `wrap_text`, `ellipsize_tail`, `cut_line`, `slice_line`, `action_at`, `wrap_line` | kernel module functions kept beside the value methods |
-
-`Command`'s positional-argument compatibility shim and `App.remove`'s
-string-or-section argument are scheduled for removal in the release wave;
-new code should always use keywords and pass a `Section`.
-
-## 5. Migration checklist
+## 4. Migration checklist
 
 1. Replace `TUI` references with `App`/`Runtime`/`Workspace`/`Terminal`.
 2. Pass `TerminalOptions` to `App`; map `mouse`/`hover` to `MouseMode`.
@@ -258,9 +249,14 @@ new code should always use keywords and pass a `Section`.
 4. Replace `Block`/`pin` with `Section`/`Placement`; consume the `Section`
    returned by `add`.
 5. Replace `take_result()` with `take()` and `Resultful` with `HasResult`.
-6. Replace `handle(event)` with the typed hooks and capability flags.
-7. Replace `ScrollView` with `ScrollPanel`; choose `axis=`.
-8. Replace `split`/`dock` strings with `Axis`/`Placement` (the strings are
-   temporary compatibility entries).
-9. Replace `Table(wrap=...)` with `cell_wrap=...`.
-10. Update tests to `headless_tui` + `Runtime.advance` + `Emulator`.
+6. Replace `handle(event)` with the typed hooks and capability flags;
+   replace `revision()` with automatic `touch()`/`generation`.
+7. Replace `ScrollView` with `ScrollPanel`; choose `axis=`. Replace
+   `ScrollState` reads with `Scroll`/`ScrollAxis`; `RowRange` with
+   `RowSpan`.
+8. Replace `split`/`dock` strings with `Axis`/`Placement`; there are no
+   compatibility entries.
+9. Replace `Table(wrap=...)` with `cell_wrap=...`; pass a registry to
+   `open_palette`.
+10. Update tests to `headless_tui` (a `Harness`) + `Runtime.advance` +
+    `Emulator`; the shipped examples are quickstart, code and wide_table.

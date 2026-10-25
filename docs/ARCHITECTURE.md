@@ -13,7 +13,7 @@ catalogue is in [WIDGETS](WIDGETS.md).
         ┌──────────────┬───────────────┬──────────────────┐
         │              │               │                  │
    motui.widgets   motui.app       motui.terminal     motui.testing
-     (46 names)    (16 names)        (17 names)         (4 names)
+     (46 names)    (19 names)        (17 names)         (5 names)
         │              │               │                  │
         └──────────────┴───────┬───────┴──────────────────┘
                                │
@@ -48,9 +48,9 @@ subset and defines no behavior of its own.
 | `glyphs.py` | `Glyphs`, `GLYPHS`, `Border` |
 | `events.py` | `Event`, `KeyEvent`, `MouseEvent`, `PasteEvent`, `ResizeEvent`, `FocusEvent`, `EventSource` |
 | `document.py` | `Component`, `Section`, `Document`, `Placement`, `Sizing`, `Fill` |
-| `layout.py` | `Constraints`, `ScrollAxis`, `Scroll`, `ScreenLayout`, `Viewport`, `ScrollState`, `Scrollable` |
+| `layout.py` | `Constraints`, `ScrollAxis`, `Scroll`, `ScreenLayout`, `Viewport`, `Scrollable`, `RowSpan` |
 | `frame.py` | `Rect`-based `Pane`, `Split`, `Frame`, `Chrome`, `Separator` |
-| `hit.py` | `Hit` and `RowRange` |
+| `hit.py` | `Hit` |
 | `overlay.py` | the ordered overlay layers and registry |
 | `selection.py` | `Selection`, `highlight`, `extract` |
 | `keymap.py` | `Keymap`, the input/editor key tables |
@@ -76,16 +76,26 @@ subset and defines no behavior of its own.
 
 ### app
 
-`runtime.py` is the driver: clock, timers, pump, screen, frame, document,
-selection and session lifecycle. `workspace.py` is the stateless facade over
-one runtime. `application.py` is `App`. The tiers are `focus.py`,
-`pointer.py`, `gesture.py`, `find.py`, `modal.py`, `command_palette.py`,
-`overlays.py`, `scrollbar.py` and `commands.py`.
+`runtime.py` (706 lines) is the session: terminal, painter, clock, timers,
+pump, dirty flag and run lifecycle. `workspace.py` (894 lines) owns what is
+on screen: document, frame, panes, docks, hit testing and selection.
+`application.py` (643 lines) is `App`: it composes the runtime, the
+workspace and the default controllers. `router.py` (357 lines) holds the
+default handler chain (`DEFAULT_HANDLERS`) and implements the wheel, drag,
+mouse, focus, page-key and binding tiers.
+
+The controllers are `FocusManager`, `Pointer`, `SelectionGesture`,
+`Scrollbar`, `Toasts`, `Tooltip`, `Stats`, `Find`, `Modal` and
+`CommandPalette` in the remaining `app/*.py` modules. They are assembled on
+the workspace: a controller host has to resolve panes, hit cells and the
+frame, and the workspace is the object that owns them.
 
 ### testing
 
-`headless_tui` builds a `Runtime` over a recording `HeadlessScreen` and a
-`ScriptedEvents` source; `snapshot` renders the document structure;
+`headless_tui` wires a recording `HeadlessScreen` and a `ScriptedEvents`
+source to a real `Runtime` and returns a `Harness` -- one flat test driver
+whose content members resolve to the workspace and whose session members
+resolve to the runtime. `snapshot` renders the document structure;
 `Emulator` consumes painter bytes and rebuilds the cell grid.
 
 ## 3. Ownership and construction
@@ -97,21 +107,28 @@ field addition does not move a caller's arguments.
 |---|---|---|
 | `Cell` / `Segment` / `Line` / `Surface` | content and geometry | components and kernel |
 | `Section` | id, widget, placement, sizing, one row cache | `Document.add` (including `sizing=Sizing.FILL`) |
-| `Document` | an ordered set of sections | host, `Pane`, workspace |
-| `Pane` | rect, viewport, chrome, optional split | `Frame` |
-| `Frame` | panes, docks, overlays, focus, composition caches | `Runtime` |
+| `Document` | an ordered set of sections | host, `Pane`, `Workspace` |
+| `Pane` | rect, viewport, chrome, optional split | `Workspace` |
+| `Frame` | panes, docks, overlays, focus, composition caches | `Workspace` |
 | `Widget` | parent/children, theme, styles, flags, hooks | host |
 | `Terminal` | one screen, one event source, clipboard | `App` or host |
-| `Runtime` | terminal, clock, timers, painter, frame, session | `App` or host |
-| `Workspace` | a delegating view of one runtime | `Runtime.workspace` |
-| `App` | runtime, workspace, terminal, default tiers | host |
+| `Runtime` | terminal, clock, timers, painter, pump, session | `App` or host |
+| `Workspace` | document, frame, panes, docks, hit and selection | `Runtime` |
+| `App` | runtime, workspace, terminal, default controllers | host |
 
 `Surface.of` and `Surface.clipped` are the supported builders; the
 dataclass fields exist for readers. `Section` is constructed by `Document`,
-`Pane`/`Frame` by the runtime, and `ScreenLayout` by `Frame.compose` or
-`Viewport.layout`; a host reads those values rather than building its own.
-`Constraints`, `TerminalOptions`, `Styles`, `Theme` and the event values are
-ordinary public constructors.
+`Pane` and `Frame` by the workspace, and `ScreenLayout` by `Frame.compose`
+or `Viewport.layout`; a host reads those values rather than building its
+own. `Constraints`, `TerminalOptions`, `Styles`, `Theme` and the event
+values are ordinary public constructors.
+
+The workspace exposes six thin session delegates for the controllers it
+hosts: `clock`, `every`, `refresh`, `screen`, `painter` and
+`copy_to_clipboard`. They are how a controller reaches the pump and the
+terminal without a second constructor argument. They are not public
+application API; a host uses `app.runtime` for the session and
+`app.workspace` for the content.
 
 ## 4. Lifecycle
 
@@ -125,7 +142,7 @@ App.run()
       loop:
         paint once when non-interactive
         Runtime.read_event()          # pure read
-        App.dispatch(event)           # first claim wins
+        App.dispatch(event)           # the handler chain, first claim wins
         Runtime.refresh()
       App.on_stop()
       Runtime._teardown: stop pump, leave, dump a non-live final screen
@@ -148,19 +165,18 @@ App.run()
 ## 5. Rendering pipeline
 
 ```
-Section.rows(Constraints)            # the section's own row cache
+Section.rows(Constraints)            # the section's row cache
   Component.render(Constraints)      # -> Surface
 Viewport.layout(width, height)       # -> ScreenLayout (rows + row ownership)
 Frame.compose(width, height)         # panes, docks, chrome, overlays
 Painter.paint(ScreenLayout)          # per-row diff -> Screen
 ```
 
-`Viewport` keeps a private incremental body index keyed on the document's
-mutation count and the constraints. It probes each body section's
-`revision()` snapshot, re-measures only changed sections and locates the
-window by bisect. A section whose component answers no snapshot is
-re-rendered on every layout; that is the price of not being able to prove
-equality.
+`Section` caches rows by `(width, max_height, widget.generation)`. A
+`Widget` bumps `generation` with `touch()`; a pure component has no
+counter, so its section renders fresh on every layout. `Viewport` keeps a
+private incremental body index keyed on the same generation counters,
+re-measures only changed sections and locates the window by bisect.
 
 `ScreenLayout.row_blocks` and `block_order` carry the ownership table with
 the layout, so hit testing, selection highlighting and extraction never
@@ -168,8 +184,11 @@ reach back into a live viewport.
 
 ## 6. Event dispatch
 
-`App.dispatch` is the default policy. The order is a public contract and
-the first claim wins:
+`App.dispatch` runs the handler tuple in `App.handlers`, which is
+`DEFAULT_HANDLERS` by default and an explicit tuple when the host passes
+`handlers=`. `auto=False` leaves the tuple empty unless the host passed
+`handlers=`. Each handler answers whether it consumed the event; the first
+`True` ends dispatch. The order is a public contract:
 
 1. open `CommandPalette`
 2. open `Modal` layers, newest first
@@ -178,16 +197,17 @@ the first claim wins:
 5. controllers added with `App.mount`, in mount order
 6. wheel: horizontal scroller in the hit chain, then vertical scroller,
    then the hit pane, then the focused pane's viewport
-7. mouse: drag in flight, selection gesture, pointer, pane focus on press
-8. focused control through `FocusManager`
-9. page keys
-10. `App.bind` callbacks, then `tab` / `s-tab`
-11. host hooks `on_key`, `on_mouse`, `on_event`
+7. drag in flight
+8. mouse: selection gesture, pointer, pane focus on press
+9. focused control through `FocusManager`
+10. page keys
+11. `App.bind` callbacks, then `tab` / `s-tab`
+12. host hooks `on_key`, `on_mouse`, `on_event`
 
 A `ResizeEvent` is broadcast to every mounted widget's `on_resize` before
 the list above and then keeps travelling: the broadcast informs, it never
-consumes. `auto=False` mounts no tiers; the host drives the runtime and
-calls its own policy.
+consumes. A host that needs a different policy passes its own
+`handlers=(...)`.
 
 ## 7. Object model details
 
@@ -201,16 +221,26 @@ calls its own policy.
   calls `touch()`, which increments `generation` along the parent chain.
   Underscore attributes and `parent` are plumbing and stay silent. Mutating
   a list or buffer in place requires an explicit `touch()`.
+- **`Frame.revision` is structural.** It counts split, close, chrome and
+  overlay mutations so a composition can reuse its tiling. It is not a row
+  cache and not a content counter; content caching reads
+  `widget.generation`.
 - **Take** is pull-based. `take()` reads the pending value once and clears
   it. `None` means "nothing pending"; `False` and `0` are real results.
   There is no per-widget result callback.
 - **Overlays** are ordered by layer name: `background`, `content`,
   `selection`, `chrome`, `overlay`, `modal`, `tooltip`, `toast`.
-- **Panes** are runtime objects, not values. Splitting or closing rewrites
+- **Panes** are workspace objects, not values. Splitting or closing rewrites
   the frame's tree in place; the frame keeps its identity, overlays and
   focus, and each pane keeps its viewport and chrome.
 - **Docks** are pane-like regions above and below the pane area. They are
   hit-testable and selectable but take neither focus nor splits.
+- **Scroll** is a value: `Viewport.scroll` and `ScrollPanel.scroll` answer
+  an immutable `Scroll` whose `x`/`y` are `ScrollAxis` values. The window
+  stores the clamped offset; a resize clamps it again from the previous
+  extent.
+- **Visible ranges** answer a `RowSpan(first, last)` (`motui.kernel.layout`),
+  a frozen half-open range of screen rows.
 
 ## 8. Extension points
 
@@ -218,7 +248,8 @@ calls its own policy.
 |---|---|---|
 | a component | a new `Widget` subclass (or just `render`) in `widgets/`, plus tests | change the kernel |
 | a container | implement `children` and `Container.child_at` | guess children from attributes |
-| a controller | a class taking `(runtime, ...)`; register with `App.mount` | edit `App.dispatch`'s order |
+| a controller | a class taking the workspace host; register with `App.mount` | edit `DEFAULT_HANDLERS`' order |
+| a dispatch tier | a `Handler(app, event) -> bool` and `App(handlers=(...))` | monkey-patch `App.dispatch` |
 | a terminal switch | add it to `TerminalOptions` | add it to `App`, `Runtime` and `Screen` separately |
 | a terminal capability | a defaulted `Screen` property or an injected collaborator | a placeholder field |
 | a theme group | add a field to `Theme` | hard-code colors in a component |
@@ -234,29 +265,27 @@ tree and running the gates there.
 
 These are real properties of the 2.0 tree, not aspirations:
 
-- `app/runtime.py` is still large (about 1,600 lines). The runtime has not
-  been split into the `session`/`layout`/`documents`/`protocol` modules
-  sketched during design. The public seams described above are stable; the
-  file layout is not.
-- `Workspace` is a thin, stateless facade: its methods delegate to
-  `Runtime`, which still owns the state and most of the bodies.
-- `Fill` is the document form `sizing=Sizing.FILL`; there is no
-  `PaneContent` union. `App.fill(component)` is the pane-level convenience.
-- `ScrollPanel` and the pane chrome still use `ScrollState` as their
-  mutable scroll geometry. The 2.0 immutable `Scroll`/`ScrollAxis` values
-  exist and carry the same thumb formula, but replacing `ScrollState`
-  everywhere is scheduled after 2.0.
-- `App` still accepts the 1.x constructor arguments (`mouse`, `hover`,
-  `color_mode`, `screen`, `keys`, `focus_events`, `sync`); they are folded
-  into `TerminalOptions`. New code should pass `terminal=`.
-- `split` and `dock` still accept the 1.x direction strings; they are
-  documented compatibility entries, not the recommended surface.
-- Both byte-level and semantic golden sets are kept. The semantic set is
-  the primary rendering contract; the 57 byte topics remain an extra
-  regression gate.
+- The split stopped short of the design targets. `app/runtime.py` is 706
+  lines (target 450), `app/workspace.py` 894 (target 450) and
+  `app/application.py` 643 (target 250); `app/router.py` is 357 lines of
+  migrated dispatch. The public seams are stable; the file split is not the
+  design's final shape.
+- The workspace exposes six thin runtime delegates (`clock`, `every`,
+  `refresh`, `screen`, `painter`, `copy_to_clipboard`) because the
+  controllers are hosted on it. They are documented as a controller seam,
+  not as public API.
+- `Fill` is the document form `sizing=Sizing.FILL`; the value class
+  `motui.kernel.document.Fill` exists, but there is no `PaneContent` union.
+  `App.fill(component)` is the pane-level convenience.
 - `Placement` and `Sizing` live in `motui.kernel.document`; they are not
-  re-exported from `motui.kernel` or the root in this release.
-- `TerminalOptions` is exported by `motui.terminal`, not by the root.
+  re-exported from `motui.kernel` or the root. `TerminalOptions` is
+  exported by `motui.terminal`, not by the root.
+- Semantic golden frames are the only golden gate: five showcase scenes in
+  `tests/golden/semantic/`. There is no byte-level golden set.
+- Document-flow horizontal scrolling is limited to `ScrollPanel` over
+  non-wrapping content; panes scroll vertically only.
+- `tools/framebench.py` is excluded from pyright; it is a benchmark
+  harness rather than library code.
 
 ## 10. Deliberate non-goals
 

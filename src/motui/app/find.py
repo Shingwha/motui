@@ -8,15 +8,15 @@ them, and an overlay that paints them over the composed frame.  Opening
 resets the query; typing re-addresses the matches; ``enter``/``down`` step to
 the next match and ``up`` to the previous one -- the ends wrap -- and
 ``escape`` closes.  Every change **reveals** the current match through the
-driver (:meth:`~motui.app.Runtime.reveal`), so the tier owns no scrolling of
+workspace (:meth:`~motui.app.Workspace.reveal`), so the tier owns no scrolling of
 its own; "bring this address on screen" is the kernel-side ability
 (``Viewport.scroll_to``), not a hole opened for search.
 
 **What is searched.**  The document of the pane **focused** when the query
-changed -- the same resolution ``tui.reveal`` scrolls -- every block in
+changed -- the same resolution ``workspace.reveal`` scrolls -- every block in
 document order, fixed-region blocks included (they are part of the document:
-they highlight in place, and revealing one moves nothing because a pinned
-block never scrolls away).  A match is a document address
+they highlight in place, and revealing one moves nothing because a
+fixed-region block never scrolls away).  A match is a document address
 ``(bid, row, start, end)``: the block id, the 0-based row within that block
 at the width the pane was last laid out at, and the hit's display-column
 range.  The width travels with the address -- another width wraps other
@@ -60,7 +60,7 @@ from ..widgets.textfield import Input
 from ..kernel.layout import Constraints
 
 if TYPE_CHECKING:
-    from .runtime import Runtime
+    from .workspace import Workspace
 
 __all__ = ["Find"]
 
@@ -74,10 +74,10 @@ COUNT_EMPTY = "(0/0)"
 class Find:
     """A self-contained search: one query row, its matches, and the overlay.
 
-    ``tui`` is the driver whose focused pane's document is searched and whose
-    frame the overlay registers on (at construction -- the ``Toasts``
+    ``workspace`` is the state owner whose focused pane's document is
+    searched and whose frame the overlay registers on (at construction -- the ``Toasts``
     lifecycle, so ``detach()`` is the one unmount) and whose
-    :meth:`~motui.app.Runtime.reveal` puts the current match on screen.
+    :meth:`~motui.app.Workspace.reveal` puts the current match on screen.
     ``theme`` (default :data:`~motui.kernel.theme.DEFAULT_THEME`) skins
     the query row and the highlight bands; ``set_theme`` rebuilds the row on
     a new one, carrying an open query's text over.
@@ -100,18 +100,18 @@ class Find:
         "glyphs",
         "input",
         "matches",
-        "runtime",
+        "workspace",
     )
 
     def __init__(
         self,
-        tui: Runtime,
+        workspace: Workspace,
         *,
         theme: Theme | None = None,
         glyphs: Glyphs = GLYPHS,
     ) -> None:
         self._theme = theme if theme is not None else DEFAULT_THEME
-        self.runtime = tui
+        self.workspace = workspace
         self.glyphs = glyphs
         self.input = Input(
             prompt=f"find {glyphs.prompt} ", glyphs=glyphs, theme=theme
@@ -125,7 +125,7 @@ class Find:
         #: anything, so no stale address ever lands on another document's rows.
         self._pane_id: str | None = None
         self._width = 0
-        tui.frame.add_overlay(self, layer="overlay")
+        workspace.frame.add_overlay(self, layer="overlay")
 
     def __repr__(self) -> str:
         return (
@@ -165,7 +165,7 @@ class Find:
         self.input.clear()
         self._recompute()
         self._open = True
-        self.runtime.refresh()
+        self.workspace.refresh()
 
     def close(self) -> None:
         """Hide the tier: it consumes nothing and paints nothing.
@@ -174,7 +174,7 @@ class Find:
         visibility's); the next :meth:`open` starts over from an empty query.
         """
         self._open = False
-        self.runtime.refresh()
+        self.workspace.refresh()
 
     def detach(self) -> None:
         """Unregister the overlay and go inert (the controller convention).
@@ -187,8 +187,8 @@ class Find:
         which only hides an attached tier.
         """
         self._detached = True
-        if self in self.runtime.frame.overlays:
-            self.runtime.frame.remove_overlay(self)
+        if self in self.workspace.frame.overlays:
+            self.workspace.frame.remove_overlay(self)
 
     def set_theme(self, theme: Theme) -> None:
         """Rebuild the query row on ``theme``, the rest of the skin following.
@@ -250,24 +250,24 @@ class Find:
         self._reveal_current()
 
     def _reveal_current(self) -> None:
-        """Put the current match on screen through the driver's own reveal.
+        """Put the current match on screen through the workspace's own reveal.
 
         The one road to visibility (D10): the tier never touches a viewport.
-        ``tui.reveal`` invalidates the frame when the window moved, so a step
+        ``workspace.reveal`` invalidates the frame when the window moved, so a step
         or a query change repaints through it; a caller that wants the host's
         own repaint cue reads :meth:`handle`'s answer.
         """
         if not self.matches:
             return
         bid, row, _, _ = self.matches[self.index]
-        self.runtime.reveal(bid, row)
+        self.workspace.reveal(bid, row)
 
     # -- matching --------------------------------------------------------------
 
     def _recompute(self) -> None:
         """Re-address the matches for the current query and reset the cursor.
 
-        The document of the pane focused **now** -- the pane ``tui.reveal``
+        The document of the pane focused **now** -- the pane ``workspace.reveal``
         would scroll -- walked in document order; each match keeps the width
         it was rendered at in :attr:`_width`, and the pane id in
         :attr:`_pane_id`, so the paint can tell a frame its addresses still
@@ -279,7 +279,7 @@ class Find:
         moved generation, so a hit is never stale.  The cursor restarts at
         the first match: a new query addresses a new set (D10).
         """
-        pane = self.runtime.frame.focused_pane
+        pane = self.workspace.frame.focused_pane
         self._pane_id = None if pane is None else pane.id
         self._width = self._pane_width()
         self.matches = []
@@ -314,12 +314,12 @@ class Find:
         placement yet) the screen width stands in, the best a frame that was
         never laid out has.
         """
-        pane = self.runtime.frame.focused_pane
+        pane = self.workspace.frame.focused_pane
         if pane is not None:
-            region = self.runtime.frame.region(pane.id)
+            region = self.workspace.frame.region(pane.id)
             if region is not None:
                 return region.width
-        return self.runtime.screen.width
+        return self.workspace.screen.width
 
     def _counter(self) -> str:
         """The row's right-hand readout: the current match over the total."""
