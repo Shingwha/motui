@@ -9,7 +9,7 @@ from dataclasses import replace
 
 import pytest
 
-from motui.kernel.keymap import DEFAULT_EDITOR_KEYMAP
+from motui.kernel.keymap import DEFAULT_EDITOR_KEYMAP, DEFAULT_INPUT_KEYMAP
 from motui.kernel.cell import Surface
 from motui.kernel.layout import Constraints
 from motui.kernel.style import Style
@@ -704,3 +704,87 @@ def test_an_input_can_opt_back_into_the_shared_wrap_guard():
     assert field.wrap is WrapMode.ELLIPSIS
     assert field.render(Constraints(width=1))[0].text == "\u2026"
     assert Input("abc").revision() != Input("abc", wrap=WrapMode.CLIP).revision()
+
+
+# -- the 2.0 typed hooks ------------------------------------------------------
+
+
+@pytest.mark.parametrize("make", FIELDS)
+def test_the_fields_declare_focus_click_and_hover(make):
+    field = make()
+
+    assert field.focusable is True
+    assert field.clickable is True
+    assert field.hoverable is True
+    assert field.activatable is False
+
+
+@pytest.mark.parametrize("make", FIELDS)
+def test_on_key_is_the_typed_spelling_of_handle(make):
+    typed, legacy = make(), make()
+
+    assert typed.on_key(key("a", "a")) is True
+    assert legacy.handle(key("a", "a")) is True
+    assert typed.text == legacy.text == "a"
+    assert typed.on_key(key("enter")) is legacy.handle(key("enter"))
+
+
+def test_on_paste_folds_newlines_in_an_input_and_keeps_them_in_an_editor():
+    field = Input()
+    assert field.on_paste(paste("a\r\n\r\nb\nc")) is True
+    assert field.text == "a b c"
+
+    editor = Editor()
+    assert editor.on_paste(paste("a\r\nb\nc")) is True
+    assert editor.text == "a\r\nb\nc"
+
+    # The 1.x handle keeps the same folding policy.
+    legacy = Input()
+    assert legacy.handle(paste("a\n\nb")) is True
+    assert legacy.text == "a b"
+
+
+@pytest.mark.parametrize(
+    "name, before, after",
+    [
+        ("move_right", 0, 1),
+        ("move_left", 1, 0),
+        ("end", 0, 3),
+        ("home", 3, 0),
+    ],
+)
+def test_on_action_runs_a_bound_keymap_action(name, before, after):
+    field = Input("abc")
+    park(field, before)
+
+    assert field.on_action(name) is True
+    assert field.cursor == (0, after)
+
+
+def test_on_action_declines_unbound_names_and_activation():
+    field = Input("abc")
+
+    assert field.on_action("activate") is False
+    assert field.on_action("no_such_action") is False
+
+    field.keymap = {**field.keymap, "c-j": "clear"}
+    assert field.on_action("clear") is True
+    assert field.text == ""
+
+
+def test_an_instance_keymap_rebind_does_not_write_the_default_table():
+    field = Input()
+
+    assert field.keymap is not DEFAULT_INPUT_KEYMAP
+    field.keymap["c-j"] = "clear"
+    assert "c-j" not in DEFAULT_INPUT_KEYMAP
+    assert field.on_key(key("c-j")) is True and field.text == ""
+
+
+def test_a_constructor_keymap_is_copied_too():
+    custom = {"c-j": "clear"}
+    field = Input(keymap=custom)
+
+    field.keymap["x"] = "newline"
+    assert "x" not in custom
+    assert field.on_key(key("c-j")) is True and field.text == ""
