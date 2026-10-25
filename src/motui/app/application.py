@@ -82,6 +82,7 @@ from ..kernel.style import ColorMode, Style
 from ..kernel.theme import DEFAULT_THEME, Theme
 from ..widgets.base import Widget
 from .command_palette import CommandPalette
+from .commands import CommandRegistry
 from .runtime import Runtime
 from .find import Find
 from .focus import FocusManager, focus_targets, iter_widgets
@@ -537,12 +538,23 @@ class App:
         self._modals.append(modal)
         return modal
 
-    def open_palette(self, commands: list[object], **kwargs: Any) -> CommandPalette:
-        """Open the lazily created command palette over ``commands``."""
+    def open_palette(
+        self,
+        commands: "CommandRegistry | list[object]",
+        **kwargs: Any,
+    ) -> CommandPalette:
+        """Open the lazily created command palette over ``commands``.
+
+        ``commands`` is a :class:`~motui.app.commands.CommandRegistry` --
+        its :meth:`~motui.app.commands.CommandRegistry.options` view is what
+        the palette renders -- or a ready list of options (the 1.x path,
+        kept for compatibility until W5).
+        """
+        options = commands.options() if isinstance(commands, CommandRegistry) else commands
         if self._palette is None:
             kwargs.setdefault("theme", self._theme)
             kwargs.setdefault("focus", self._focus)
-            self._palette = CommandPalette(self.runtime, commands, **kwargs)
+            self._palette = CommandPalette(self.runtime, options, **kwargs)
         self._palette.open()
         return self._palette
 
