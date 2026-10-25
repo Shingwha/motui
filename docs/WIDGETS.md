@@ -268,7 +268,7 @@ Rules of thumb:
 ## Collecting results
 
 ```python
-from motui.widgets import HasResult
+from motui.widgets.base import HasResult
 
 for widget in app.walk():
     if isinstance(widget, HasResult):

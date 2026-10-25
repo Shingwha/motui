@@ -5,6 +5,95 @@ is [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and the version
 numbers follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html) with
 the library-specific reading spelled out in [`CONTRIBUTING.md`](CONTRIBUTING.md).
 
+## [2.0.0] — 2026-10-25
+
+**A new call surface, a pure kernel, and a component tree.** 2.0 is a
+breaking release. The render protocol answers a `Surface` from
+`Constraints`, the document unit is a `Section`, the driver is split into
+`Runtime`/`Workspace`/`Terminal`, one-shot results are read with `take()`,
+and interaction is expressed as typed hooks plus capability flags. The
+migration table and recipes are in [`docs/MIGRATION.md`](docs/MIGRATION.md).
+
+### Breaking
+
+- `render(width) -> list[Line]` is now
+  `render(c: Constraints) -> Surface`; every component and custom renderer
+  moves to the new protocol.
+- `Block`/`pin` are now `Section`/`Placement`; `add`, `get` and `remove`
+  answer a `Section` at the App, Workspace, Document and Pane levels.
+- `App` takes `terminal=TerminalOptions(...)`; `MouseMode` replaces the
+  separate `mouse`/`hover` switches. The old arguments are folded into
+  `TerminalOptions` for compatibility.
+- `split` and `dock` speak `Axis` and `Placement`; `weights` replaces
+  `ratios`. The string entries remain accepted but are not the recommended
+  surface.
+- `Command` is keyword-only and has a first-class `group`;
+  `CommandRegistry.bind(app)` wires its keys and `open_palette(registry)`
+  consumes it.
+- `Table(wrap=bool)` is replaced by `cell_wrap=WrapMode`; `OVERFLOW` is the
+  horizontal-panel mode.
+- Widget interaction moved from `handle`/`click`/`activate` to
+  `on_key`/`on_mouse`/`on_paste`/`on_resize`/`on_focus`/`on_click`/
+  `on_hover`/`on_drag`/`on_action`.
+
+### Added
+
+- A pure `motui.kernel`: geometry, rows, surfaces, styles, themes, events,
+  the document model, layout/scroll values, the frame compositor, hit
+  testing and selection arithmetic.
+- `Surface` and `Constraints` as the one render contract, with
+  `Surface.of`/`clipped`, `WrapMode` (`WORD`, `CHAR`, `ELLIPSIS`, `CLIP`,
+  `OVERFLOW`) and `Line.reflow`/`clip`/`pad`/`fill`.
+- `Widget`'s explicit tree (`parent`, `children`, `walk()`, `touch()`,
+  `generation`) and automatic invalidation.
+- `Runtime`, `Workspace`, `Terminal` and `TerminalOptions` as separate,
+  addressable objects; `App` composes them with the default tiers.
+- `Canvas` (cell/half/braille markers) and `Sparkline`.
+- `ScrollPanel(axis="x" | "both")` for wide, non-wrapping content.
+- `Section` row caching keyed by width, height budget and revision
+  snapshot; `MOTUI_NO_CACHE=1` disables it.
+- `HasResult`/`take()` as the one-shot result door.
+- `Command.group`, `CommandRegistry.bind`, `Timer`, and
+  `Runtime.advance(dt)` for deterministic replay.
+- `testing.Emulator`, which rebuilds the painted cell grid for assertions.
+- `examples/snake.py`, `examples/dashboard.py` and `examples/wide_table.py`.
+
+### Changed
+
+- The terminal edge is `motui.terminal`; `ansi` is private and is the only
+  place escape bytes are constructed.
+- `Theme` keeps its ten role groups; widgets resolve them at render time,
+  and `App.theme` repaints mounted widgets whose theme is inherited.
+- `Viewport` maintains an incremental body index and locates the visible
+  window by bisect instead of walking every section.
+- `Screen` is an ABC rather than a protocol; custom screens subclass it.
+- The primary golden gate is semantic (cell grid); the 57 byte topics
+  remain as an additional regression check.
+- `List`, `Table`, `Tree`, `Tabs`, `NavList`, `MenuBar` and the form groups
+  share one cursor/window vocabulary and capability flags.
+- `docs/` now contains ARCHITECTURE, CONTRACT, WIDGETS, MIGRATION and 23
+  ADRs; the 1.x DESIGN and COMPONENTS pages are removed.
+
+### Removed
+
+- `TUI` and `App.tui`; `take_result` and `Resultful`; `Revisioned` and
+  `Themed` as public bases; `set_focus_targets`; `EveryHandle`;
+  `ClampedCursor`; `ScrollView`; `Block`; the `core/` package; public
+  `ansi.*` exports; `mark_prefix` as a facade export; the free row helpers
+  as an application API; and `Table(wrap=bool)`.
+- No aliases or forwarding modules are shipped. See
+  [`docs/MIGRATION.md`](docs/MIGRATION.md) for the replacements and the
+  small set of compatibility entries that remain.
+
+### Performance
+
+- One frame is one write and one flush; an unchanged frame writes zero
+  bytes. Section rows are cached, `Viewport` re-measures only changed
+  sections, and the painter diffs rows.
+- Timers schedule against absolute deadlines, so animation does not drift.
+- The byte-level `render-hash` and the nine `framebench` workloads remain
+  the performance and regression baselines.
+
 ## [1.2.3] — 2026-10-24
 
 **A chrome band now says what it decorates.** A pane can hold a header, a
@@ -706,7 +795,8 @@ was ever published.
 - **The demo** — `python -m motui` runs an 11-page exhibit of the library,
   shipped inside the wheel and pinned frame by frame in the test suite.
 
-[Unreleased]: https://github.com/Shingwha/motui/compare/v1.2.2...HEAD
+[Unreleased]: https://github.com/Shingwha/motui/compare/v2.0.0...HEAD
+[2.0.0]: https://github.com/Shingwha/motui/releases/tag/v2.0.0
 [1.2.2]: https://github.com/Shingwha/motui/compare/v1.2.1...v1.2.2
 [1.2.1]: https://github.com/Shingwha/motui/compare/v1.2.0...v1.2.1
 [1.2.0]: https://github.com/Shingwha/motui/compare/v1.1.9...v1.2.0

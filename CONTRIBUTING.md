@@ -6,59 +6,73 @@ process.
 
 ## The invariants
 
-1. **Dependency direction is one-way.** `core` imports nothing above
-   itself; `widgets` imports `core`; `app` imports `core` and `widgets`;
-   `testing` imports `app` and `core`. Never the other way round. There is
-   no `kernel`, `keys`, `interaction` or `commands` namespace.
+1. **Dependency direction is one-way.** `motui.kernel` imports nothing
+   above itself; `motui.widgets` imports the kernel; `motui.terminal`
+   imports the kernel; `motui.app` composes the kernel, widgets and the
+   terminal; `motui.testing` sits outside both. Never the other way round.
 2. **One name, one home.** A public name lives in exactly one facade. The
-   root is a curated 41-name subset (including `App`, `CommandPalette`,
-   `ColorPalette`, `Glyphs`, `Border`, `ScrollView`, `Row`, `Column` and
-   `Panel`); everything else is public one
-   import deeper. `tests/test_api.py` asserts that every facade name
-   resolves and that the root is a subset of the layers.
+   root is a curated 40-name subset; everything else is public one import
+   deeper. `tests/test_api.py` asserts that every facade name resolves and
+   that the root is a subset of the layers.
 3. **One source module, one test file.** `src/motui/x/y.py` is exercised by
-   `tests/test_y.py`; the component families share one test file per family.
-4. **Rendering is pinned.** `tests/golden/topics/*.txt` is what a user sees,
-   topic by topic, byte for byte. `tools/framebench.py`'s render hash is the
-   coarse proof that a refactor moved nothing.
+   the matching test module; a component family shares one test file.
+4. **Rendering is pinned.** `tests/golden/semantic/` is the primary cell
+   grid contract; `tests/golden/topics/*.txt` is an additional byte-level
+   regression gate. `tools/framebench.py`'s render hash is the coarse proof
+   that a refactor moved nothing.
 5. **No compatibility shims.** A renamed name is deleted with its last
    consumer: no alias, no `_deprecated` re-export, no forwarding module.
-   The 1.x `RowBands`, the flat `Theme` fields, the `kernel.style` /
-   `kernel.glyphs` constants, `BlockState`/`seal`, `Delegate`, `Host` and
-   the old namespaces were removed this way in 1.2.0; new code reads
-   `theme.<group>.<role>`, `styles: Styles`, and the `Glyphs` vocabulary.
-6. **Within 1.2.x the contract is additive.** A release adds names,
-   components and verbs; it does not rename or re-purpose an existing one.
+   The small documented string entries in `MIGRATION.md` are the exception,
+   and they are temporary.
+6. **Within 2.x the contract is additive.** A release adds names,
+   components and hooks; it does not rename or re-purpose an existing one.
    A removal is a MAJOR decision.
-7. **The library never sleeps.** Time enters through `tui.clock()`, which a
-   test injects.
+7. **The library never sleeps.** Time enters through `Runtime.clock()`,
+   which a test injects; `Runtime.advance(dt)` replays it.
 8. **A public-surface change is a decision, not an accident.** The pinned
-   surface is the API test plus the golden frames; moving either is a
-   versioning call.
+   surface (`tools/api-2.0.txt`) plus the golden frames are the gate.
 9. **Docs move with the code**, in the same commit.
 
-## The dependency graph
+## The directory
 
 ```
-core  ->  widgets  ->  app
-testing (above app and core)
+src/motui/
+  __init__.py       curated root facade (40 names)
+  kernel/           pure values and protocols: geom, cell, text, events,
+                    document, layout, frame, hit, overlay, selection,
+                    style, theme, glyphs, keymap
+  terminal/         Screen ABC, Terminal/TerminalOptions, decoder, key
+                    sources, capability, clipboard, Painter, SGR render,
+                    private ansi
+  widgets/          the component library (46 names) and Widget/Container
+  app/              Runtime, Workspace, App, focus/pointer/gesture/find/
+                    modal/palette/overlays/scrollbar/commands
+  testing/          headless_tui, ScriptedEvents, snapshot, Emulator
+  demo/             python -m motui; the golden frames render from it
+tests/
+  kernel/ widgets/ app/ terminal/   behavior and contract tests
+  golden/semantic/                 cell-grid snapshots per topic
+  golden/topics/                   byte-level snapshots per topic
+  testing/                         clocks, doubles, events, layout helpers
+tools/
+  golden.py semantic.py            the frame gates
+  framebench.py                    nine timing workloads and render hash
+  api.py growth.py                 public surface and growth probe
+docs/                              ARCHITECTURE, CONTRACT, WIDGETS, MIGRATION, adr/
 ```
 
-- `motui.core` is the root: values, styles, palettes, themes, glyphs and
-  borders, events, the document model, screen, viewport, painter, frame,
-  selection, chrome, clipboard, the decoder/keymaps/key sources, `Widget`,
-  `ScrollState`, `Cursor` and `Hit`. It imports the standard library and
-  `wcwidth` only.
-- `motui.widgets` is the component library, Markdown rules and syntax
-  highlighting. It imports `core`.
-- `motui.app` is the driver and composition root: `App`, `TUI`, focus,
-  pointer, gesture, find, modal, palette, overlays, scrollbar and the
-  command registry. It imports `core` and `widgets`.
-- `motui.testing` sits above both: headless screens, scripted sources,
-  `headless_tui` and `snapshot`.
+The dependency graph is:
 
-If a change needs a new edge, stop and fix the seam instead. The two usual
-answers are "put the mechanism in `core`" and "compose it in `app`".
+```
+kernel  <-  widgets  <-  app
+kernel  <-  terminal <-  app
+testing (above app, terminal and kernel)
+```
+
+`import-linter` enforces the four structural contracts in
+`pyproject.toml`: the kernel has no I/O, the kernel is a leaf, widgets do
+not import terminal/app, and terminal does not import widgets/app. If a
+change needs a new edge, stop and fix the seam instead.
 
 ## Gates
 
@@ -68,22 +82,36 @@ Every commit passes all of these:
 uv sync --locked
 uv run pytest -q -p no:cacheprovider
 uv run python tools/golden.py --check
+uv run python tools/semantic.py --check
 uv run python tools/framebench.py
 uv run python -m motui < /dev/null
 uv run python -m motui --pages
+uv run ruff check .
+uv run pyright
+uv run lint-imports
+uv run python tools/api.py --check
+uv run python tools/growth.py
+uv run python examples/snake.py --headless
+uv run python examples/dashboard.py --headless
+uv run python examples/wide_table.py --headless
 ```
 
 What each protects:
 
 | Gate | Protects |
 |---|---|
-| `pytest` | behavior, the API pin and the import graph |
-| `golden.py --check` | the rendered topic frames users see |
+| `pytest` | behavior, the API pin, the import graph and packaging |
+| `golden.py --check` | the byte-level topic frames (an extra gate) |
+| `semantic.py --check` | the cell grid users actually see |
 | `framebench.py` | timing workloads and the render hash |
-| the two piped demo entries | the demo's headless replay and page dump |
+| the two piped demo entries | headless replay and the plain-text page dump |
+| `ruff` / `pyright` | style, imports and types |
+| `lint-imports` | the four layering contracts |
+| `api.py --check` | every exported name and signature |
+| `growth.py` | a defaulted kernel field is a non-breaking change |
+| the example scripts | the shipped assembly paths run without a TTY |
 
 CI runs the same set on Linux and Windows with the oldest supported Python.
-
 Use `-p no:cacheprovider` in parallel work: several agents must not share
 one `.pytest_cache`.
 
@@ -102,40 +130,52 @@ The definition of done for a behavior change:
 - tests for the behavior, in the same commit;
 - its documentation updated in the same commit;
 - if it moves what a user sees, re-record the golden frames with
-  `tools/golden.py --update` and explain every changed frame in the commit
-  message;
-- if it touches a facade, make a version decision first.
+  `tools/semantic.py --update` (and `tools/golden.py --update` for the byte
+  set) and explain every changed frame in the commit message;
+- if it touches a facade, make a version decision first and update
+  `tools/api-2.0.txt` with `tools/api.py --update`.
 
 **Interactive paths need tests that reach them.** A headless session with
 scripted events runs the same handlers a live session runs. A behavior that
 only ever runs on a real terminal is invisible to the suite.
 
-**Don't hand-edit the golden frames**, don't rewrite `specs/` (it is an
-add-only process archive), and don't commit local tool directories.
+**Do not hand-edit golden frames**, do not rewrite `specs/` (it is an
+add-only process archive), and do not commit local tool directories.
+
+## Commit style
+
+One logical change per commit. The subject is
+`area: imperative lowercase phrase`; the body explains why and names any
+golden or API snapshot change.
+
+```
+kernel: a wrap mode names how a row meets its width
+widgets: scroll panel windows columns and rows
+docs: architecture, contract and widgets describe the 2.0 tree
+release: the package is 2.0.0
+```
 
 ## Adding a component
 
 Five things, in one commit:
 
-1. `render(width) -> list[Line]` that is pure and fits every row. If the
-   component is themed and interactive, inherit `Widget` and accept
-   `theme=None, styles=None`; if it is a pure renderer, `Component`'s one
-   method is enough.
-2. The verbs it answers: `handle`, `click`, `drag`, `hover_at`, `move`,
-   `select`, `activate`, `toggle`, and `take_result` when it has a one-shot
-   result. `Widget` already supplies all of them as no-ops.
-3. A `revision()` snapshot when it holds mutable state, and `theme` /
-   `styles` included in that snapshot.
-4. Tests for rendering, every verb and the protocol surfaces. A widget with
-   no `*_style` constructor arguments and no `focused=` flag: assign the
-   shared flags and override role groups with `Styles`.
-5. A catalogue entry in [`docs/COMPONENTS.md`](docs/COMPONENTS.md), in the
-   fixed template (`purpose -> signature -> verbs -> result -> protocols ->
-   notes`), and a demo topic if the component belongs on the tour.
+1. `render(c: Constraints) -> Surface`, pure and fitting every row. If the
+   component is interactive, inherit `Widget` and accept `theme=None,
+   styles=None`; a pure renderer needs only the one method.
+2. The capability flags it honors (`focusable`, `clickable`, `hoverable`,
+   `activatable`) and the typed hooks it overrides (`on_key`, `on_click`,
+   `on_action`, ...). `Widget` supplies all hooks as no-ops.
+3. A `revision()` snapshot when it holds mutable state, including `theme`
+   and `styles` when those change its rows.
+4. Tests for rendering, every hook and the capability surface. Do not add
+   per-token `*_style` constructor arguments or a `focused=` flag; assign
+   the shared flags and override role groups with `Styles`.
+5. A catalogue entry in [`docs/WIDGETS.md`](docs/WIDGETS.md) and, if the
+   component belongs on the tour, a demo topic.
 
-If the component joins a public facade, update the facade `__all__`; the
-API test pins the structure, not a name list. If it changes what a topic
-renders, re-record that topic's golden frame.
+If the component joins a public facade, update the facade `__all__` and the
+API snapshot. If it changes what a topic renders, re-record that topic's
+golden frames.
 
 ## Adding a demo topic
 
@@ -151,56 +191,41 @@ The demo is a master-detail explorer, not a gallery. A topic is one
 Then:
 
 ```bash
-uv run python tools/golden.py --update   # records tests/golden/topics/<section>--<topic>.txt
-uv run python -m motui --pages           # review the plain-text dump
+uv run python tools/golden.py --update      # byte topics
+uv run python tools/semantic.py --update    # semantic snapshots
+uv run python -m motui --pages              # review the plain-text dump
 ```
 
-Do not invent a second rendering path: `--pages`, the golden tool and the
-tests share `render_topic`.
+Do not invent a second rendering path: `--pages`, the golden tools and the
+tests share the same topic renderer.
 
 ## Versioning
 
-SemVer, with a deliberately slow MAJOR cadence: a MAJOR release lands about
-once a year, so the removals and contract changes of the year ride the MINOR
-and PATCH releases in between only when they were already announced. The
-current release is **1.2.2**. Inside the 1.2.x line the public contract is
-**additive**: a name joins a facade, no existing name changes meaning, and
-no name is removed. The one rule is that a change must be documented, never
-silent. A PATCH may correct a default that contradicted the contract's own
-ownership rule; the correction is documented under Changed with its
-migration.
+SemVer, with a deliberately slow MAJOR cadence. The current release is
+**2.0.0**. The 2.0 break is documented name by name in
+[`docs/MIGRATION.md`](docs/MIGRATION.md); no compatibility aliases are
+provided beyond the small entries that page lists.
+
+Inside 2.x the public contract is **additive**: a name joins a facade, no
+existing name changes meaning, and no name is removed without a MAJOR. A
+new kernel field must be keyword-only with a default; `tools/growth.py`
+proves that pattern.
 
 - **MAJOR** — the yearly cut that owns the year's removals and renames.
-- **MINOR** — a name joins a facade, a new component/verb, or an additive
+- **MINOR** — a name joins a facade, a new component/hook, or an additive
   behavior.
-- **PATCH** — a fix that changes no contract. A rendering fix that moves the
-  golden frames is still a PATCH: the frame diff is the evidence. So is a
-  documented additive name that is the door a fix needs
-  (`Document.mutation` and `Block.rows_view`/`row_count` rode 1.2.2 with
-  the frame-cost and security work they serve); a name that is not such a
-  door waits for a MINOR.
+- **PATCH** — a fix that changes no contract. A rendering fix that moves a
+  golden frame is still a PATCH; the frame diff is the evidence.
 - Prereleases are allowed and publish through the same workflow.
-
-A name with real users gets a deprecation cycle first: one release that
-keeps it working with a `DeprecationWarning` naming the replacement and the
-removal version, then the next yearly MAJOR removes it. Machinery for names
-nobody uses is not worth writing.
-
-**Release timing.** Documentation and code may land continuously, but a
-release is a single bundle: version bump, changelog section, release notes,
-annotated tag and GitHub release. The release itself waits for the user's
-test refactor to land and for a separate go-ahead; do not bump
-`pyproject.toml`, write release notes, tag or publish as part of a docs or
-feature change.
 
 ## Releasing
 
-When the go-ahead comes:
+The release is a single bundle and waits for an explicit go-ahead:
 
 1. On `main`, every gate green, and CI green on the commit to tag.
-2. Bump `version` in `pyproject.toml`; `motui.__version__` reads the
-   installed metadata and `tests/test_packaging.py` pins them equal.
-3. Move the `Unreleased` material in `CHANGELOG.md` into a dated section.
+2. Confirm `version` in `pyproject.toml`, the `motui.__version__` fallback
+   and `uv.lock` agree; `tests/test_packaging.py` pins the relation.
+3. Move the changelog material into the dated `## [<version>]` section.
 4. Write the release notes to `docs/releases/<version>.md`.
 5. Commit the bundle, push, wait for green CI.
 6. Create an **annotated** tag and push it. `release.yml` builds on both

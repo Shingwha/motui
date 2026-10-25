@@ -5,7 +5,7 @@
 [![python](https://img.shields.io/pypi/pyversions/motui)](https://pypi.org/project/motui/)
 [![license](https://img.shields.io/pypi/l/motui)](LICENSE)
 
-A layered, full-screen TUI toolkit with pure values at the bottom and a
+A layered, full-screen terminal UI toolkit with pure values at the bottom and a
 component tree on top. You describe a document of addressable sections;
 motui lays them out, scrolls them, and paints only the rows that changed on
 the terminal's alternate screen. It ships parts, not an application: a
@@ -408,7 +408,7 @@ clears it, so `None` means "nothing pending" and `False` is a real result.
 Collect results with `walk()`:
 
 ```python
-from motui.widgets import HasResult
+from motui.widgets.base import HasResult
 
 for widget in app.walk():
     if isinstance(widget, HasResult):
