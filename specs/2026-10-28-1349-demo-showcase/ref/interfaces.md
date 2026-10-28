@@ -30,26 +30,14 @@ class Scene(Protocol):
 `Showcase(Widget)`：`scene: str`、`phase: int`、`switch(name)`、`tick()`、`on_quit` 回调、
 `_scenes` 注册表由 `_scenes(theme, seed) -> dict[str, Scene]` 构造。
 
-## examples/pixel.py 当前 API（W1-a 的改造对象；W1-a 后为 W2-a 的抽取契约来源）
+## examples/pixel.py —— 仅参考实现（W1-b 物理删除，非契约）
 
-```python
-class Raster:                    # 强度网格：width=cols*2, height=rows*4
-    cols/rows/width/height/grid: bytearray   # 0..255 强度
-    clear() / decay(amount) / set(x, y, intensity=255)
-    line(x0,y0,x1,y1,intensity) / rect(x0,y0,x1,y1,fill=False,intensity)
-    disc(cx,cy,r,intensity) / ring(cx,cy,r,thickness=1,intensity)
-
-def quantize(raster, palette, underlay=None) -> list[Line]
-#   palette: tuple[(low, high, Style), ...]  按格内最亮强度选带
-#   underlay: (Raster, Style) | None 静态垫底层
-
-class PixelDemo:                 # 三模式 rings/bounce/spin
-    MODES; mode; combo/score/hits/attempts/bounces/respawns
-    set_mode(mode); tick(now: float); hit(); kick(cell_x, cell_y) -> bool
-    render(c: Constraints) -> Surface
-# 常量：FPS=60, _ON=128, _PALETTE 4 色带, _SLOT 4 槽位色
-# 确定性：random.Random(20261028) + runtime.clock()，--headless --frames 可逐字重放
-```
+已在本仓库对话中验证的算法语义（W1-a 交付 kernel 版时的行为基准）：色索引+热度双网格、
+逐格多数槽位选 fg、冷却穿色、half 实心填充 / braille 曲线、run 融合直接构 Line
+（绕开 Canvas 逐格簿记，2.0–4.2ms/76×24 帧）、`bytes.translate` 表驱动衰减、
+盲文位序 `((0x01,0x02,0x04,0x40),(0x08,0x10,0x20,0x80))`、确定性重放
+（`random.Random(20261028)` + `runtime.clock()`）。目标 API 契约见 `01-W1-a-kernel-pixel-core.md` 工单；
+合并后由 lead 把 kernel 现实签名回写到这里。
 
 ## App 接线（demo 壳使用）
 

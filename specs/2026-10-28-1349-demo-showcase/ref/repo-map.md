@@ -10,7 +10,7 @@ src/motui/
   widgets/     Canvas(marker: cell/half/braille, put/text/box/plot, 行缓存)、Text/Input/Panel/Table/Select/Markdown/Sparkline/…
   demo/        __init__(入口 main/render_scene/scene_output/PAGE_PHASE=20/TICK_HZ=30)、showcase.py(900 行:Scene 协议+Splash/Menu/Dashboard/Gallery+Showcase 壳)、snake.py、art.py(big_text 5×7 字体)
   testing/     headless_tui(Harness)/Emulator/snapshot
-examples/      quickstart.py / code.py / wide_table.py（自包含、--headless 可验）
+examples/      quickstart.py / code.py / wide_table.py + pixel.py（像素参考实现）——**本操作 W1-b 全部删除**，demo 成唯一展示面
 tools/         semantic.py(golden --check/--update)、framebench.py(性能)、api.py+api-2.0.txt(公共 API 面板)、growth.py
 tests/         test_demo_scenes.py(16 条,直接 import showcase 场景类)、test_examples.py(subprocess 跑 examples)、test_semantic_golden.py(逐场景 golden)、app/core/kernel/terminal/widgets/testing/ 各目录
 specs/         历史操作组（本组：2026-10-28-1349-demo-showcase）

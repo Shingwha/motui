@@ -1,5 +1,5 @@
-# W1-b · demo 新壳：sections 拆分 + Home 瓷砖 + 过渡 + StatusLine + 60Hz
-> 分支 `dm-w1b-demo-shell`；前置 无（并行波，与 W1-a 文件不相交）；写入范围 `src/motui/demo/**`、`tests/golden/semantic/*`（重录）、`tests/test_demo_shell.py`（新建）
+# W1-b · demo 新壳：sections 拆分 + Home 瓷砖 + 过渡 + StatusLine + 60Hz + examples 退场
+> 分支 `dm-w1b-demo-shell`；前置 无（并行波，与 W1-a 文件不相交）；写入范围 `src/motui/demo/**`、`tests/golden/semantic/*`（重录）、`tests/test_demo_shell.py`（新建）、**删除 `examples/**` 与 `tests/test_examples.py`**、README/pyproject/CI 引用清扫
 
 ## 目标
 
@@ -27,6 +27,7 @@
 | P7 | 命令面板：`app.open_modal` 的 palette 注册 demo 命令——jump to section（每节一条）、toggle status line、quit。用 App 既有公共 API，不改 src |
 | P8 | golden 逐场景重录（`uv run python tools/semantic.py --update`），handoff 列出重录原因（menu 重绘、新增占位节）；snake/splash 理论上不应变化，若变了逐字说明原因 |
 | P9 | 新测试落新文件 `tests/test_demo_shell.py`（≤4 条）：瓷砖导航路由、wipe 中间帧确定性、占位节进出、SCENES 与 golden 覆盖一致 |
+| P10 | **examples/ 全部删除**（用户拍板）：`examples/` 目录、`tests/test_examples.py` 整文件；全仓 grep 清扫引用（README 能力矩阵与 quickstart 段落改指 demo、`pyproject.toml`、`.github/workflows/`、`docs/`、demo 内 docstring）。删除后测试基线 **1641→1638**。`examples/pixel.py` 是 W1-a 的参考实现——你的分支上它可能仍存在（并行波），照删不误，不读它 |
 
 ## 工单（按序执行，每项一个 commit）
 
@@ -47,11 +48,16 @@
 - `tools/semantic.py --update`；新测试文件；`demo/showcase.py` 里对已消失符号的引用清零（re-export 之外零逻辑）。
 - 验证：全量 pytest + ruff + golden --check。
 
+### T5 examples 退场（P10）
+- `git rm -r examples tests/test_examples.py`；全仓 grep `examples/`（README、`pyproject.toml`、`.github/workflows/`、`docs/`、`tools/`、`src/motui/` 内 docstring）逐处改指 demo 或删除。
+- README 能力矩阵的 examples 行改指 demo 对应节；quickstart 段落改指 `python -m motui`。
+- 验证：`uv run pytest -q` = **1638 passed**（1641 − 3）；`grep -rn "examples" README.md pyproject.toml .github docs src --include="*.py" --include="*.md" --include="*.yml" --include="*.toml"` 的残余逐条解释（specs/ 历史文档除外）。
+
 ## 验收
 
-1. `uv run pytest -q` 全绿（贴真实输出；test_demo_scenes.py 16 条零修改通过）
+1. `uv run pytest -q` 全绿 = **1638 passed**（贴真实输出；test_demo_scenes.py 16 条零修改通过）
 2. `uv run ruff check .` 零告警；`tools/semantic.py --check` 绿
-3. `uv run python -m motui --headless` 与 `--pages` 跑通，输出含全部七节名
+3. `uv run python -m motui --headless` 与 `--pages` 跑通，输出含全部七节名；`examples/` 不存在
 4. `grep -n "_sync\|showcase" src/motui/demo/showcase.py` 证明 re-export 壳无残留逻辑（或给出等价证据）
 
 ## 禁触清单
