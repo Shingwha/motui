@@ -68,6 +68,17 @@ def test_tab_swaps_the_pixel_board_for_the_snake_board():
     assert scene.on_key(KeyEvent("escape")) == "menu"
 
 
+def test_a_reentered_motion_section_lands_on_a_fresh_rings_board():
+    scene = _motion()
+    scene.on_key(KeyEvent("tab"))
+    scene.tick(100)  # a visit spent on the snake board
+    scene.tick(1)  # re-entry: the shell resets its phase on every switch
+    assert scene.mode == "rings"  # never the stale tab choice
+    assert (scene.score, scene.attempts) == (0, 0)  # a fresh board, not a resume
+    scene.render(FRAME, 1)
+    assert "rings" in "\n".join(row.text for row in scene.render(FRAME, 1))
+
+
 def test_the_splash_paints_a_pixel_wordmark_and_still_leaves_for_the_menu():
     scene = SplashScene(Theme.dark(), seed=0)
     assert scene.tick(10_000) is None  # never times out
