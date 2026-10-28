@@ -23,6 +23,7 @@ from motui import Text
 from motui.app import CommandPalette
 from motui.kernel import Component, Constraints, Surface, visible_width
 from motui.kernel.glyphs import GLYPHS, Border
+from motui.kernel.pixel import PixelPalette
 from motui.testing import headless_tui
 from motui.widgets import (
     Autocomplete,
@@ -51,6 +52,7 @@ from motui.widgets import (
     Option,
     Padding,
     Panel,
+    PixelCanvas,
     ProgressBar,
     RadioGroup,
     Row,
@@ -72,6 +74,16 @@ from motui.widgets import (
 WIDTHS = (0, 1, 2, 3, 7, 20, 80)
 
 _WIDE = "a long line with 中文 wide characters and words longer than any tiny width"
+
+#: A two-slot pixel palette for the matrix case (nothing draws into it; the
+#: matrix only renders blank canvases at every width).
+_PIXEL_PALETTE = PixelPalette(
+    slots={
+        1: ((255, 255, 255), (140, 140, 160)),
+        2: ((255, 130, 190), (150, 70, 110)),
+    },
+    bg=(12, 12, 16),
+)
 
 
 class _WidgetProbe(Widget):
@@ -126,6 +138,7 @@ CASES = {
     ),
     "Padding": lambda: Padding(Text("inner"), left=2, right=2, top=1),
     "Panel": lambda: Panel(Text("inner"), title="box", border=Border.double()),
+    "PixelCanvas": lambda: PixelCanvas(6, 3, palette=_PIXEL_PALETTE),
     "ProgressBar": lambda: ProgressBar(0.4, label="work"),
     "RadioGroup": lambda: RadioGroup(["one", _WIDE, "three"]),
     "Row": lambda: Row([Text("a"), Text("b")], gap=1),
