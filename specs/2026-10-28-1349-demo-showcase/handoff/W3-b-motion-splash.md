@@ -188,3 +188,63 @@ plasma 12 槽色相轮 `+phase//2` 步进；retro 琥珀/绿按 SPLASH_ROTATE_TI
 4. demo 目录 ruff 排除已被 ratchet 摘除：`sections/*` 现在**逐文件 lint**，
    新写 demo 代码注意 B905（zip strict）/行长 100。
 
+## E · splash 重构轮 + motion 进入修复补全（真机三项不满后）
+
+用户真机验收：① 字母"不符合字母的构造"（自由手绘读不出字）；② 星星落在字母上
+"空白背景很丑"；③（动画层次要求）入场/循环/呼吸三层。另有 lead 已修的 motion
+"二次进入无响应"——本轮发现该修法在真实路径上不可达，已补全（见 E.3，**超出
+本轮红线的唯一 motion.py 改动**，理由与复现见 E.2）。
+波末 `uv run pytest -q` = **1660 passed**（基线 1659 + 1 条进入重置钉子），
+ruff 零告警，golden 10 场景 match（恰 splash.txt 重录）。
+
+### E.1 splash 重构落点（只动 sections/splash.py）
+
+1. **字形骨架**：弃全部自由手绘笔画，改为 `art.py` 的 `FONT_5X7`（旧 splash
+   用过的验证字母表）按整数倍放大——font 格 → 3×4 子格（笔画 3 宽/4 高），
+   字距 2 font 格，整词 99×28 子格；凸角（正交两邻皆空）削 1 子格做圆角。
+   命中 M 的斜角/O 的环/T 的顶杠/U 的碗/I 的衬线，构造一眼可读。
+   小画布整数降档链 (3,4)→(2,3)→(1,2)→(1,1)（`_pick_scale`）。
+2. **三层动效**：
+   - 入场：逐字母自下而上滑入装配，letter i 在 `i*9` tick 起步、30 tick 完成
+     （ease_out_back 位置 + heat 128→255 沿 cool→main 曲线淡入），全程 66 tick
+     （~1.1s），phase 纯函数；
+   - 循环：入场完成后启动——neon 白扫光（decay 曲线拖尾，`phase-66` 后才走）、
+     plasma 色相轮步进、retro 琥珀/绿+扫描线、starfield 三层视差+闪烁；均保留；
+   - 呼吸：pulse 点行原样（glyph 变形仍挂在亮点上）。
+3. **星野移位**：布局上预留字包围盒上下各 2 子格净空的带（`_geometry` 返回
+   top/bottom 界），星 seeds 的虚拟 y 上半映射上带、下半映射下带——**任何
+   phase、任何几何下星点不可能与字母格重叠**（6 种几何 × 86 星的穷举断言 +
+   headless 帧目检）；带高 ≤0 时整带跳过。drift 仍只横向，星 y 不随时间变。
+4. 性能（协议同 A.4/D.2）：本轮会话 VM 持续高载，四循环包 med-of-med
+   **6.4–7.2 ms**，同会话未改动的 rings 参照 6.6 ms（静默窗约 ~2.8-3 ms）——
+   与 rings 同量级、8ms 预算内；入场帧 ~2.9 ms。数字已写入 render docstring。
+5. golden：splash.txt 重录（新字形+入场期相位帧）；其余 9 个 LF 假 modified
+   还原。PAGE_PHASE=20 落在入场中段（M/O 已落、T 半程、U 起步、I 未出场）——
+   golden 是入场帧，属预期。
+
+### E.2 motion 修复补全（红线偏差，已声明）
+
+lead 的修复（`0d37019`：`_sync` rewind 分支置 `mode = "rings"`）在真实路径
+**不可达**：二次进入时 mode 已是 snake，而 `tick()` 的 snake 分支走
+`_snake.tick`，永远到不了 `_sync`——复现脚本确认二次进入仍落蛇板（原 bug 未修）。
+补全：`tick()` 顶部把 rewind 检测提上来（`phase < self._phase` → `mode =
+"rings"`），snake 分支也能落回默认板；`_sync` 的原修复保留（> `_MAX_SYNC`
+大跳等路径仍靠它）。**这是本轮唯一超出"只改 splash.py + splash golden"红线的
+改动**（motion.py 4 行 + tests/test_demo_motion.py 1 条钉子，后者即 lead
+option b 的授权范围）：选项 b 的钉子要求行为成立，而行为不成立，遂一并补全。
+若 lead 不认可，revert `tick` 的 4 行即可，钉子会转红如实暴露。
+
+### E.3 重构轮偏差与坑
+
+1. **`_geometry` 的 pitch 坑（本波踩过）**：逐字母 point list 是 glyph 本地
+   坐标，摆放时必须加 `order * (5+gap)*sx` 的槽位偏移——首版漏加，五个字母
+   全叠在词首（帧上是一团不可读的叠加块）。
+2. **入场期不走缓存索引**：飞行中字母有 `drop` 位移，索引须按 `(x, y+drop)`
+   现算（bounds 检查后直写）；落定后走缓存 index。两条路径同帧共存
+   （先到的字母已落定），切换以每字母的 `t` 判定。
+3. **星带的空带保护**：`top <= 0` / `lower <= 0`（迷你画布）时整带跳过；
+   直写 index 前仍保留 bounds 检查，负 oy（画布比词还窄）不会写穿栅格。
+4. amber retro 在 seed=0 轮转不可见（D.3 第 1 条）在本轮依旧成立；
+   字形重构不改变包轮转。
+
+
