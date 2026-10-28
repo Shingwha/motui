@@ -120,12 +120,13 @@ def test_quantize_turns_a_hand_drawn_raster_into_exact_styled_segments():
     [line] = quantize([(mixed, "half")], palette)
     assert line.segments == (Segment("\u2588", Style(fg=(255, 0, 0), bg=(10, 10, 30))),)
 
-    # A half layer paints its empty cells with the palette background.
+    # A half layer leaves its empty cells transparent: the terminal's own
+    # background shows through between inked cells.
     sparse = Raster(2, 1)
     sparse.set(3, 0, 2)  # the second cell's top half
     [line] = quantize([(sparse, "half")], palette)
     assert line.segments == (
-        Segment(" ", Style(bg=(10, 10, 30))),
+        Segment(" "),
         Segment("\u2580", Style(fg=(0, 0, 255), bg=(10, 10, 30))),
     )
 

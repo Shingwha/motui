@@ -25,7 +25,7 @@ def test_the_canvas_quantizes_a_line_layer_over_a_fill_layer_through_the_kernel_
     canvas.set(2, 0, slot=1)  # art dot, cell (1, 0)
     surface = canvas.render(Constraints(width=2, max_height=2))
     # The line layer keeps every cell it has ink on; the fill layer shows
-    # only where the art is dark, and blanks carry the palette background.
+    # only where the art is dark, and blanks stay transparent.
     assert [row.text for row in surface] == ["\u2801\u2801", "\u2584 "]
     top = surface[0].segments
     assert len(top) == 1  # both art cells share one style object: one run
@@ -33,7 +33,7 @@ def test_the_canvas_quantizes_a_line_layer_over_a_fill_layer_through_the_kernel_
     bottom = surface[1].segments
     assert [(s.text, s.style.fg, s.style.bg) for s in bottom] == [
         ("\u2584", (255, 130, 190), (12, 12, 16)),
-        (" ", None, (12, 12, 16)),
+        (" ", None, None),
     ]
 
 

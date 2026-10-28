@@ -320,12 +320,13 @@ def quantize(layers: Sequence[PixelLayer], palette: PixelPalette) -> list[Line]:
       :data:`HALF_BOTTOM`; the style carries ``bg`` so an unlit sub-row
       shows the palette background.
 
-    A cell with no ink anywhere is a plain space -- unless some layer uses
-    ``"half"``, in which case empty cells paint the palette background
-    (that is what makes a ``"half"`` layer a *fill* layer).  Adjacent
-    cells with the same character and the very same style object fuse into
-    one ``Segment``, so a frame is a handful of runs, not a per-cell
-    bookkeeping walk.  An empty ``layers`` quantizes to no rows.
+    A cell with no ink anywhere is a plain space -- the terminal's own
+    background shows through, so a canvas never paints a rectangle of its
+    own unless the caller fills one explicitly.  Within an inked
+    ``"half"`` cell the unlit sub-rows still show the palette background.
+    Adjacent cells with the same character and the very same style object
+    fuse into one ``Segment``, so a frame is a handful of runs, not a
+    per-cell bookkeeping walk.  An empty ``layers`` quantizes to no rows.
 
     The scan has one shape for both markers: walk the cell's eight
     sub-cells through a flat offset table, tracking the braille bits, the
@@ -350,8 +351,6 @@ def quantize(layers: Sequence[PixelLayer], palette: PixelPalette) -> list[Line]:
         if marker not in ("half", "braille"):
             raise ValueError(f"unknown pixel marker {marker!r}: expected 'half' or 'braille'")
         grids.append((raster.slot, raster.heat, 0 if marker == "braille" else 1))
-    any_half = any(kind for _slot, _heat, kind in grids)
-    bg_style = palette._bg_style
     styles_get = palette._styles.get
     fallback = palette._fallback
     width = cols * 2
@@ -456,7 +455,7 @@ def quantize(layers: Sequence[PixelLayer], palette: PixelPalette) -> list[Line]:
                         break
                 if char is None:  # no layer has ink in this cell
                     char = " "
-                    style = bg_style if any_half else None
+                    style = None
             if char == run_char and style is run_style:
                 continue  # same run: fuse by identity, no segment spent
             if run_char is not None:
