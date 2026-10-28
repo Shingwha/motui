@@ -23,17 +23,14 @@ from ...kernel.cell import Line, Segment, Surface
 from ...kernel.events import KeyEvent
 from ...kernel.geom import Pos
 from ...kernel.layout import Constraints
-from ...kernel.style import Style
 from ...kernel.text import WrapMode
 from ...kernel.theme import Theme
-from ...widgets import Column, Editor, Panel, Row, ScrollPanel, Table, Text
+from ...widgets import Column, Editor, Panel, Row, ScrollPanel, Table, Tabs, Text
+from ..scene import Scene
 
 __all__ = ["LayoutScene"]
 
 _CLIP = WrapMode.CLIP
-
-#: The emphasis on the active drill's name.
-_BOLD = Style(bold=True)
 
 #: The drills, in tour order; the number keys select them.
 _DRILLS = ("split", "dock", "scroll", "wide table")
@@ -136,7 +133,7 @@ _WIDE_ROWS: tuple[tuple[str, ...], ...] = (
 )
 
 
-class LayoutScene:
+class LayoutScene(Scene):
     """The layout drills: split, dock and two scrolls you can drive.
 
     ``1``-``4`` pick the drill; the arrows mean what the drill says.  The
@@ -151,11 +148,12 @@ class LayoutScene:
     name = "layout"
 
     def __init__(self, theme: Theme) -> None:
-        self.theme = theme
-        self._phase = 0
+        super().__init__(theme)
         self._drill = 0
         self._split = 12  # of _SASH_STEPS: the west pane's share
         self._dock = "north"
+        self.tabs = Tabs(list(_DRILLS), theme=theme)
+        self.tabs.focused = True
 
         self._code = Editor(_LONG_CODE, wrap=WrapMode.OVERFLOW, theme=theme)
         self._code.focused = False
@@ -172,16 +170,42 @@ class LayoutScene:
             self._table, bar=True, axis="x", theme=theme
         )
 
+    def enter(self) -> None:
+        super().enter()
+        self._drill = 0
+        self._split = 12
+        self._dock = "north"
+        self.tabs.select(0)
+        self._code_scroll.scroll_to(0)
+        self._code_scroll.scroll_to_x(0)
+        self._wide_scroll.scroll_to(0)
+        self._wide_scroll.scroll_to_x(0)
+
+    @property
+    def drill(self) -> int:
+        return self._drill
+
+    @property
+    def wide_scroll(self):
+        return self._wide_scroll
+
+    @property
+    def code_scroll(self):
+        return self._code_scroll
+
     # -- rendering ---------------------------------------------------------------
 
     def render(self, c: Constraints, phase: int) -> Surface:
         self._phase = phase
         width = c.width
         height = c.max_height if c.max_height is not None else 24
-        body_h = max(4, height - 4)
+        body_h = max(4, height - 5)
+        self.tabs.select(self._drill)
+        strip = list(self.tabs.render(Constraints(width=width)))
+        tab_row = strip[0] if strip else Line()
         rows: list[Line] = [
             self._heading_line(),
-            self._drill_line(),
+            tab_row,
             *self._body(width, body_h),
         ]
         rows.append(self._readout_line(width))
@@ -197,19 +221,6 @@ class LayoutScene:
                 Segment(" \u00b7 constraints you can drive", self.theme.text.faint),
             )
         )
-
-    def _drill_line(self) -> Line:
-        """The drill bar: the four names, the active one accented and bold."""
-        segments: list[Segment] = []
-        for index, name in enumerate(_DRILLS):
-            if index:
-                segments.append(Segment("  ", self.theme.text.faint))
-            label = f"{index + 1} {name}"
-            if index == self._drill:
-                segments.append(Segment(label, self.theme.content.accent.merge(_BOLD)))
-            else:
-                segments.append(Segment(label, self.theme.text.faint))
-        return Line(tuple(segments))
 
     def _body(self, width: int, height: int) -> list[Line]:
         """The active drill's body, padded to exactly ``height`` rows."""
@@ -416,5 +427,7 @@ class LayoutScene:
         return None
 
     def on_click(self, pos: Pos) -> str | None:
-        """Clicks are the keys' story here; the scene takes none."""
+        """A click on the drill strip selects that drill."""
+        if pos.y == 1 and self.tabs.on_click(Pos(x=pos.x, y=0)):
+            self._drill = self.tabs.index
         return None

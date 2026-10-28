@@ -1,8 +1,8 @@
-# Migration: 1.x to 2.0
+# Migration: 1.x to 2.1
 
-2.0 is a breaking release. There are no shims or forwarding modules: a
-removed name is gone, and this page is the one place that maps the old
-vocabulary to the new one. The current API is described by
+2.0 and 2.1 are breaking releases. There are no shims or forwarding
+modules: a removed name is gone, and this page is the one place that maps
+the old vocabulary to the new one. The current API is described by
 [CONTRACT](CONTRACT.md), [WIDGETS](WIDGETS.md) and [ARCHITECTURE](ARCHITECTURE.md).
 
 ## 1. One-page name table
@@ -43,11 +43,41 @@ vocabulary to the new one. The current API is described by
 | `App.remove(id)` | `App.remove(section)` | takes the `Section` value `add` answered |
 | `set_focus_targets(...)` | `focusable = True` on widgets | the ring is derived from the tree |
 | `ClampedCursor` | the per-view index attributes (`index`, `selected`) | no shared cursor value |
-| `handle`-style demo topics / `Topic` registry | the five-scene showcase (`demo/`) | the topic tour is gone |
+| `handle`-style demo topics / `Topic` registry | the ten-scene showcase (`demo/`) | the topic tour is gone |
 
-## 2. Recipes
+## 2. 2.0 to 2.1: PixelCanvas is new, the showcase is reworked
 
-### 2.1 App and terminal options
+2.1 adds the sub-cell `PixelCanvas` and its `motui.pixel` engine; there was
+no pixel API in 2.0 to migrate from. The pixel surface is provisional in
+2.1: it may change in a minor until it is frozen. The stable 2.x core
+(kernel without pixel, terminal, widgets without `PixelCanvas`, app) is
+unchanged, and the 2.0 public surface has no removals. The demo is not a
+public contract.
+
+| 2.1 surface | What it is | Notes |
+|---|---|---|
+| `PixelCanvas(width, height, *, marker, palette)` | a sub-cell widget with art over fill | `marker` is `Marker.BRAILLE` or `Marker.HALF` |
+| `PixelCanvas.plot/erase/stamp/line/rect/disc/ring/clear/decay` | one verb set for both layers | `heat` is a keyword; `layer=LayerName.ART` by default |
+| `LayerName.ART` / `LayerName.FILL` | layer selection | the fill layer is always quantized as half blocks |
+| `PixelCanvas.pixel_width` / `pixel_height` | sub-cell geometry | the rasters themselves are private |
+| `PixelCanvas.marker` | validated marker property | assignment touches the widget |
+| `motui.pixel.Raster` | the mutable sub-cell grid | `at()` is the one read door; private slot/heat grids |
+| `motui.pixel.quantize` | layered rasters to kernel `Line`s | first layer with ink in a cell owns it |
+| `motui.pixel.PixelPalette` | main/cool color pairs plus optional bg | fresh ink is main, cooled ink is cool |
+| `motui.pixel.PixelLayer(raster, Marker...)` | one layer value | not a bare tuple |
+
+Demo-internal changes (not a public API):
+
+| 2.0 demo path | 2.1 demo path | Notes |
+|---|---|---|
+| `demo.showcase` imports | `demo.sections` / `demo.shell` / `demo.registry` | the compatibility module is deleted |
+| `demo.PAGE_PHASE` for every scene | `SceneSpec.preview_phase` | motion records at 96; most scenes at 20 |
+| `Showcase.switch` resets a scene by convention | `Scene.enter()` is the one reset door | the shell calls it on entry and seek rewinds |
+| `demo.art` helpers | `demo/sections/splash/font.py` and `demo/common.py` | `big_text` and `gradient_styles` are deleted |
+
+## 3. Recipes
+
+### 3.1 App and terminal options
 
 ```python
 # 1.x
@@ -70,7 +100,7 @@ hover=False`. `focus_events`, `sync`, `color_mode`, `stream`, `input` and
 `screen` are fields of the same value. `App` accepts no other terminal
 arguments.
 
-### 2.2 Document, sections and panes
+### 3.2 Document, sections and panes
 
 ```python
 # 1.x
@@ -100,7 +130,7 @@ app.add(game, sizing=Sizing.FILL)   # or: app.fill(game)
 The content doors are `App`, `Workspace` and `Pane`; `Runtime` has no
 `add`, `get`, `split`, `dock`, `fill` or `rows` of its own.
 
-### 2.3 A custom component
+### 3.3 A custom component
 
 ```python
 # 1.x
@@ -136,7 +166,7 @@ A pure renderer does not need `Widget`; one `render(c) -> Surface` method is
 the whole `Component` protocol. A pure component is not cached; subclass
 `Widget` when you want `touch()`/`generation` invalidation.
 
-### 2.4 One-shot results and tree collection
+### 3.4 One-shot results and tree collection
 
 ```python
 # 1.x
@@ -158,7 +188,7 @@ for widget in app.walk():
 State attributes (`selected`, `checked`, `text`, `open`) are not cleared by
 `take()`.
 
-### 2.5 A custom screen
+### 3.5 A custom screen
 
 ```python
 from motui.terminal import HeadlessScreen, Screen, TerminalOptions
@@ -177,7 +207,7 @@ Subclass `Screen` (directly or through `HeadlessScreen`). `enter`, `leave`,
 `copy_to_clipboard` has a declining default, so override it only if the
 screen owns that write.
 
-### 2.6 Theme and per-widget styles
+### 3.6 Theme and per-widget styles
 
 ```python
 # 1.x
@@ -196,7 +226,7 @@ widget reads a group at render time through `self.group(name)`, which calls
 `Theme.group`; a theme assignment repaints an already mounted UI. Build
 variants with `dataclasses.replace` or `Theme.from_palette(ColorPalette(...))`.
 
-### 2.7 Tests
+### 3.7 Tests
 
 ```python
 # 1.x
@@ -223,7 +253,7 @@ assert screen.cell(0, 0).char == "h"
 without sleeping. `ScriptedEvents` replays a fixed event sequence.
 `snapshot(tui)` renders the document as structured plain text.
 
-## 3. Removed names
+## 4. Removed names
 
 These are gone from the public surface and from the source; no alias is
 provided.
@@ -241,7 +271,7 @@ arguments.
 close, chrome, overlay, band); it is not a row cache and has no relation to
 the removed `Revisioned` protocol.
 
-## 4. Migration checklist
+## 5. Migration checklist
 
 1. Replace `TUI` references with `App`/`Runtime`/`Workspace`/`Terminal`.
 2. Pass `TerminalOptions` to `App`; map `mouse`/`hover` to `MouseMode`.

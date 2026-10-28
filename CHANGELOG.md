@@ -5,6 +5,80 @@ is [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and the version
 numbers follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html) with
 the library-specific reading spelled out in [`CONTRIBUTING.md`](CONTRIBUTING.md).
 
+## [2.1.0] — 2026-10-28
+
+**PixelCanvas, and a showcase built to show it off.** 2.1 adds the
+sub-cell `PixelCanvas` and the `motui.pixel` medium behind it: braille and
+half-block cells, slot/heat trails, layered art over fill, and a palette
+that turns rasters into ordinary kernel rows. The demo is rebuilt around
+the same idea -- one scene registry, one reset door, a real help screen and
+scenes that each explain one part of the toolkit. The engine extraction
+and test cleanup are supporting work, not the headline.
+
+### Added
+
+- **`PixelCanvas`** (`motui.widgets`): a widget that draws on two private
+  sub-cell rasters through `plot/erase/stamp/line/rect/disc/ring/clear/
+  decay`, with `layer=LayerName.ART|FILL`, a validated `marker`, and
+  `pixel_width`/`pixel_height`.
+- **`motui.pixel`**: the engine behind it -- `Raster`, `PixelPalette`,
+  `Marker`, `PixelLayer` and `quantize`. Braille and half markers, a
+  caller palette with main/cool colors, and 0..255 heat for trails.
+- A real showcase layer: `SceneSpec` registry (title, blurb, keys,
+  miniature, preview phase), `Scene.enter()` as the one reset door, a
+  frozen old phase during the wipe, and `Showcase.seek()` for snapshots.
+- A global help overlay (`F1`, also in the command palette) that pauses the
+  clock; Home `s`/`g` shortcuts and palette entries for Snake and Gallery.
+- `--list`, `--version`; `--pages` honours `--width`/`--height`.
+- Motion's preview phase (96), so its page, headless frame and semantic
+  golden show a live board.
+- `framebench` gains `pixel-quantize`, `scene-render` and `scene-paint`
+  with p50/p95.
+
+### Changed
+
+- The demo is split into `cli`, `preview`, `commands`, `scene`, `registry`,
+  `common`, `minis`, `shell` and `sections`; splash and motion are
+  packages. The motion page is the rings game; the marker ladder lives in
+  the terminal report; Snake is its own scene; layout uses a visible tab
+  strip.
+- The Home footer reaches Snake and Gallery; the command palette reaches
+  every jumpable scene; the status line names the scene title.
+- Dashboard replays a large seek in one refresh, Terminal rebuilds its feed
+  only on click, and Themes caches the compare grid by width.
+- `motui 2.1.0`; `tools/api-2.1.txt`; ten semantic goldens; the lockfile and
+  source fallback carry the same number.
+
+### Fixed
+
+- A wipe now renders the outgoing scene at the phase it was left on, not a
+  reset phase.
+- A motion board resize starts a fresh game, so the seeded spawn sequence
+  is not reused against stale positions.
+- Re-entering any section restores its fresh state instead of reviving a
+  modal, toast, feed or tab choice.
+
+### Provisional
+
+`PixelCanvas` and `motui.pixel` are new in 2.1 and provisional; they may
+change in a minor until they are frozen. This is an addition, not a change
+to an existing 2.x name. The 2.0 public surface is unchanged otherwise.
+
+### Removed (demo internals and tests)
+
+- `demo/showcase.py`, `demo/art.py`, `big_text` and `gradient_styles`.
+- The motion scene's embedded Snake board and marker ladder; the per-scene
+  `_MAX_SYNC`/`phase < _phase` rewind patches.
+- Timing assertions in unit tests, private-delegate tests, and duplicate
+  golden/splash/return assertions. Timing lives in `framebench` now.
+
+### Performance
+
+- Targeted work only: splash wordmark points grouped by slot/heat, motion
+  fading rings stamped in batches, dashboard big seeks rebuilt in one pass,
+  terminal feed only on click, themes compare cached. The final p95s are
+  in `tools/framebench.py`; the 8 ms scene budget holds.
+
 ## [2.0.0] — 2026-10-25
 
 **A clean 2.0 surface and an interactive showcase.** 2.0 is a breaking
@@ -800,7 +874,8 @@ was ever published.
 - **The demo** — `python -m motui` runs an 11-page exhibit of the library,
   shipped inside the wheel and pinned frame by frame in the test suite.
 
-[Unreleased]: https://github.com/Shingwha/motui/compare/v2.0.0...HEAD
+[Unreleased]: https://github.com/Shingwha/motui/compare/v2.1.0...HEAD
+[2.1.0]: https://github.com/Shingwha/motui/releases/tag/v2.1.0
 [2.0.0]: https://github.com/Shingwha/motui/releases/tag/v2.0.0
 [1.2.2]: https://github.com/Shingwha/motui/compare/v1.2.1...v1.2.2
 [1.2.1]: https://github.com/Shingwha/motui/compare/v1.2.0...v1.2.1

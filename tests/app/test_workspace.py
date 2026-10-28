@@ -144,28 +144,6 @@ def test_selection_reads_and_writes_on_the_workspace():
     assert workspace.selection is None
 
 
-def test_the_private_delegates_live_on_the_workspace():
-    workspace = _runtime().workspace
-    block = workspace.add(Text("one"))
-
-    assert workspace._next_block_id() == "b1"
-    assert workspace._holder(block.id) is workspace.pane("primary")
-    assert workspace._panes_holding(block.id) == (workspace.pane("primary"),)
-    assert len(workspace._document_panes()) == 1
-    assert workspace._content_pane(None) is workspace.pane("primary")
-    assert workspace._focus_pane(None) is workspace.pane("primary")
-    assert workspace._focused_viewport() is workspace.viewport
-    assert workspace._focused_id() == "primary"
-    assert workspace._pane_id("primary") == "primary"
-    assert workspace._dock_height("bottom", 40, 6) == 0
-
-    workspace._retile()
-    workspace._set_selection(None, None)
-    assert workspace.selection is None
-    with pytest.raises(KeyError):
-        workspace._holder("missing")
-
-
 def test_the_workspace_exposes_the_runtime_seams_controllers_read():
     runtime = _runtime()
     workspace = runtime.workspace
@@ -177,5 +155,5 @@ def test_the_workspace_exposes_the_runtime_seams_controllers_read():
     assert workspace.screen is runtime.screen
     assert workspace.painter is runtime.painter
     workspace.refresh()
-    assert runtime._dirty is True  # noqa: SLF001 - the seam is the assertion
+    runtime.paint()
     assert workspace.copy_to_clipboard("copied") is True

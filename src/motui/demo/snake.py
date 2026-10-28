@@ -27,6 +27,8 @@ from ..kernel.style import Style
 from ..kernel.text import WrapMode
 from ..kernel.theme import Theme
 from ..widgets import Canvas, Column, Panel, Text
+from .common import ends
+from .scene import Scene
 
 __all__ = ["SnakeScene"]
 
@@ -37,7 +39,6 @@ _MAX_HEIGHT = 24
 #: The starting snake and the pace: one move every four animation ticks.
 _START_LENGTH = 4
 _STEP_TICKS = 4
-_MAX_SYNC = 4096
 
 #: A fixed seed makes a reset and a headless replay deal the same food.
 _SEED = 20261025
@@ -52,7 +53,7 @@ _HALF_BOTTOM = "\u2584"
 _FULL = "\u2588"
 
 
-class SnakeScene:
+class SnakeScene(Scene):
     """The whole game: state, movement, collision, input and Canvas rendering.
 
     Coordinates below the HUD are playfield-local: ``(0, 0)`` is the inner
@@ -63,8 +64,7 @@ class SnakeScene:
     name = "snake"
 
     def __init__(self, theme: Theme) -> None:
-        self.theme = theme
-        self._phase = 0
+        super().__init__(theme)
         self._clock = 0
         # The capped block until the first render says otherwise.
         self._left = 0
@@ -83,6 +83,15 @@ class SnakeScene:
         self.food: tuple[int, int] = (0, 0)
         self._rng = random.Random(_SEED)
         self._reset()
+
+    def enter(self) -> None:
+        super().enter()
+        self._reset()
+
+    @property
+    def playfield_width(self) -> int:
+        """The addressable playfield width in logical cells."""
+        return self._iw
 
     # -- layout ------------------------------------------------------------
 
@@ -139,12 +148,14 @@ class SnakeScene:
     # -- simulation --------------------------------------------------------
 
     def _sync(self, phase: int) -> None:
-        """Advance to ``phase``; a backwards jump starts a new game."""
-        if phase < self._phase:
-            self._reset()
-        steps = min(max(0, phase - self._phase), _MAX_SYNC)
+        """Advance to ``phase``; a dead or paused board skips the rest."""
+        steps = phase - self._phase
+        if steps <= 0:
+            return
         for _ in range(steps):
             self._advance()
+            if not self.alive or self.paused:
+                break
         self._phase = phase
 
     def _advance(self) -> None:
@@ -329,7 +340,7 @@ class SnakeScene:
             if self.paused
             else self.theme.text.muted
         )
-        return _ends(width, left, right, self.theme.text.muted, right_style)
+        return ends(width, left, right, self.theme.text.muted, right_style)
 
     def _hint(self, width: int) -> Line:
         """The key hint: one clipped row under the playfield."""
@@ -343,24 +354,3 @@ class SnakeScene:
             f"SnakeScene(score={self.score}, length={len(self.snake)}, "
             f"alive={self.alive}, paused={self.paused})"
         )
-
-
-def _ends(
-    width: int,
-    left: str,
-    right: str,
-    left_style: Style,
-    right_style: Style,
-) -> Line:
-    """One row with ``left`` at the start and ``right`` at the end."""
-    gap = max(1, width - len(left) - len(right) - 2)
-    line = Line(
-        (
-            Segment(" "),
-            Segment(left, left_style),
-            Segment(" " * gap),
-            Segment(right, right_style),
-            Segment(" "),
-        )
-    )
-    return line.clip(_CLIP, width)

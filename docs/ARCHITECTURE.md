@@ -1,7 +1,7 @@
 # Architecture
 
-motui is built from one direction of dependency and four kinds of object:
-pure values, renderers, terminal edges, and policy. This page describes the
+motui is built from one direction of dependency and five kinds of object:
+pure values, optional media, renderers, terminal edges, and policy. This page describes the
 layers, the object model, the lifecycle and the places a host is expected to
 extend. The normative rules are in [CONTRACT](CONTRACT.md); the component
 catalogue is in [WIDGETS](WIDGETS.md).
@@ -13,22 +13,27 @@ catalogue is in [WIDGETS](WIDGETS.md).
         ┌──────────────┬───────────────┬──────────────────┐
         │              │               │                  │
    motui.widgets   motui.app       motui.terminal     motui.testing
-     (46 names)    (19 names)        (17 names)         (5 names)
+     (48 names)    (19 names)        (17 names)         (5 names)
         │              │               │                  │
-        └──────────────┴───────┬───────┴──────────────────┘
-                               │
-                        motui.kernel (61 names)
+        │              │               └────────┐         │
+        │              │                        │         │
+        │         motui.pixel (13 names)       │         │
+        │              │                        │         │
+        └──────────────┴───────────┬────────────┴─────────┘
+                                   │
+                            motui.kernel (61 names)
 ```
 
-The rules are enforced by `import-linter` (four contracts in
+The rules are enforced by `import-linter` (five contracts in
 `pyproject.toml`):
 
 | Rule | Meaning |
 |---|---|
 | `kernel has no I/O` | `motui.kernel` may not import `os`, `sys`, `io`, `ctypes`, `termios`, `tty`, `select` or `asyncio` |
-| `kernel is a leaf` | `motui.kernel` may not import `motui.widgets`, `motui.app`, `motui.terminal` or `motui.testing` |
-| `widgets may not import terminal or app` | components depend on the kernel only |
-| `terminal may not import widgets or app` | the terminal edge knows bytes, screens and events, not components |
+| `kernel is a leaf` | `motui.kernel` may not import `motui.pixel`, `motui.widgets`, `motui.app`, `motui.terminal` or `motui.testing` |
+| `pixel depends only on the kernel` | the raster medium knows no widgets, app, terminal or testing layer |
+| `widgets may not import terminal or app` | components depend on the kernel and the optional pixel medium |
+| `terminal may not import widgets, app or pixel` | the terminal edge knows bytes, screens and events, not components or rasters |
 
 `motui.testing` sits outside both `widgets` and `app`; it composes the
 runtime and the terminal for tests. The root facade re-exports a curated
@@ -55,6 +60,14 @@ subset and defines no behavior of its own.
 | `selection.py` | `Selection`, `highlight`, `extract` |
 | `keymap.py` | `Keymap`, the input/editor key tables |
 
+### pixel
+
+`raster.py` (`Raster` and its verbs, private slot/heat grids,
+`at()`), `palette.py` (`PixelPalette`), `quantize.py` (layered rasters to
+kernel `Line`s), `types.py` (`Marker`, `PixelLayer`, colors and the braille
+constants). It imports the kernel only. `PixelCanvas` in the widget layer is
+the adapter; the demo never touches a raster byte array.
+
 ### terminal
 
 `screen.py` (`Screen` ABC, `TerminalScreen`, `HeadlessScreen`,
@@ -72,7 +85,8 @@ subset and defines no behavior of its own.
 `list.py`, `table.py`, `tree.py`, `tabs.py`, `menubar.py`, `navlist.py`,
 `autocomplete.py`, `combobox.py`, `form.py`, `indicators.py`, `layout.py`,
 `decor.py`, `collapsible.py`, `action.py`, `dialog.py`, `scroll.py`,
-`canvas.py`, `mark.py`, `syntax.py`, `strip.py` and `cursor.py`.
+`canvas.py`, `pixel_canvas.py` (`PixelCanvas`, `LayerName`), `mark.py`,
+`syntax.py`, `strip.py` and `cursor.py`.
 
 ### app
 
@@ -89,6 +103,14 @@ The controllers are `FocusManager`, `Pointer`, `SelectionGesture`,
 `CommandPalette` in the remaining `app/*.py` modules. They are assembled on
 the workspace: a controller host has to resolve panes, hit cells and the
 frame, and the workspace is the object that owns them.
+
+### demo
+
+`cli.py` (entry modes), `preview.py` (deterministic text/painter
+snapshots), `registry.py` (`SPECS`/`SCENES`/`TILES`), `scene.py` (`Scene`,
+`SceneSpec`), `shell.py` (`Showcase`: phase, wipe, help, status),
+`common.py`, `minis.py` and `sections/` (one scene per module; splash and
+motion are packages). The demo is not a public facade.
 
 ### testing
 
@@ -263,7 +285,7 @@ tree and running the gates there.
 
 ## 9. Known limits in this release
 
-These are real properties of the 2.0 tree, not aspirations:
+These are real properties of the 2.1 tree, not aspirations:
 
 - The split stopped short of the design targets. `app/runtime.py` is 706
   lines (target 450), `app/workspace.py` 894 (target 450) and
@@ -280,8 +302,9 @@ These are real properties of the 2.0 tree, not aspirations:
 - `Placement` and `Sizing` live in `motui.kernel.document`; they are not
   re-exported from `motui.kernel` or the root. `TerminalOptions` is
   exported by `motui.terminal`, not by the root.
-- Semantic golden frames are the only golden gate: five showcase scenes in
-  `tests/golden/semantic/`. There is no byte-level golden set.
+- Semantic golden frames are the only golden gate: ten showcase scenes in
+  `tests/golden/semantic/`, each at its registry preview phase. There is no
+  byte-level golden set.
 - Document-flow horizontal scrolling is limited to `ScrollPanel` over
   non-wrapping content; panes scroll vertically only.
 - `tools/framebench.py` is excluded from pyright; it is a benchmark

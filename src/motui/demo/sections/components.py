@@ -41,6 +41,8 @@ from ...widgets import (
     Widget,
 )
 from ...widgets.syntax import RegexHighlighter
+from ..common import LinesView
+from ..scene import Scene
 
 __all__ = ["ComponentsScene"]
 
@@ -65,26 +67,7 @@ _CRATES: tuple[tuple[str, str, str], ...] = (
 )
 
 
-class _CodeView(Widget):
-    """A render-only block of pre-built lines: the highlighted snippet.
-
-    The scene rebuilds :attr:`lines` from live state on every frame -- the
-    highlighter caches per line, so a quiet state re-pays nothing -- and the
-    block itself adds nothing beyond clipping to the painting width.
-    """
-
-    __slots__ = ("lines",)
-
-    def __init__(self, theme: Theme) -> None:
-        super().__init__(theme, None)
-        self.lines: list[Line] = []
-
-    def render(self, c: Constraints) -> Surface:
-        rows = [line.clip(_CLIP, c.width) for line in self.lines]
-        return Surface.of(rows, c.width)
-
-
-class ComponentsScene:
+class ComponentsScene(Scene):
     """The components playground: controls on the left, their code on the right.
 
     The tab strip, every control of the active page and the modal dialog are
@@ -99,8 +82,7 @@ class ComponentsScene:
     name = "components"
 
     def __init__(self, theme: Theme) -> None:
-        self.theme = theme
-        self._phase = 0
+        super().__init__(theme)
         self._tab = 0
         self._focus = 0  # index into the active page's targets; 0 is the strip
         self._sort_col = -1  # no column sorted yet
@@ -137,7 +119,7 @@ class ComponentsScene:
         )
 
         # -- the frame: the strip, both panels, then toast and hint rows ----
-        self._code = _CodeView(theme)
+        self._code = LinesView(theme)
         self._highlighter = RegexHighlighter(theme=theme)
         self._left_col = Column([], gap=1)
         self._left = Panel(self._left_col, title="widgets", theme=theme)
@@ -145,6 +127,41 @@ class ComponentsScene:
         self._body = Row([self._left, self._right], widths=[44, None], gap=1)
         self._set_focus(0)
         self._mount()
+
+    def enter(self) -> None:
+        super().enter()
+        self._tab = 0
+        self._focus = 0
+        self._sort_col = -1
+        self._modal = False
+        self._toast = None
+        self._dialog_rect = (0, 0, 0, 0)
+        self.tabs.select(0)
+        self.input.text = "Ada Lovelace"
+        self.radio.index = 1
+        self.checkbox.checked = False
+        self.slider.value = 6
+        self.table.rows = [list(row) for row in _CRATES]
+        self._set_focus(0)
+        self._mount()
+
+    # -- public state ----------------------------------------------------------
+
+    @property
+    def modal(self) -> bool:
+        return self._modal
+
+    @property
+    def sort_column(self) -> int:
+        return self._sort_col
+
+    @property
+    def page(self) -> int:
+        return self._tab
+
+    @property
+    def toast_state(self) -> tuple[str, int, str] | None:
+        return self._toast
 
     # -- state ------------------------------------------------------------------
 

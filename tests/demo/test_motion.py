@@ -1,16 +1,9 @@
-"""The motion section's rings game, marker ladder, and the pixel splash.
-
-``test_demo_scenes`` pins the snake game and the splash's exit contract;
-this file pins what the W3-b wave added: the rings judgment windows (the
-contract numbers), the marker ladder's labels, the ``tab`` board swap and
-the splash's pixel wordmark.
-"""
+"""The motion rings game and the pixel splash."""
 
 from __future__ import annotations
 
 from motui.demo import render_scene
-from motui.demo.sections import MotionScene
-from motui.demo.showcase import SplashScene
+from motui.demo.sections import MotionScene, SplashScene
 from motui.kernel.events import KeyEvent
 from motui.kernel.geom import Pos
 from motui.kernel.layout import Constraints
@@ -46,48 +39,30 @@ def test_rings_judge_on_the_contract_windows():
     assert (scene.attempts, scene.combo, scene.hits) == (4, 0, 2)
 
 
-def test_the_motion_frame_is_deterministic_and_carries_the_ladder():
+def test_the_motion_frame_is_deterministic_and_has_a_live_board():
     first = render_scene("motion", width=80, height=24, phase=40)
     second = render_scene("motion", width=80, height=24, phase=40)
     assert first == second  # a pure function of the geometry and phase
-    for label in ("half", "braille", "octant", "unprobed"):
-        assert label in first, label
     assert "combo" in first and "score" in first and "hits" in first
+    assert any(char in first for char in ("\u2800", "\u2580", "\u2584", "\u2588"))
 
 
-def test_tab_swaps_the_pixel_board_for_the_snake_board():
-    scene = _motion()
-    assert scene.mode == "rings"  # rings is the default board
-    assert scene.on_key(KeyEvent("tab")) is None
-    assert scene.mode == "snake"
-    surface = scene.render(FRAME, 8)
-    text = "\n".join(row.text for row in surface)
-    assert "snake" in text and "score" in text  # the whole-cell board
-    scene.on_key(KeyEvent("tab"))
-    assert scene.mode == "rings"
-    assert scene.on_key(KeyEvent("escape")) == "menu"
-
-
-def test_a_reentered_motion_section_lands_on_a_fresh_rings_board():
+def test_enter_lands_on_a_fresh_rings_board():
     scene = _motion()
     for phase in range(1, 100):
-        scene.tick(phase)  # a first visit actually played on the rings board
-    played_attempts = scene.attempts
-    assert played_attempts > 0  # the auto-missed rings left a real residue
-    scene.on_key(KeyEvent("tab"))
-    scene.tick(100)  # ...then some of it spent on the snake board
-    scene.tick(1)  # re-entry: the shell resets its phase on every switch
-    assert scene.mode == "rings"  # never the stale tab choice
-    assert (scene.score, scene.attempts) == (0, 0)  # a fresh board, not a resume
+        scene.tick(phase)
+    assert scene.attempts > 0  # the auto-missed rings left a real residue
+    scene.enter()
+    assert (scene.score, scene.attempts, len(scene.rings)) == (0, 0, 0)
     scene.render(FRAME, 1)
     assert "rings" in "\n".join(row.text for row in scene.render(FRAME, 1))
 
 
-def test_the_splash_paints_a_pixel_wordmark_and_still_leaves_for_the_menu():
+def test_the_splash_paints_a_pixel_wordmark():
+    frame = render_scene("splash", width=80, height=24, phase=30)
+    assert "press any key" in frame
+    assert "\u2580" in frame or "\u2584" in frame or "\u2588" in frame  # wordmark
     scene = SplashScene(Theme.dark(), seed=0)
     assert scene.tick(10_000) is None  # never times out
     assert scene.on_key(KeyEvent("x")) == "menu"
     assert scene.on_click(Pos(x=0, y=0)) == "menu"
-    frame = render_scene("splash", width=80, height=24, phase=30)
-    assert "press any key" in frame
-    assert "\u2580" in frame or "\u2584" in frame or "\u2588" in frame  # wordmark

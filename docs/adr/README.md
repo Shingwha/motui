@@ -31,3 +31,6 @@ what [CONTRACT](../CONTRACT.md) and [WIDGETS](../WIDGETS.md) describe.
 | [021](ADR-021.md) | Focus is derived from the tree | Accepted |
 | [022](ADR-022.md) | One-shot results are take() | Accepted |
 | [023](ADR-023.md) | Results are pulled, not pushed | Accepted |
+| [024](ADR-024.md) | Pixel is a medium, not kernel core | Accepted |
+| [025](ADR-025.md) | Scene entry is the one reset door | Accepted |
+| [026](ADR-026.md) | Tests pin contracts, not implementation | Accepted |

@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "motui"
-version = "2.0.0"
+version = "2.1.0"
 description = "A layered full-screen TUI toolkit for Python with the Ink & Signal theme: alternate-screen rendering, addressable blocks, viewport scrollback, role-based theming, configurable keymaps, and a pointer-aware widget library (wcwidth-only)."
 readme = "README.md"
 requires-python = ">= 3.12"
@@ -72,7 +72,6 @@ exclude = [
     "specs",
     "src/motui/widgets",
     "src/motui/app",
-    "src/motui/demo",
     "src/motui/__init__.py",
     "tests/widgets",
     "tests/app",
@@ -98,10 +97,17 @@ select = ["E", "F", "I", "UP", "B", "SIM", "RUF"]
 "tests/kernel/test_events.py" = ["E501"]
 "tests/kernel/test_style.py" = ["B017"]
 "tests/test_invariants.py" = ["I001", "E501"]
+"src/motui/demo/sections/layout.py" = ["E501"]  # the drill's intentionally long source line
 "tools/framebench.py" = ["E402", "F401", "I001"]
 
 [tool.pyright]
-include = ["src/motui/kernel", "src/motui/testing", "tools"]
+include = [
+    "src/motui/kernel",
+    "src/motui/pixel",
+    "src/motui/testing",
+    "src/motui/widgets/pixel_canvas.py",
+    "tools",
+]
 # The benchmark tool is a pinned file; its wave is later.
 ignore = ["tools/framebench.py"]
 # The migrated 1.x kernel code is checked at basic; W0b's strict files stay
@@ -109,6 +115,7 @@ ignore = ["tools/framebench.py"]
 typeCheckingMode = "basic"
 strict = [
     "src/motui/kernel/geom.py",
+    "src/motui/pixel",
     "src/motui/testing",
     "tools/api.py",
     "tools/growth.py",
@@ -138,7 +145,24 @@ forbidden_modules = [
 name = "kernel is a leaf"
 type = "forbidden"
 source_modules = ["motui.kernel"]
-forbidden_modules = ["motui.widgets", "motui.app", "motui.terminal", "motui.testing"]
+forbidden_modules = [
+    "motui.pixel",
+    "motui.widgets",
+    "motui.app",
+    "motui.terminal",
+    "motui.testing",
+]
+
+[[tool.importlinter.contracts]]
+name = "pixel depends only on the kernel"
+type = "forbidden"
+source_modules = ["motui.pixel"]
+forbidden_modules = [
+    "motui.widgets",
+    "motui.app",
+    "motui.terminal",
+    "motui.testing",
+]
 
 [[tool.importlinter.contracts]]
 name = "widgets may not import terminal or app"
@@ -147,7 +171,7 @@ source_modules = ["motui.widgets"]
 forbidden_modules = ["motui.terminal", "motui.app"]
 
 [[tool.importlinter.contracts]]
-name = "terminal may not import widgets or app"
+name = "terminal may not import widgets, app or pixel"
 type = "forbidden"
 source_modules = ["motui.terminal"]
-forbidden_modules = ["motui.widgets", "motui.app"]
+forbidden_modules = ["motui.widgets", "motui.app", "motui.pixel"]

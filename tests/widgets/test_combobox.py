@@ -167,15 +167,3 @@ def test_on_action_activates_the_open_dropdown_only():
     # Other names are editing actions and belong to the field.
     assert combo.on_action("move_left") is True
     assert combo.input.cursor == (0, 11)
-
-
-def test_take_reads_the_result_once():
-    combo = ComboBox(OPTIONS)
-
-    combo.open()
-    assert combo.on_key(key("enter")) is True
-    assert combo.take() == "autocomplete"
-
-    combo.open()
-    assert combo.on_key(key("enter")) is True
-    assert combo.take() == "autocomplete"

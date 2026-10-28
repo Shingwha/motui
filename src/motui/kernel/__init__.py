@@ -42,25 +42,12 @@ from .keymap import (
 )
 from .layout import Constraints, RowSpan, ScreenLayout, Scroll, ScrollAxis, Viewport
 from .overlay import Overlay
-from .pixel import (
-    BRAILLE_BITS,
-    COOL_AT,
-    HALF_BOTTOM,
-    HALF_FULL,
-    HALF_TOP,
-    PixelLayer,
-    PixelPalette,
-    Raster,
-    quantize,
-)
 from .selection import Selection, extract, highlight
 from .style import FG_CODES, NONE, RESET, Color, ColorMode, Style, sgr_prefix
 from .text import WrapMode, ellipsize_tail, visible_width, wrap_text
 from .theme import DEFAULT_THEME, ColorPalette, Styles, Theme
 
 __all__ = [
-    "BRAILLE_BITS",
-    "COOL_AT",
     "DEFAULT_EDITOR_KEYMAP",
     "DEFAULT_INPUT_KEYMAP",
     "DEFAULT_THEME",
@@ -68,9 +55,6 @@ __all__ = [
     "ELLIPSIS",
     "FG_CODES",
     "GLYPHS",
-    "HALF_BOTTOM",
-    "HALF_FULL",
-    "HALF_TOP",
     "NONE",
     "RESET",
     "Axis",
@@ -96,10 +80,7 @@ __all__ = [
     "Overlay",
     "Pane",
     "PasteEvent",
-    "PixelLayer",
-    "PixelPalette",
     "Pos",
-    "Raster",
     "Rect",
     "ResizeEvent",
     "RowSpan",
@@ -123,7 +104,6 @@ __all__ = [
     "ellipsize_tail",
     "extract",
     "highlight",
-    "quantize",
     "sgr_prefix",
     "slice_line",
     "visible_width",

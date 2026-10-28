@@ -58,9 +58,7 @@ motui.app	Tooltip	class	(tui: 'Runtime', pointer: 'Pointer', *, theme: 'Theme | 
 motui.app	Workspace	class	(runtime: 'Runtime', *, theme: 'Theme') -> 'None'
 motui.app	copy_on_select	function	(tui: 'Runtime', selection: 'Selection') -> 'bool'
 motui.kernel	Axis	class	(*values)
-motui.kernel	BRAILLE_BITS	value	((1, 2, 4, 64), (8, 16, 32, 128))
 motui.kernel	Border	class	(top_left: 'str' = '┌', top: 'str' = '─', top_tee: 'str' = '┬', top_right: 'str' = '┐', left: 'str' = '│', middle: 'str' = '─', cross: 'str' = '┼', right: 'str' = '│', middle_left: 'str' = '├', middle_right: 'str' = '┤', bottom_left: 'str' = '└', bottom: 'str' = '─', bottom_tee: 'str' = '┴', bottom_right: 'str' = '┘') -> None
-motui.kernel	COOL_AT	value	192
 motui.kernel	Cell	class	(char: 'str' = ' ', style: 'Style' = Style(fg=None, bg=None, bold=False, dim=False, italic=False, underline=False, reverse=False, strike=False), link: 'str | None' = None, action: 'str | None' = None) -> None
 motui.kernel	Chrome	class	(edge: 'str', size: 'int', paint: 'Callable[[ScreenLayout, int], list[Line]]', name: 'str' = '', scope: 'str' = 'pane') -> None
 motui.kernel	Color	class	(value: 'str | tuple[int, int, int]', ansi: 'str | None' = None) -> None
@@ -81,9 +79,6 @@ motui.kernel	FocusEvent	class	(focused: 'bool') -> None
 motui.kernel	Frame	class	(panes: 'Iterable[Pane]' = (), *, docks: 'Mapping[str, Pane] | None' = None) -> 'None'
 motui.kernel	GLYPHS	value	Glyphs(prompt='❯', cursor='→', rail='▌', fold_open='▾', fold_closed='▸', radio_off='( )', radio_on='(•)', check_off='[ ]', check_on='[x]', check_indeterminate='[-]', more_up='↑', more_down='↓', bar_full='█', bar_empty='░', slider_track='━', slider_thumb='●', horizontal_rule='─', vertical_rule='│', quote='│', separator=' · ', bullets=('•', '◦', '▪'), notice_info='i', notice_success='✓', notice_warn='!', notice_error='×', diff_add='+', diff_remove='-', diff_context=' ', spinner=('⠋', '⠙', '⠹', '⠸', '⠼', '⠴', '⠦', '⠧', '⠇', '⠏'), box=Border(top_left='┌', top='─', top_tee='┬', top_right='┐', left='│', middle='─', cross='┼', right='│', middle_left='├', middle_right='┤', bottom_left='└', bottom='─', bottom_tee='┴', bottom_right='┘'), grid=Border(top_left='┌', top='─', top_tee='┬', top_right='┐', left='│', middle='─', cross='┼', right='│', middle_left='├', middle_right='┤', bottom_left='└', bottom='─', bottom_tee='┴', bottom_right='┘'))
 motui.kernel	Glyphs	class	(*, prompt: 'str' = '❯', cursor: 'str' = '→', rail: 'str' = '▌', fold_open: 'str' = '▾', fold_closed: 'str' = '▸', radio_off: 'str' = '( )', radio_on: 'str' = '(•)', check_off: 'str' = '[ ]', check_on: 'str' = '[x]', check_indeterminate: 'str' = '[-]', more_up: 'str' = '↑', more_down: 'str' = '↓', bar_full: 'str' = '█', bar_empty: 'str' = '░', slider_track: 'str' = '━', slider_thumb: 'str' = '●', horizontal_rule: 'str' = '─', vertical_rule: 'str' = '│', quote: 'str' = '│', separator: 'str' = ' · ', bullets: 'tuple[str, ...]' = ('•', '◦', '▪'), notice_info: 'str' = 'i', notice_success: 'str' = '✓', notice_warn: 'str' = '!', notice_error: 'str' = '×', diff_add: 'str' = '+', diff_remove: 'str' = '-', diff_context: 'str' = ' ', spinner: 'tuple[str, ...]' = ('⠋', '⠙', '⠹', '⠸', '⠼', '⠴', '⠦', '⠧', '⠇', '⠏'), box: 'Border' = Border(top_left='┌', top='─', top_tee='┬', top_right='┐', left='│', middle='─', cross='┼', right='│', middle_left='├', middle_right='┤', bottom_left='└', bottom='─', bottom_tee='┴', bottom_right='┘'), grid: 'Border' = Border(top_left='┌', top='─', top_tee='┬', top_right='┐', left='│', middle='─', cross='┼', right='│', middle_left='├', middle_right='┤', bottom_left='└', bottom='─', bottom_tee='┴', bottom_right='┘')) -> None
-motui.kernel	HALF_BOTTOM	value	'▄'
-motui.kernel	HALF_FULL	value	'█'
-motui.kernel	HALF_TOP	value	'▀'
 motui.kernel	Hit	class	(pane: 'Pane', block: 'Section', row: 'int', col: 'int', chain: 'tuple[tuple[Component, int, int], ...]' = ()) -> None
 motui.kernel	KeyEvent	class	(key: 'str', char: 'str' = '', modifiers: 'frozenset[str]' = frozenset(), kind: 'str' = 'press') -> None
 motui.kernel	Keymap	function	(*args, **kwargs)
@@ -93,11 +88,8 @@ motui.kernel	NONE	value	Style(fg=None, bg=None, bold=False, dim=False, italic=Fa
 motui.kernel	Overlay	class	(*args, **kwargs)
 motui.kernel	Pane	class	(id: 'str', rect: 'Rect', viewport: 'Viewport', chrome: 'tuple' = (), division: 'Split | None' = None, children: 'tuple[Pane, ...]' = (), _frame: 'Frame | None' = None, _negotiation: 'tuple[Rect, tuple, Rect, tuple] | None' = None) -> None
 motui.kernel	PasteEvent	class	(text: 'str') -> None
-motui.kernel	PixelLayer	function	(iterable=(), /)
-motui.kernel	PixelPalette	class	(slots: 'Mapping[int, tuple[tuple[int, int, int], tuple[int, int, int]]]', bg: 'tuple[int, int, int] | None' = None) -> None
 motui.kernel	Pos	class	(*, x: 'int' = 0, y: 'int' = 0) -> None
 motui.kernel	RESET	value	'\x1b[0m'
-motui.kernel	Raster	class	(cols: 'int', rows: 'int') -> 'None'
 motui.kernel	Rect	class	(*, x: 'int' = 0, y: 'int' = 0, width: 'int' = 0, height: 'int' = 0) -> None
 motui.kernel	ResizeEvent	class	(width: 'int', height: 'int') -> None
 motui.kernel	RowSpan	class	(first: 'int', last: 'int') -> None
@@ -121,12 +113,36 @@ motui.kernel	cut_line	function	(line: 'Line', start: 'int', end: 'int') -> 'Line
 motui.kernel	ellipsize_tail	function	(text: 'str', width: 'int') -> 'str'
 motui.kernel	extract	function	(document: 'Document', selection: 'Selection | None', *, width: 'int') -> 'str'
 motui.kernel	highlight	function	(layout: 'ScreenLayout', selection: 'Selection | None', *, style: 'Style' = Style(fg=None, bg=None, bold=False, dim=False, italic=False, underline=False, reverse=True, strike=False)) -> 'ScreenLayout'
-motui.kernel	quantize	function	(layers: 'Sequence[PixelLayer]', palette: 'PixelPalette') -> 'list[Line]'
 motui.kernel	sgr_prefix	function	(style: 'Style', mode: 'ColorMode' = 'truecolor') -> 'str'
 motui.kernel	slice_line	function	(line: 'Line', start: 'int', end: 'int') -> 'Line'
 motui.kernel	visible_width	function	(text: 'str') -> 'int'
 motui.kernel	wrap_line	function	(line: 'Line', width: 'int') -> 'list[Line]'
 motui.kernel	wrap_text	function	(text: 'str', width: 'int') -> 'list[str]'
+motui.pixel	BRAILLE_BITS	value	((1, 2, 4, 64), (8, 16, 32, 128))
+motui.pixel	COOL_AT	value	192
+motui.pixel	HALF_BOTTOM	value	'▄'
+motui.pixel	HALF_FULL	value	'█'
+motui.pixel	HALF_TOP	value	'▀'
+motui.pixel	HEAT_LIT	value	128
+motui.pixel	Marker	class	(*values)
+motui.pixel	PixelLayer	class	(raster: 'Raster', marker: 'Marker') -> None
+motui.pixel	PixelPalette	class	(slots: 'Mapping[int, SlotColors]', bg: 'RGB | None' = None) -> None
+motui.pixel	PixelPalette.tables	method	(self) -> 'tuple[Mapping[int, StyleQuad], StyleQuad]'
+motui.pixel	RGB	function	(iterable=(), /)
+motui.pixel	Raster	class	(cols: 'int', rows: 'int') -> 'None'
+motui.pixel	Raster.at	method	(self, x: 'float', y: 'float') -> 'tuple[int, int]'
+motui.pixel	Raster.clear	method	(self) -> 'None'
+motui.pixel	Raster.decay	method	(self, amount: 'int') -> 'None'
+motui.pixel	Raster.disc	method	(self, cx: 'float', cy: 'float', r: 'float', slot: 'int' = 1, heat: 'int' = 255) -> 'None'
+motui.pixel	Raster.erase	method	(self, x: 'float', y: 'float') -> 'None'
+motui.pixel	Raster.grids	method	(self) -> 'tuple[memoryview, memoryview]'
+motui.pixel	Raster.line	method	(self, x0: 'float', y0: 'float', x1: 'float', y1: 'float', slot: 'int' = 1, heat: 'int' = 255) -> 'None'
+motui.pixel	Raster.plot	method	(self, x: 'float', y: 'float', slot: 'int' = 1, heat: 'int' = 255) -> 'None'
+motui.pixel	Raster.rect	method	(self, x0: 'float', y0: 'float', x1: 'float', y1: 'float', *, fill: 'bool' = False, slot: 'int' = 1, heat: 'int' = 255) -> 'None'
+motui.pixel	Raster.ring	method	(self, cx: 'float', cy: 'float', r: 'float', thickness: 'int' = 1, slot: 'int' = 1, heat: 'int' = 255) -> 'None'
+motui.pixel	Raster.stamp	method	(self, points: 'Iterable[Point]', slot: 'int' = 1, heat: 'int' = 255) -> 'None'
+motui.pixel	SlotColors	function	(iterable=(), /)
+motui.pixel	quantize	function	(layers: 'Sequence[PixelLayer]', palette: 'PixelPalette') -> 'list[Line]'
 motui.terminal	Capability	class	(*, color_mode: 'ColorMode', size: 'tuple[int, int]', live: 'bool', encoding: 'str | None' = None) -> None
 motui.terminal	Clipboard	class	(*args, **kwargs)
 motui.terminal	HeadlessScreen	class	(width: 'int' = 80, height: 'int' = 24, *, mouse: 'bool' = True, paste: 'bool' = True, hover: 'bool' = False, focus_events: 'bool' = False, color_mode: 'ColorMode' = 'truecolor') -> 'None'
@@ -166,6 +182,7 @@ motui.widgets	Editor	class	(text: 'str' = '', *, placeholder: 'str' = '', mask: 
 motui.widgets	Field	class	(name: 'str', component: 'Component', label: 'str' = '', validate: 'Callable[[object], str | None] | None' = None, value: 'Callable[[], object] | None' = None, error: 'str | None' = None) -> None
 motui.widgets	Form	class	(fields: 'Sequence[Field]', *, gap: 'int' = 0, index: 'int' = 0, on_submit: 'Callable[[dict[str, object]], object] | None' = None, theme: 'Theme | None' = None, styles: 'Styles | None' = None) -> 'None'
 motui.widgets	Input	class	(text: 'str' = '', *, prompt: 'str | None' = None, placeholder: 'str' = '', mask: 'str' = '', glyphs: 'Glyphs' = Glyphs(prompt='❯', cursor='→', rail='▌', fold_open='▾', fold_closed='▸', radio_off='( )', radio_on='(•)', check_off='[ ]', check_on='[x]', check_indeterminate='[-]', more_up='↑', more_down='↓', bar_full='█', bar_empty='░', slider_track='━', slider_thumb='●', horizontal_rule='─', vertical_rule='│', quote='│', separator=' · ', bullets=('•', '◦', '▪'), notice_info='i', notice_success='✓', notice_warn='!', notice_error='×', diff_add='+', diff_remove='-', diff_context=' ', spinner=('⠋', '⠙', '⠹', '⠸', '⠼', '⠴', '⠦', '⠧', '⠇', '⠏'), box=Border(top_left='┌', top='─', top_tee='┬', top_right='┐', left='│', middle='─', cross='┼', right='│', middle_left='├', middle_right='┤', bottom_left='└', bottom='─', bottom_tee='┴', bottom_right='┘'), grid=Border(top_left='┌', top='─', top_tee='┬', top_right='┐', left='│', middle='─', cross='┼', right='│', middle_left='├', middle_right='┤', bottom_left='└', bottom='─', bottom_tee='┴', bottom_right='┘')), theme: 'Theme | None' = None, styles: 'Styles | None' = None, keymap: 'Keymap | None' = None, read_only: 'bool' = False, wrap: 'WrapMode' = <WrapMode.OVERFLOW: 'overflow'>) -> 'None'
+motui.widgets	LayerName	class	(*values)
 motui.widgets	Link	class	(text: 'str', *, disabled: 'bool' = False, theme: 'Theme | None' = None, styles: 'Styles | None' = None) -> 'None'
 motui.widgets	List	class	(items: 'Sequence[str]' = (), *, window: 'int' = 8, prefix_jump: 'bool' = True, glyphs: 'Glyphs' = Glyphs(prompt='❯', cursor='→', rail='▌', fold_open='▾', fold_closed='▸', radio_off='( )', radio_on='(•)', check_off='[ ]', check_on='[x]', check_indeterminate='[-]', more_up='↑', more_down='↓', bar_full='█', bar_empty='░', slider_track='━', slider_thumb='●', horizontal_rule='─', vertical_rule='│', quote='│', separator=' · ', bullets=('•', '◦', '▪'), notice_info='i', notice_success='✓', notice_warn='!', notice_error='×', diff_add='+', diff_remove='-', diff_context=' ', spinner=('⠋', '⠙', '⠹', '⠸', '⠼', '⠴', '⠦', '⠧', '⠇', '⠏'), box=Border(top_left='┌', top='─', top_tee='┬', top_right='┐', left='│', middle='─', cross='┼', right='│', middle_left='├', middle_right='┤', bottom_left='└', bottom='─', bottom_tee='┴', bottom_right='┘'), grid=Border(top_left='┌', top='─', top_tee='┬', top_right='┐', left='│', middle='─', cross='┼', right='│', middle_left='├', middle_right='┤', bottom_left='└', bottom='─', bottom_tee='┴', bottom_right='┘')), disabled: 'bool' = False, disabled_items: 'Iterable[int]' = (), theme: 'Theme | None' = None, styles: 'Styles | None' = None) -> 'None'
 motui.widgets	Markdown	class	(text: 'str' = '', *, block_rules: 'Sequence[BlockRule] | None' = None, inline_rules: 'Sequence[InlineRule] | None' = None, theme: 'Theme | None' = None, styles: 'Styles | None' = None, highlighter: 'Highlighter | None' = None, glyphs: 'Glyphs' = Glyphs(prompt='❯', cursor='→', rail='▌', fold_open='▾', fold_closed='▸', radio_off='( )', radio_on='(•)', check_off='[ ]', check_on='[x]', check_indeterminate='[-]', more_up='↑', more_down='↓', bar_full='█', bar_empty='░', slider_track='━', slider_thumb='●', horizontal_rule='─', vertical_rule='│', quote='│', separator=' · ', bullets=('•', '◦', '▪'), notice_info='i', notice_success='✓', notice_warn='!', notice_error='×', diff_add='+', diff_remove='-', diff_context=' ', spinner=('⠋', '⠙', '⠹', '⠸', '⠼', '⠴', '⠦', '⠧', '⠇', '⠏'), box=Border(top_left='┌', top='─', top_tee='┬', top_right='┐', left='│', middle='─', cross='┼', right='│', middle_left='├', middle_right='┤', bottom_left='└', bottom='─', bottom_tee='┴', bottom_right='┘'), grid=Border(top_left='┌', top='─', top_tee='┬', top_right='┐', left='│', middle='─', cross='┼', right='│', middle_left='├', middle_right='┤', bottom_left='└', bottom='─', bottom_tee='┴', bottom_right='┘')), gap: 'int' = 1, divider_max_width: 'int | None' = 80, max_width: 'int | None' = None, code_wrap: 'WrapMode' = <WrapMode.WORD: 'word'>) -> 'None'
@@ -176,7 +193,31 @@ motui.widgets	Notice	class	(text: 'str', *, level: 'str' = 'info', glyphs: 'Glyp
 motui.widgets	Option	class	(label: 'str', value: 'object' = None, description: 'str' = '') -> None
 motui.widgets	Padding	class	(child, *, left: 'int' = 0, right: 'int' = 0, top: 'int' = 0, bottom: 'int' = 0, theme: 'Theme | None' = None, styles: 'Styles | None' = None) -> 'None'
 motui.widgets	Panel	class	(child, *, title: 'str' = '', frame: 'bool' = True, border: 'Border | None' = None, glyphs: 'Glyphs' = Glyphs(prompt='❯', cursor='→', rail='▌', fold_open='▾', fold_closed='▸', radio_off='( )', radio_on='(•)', check_off='[ ]', check_on='[x]', check_indeterminate='[-]', more_up='↑', more_down='↓', bar_full='█', bar_empty='░', slider_track='━', slider_thumb='●', horizontal_rule='─', vertical_rule='│', quote='│', separator=' · ', bullets=('•', '◦', '▪'), notice_info='i', notice_success='✓', notice_warn='!', notice_error='×', diff_add='+', diff_remove='-', diff_context=' ', spinner=('⠋', '⠙', '⠹', '⠸', '⠼', '⠴', '⠦', '⠧', '⠇', '⠏'), box=Border(top_left='┌', top='─', top_tee='┬', top_right='┐', left='│', middle='─', cross='┼', right='│', middle_left='├', middle_right='┤', bottom_left='└', bottom='─', bottom_tee='┴', bottom_right='┘'), grid=Border(top_left='┌', top='─', top_tee='┬', top_right='┐', left='│', middle='─', cross='┼', right='│', middle_left='├', middle_right='┤', bottom_left='└', bottom='─', bottom_tee='┴', bottom_right='┘')), theme: 'Theme | None' = None, styles: 'Styles | None' = None) -> 'None'
-motui.widgets	PixelCanvas	class	(width: 'int' = 0, height: 'int' = 0, *, marker: 'str' = 'braille', palette: 'PixelPalette', theme=None, styles=None) -> 'None'
+motui.widgets	PixelCanvas	class	(width: 'int' = 0, height: 'int' = 0, *, marker: 'Marker | str' = <Marker.BRAILLE: 'braille'>, palette: 'PixelPalette', theme=None, styles=None) -> 'None'
+motui.widgets	PixelCanvas.clear	method	(self, *, layer: 'LayerName | str | None' = None) -> 'None'
+motui.widgets	PixelCanvas.decay	method	(self, amount: 'int', *, layer: 'LayerName | str' = <LayerName.ART: 'art'>) -> 'None'
+motui.widgets	PixelCanvas.disc	method	(self, cx: 'float', cy: 'float', r: 'float', slot: 'int' = 1, *, heat: 'int' = 255, layer: 'LayerName | str' = <LayerName.ART: 'art'>) -> 'None'
+motui.widgets	PixelCanvas.erase	method	(self, x: 'float', y: 'float', *, layer: 'LayerName | str' = <LayerName.ART: 'art'>) -> 'None'
+motui.widgets	PixelCanvas.group	method	(self, name: 'str') -> 'object'
+motui.widgets	PixelCanvas.line	method	(self, x0: 'float', y0: 'float', x1: 'float', y1: 'float', slot: 'int' = 1, *, heat: 'int' = 255, layer: 'LayerName | str' = <LayerName.ART: 'art'>) -> 'None'
+motui.widgets	PixelCanvas.on_action	method	(self, name: 'str') -> 'bool'
+motui.widgets	PixelCanvas.on_click	method	(self, pos: 'Pos') -> 'bool'
+motui.widgets	PixelCanvas.on_drag	method	(self, pos: 'Pos', phase: 'str') -> 'bool'
+motui.widgets	PixelCanvas.on_focus	method	(self, gained: 'bool') -> 'None'
+motui.widgets	PixelCanvas.on_hover	method	(self, pos: 'Pos | None') -> 'bool'
+motui.widgets	PixelCanvas.on_key	method	(self, e: 'KeyEvent') -> 'bool'
+motui.widgets	PixelCanvas.on_mouse	method	(self, e: 'MouseEvent') -> 'bool'
+motui.widgets	PixelCanvas.on_paste	method	(self, e: 'PasteEvent') -> 'bool'
+motui.widgets	PixelCanvas.on_resize	method	(self, e: 'ResizeEvent') -> 'None'
+motui.widgets	PixelCanvas.plot	method	(self, x: 'float', y: 'float', slot: 'int' = 1, *, heat: 'int' = 255, layer: 'LayerName | str' = <LayerName.ART: 'art'>) -> 'None'
+motui.widgets	PixelCanvas.rect	method	(self, x0: 'float', y0: 'float', x1: 'float', y1: 'float', *, fill: 'bool' = False, slot: 'int' = 1, heat: 'int' = 255, layer: 'LayerName | str' = <LayerName.ART: 'art'>) -> 'None'
+motui.widgets	PixelCanvas.render	method	(self, c: 'Constraints') -> 'Surface'
+motui.widgets	PixelCanvas.resize	method	(self, width: 'int', height: 'int') -> 'None'
+motui.widgets	PixelCanvas.ring	method	(self, cx: 'float', cy: 'float', r: 'float', thickness: 'int' = 1, slot: 'int' = 1, *, heat: 'int' = 255, layer: 'LayerName | str' = <LayerName.ART: 'art'>) -> 'None'
+motui.widgets	PixelCanvas.stamp	method	(self, points: 'Iterable[tuple[float, float]]', slot: 'int' = 1, *, heat: 'int' = 255, layer: 'LayerName | str' = <LayerName.ART: 'art'>) -> 'None'
+motui.widgets	PixelCanvas.take	method	(self) -> 'object | None'
+motui.widgets	PixelCanvas.touch	method	(self) -> 'None'
+motui.widgets	PixelCanvas.walk	method	(self) -> 'Iterator[Widget]'
 motui.widgets	ProgressBar	class	(fraction: 'float' = 0.0, *, label: 'str' = '', width_chars: 'int | None' = None, glyphs: 'Glyphs' = Glyphs(prompt='❯', cursor='→', rail='▌', fold_open='▾', fold_closed='▸', radio_off='( )', radio_on='(•)', check_off='[ ]', check_on='[x]', check_indeterminate='[-]', more_up='↑', more_down='↓', bar_full='█', bar_empty='░', slider_track='━', slider_thumb='●', horizontal_rule='─', vertical_rule='│', quote='│', separator=' · ', bullets=('•', '◦', '▪'), notice_info='i', notice_success='✓', notice_warn='!', notice_error='×', diff_add='+', diff_remove='-', diff_context=' ', spinner=('⠋', '⠙', '⠹', '⠸', '⠼', '⠴', '⠦', '⠧', '⠇', '⠏'), box=Border(top_left='┌', top='─', top_tee='┬', top_right='┐', left='│', middle='─', cross='┼', right='│', middle_left='├', middle_right='┤', bottom_left='└', bottom='─', bottom_tee='┴', bottom_right='┘'), grid=Border(top_left='┌', top='─', top_tee='┬', top_right='┐', left='│', middle='─', cross='┼', right='│', middle_left='├', middle_right='┤', bottom_left='└', bottom='─', bottom_tee='┴', bottom_right='┘')), theme: 'Theme | None' = None, styles: 'Styles | None' = None) -> 'None'
 motui.widgets	RadioGroup	class	(labels: 'Sequence[str | Option]', *, index: 'int' = 0, glyphs: 'Glyphs' = Glyphs(prompt='❯', cursor='→', rail='▌', fold_open='▾', fold_closed='▸', radio_off='( )', radio_on='(•)', check_off='[ ]', check_on='[x]', check_indeterminate='[-]', more_up='↑', more_down='↓', bar_full='█', bar_empty='░', slider_track='━', slider_thumb='●', horizontal_rule='─', vertical_rule='│', quote='│', separator=' · ', bullets=('•', '◦', '▪'), notice_info='i', notice_success='✓', notice_warn='!', notice_error='×', diff_add='+', diff_remove='-', diff_context=' ', spinner=('⠋', '⠙', '⠹', '⠸', '⠼', '⠴', '⠦', '⠧', '⠇', '⠏'), box=Border(top_left='┌', top='─', top_tee='┬', top_right='┐', left='│', middle='─', cross='┼', right='│', middle_left='├', middle_right='┤', bottom_left='└', bottom='─', bottom_tee='┴', bottom_right='┘'), grid=Border(top_left='┌', top='─', top_tee='┬', top_right='┐', left='│', middle='─', cross='┼', right='│', middle_left='├', middle_right='┤', bottom_left='└', bottom='─', bottom_tee='┴', bottom_right='┘')), disabled: 'bool' = False, disabled_items: 'Iterable[int]' = (), theme: 'Theme | None' = None, styles: 'Styles | None' = None) -> 'None'
 motui.widgets	Row	class	(children, *, widths: 'list[int | None] | None' = None, gap: 'int' = 1) -> 'None'

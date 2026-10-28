@@ -43,6 +43,9 @@ jobs:
       - name: ruff
         run: uv run ruff check .
 
+      - name: ruff -- the PixelCanvas adapter (widgets tree still on the ratchet)
+        run: uv run ruff check src/motui/widgets/pixel_canvas.py tests/widgets/test_pixel_canvas.py --config "exclude=[]"
+
       - name: pyright
         run: uv run pyright
 
@@ -84,5 +87,5 @@ jobs:
       - name: demo -- snake replay
         run: uv run python -m motui --scene snake --frames 30 --headless
 
-      - name: demo -- placeholder section replay
+      - name: demo -- components replay
         run: uv run python -m motui --scene components --frames 12 --headless

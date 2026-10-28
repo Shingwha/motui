@@ -39,8 +39,9 @@ from ...widgets import (
     Row,
     Slider,
     Tabs,
-    Widget,
 )
+from ..common import LinesView
+from ..scene import Scene
 
 __all__ = ["ThemesScene"]
 
@@ -122,21 +123,7 @@ def _role_lines(theme: Theme, *, compact: bool) -> list[Line]:
     ]
 
 
-class _LinesView(Widget):
-    """A render-only block of pre-built lines: the role sampler's panel body."""
-
-    __slots__ = ("lines",)
-
-    def __init__(self, theme: Theme) -> None:
-        super().__init__(theme, None)
-        self.lines: list[Line] = []
-
-    def render(self, c: Constraints) -> Surface:
-        rows = [line.clip(_CLIP, c.width) for line in self.lines]
-        return Surface.of(rows, c.width)
-
-
-class ThemesScene:
+class ThemesScene(Scene):
     """The themes section: one sample, every control re-skinned by the picker.
 
     The tab strip at the top is the picker (a real :class:`Tabs`); the
@@ -152,11 +139,21 @@ class ThemesScene:
     name = "themes"
 
     def __init__(self, theme: Theme) -> None:
-        self.theme = theme
-        self._phase = 0
+        super().__init__(theme)
+        self._index = 0
+        self._compare = False
+        self._compare_cache: dict[int, list[Line]] = {}
+        self._mount()
+
+    def enter(self) -> None:
+        super().enter()
         self._index = 0
         self._compare = False
         self._mount()
+
+    @property
+    def compare(self) -> bool:
+        return self._compare
 
     # -- the sample ---------------------------------------------------------------
 
@@ -179,7 +176,7 @@ class ThemesScene:
             [self.input, self.checkbox, self.radio, self.slider, self.button],
             gap=1,
         )
-        self._roles = _LinesView(current)
+        self._roles = LinesView(current)
         self._roles.lines = _role_lines(current, compact=False)
         self._roles_panel = Panel(self._roles, title="role tokens", theme=current)
         self._controls_panel = Panel(controls, title="controls", theme=current)
@@ -199,7 +196,6 @@ class ThemesScene:
         self._phase = phase
         width = c.width
         height = c.max_height if c.max_height is not None else 24
-        current = self._current
         strip = self.tabs.render(Constraints(width=width))
         rows: list[Line] = [self._heading(), next(iter(strip)).clip(_CLIP, width)]
         body_h = max(3, height - 4)  # heading, strip, provenance and hint own rows
@@ -218,14 +214,19 @@ class ThemesScene:
 
     def _compare_rows(self, width: int) -> list[Line]:
         """All four themes' compact samplers, one quarter pane each."""
+        cached = self._compare_cache.get(width)
+        if cached is not None:
+            return cached
         panels = []
         for name, theme, _note in _PAGES:
-            view = _LinesView(theme)
+            view = LinesView(theme)
             view.lines = _role_lines(theme, compact=True)
             panels.append(Panel(view, title=name, theme=theme))
         each = max(8, (width - 3) // 4)
         quad = Row(panels, widths=[each, each, each, each], gap=1)
-        return list(quad.render(Constraints(width=width)))
+        rows = list(quad.render(Constraints(width=width)))
+        self._compare_cache[width] = rows
+        return rows
 
     def _heading(self) -> Line:
         """The one-row title, wearing the selected theme's accent."""

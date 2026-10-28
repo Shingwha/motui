@@ -1,8 +1,7 @@
-"""``python -m motui.demo``: the demo's module entry, beside the package one."""
+"""``python -m motui``: the showcase entry point."""
 
 from __future__ import annotations
 
-from . import main
+from .cli import main
 
-if __name__ == "__main__":
-    raise SystemExit(main())
+raise SystemExit(main())

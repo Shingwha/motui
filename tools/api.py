@@ -1,8 +1,8 @@
 """The public-surface snapshot: what each facade exports, and with what shape.
 
-The snapshot is one line per exported name::
+The snapshot is one line per exported name, plus selected public methods::
 
-    <module>\t<name>\t<class|function|module|value>\t<signature>
+    <module>\t<name>\t<class|function|module|value|method>\t<signature>
 
 ``signature`` is :func:`inspect.signature`'s rendering, with any memory
 address scrubbed so the file is stable across processes; a value that has no
@@ -10,15 +10,16 @@ signature contributes its stable ``repr`` instead.
 
 Three modes:
 
-* ``--update`` writes the snapshot to ``tools/api-2.0.txt``;
+* ``--update`` writes the snapshot to ``tools/api-2.1.txt``;
 * ``--check`` compares it line for line and exits 1 on any difference;
 * ``--check --allow-additions`` compares only the ``(module, name)`` keys:
   new names and changed signatures pass (that is what a growth wave does),
   a name that disappeared fails.
 
-The faces are the six public roots the 1.x tree ships.  A face that does not
-exist yet is skipped, so the snapshot keeps working while W1 moves layers
-around; regenerate it in the wave that moves them.
+The faces are the seven public roots the 2.1 tree ships.  The selected
+provisional classes also record their public method signatures, so the
+verb vocabulary is pinned, not only the constructor.  A face that does not
+exist yet is skipped; regenerate the snapshot in the wave that moves it.
 """
 
 from __future__ import annotations
@@ -40,14 +41,22 @@ sys.path.insert(0, str(ROOT / "src"))
 FACES = (
     "motui",
     "motui.kernel",
+    "motui.pixel",
     "motui.terminal",
     "motui.widgets",
     "motui.app",
     "motui.testing",
 )
 
+#: Classes whose public method signatures are part of the provisional pin.
+MEMBER_TARGETS = (
+    ("motui.pixel", "Raster"),
+    ("motui.pixel", "PixelPalette"),
+    ("motui.widgets", "PixelCanvas"),
+)
+
 #: Where ``--update`` records the surface and ``--check`` reads it.
-SNAPSHOT = ROOT / "tools" / "api-2.0.txt"
+SNAPSHOT = ROOT / "tools" / "api-2.1.txt"
 
 _ADDRESS = re.compile(r"0x[0-9a-fA-F]+")
 
@@ -107,6 +116,15 @@ def surface() -> list[str]:
         for name in _exported(module):
             obj: object = getattr(module, name)
             rows.append((face, name, _kind(obj), _signature(obj)))
+    for face, class_name in MEMBER_TARGETS:
+        module = importlib.import_module(face)
+        cls = getattr(module, class_name)
+        for name in sorted(dir(cls)):
+            if name.startswith("_"):
+                continue
+            member = getattr(cls, name)
+            if inspect.isfunction(member):
+                rows.append((face, f"{class_name}.{name}", "method", _signature(member)))
     rows.sort(key=lambda row: (row[0], row[1]))
     return ["\t".join(row) for row in rows]
 

@@ -56,7 +56,7 @@ from .list import List
 from .markdown import Markdown
 from .menubar import ContextMenu, MenuBar
 from .navlist import NavList
-from .pixel_canvas import PixelCanvas
+from .pixel_canvas import LayerName, PixelCanvas
 from .rows import Notice, ShortcutBar, StatusLine
 from .scroll import ScrollPanel
 from .table import Table
@@ -83,6 +83,7 @@ __all__ = [
     "Field",
     "Form",
     "Input",
+    "LayerName",
     "Link",
     "List",
     "Markdown",

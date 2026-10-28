@@ -15,6 +15,7 @@ import pytest
 FACADES = (
     "motui",
     "motui.kernel",
+    "motui.pixel",
     "motui.terminal",
     "motui.widgets",
     "motui.app",

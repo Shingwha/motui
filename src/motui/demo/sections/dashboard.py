@@ -20,6 +20,8 @@ from ...widgets import (
     Table,
     Text,
 )
+from ..common import FixedHeight
+from ..scene import Scene
 
 __all__ = ["DashboardScene"]
 
@@ -31,11 +33,8 @@ _DASHBOARD_POINTS = 48
 _DASHBOARD_LOG = 4
 _DASHBOARD_FPS = 30
 
-#: A phase jump replays at most this many dashboard samples.
-_MAX_SYNC = 4096
 
-
-class DashboardScene:
+class DashboardScene(Scene):
     """A live operations page built from real widgets, never a clock read.
 
     The scene keeps a rolling window of 48 samples and pushes one point per
@@ -50,8 +49,7 @@ class DashboardScene:
     name = "dashboard"
 
     def __init__(self, theme: Theme) -> None:
-        self.theme = theme
-        self._phase = 0
+        super().__init__(theme)
         self.samples: list[float] = []
         self.log: list[str] = []
         self.cpu = 0.0
@@ -74,12 +72,12 @@ class DashboardScene:
         )
         self._summary = Text("", style=theme.text.muted, theme=theme)
         self._events = Text("", style=theme.text.faint, theme=theme)
-        self._spark_box = _FixedHeight(self.spark, 0)
-        self._pressure_box = _FixedHeight(
+        self._spark_box = FixedHeight(self.spark, 0)
+        self._pressure_box = FixedHeight(
             Column([self.cpu_bar, self.mem_bar, self._summary], gap=0), 0
         )
-        self._metrics_box = _FixedHeight(self.table, 0)
-        self._events_box = _FixedHeight(self._events, 0)
+        self._metrics_box = FixedHeight(self.table, 0)
+        self._events_box = FixedHeight(self._events, 0)
         self._spark_panel = Panel(
             self._spark_box, title="throughput", theme=theme
         )
@@ -88,6 +86,11 @@ class DashboardScene:
         )
         self._metrics_panel = Panel(self._metrics_box, title="metrics", theme=theme)
         self._events_panel = Panel(self._events_box, title="events", theme=theme)
+        self._refresh()
+
+    def enter(self) -> None:
+        super().enter()
+        self._seed()
         self._refresh()
 
     # -- data --------------------------------------------------------------
@@ -120,13 +123,12 @@ class DashboardScene:
         ]
 
     def _push(self, step: int) -> None:
-        """Append one sample and move every gauge with it."""
+        """Append one sample and move every gauge with it (no refresh)."""
         self.samples = [*self.samples[1:], _sample(step)]
         self._set_gauges(step)
         if step % 6 == 0:
             self.log.append(_log_line(step))
             del self.log[:-_DASHBOARD_LOG]
-        self._refresh()
 
     def _refresh(self) -> None:
         """Copy the model onto the real widgets (each assignment touches)."""
@@ -141,15 +143,28 @@ class DashboardScene:
         self._events.text = "\n".join(self.log)
 
     def _sync(self, phase: int) -> None:
-        """Replay the missing ticks; a backwards jump re-seeds the window."""
-        if phase < self._phase:
-            self._phase = 0
-            self._seed()
-            self._refresh()
-        steps = min(max(0, phase - self._phase), _MAX_SYNC)
-        for step in range(self._phase + 1, self._phase + steps + 1):
-            self._push(step)
+        """Advance the window to ``phase`` and refresh the widgets once.
+
+        A larger jump than the window is rebuilt directly instead of
+        replaying thousands of steps; the models are all pure functions of
+        the tick number, so the result is identical.
+        """
+        steps = phase - self._phase
+        if steps > _DASHBOARD_POINTS:
+            first = phase - _DASHBOARD_POINTS + 1
+            self.samples = [_sample(step) for step in range(first, phase + 1)]
+            latest = phase - phase % 6
+            self.log = [
+                _log_line(step) for step in range(latest - 18, latest + 1, 6)
+            ]
+            self._set_gauges(phase)
+        elif steps > 0:
+            for step in range(self._phase + 1, phase + 1):
+                self._push(step)
+        else:
+            return
         self._phase = phase
+        self._refresh()
 
     # -- protocol ----------------------------------------------------------
 
@@ -228,28 +243,6 @@ class DashboardScene:
 
     def __repr__(self) -> str:
         return f"DashboardScene(phase={self._phase}, samples={len(self.samples)})"
-
-
-class _FixedHeight:
-    """Render a child under a row budget and pad it to exactly that height.
-
-    The dashboard's panels need equal heights in a ``Row``; ``Panel`` hands
-    its child only a width, so this small adapter supplies the row budget a
-    ``Sparkline`` or a ``Table`` needs and fills the remainder with blanks.
-    """
-
-    def __init__(self, child, height: int = 0) -> None:
-        self.child = child
-        self.height = height
-
-    def render(self, c: Constraints) -> Surface:
-        budget = max(0, self.height)
-        rows = list(
-            self.child.render(Constraints(width=c.width, max_height=budget))
-        )
-        rows = rows[:budget]
-        rows.extend(Line() for _ in range(budget - len(rows)))
-        return Surface.of(rows, c.width)
 
 
 def _clamp(value: float) -> float:

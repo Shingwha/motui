@@ -1,6 +1,6 @@
 # Widgets
 
-The component library lives in `motui.widgets` (46 exported names) and is
+The component library lives in `motui.widgets` (48 exported names) and is
 re-exported selectively from `motui`. Every component renders through
 
 ```python
@@ -191,6 +191,63 @@ dropped. `Canvas` is mutable and produces a `Surface`; it never writes
 terminal bytes. `Sparkline(values=(), *, marker="half", style=Style(),
 glyphs=GLYPHS)` is a plain renderer (not a `Widget`) over the same canvas;
 its natural height is one row, and a `max_height` budget fills that many.
+
+## PixelCanvas: sub-cell art
+
+`PixelCanvas` is the sub-cell sibling of `Canvas`. It is new in 2.1 and
+provisional: the engine (`motui.pixel`) and this widget may change in a
+minor until they are frozen.
+
+```python
+class PixelCanvas(Widget):
+    def __init__(self, width=0, height=0, *, marker=Marker.BRAILLE,
+                 palette=PixelPalette(...), theme=None, styles=None): ...
+    def plot(self, x, y, slot=1, *, heat=255, layer=LayerName.ART) -> None: ...
+    def erase(self, x, y, *, layer=LayerName.ART) -> None: ...
+    def stamp(self, points, slot=1, *, heat=255, layer=LayerName.ART) -> None: ...
+    def line(self, x0, y0, x1, y1, slot=1, *, heat=255, layer=LayerName.ART) -> None: ...
+    def rect(self, x0, y0, x1, y1, *, fill=False, slot=1, heat=255, layer=LayerName.ART) -> None: ...
+    def disc(self, cx, cy, r, slot=1, *, heat=255, layer=LayerName.ART) -> None: ...
+    def ring(self, cx, cy, r, thickness=1, slot=1, *, heat=255, layer=LayerName.ART) -> None: ...
+    def clear(self, *, layer=None) -> None: ...
+    def decay(self, amount, *, layer=LayerName.ART) -> None: ...
+    def render(self, c: Constraints) -> Surface: ...
+```
+
+Every cell is a 2x4 sub-cell grid and every drawing coordinate is a
+sub-cell. The widget owns two private `motui.pixel.Raster` layers:
+
+- **art** (`LayerName.ART`) — lines, sprites and rings at `marker`
+  resolution;
+- **fill** (`LayerName.FILL`) — half-block fills behind the art.
+
+`marker` is `Marker.BRAILLE` (eight dots) or `Marker.HALF` (top/bottom
+blocks); it is validated on assignment. `PixelPalette` maps each slot id to
+a `(main, cool)` color pair; fresh ink (`heat >= 192`) uses *main*, cooled
+ink uses *cool*, and `bg` optionally paints the unlit half of a fill cell.
+`heat` is `0..255`; `decay` cools a layer in place, which is the trail
+primitive. A cell belongs to the first layer with ink in it, so art wins a
+cell both layers claim.
+
+```python
+from motui.kernel.layout import Constraints
+from motui.pixel import Marker, PixelPalette
+from motui.widgets import LayerName, PixelCanvas
+
+palette = PixelPalette(slots={1: ((255, 99, 132), (122, 46, 64))})
+canvas = PixelCanvas(20, 8, palette=palette)
+canvas.disc(20, 16, 5, 1, layer=LayerName.FILL)
+canvas.ring(20, 16, 12, 2, 1)
+canvas.decay(40)
+surface = canvas.render(Constraints(width=20, max_height=8))
+```
+
+`render` re-quantizes from scratch and syncs the rasters to the constraint:
+a new width/height rebuilds them empty, which a pixel scene refills on its
+next tick. `pixel_width`/`pixel_height` answer the sub-cell geometry;
+`resize` does the same rebuild explicitly. The splash and motion scenes are
+the reference uses: the wordmark stamps the fill layer, the sweep and stars
+ride the art layer, and the rings stamp their fade at an explicit heat.
 
 ## Dialogs and modal panels
 

@@ -23,7 +23,7 @@ from motui import Text
 from motui.app import CommandPalette
 from motui.kernel import Component, Constraints, Surface, visible_width
 from motui.kernel.glyphs import GLYPHS, Border
-from motui.kernel.pixel import PixelPalette
+from motui.pixel import PixelPalette
 from motui.testing import headless_tui
 from motui.widgets import (
     Autocomplete,

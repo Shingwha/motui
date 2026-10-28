@@ -69,6 +69,7 @@ What each piece did:
 | Goal | What ships | Where it runs |
 |---|---|---|
 | Playable game | `Canvas` cell grid, `Sizing.FILL`, `app.every`, `app.bind` | `python -m motui --scene snake` |
+| Pixel art | `PixelCanvas`, `motui.pixel`, braille/half markers, slot/heat trails | `python -m motui --scene motion` |
 | Live dashboard | `Sparkline`, `ProgressBar`, `Table`, `App.every`/`invalidate` | `python -m motui --scene dashboard` |
 | Wide table | `Table(cell_wrap=WrapMode.OVERFLOW)` inside `ScrollPanel(axis="x")` | `python -m motui --scene gallery` |
 | Two-axis code view | `WrapMode.OVERFLOW` inside `ScrollPanel(axis="both")` | `python -m motui --scene gallery` |
@@ -77,10 +78,40 @@ What each piece did:
 | Forms and dialogs | `Form`/`Field`, `Input`/`Editor`, `Dialog` through `App.open_modal` | [WIDGETS](docs/WIDGETS.md) |
 
 The interactive demo is the only showcase: a splash that cycles Neon,
-Plasma, Retro CRT and Starfield until a key, then the Home tiles over the
-seven sections -- components, layout, motion, dashboard, terminal and
-themes around the tile grid itself -- plus the standalone Snake game and
-the component Gallery. `python -m motui --pages` dumps every scene.
+Plasma, Retro CRT and Starfield until a key, then the Home tiles over six
+sections -- components, layout, motion, dashboard, terminal and themes --
+plus the standalone Snake game and the component Gallery. The splash
+wordmark and the motion rings are painted by `PixelCanvas`; the marker
+ladder lives in the terminal report. `python -m motui --pages` dumps every
+scene.
+
+## PixelCanvas
+
+`PixelCanvas` is the sub-cell drawing widget: every terminal cell is a 2x4
+sub-cell grid, and the widget quantizes two private `motui.pixel.Raster`
+layers (art over fill) into ordinary rows. It is new in 2.1 and
+provisional. Draw with `plot/erase/stamp/line/rect/disc/ring`, choose
+`layer=LayerName.ART|FILL`, set a `heat` for trails, and let a
+`PixelPalette` map slot ids to `(main, cool)` colors. `Marker.BRAILLE`
+spends the eight dots; `Marker.HALF` folds four sub-rows into half blocks.
+
+```python
+from motui.kernel.layout import Constraints
+from motui.pixel import PixelPalette
+from motui.widgets import LayerName, PixelCanvas
+
+palette = PixelPalette(slots={1: ((255, 99, 132), (122, 46, 64))})
+canvas = PixelCanvas(20, 8, palette=palette)
+canvas.disc(20, 16, 5, 1, layer=LayerName.FILL)  # target behind the ring
+canvas.ring(20, 16, 12, 2, 1)                    # braille ring
+canvas.decay(40)                                 # cool the trail
+surface = canvas.render(Constraints(width=20, max_height=8))
+```
+
+The full constructor, layer rules and palette semantics are in
+[WIDGETS](docs/WIDGETS.md#pixelcanvas-sub-cell-art); the engine is
+`motui.pixel` (`Raster`, `PixelPalette`, `Marker`, `PixelLayer`,
+`quantize`).
 
 Wide content is the one horizontal-scroll case: `ScrollPanel(axis="x"` or
 `"both")` windows a component that may render wider than its constraints
@@ -449,10 +480,9 @@ deadlines rather than accumulating drift.
 
 `python -m motui` starts the showcase that ships in the wheel: a persistent
 MOTUI splash (Neon / Plasma / Retro CRT / Starfield, until any key), then
-the Home tiles over seven sections -- components, layout, motion,
-dashboard, terminal and themes as placeholders this release -- plus the
-standalone Snake game and Component Gallery. No network, no model, no
-assets beyond the package.
+the Home tiles over six real sections -- components, layout, motion,
+dashboard, terminal and themes -- plus the standalone Snake game and the
+component Gallery. No network, no model, no assets beyond the package.
 
 ```bash
 python -m motui                          # a real terminal: splash, then Home
@@ -460,16 +490,19 @@ python -m motui --scene gallery          # start on one scene
 python -m motui --headless --frames 60   # deterministic text frame, no TTY
 python -m motui < /dev/null              # piped: print the Home frame, exit 0
 python -m motui --pages                  # all ten scenes as plain text
+python -m motui --list                   # scene names, titles and blurbs
+python -m motui --version                # the distribution version
 ```
 
-On Home, arrows and `enter` (or a click) open a tile; `esc` returns to the
-splash. Entering a section wipes it in column by column over ~150 ms, and a
-status line pins the section name plus a theme/fps note to the bottom row.
-`ctrl+p` opens the command palette: one jump command per section, the
-status-line toggle and quit. Snake plays with the arrow keys or WASD,
-`space` pauses, and `q` or `esc` returns to Home. The Gallery keeps a real
-`Tree`, `Table`, `ProgressBar`, `Slider` and `Input` side by side; `tab`
-cycles their focus.
+On Home, arrows and `enter` (or a click) open a tile; `s` opens Snake and
+`g` opens Gallery; `esc` returns to the splash. Entering a section wipes it
+in column by column over ~150 ms, and a status line pins the section title
+plus a theme/fps note to the bottom row. `ctrl+p` opens the command palette
+(every jumpable scene, help, the status-line toggle and quit); `F1` opens a
+help panel with the current scene's keys and pauses the clock. Snake plays
+with the arrow keys or WASD, `space` pauses, and `q` or `esc` returns to
+Home. The Gallery keeps a real `Tree`, `Table`, `ProgressBar`, `Slider` and
+`Input` side by side; `tab` cycles their focus.
 
 ## Docs
 
@@ -479,7 +512,7 @@ cycles their focus.
   invariants the implementation and tests are written against.
 - [WIDGETS](docs/WIDGETS.md) - every component: construction, capabilities,
   hooks and `take()`.
-- [MIGRATION](docs/MIGRATION.md) - the 1.x to 2.0 name table, recipes and the
+- [MIGRATION](docs/MIGRATION.md) - the 1.x to 2.1 name table, recipes and the
   removal list.
 - [ADRs](docs/adr/README.md) - the 23 accepted architecture decisions.
 - [CONTRIBUTING](CONTRIBUTING.md) - the gates, the commit style and the

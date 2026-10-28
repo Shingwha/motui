@@ -7,18 +7,20 @@ Run it from the repository root::
     uv run python tools/semantic.py --update   # re-record every scene
     uv run python tools/semantic.py --check --snapshot DIR   # another set
 
-The tool pins what a terminal would *show* for each of the five showcase
-scenes (``splash``, ``menu``, ``snake``, ``dashboard``, ``gallery``):
-the bytes ``scene_output`` paints go through
+The tool pins what a terminal would *show* for each of the ten showcase
+scenes (``splash``, ``menu``, ``components``, ``layout``, ``motion``,
+``dashboard``, ``terminal``, ``themes``, ``snake``, ``gallery``): the bytes
+``scene_output`` paints go through
 :class:`~motui.testing.emulator.Emulator`, which rebuilds
 the cell grid, and each row is written as its text plus the styled runs
 over it.  A change that only reorders escapes stays green; a change in
 glyphs, SGR attributes, OSC 8 links or the cursor anchor moves the snapshot.
 
-``scene_output`` is the production painter path at a fixed phase: a fresh
-headless runtime, ``fill(Showcase)`` and one ``paint`` -- no event pump, no
-clock, no terminal.  The same path ``python -m motui --pages`` renders as
-text, so the scene snapshots and the page dump describe one frame.
+``scene_output`` is the production painter path at the scene registry's
+preview phase: a fresh headless runtime, ``fill(Showcase)`` and one
+``paint`` -- no event pump, no clock, no terminal.  The same path
+``python -m motui --pages`` renders as text, so the scene snapshots and
+the page dump describe one frame.
 
 Format, one LF-terminated file per scene::
 
@@ -49,7 +51,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT / "src"))
 
-from motui.demo import PAGE_PHASE, SCENES, scene_output  # noqa: E402
+from motui.demo import SCENES, scene_output  # noqa: E402
 from motui.kernel.style import Style  # noqa: E402
 from motui.testing import Emulator  # noqa: E402
 
@@ -73,7 +75,7 @@ def frame(
     name: str,
     width: int = WIDTH,
     height: int = HEIGHT,
-    phase: int = PAGE_PHASE,
+    phase: int | None = None,
 ) -> Emulator:
     """Emulate one scene's painted bytes on a ``width`` x ``height`` grid."""
     emulator = Emulator(width, height)
@@ -113,7 +115,7 @@ def snapshot(
     name: str,
     width: int = WIDTH,
     height: int = HEIGHT,
-    phase: int = PAGE_PHASE,
+    phase: int | None = None,
 ) -> str:
     """One scene's semantic frame: the cursor header, then text and runs."""
     emulator = frame(name, width, height, phase)

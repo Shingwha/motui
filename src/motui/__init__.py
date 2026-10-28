@@ -5,7 +5,7 @@ addressable blocks one diffed row at a time, owns its own scrollback, and
 keeps pinned bands (fixed top and bottom regions, the frame's own footer)
 that never scroll away.
 
-Three layers carry it:
+The layers carry it:
 
 * :mod:`motui.kernel` -- the core and the root of the dependency graph:
   the frozen :class:`~motui.kernel.document.Component` protocol and the
@@ -22,6 +22,11 @@ Three layers carry it:
   :func:`~motui.kernel.selection.extract`), and raw terminal bytes into
   events: the pure :class:`~motui.kernel.KeyDecoder`, the keymaps and the
   terminal key sources.
+* :mod:`motui.pixel` -- the optional sub-cell raster medium:
+  :class:`~motui.pixel.Raster`, :class:`~motui.pixel.PixelPalette`,
+  :class:`~motui.pixel.PixelLayer`, :class:`~motui.pixel.Marker` and
+  :func:`~motui.pixel.quantize`.  It imports the kernel only; the
+  :class:`~motui.widgets.PixelCanvas` widget is its adapter.
 * :mod:`motui.widgets` -- the generic component library: the renderers plus
   the minimal action primitives, the Markdown rule registries under
   :mod:`motui.widgets.markdown` and the zero-dependency highlighting seam in
@@ -62,6 +67,7 @@ Everything else stays public at its own layer namespace::
     from motui import App, Input, Markdown           # the root: the curated face
     from motui.widgets import Row, Panel, Diff       # a layer: the whole library
     from motui.kernel import Style, Line, Selection    # the kernel seam
+    from motui.pixel import Raster, PixelPalette        # the optional pixel medium
     from motui.kernel import DEFAULT_INPUT_KEYMAP
     from motui.app import Runtime, Workspace, FocusManager, Pointer, Find
 
@@ -71,9 +77,10 @@ under :mod:`motui.kernel`, the byte decoder beside them, and
 the Markdown rule registries and the highlighter protocol under
 :mod:`motui.widgets` -- for hosts that reach below the layers.
 
-Dependencies point one way: the core depends on nothing outside itself,
-``widgets`` builds on it, and the app layer and the headless helpers
-compose them from above.
+Dependencies point one way: the core depends on nothing outside itself;
+``pixel`` and ``terminal`` build on the core; ``widgets`` builds on the
+kernel and the optional pixel medium; and the app layer and the headless
+helpers compose them from above.
 """
 
 from importlib.metadata import PackageNotFoundError, version
@@ -85,7 +92,7 @@ from importlib.metadata import PackageNotFoundError, version
 try:
     __version__ = version("motui")
 except PackageNotFoundError:  # pragma: no cover - a pure source checkout
-    __version__ = "2.0.0"
+    __version__ = "2.1.0"
 
 from .app import App, CommandPalette, Modal
 from .kernel import (

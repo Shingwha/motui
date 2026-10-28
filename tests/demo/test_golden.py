@@ -16,7 +16,7 @@ import pytest
 
 from motui.demo import SCENES
 
-ROOT = Path(__file__).resolve().parent.parent
+ROOT = Path(__file__).resolve().parents[2]
 TOOL = ROOT / "tools" / "semantic.py"
 
 
@@ -104,3 +104,16 @@ def test_every_scene_has_a_snapshot(semantic):
         ).splitlines()
         assert lines[0].startswith(f"# {name} 100x30 cursor=")
         assert len(lines) == 31
+
+
+def test_the_motion_snapshot_has_a_live_pixel_board(semantic):
+    lines = semantic.snapshot("motion").splitlines()
+    board = "\n".join(lines[2:-1])  # HUD first, hint last
+    assert any(
+        (
+            "\u2800" < char < "\u2900"
+            or char in "\u2580\u2584\u2588"
+        )
+        for row in board
+        for char in row
+    ), board

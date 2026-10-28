@@ -1,12 +1,17 @@
 # Contract
 
-This page is the short normative layer for motui 2.0. It states the rules
+This page is the short normative layer for motui 2.1. It states the rules
 the implementation and the tests are written against; it is not a tutorial.
 [ARCHITECTURE](ARCHITECTURE.md) explains the mechanisms, [WIDGETS](WIDGETS.md)
 explains how to build with them, and [MIGRATION](MIGRATION.md) holds the 1.x
 name table and the removal list. Where this page and the shipped code
 disagree, the code is wrong and the change that touches it must make the code
 match.
+
+The optional pixel medium (`motui.pixel`, `PixelCanvas`) is provisional in
+2.1: it may change in a minor until it is frozen. The stable core is the
+kernel without pixel, terminal, widgets without `PixelCanvas`, and app.
+The demo is not a public contract.
 
 ## 1. Values and immutability
 
@@ -339,5 +344,5 @@ A name lives in exactly one facade; there are no alias modules and no
 forwarding packages. `motui.terminal.ansi` is private: it is the only place
 escape bytes are constructed, and it is not re-exported.
 
-The 2.0 removal list and the replacements are in
+The 2.0/2.1 removal list and the replacements are in
 [MIGRATION](MIGRATION.md). No alias is provided for a removed name.

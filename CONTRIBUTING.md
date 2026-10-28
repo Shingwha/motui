@@ -15,20 +15,27 @@ process.
    deeper. `tests/test_api.py` asserts that every facade name resolves and
    that the root is a subset of the layers.
 3. **One source module, one test file.** `src/motui/x/y.py` is exercised by
-   the matching test module; a component family shares one test file.
+   the matching test module; a component family shares one test file. A
+   cross-widget contract may live in one parameterized `test_contracts.py`
+   instead of being copied into every family.
 4. **Rendering is pinned.** `tests/golden/semantic/` is the cell-grid
-   contract: five showcase scenes, one file each. `tools/framebench.py`'s
-   render hash is the coarse proof that a refactor moved nothing.
+   contract: ten showcase scenes, one file each, each recorded at its
+   registry preview phase. `tools/framebench.py`'s render hash is the coarse
+   proof that a refactor moved nothing.
 5. **No compatibility shims.** A renamed name is deleted with its last
    consumer: no alias, no `_deprecated` re-export, no forwarding module, no
    accepted legacy string or argument. `MIGRATION.md` records the mapping.
 6. **Within 2.x the contract is additive.** A release adds names,
    components and hooks; it does not rename or re-purpose an existing one.
-   A removal is a MAJOR decision.
+   A removal is a MAJOR decision. **2.1 addition:** `motui.pixel` and
+   `PixelCanvas` are new in 2.1 and provisional; as new names they may change
+   in a minor until they are frozen. The stable 2.x core is kernel (without
+   pixel), terminal, widgets (without `PixelCanvas`) and app; the demo is
+   not a public contract.
 7. **The library never sleeps.** Time enters through `Runtime.clock()`,
    which a test injects; `Runtime.advance(dt)` replays it.
 8. **A public-surface change is a decision, not an accident.** The pinned
-   surface (`tools/api-2.0.txt`) plus the golden frames are the gate.
+   surface (`tools/api-2.1.txt`) plus the golden frames are the gate.
 9. **Docs move with the code**, in the same commit.
 
 ## The directory
@@ -42,16 +49,16 @@ src/motui/
   terminal/         Screen ABC, Terminal/TerminalOptions, decoder, key
                     sources, capability, clipboard, Painter, SGR render,
                     private ansi
-  widgets/          the component library (46 names) and Widget/Container
+  widgets/          the component library (48 names) and Widget/Container
   app/              Runtime, Workspace, App, Router, focus/pointer/gesture/
                     find/modal/palette/overlays/scrollbar/commands
+  pixel/            the optional raster medium: Raster, palette, quantize
   testing/          Harness, headless_tui, ScriptedEvents, snapshot, Emulator
-  demo/             python -m motui: art, showcase (splash/menu/gallery/
-                    dashboard) and breakout
+  demo/             python -m motui: cli, preview, registry, shell, sections
 tests/
-  kernel/ widgets/ app/ terminal/   behavior and contract tests
-  golden/semantic/                 five cell-grid scene snapshots
-  testing/                         clocks, doubles, events, layout helpers
+  kernel/ pixel/ widgets/ app/ terminal/ testing/   behavior and contract tests
+  demo/                            registry, lifecycle, scenes, entry, golden
+  golden/semantic/                 ten cell-grid scene snapshots
 tools/
   semantic.py                      the semantic frame gate
   framebench.py                    timing workloads and render hash
@@ -83,16 +90,14 @@ uv run python tools/semantic.py --check
 uv run python tools/framebench.py
 uv run python -m motui < /dev/null
 uv run python -m motui --pages
-uv run python -m motui --scene breakout --frames 30 --headless
+uv run python -m motui --scene snake --frames 30 --headless
 uv run python -m motui --scene dashboard --frames 30 --headless
 uv run ruff check .
+uv run ruff check src/motui/widgets/pixel_canvas.py tests/widgets/test_pixel_canvas.py --config "exclude=[]"
 uv run pyright
 uv run lint-imports
 uv run python tools/api.py --check
 uv run python tools/growth.py
-uv run python examples/quickstart.py --headless
-uv run python examples/code.py --headless
-uv run python examples/wide_table.py --headless
 ```
 
 What each protects:
@@ -131,7 +136,7 @@ The definition of done for a behavior change:
   `tools/semantic.py --update` and explain every changed scene in the
   commit message;
 - if it touches a facade, make a version decision first and update
-  `tools/api-2.0.txt` with `tools/api.py --update`.
+  `tools/api-2.1.txt` with `tools/api.py --update`.
 
 **Interactive paths need tests that reach them.** A headless session with
 scripted events runs the same handlers a live session runs. A behavior that
@@ -149,8 +154,8 @@ golden or API snapshot change.
 ```
 kernel: a wrap mode names how a row meets its width
 widgets: scroll panel windows columns and rows
-docs: architecture, contract and widgets describe the 2.0 tree
-release: the package is 2.0.0
+docs: architecture, contract and widgets describe the 2.1 tree
+release: the package is 2.1.0
 ```
 
 ## Adding a component
@@ -178,17 +183,18 @@ semantic frame.
 
 ## Adding a showcase scene
 
-`src/motui/demo/showcase.py` holds `Showcase`, `Splash`, `Menu`, `Gallery`
-and `DashboardScene`; `src/motui/demo/breakout.py` holds the game. A scene
-registers its name in `SCENES` (via `demo/__init__.py`) and answers
-`render(Constraints) -> Surface` plus `tick()`/`on_key()`/`on_click()` as
-needed. Keep it deterministic: derive motion from the phase, never from the
-clock, stdin or randomness.
+`src/motui/demo/scene.py` holds the `Scene` contract and `SceneSpec`;
+`demo/registry.py` is the one registry the shell, Home tiles, palette and
+snapshots read. A scene subclasses `Scene`, implements
+`render(Constraints) -> Surface` and its `tick()`/`on_key()`/`on_click()`
+as needed, and registers a `SceneSpec` with its title, blurb, keys,
+optional miniature and preview phase. Keep it deterministic: derive motion
+from the phase, never from the clock, stdin or randomness.
 
 Then:
 
 ```bash
-uv run python tools/semantic.py --update    # five scene snapshots
+uv run python tools/semantic.py --update    # ten scene snapshots
 uv run python -m motui --pages              # review the plain-text dump
 ```
 
@@ -198,12 +204,14 @@ headless entry and the tests share the same scene renderer.
 ## Versioning
 
 SemVer, with a deliberately slow MAJOR cadence. The current release is
-**2.0.0**. The 2.0 break is documented name by name in
+**2.1.0**. The 1.x -> 2.0 break and the 2.0 -> 2.1 additions are documented name by name in
 [`docs/MIGRATION.md`](docs/MIGRATION.md); no compatibility aliases or
 legacy arguments are provided.
 
-Inside 2.x the public contract is **additive**: a name joins a facade, no
-existing name changes meaning, and no name is removed without a MAJOR. A
+Inside 2.x the public contract is **additive**. 2.1 adds a provisional pixel
+surface (`motui.pixel`, `PixelCanvas`); as new names they may change in a
+minor until they are frozen. No existing 2.0 name changes meaning, and no
+name is removed without a MAJOR. A
 new kernel field must be keyword-only with a default; `tools/growth.py`
 proves that pattern.
 

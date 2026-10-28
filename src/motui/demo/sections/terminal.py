@@ -35,7 +35,9 @@ from ...kernel.layout import Constraints
 from ...kernel.style import FG_CODES, Style
 from ...kernel.text import WrapMode
 from ...kernel.theme import Theme
-from ...widgets import Canvas, Panel, Row, Widget
+from ...widgets import Canvas, Panel, Row
+from ..common import FixedHeight, LinesView
+from ..scene import Scene
 
 __all__ = ["TerminalScene"]
 
@@ -72,9 +74,9 @@ _BASE16 = tuple(FG_CODES)
 #: kernel's quantizer searches), then the blue channel's six cube levels.
 _CUBE_LEVELS = (0, 95, 135, 175, 215, 255)
 _BAR_256 = tuple(
-    "#%02x%02x%02x" % (value, value, value)
+    f"#{value:02x}{value:02x}{value:02x}"
     for value in (8 + 10 * step for step in range(24))
-) + tuple("#%02x%02x%02x" % (0, 0, value) for value in _CUBE_LEVELS)
+) + tuple(f"#0000{value:02x}" for value in _CUBE_LEVELS)
 
 #: The truecolor bar's endpoints: a raised dark surface into the accent hue.
 _TRUE_FROM = (22, 29, 39)
@@ -86,56 +88,16 @@ def _gradient() -> tuple[str, ...]:
     """The 24-bit sweep, one ``#rrggbb`` per step, integer interpolation."""
     span = _TRUE_STEPS - 1
     return [
-        "#%02x%02x%02x"
-        % tuple(a + (b - a) * step // span for a, b in zip(_TRUE_FROM, _TRUE_TO))
+        "#{:02x}{:02x}{:02x}".format(
+            *(a + (b - a) * step // span for a, b in zip(
+                _TRUE_FROM, _TRUE_TO, strict=True
+            ))
+        )
         for step in range(_TRUE_STEPS)
     ]
 
 
-class _LinesView(Widget):
-    """A render-only block of pre-built lines: one panel's content.
-
-    The scene rebuilds :attr:`lines` when the facts change (the session
-    panel answers a new size or tick, the feed a new click); the static
-    panels build theirs once.
-    """
-
-    __slots__ = ("lines",)
-
-    def __init__(self, theme: Theme) -> None:
-        super().__init__(theme, None)
-        self.lines: list[Line] = []
-
-    def render(self, c: Constraints) -> Surface:
-        rows = [line.clip(_CLIP, c.width) for line in self.lines]
-        return Surface.of(rows, c.width)
-
-
-class _Box:
-    """Render a child under a row budget and pad it to exactly that height.
-
-    The section's 2x2 panel grid wants equal heights per half; ``Panel``
-    hands its child only a width, so this small adapter supplies the row
-    budget and fills the remainder with blanks.
-    """
-
-    __slots__ = ("child", "height")
-
-    def __init__(self, child: object, height: int = 0) -> None:
-        self.child = child
-        self.height = height
-
-    def render(self, c: Constraints) -> Surface:
-        budget = max(0, self.height)
-        rows = list(
-            self.child.render(Constraints(width=c.width, max_height=budget))
-        )
-        del rows[budget:]
-        rows.extend(Line() for _ in range(budget - len(rows)))
-        return Surface.of(rows, c.width)
-
-
-class TerminalScene:
+class TerminalScene(Scene):
     """The terminal report: the pipe under every widget, on one frame.
 
     A 2x2 grid of panels -- session facts and the mouse feed above the
@@ -148,18 +110,17 @@ class TerminalScene:
     name = "terminal"
 
     def __init__(self, theme: Theme) -> None:
-        self.theme = theme
-        self._phase = 0
+        super().__init__(theme)
         self._feed: list[str] = []  # recent click reports, newest last
 
         # -- the two static panels -----------------------------------
-        self._bars = _LinesView(theme)
+        self._bars = LinesView(theme)
         self._bars.lines = self._bar_lines()
-        self._ladder = _LinesView(theme)
+        self._ladder = LinesView(theme)
         self._ladder.lines = self._ladder_lines()
         # -- the two panels that re-answer every frame ----------------
-        self._session = _LinesView(theme)
-        self._feed_view = _LinesView(theme)
+        self._session = LinesView(theme)
+        self._feed_view = LinesView(theme)
         self._session_panel = Panel(self._session, title="session", theme=theme)
         self._feed_panel = Panel(self._feed_view, title="mouse \u00b7 live", theme=theme)
         self._bars_panel = Panel(
@@ -167,15 +128,25 @@ class TerminalScene:
         )
         self._ladder_panel = Panel(self._ladder, title="marker ladder", theme=theme)
         self._top = Row(
-            [_Box(self._session_panel), _Box(self._feed_panel)],
+            [FixedHeight(self._session_panel), FixedHeight(self._feed_panel)],
             widths=[52, None],
             gap=1,
         )
         self._bottom = Row(
-            [_Box(self._bars_panel), _Box(self._ladder_panel)],
+            [FixedHeight(self._bars_panel), FixedHeight(self._ladder_panel)],
             widths=[52, None],
             gap=1,
         )
+        self._refresh_feed()
+
+    def enter(self) -> None:
+        super().enter()
+        self._feed.clear()
+        self._refresh_feed()
+
+    @property
+    def feed(self) -> tuple[str, ...]:
+        return tuple(self._feed)
 
     # -- the static panels -------------------------------------------------------
 
@@ -301,7 +272,6 @@ class TerminalScene:
         width = c.width
         height = c.max_height if c.max_height is not None else 24
         self._refresh_session(width, height)
-        self._refresh_feed()
 
         left = min(52, max(30, width * 52 // 100))
         self._top.widths = [left, None]
@@ -364,4 +334,5 @@ class TerminalScene:
         """Land one click report in the live feed (newest last, depth-capped)."""
         self._feed.append(f"click ({pos.x}, {pos.y})")
         del self._feed[:-_FEED_DEPTH]
+        self._refresh_feed()
         return None

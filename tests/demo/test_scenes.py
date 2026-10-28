@@ -1,20 +1,13 @@
-"""The interactive showcase scenes, driven directly instead of through a TTY.
-
-``test_smoke`` covers the entry points; this file pins the scene mechanics
-that a key sequence exposes: the snake's pace/turns/food/death, the gallery's
-click-through to its widgets, and the determinism a headless replay relies on.
-"""
+"""The showcase scenes driven directly instead of through a TTY."""
 
 from __future__ import annotations
 
+import pytest
+
 from motui.demo import PAGE_PHASE, render_scene
-from motui.demo.showcase import (
-    SPLASH_ROTATE_TICKS,
-    DashboardScene,
-    GalleryScene,
-    SnakeScene,
-    SplashScene,
-)
+from motui.demo.sections import DashboardScene, GalleryScene
+from motui.demo.sections.splash import SPLASH_ROTATE_TICKS, SplashScene
+from motui.demo.snake import SnakeScene
 from motui.kernel.events import KeyEvent
 from motui.kernel.geom import Pos
 from motui.kernel.layout import Constraints
@@ -29,15 +22,9 @@ def _snake() -> SnakeScene:
     return scene
 
 
-def test_the_splash_waits_for_a_key_and_never_times_out():
-    scene = SplashScene(Theme.dark(), seed=0)
-    assert scene.tick(10_000) is None
-    assert scene.on_key(KeyEvent("x")) == "menu"
-    assert scene.on_click(Pos(x=0, y=0)) == "menu"
-
-
 def test_the_splash_cycles_styles_and_shapes():
     scene = SplashScene(Theme.dark(), seed=0)
+    scene.enter()
     assert scene.style_name(0) != scene.style_name(SPLASH_ROTATE_TICKS * 2)
     one = render_scene("splash", width=80, height=24, phase=0)
     two = render_scene("splash", width=80, height=24, phase=SPLASH_ROTATE_TICKS)
@@ -45,7 +32,7 @@ def test_the_splash_cycles_styles_and_shapes():
     assert "press any key" in one and "press any key" in two
 
 
-def test_the_snake_takes_one_step_every_four_ticks():
+def test_the_snake_moves_turns_eats_and_pauses():
     scene = _snake()
     head = scene.snake[0]
     scene.tick(3)
@@ -53,72 +40,56 @@ def test_the_snake_takes_one_step_every_four_ticks():
     scene.tick(4)
     assert scene.snake[0] == (head[0] + 1, head[1])
 
-
-def test_the_snake_turns_and_refuses_a_reverse():
-    scene = _snake()
     scene.on_key(KeyEvent("down"))
     assert (scene.dx, scene.dy) == (0, 1)
     scene.on_key(KeyEvent("up"))  # reverse of down: refused
     assert (scene.dx, scene.dy) == (0, 1)
+
+    head = scene.snake[0]
+    length = len(scene.snake)
+    scene.food = (head[0], head[1] + 1)
+    scene.tick(8)
+    assert scene.score == 10 and len(scene.snake) == length + 1
     scene.on_key(KeyEvent("left"))
     assert (scene.dx, scene.dy) == (-1, 0)
 
-
-def test_the_snake_eats_food_and_grows():
-    scene = _snake()
-    head = scene.snake[0]
-    length = len(scene.snake)
-    scene.food = (head[0] + 1, head[1])
-    scene.tick(4)
-    assert scene.score == 10
-    assert len(scene.snake) == length + 1
-
-
-def test_space_pauses_and_resumes():
-    scene = _snake()
     scene.on_key(KeyEvent("space"))
-    assert scene.paused
-    head = scene.snake[0]
-    scene.tick(4)
-    assert scene.snake[0] == head
-
+    paused_head = scene.snake[0]
+    scene.tick(12)
+    assert scene.snake[0] == paused_head
     scene.on_key(KeyEvent("space"))
-    assert not scene.paused
-    scene.tick(8)
-    assert scene.snake[0] != head
+    scene.tick(16)
+    assert scene.snake[0] != paused_head
 
 
 def test_hitting_the_wall_ends_the_game_and_space_restarts():
     scene = _snake()
-    scene.snake = [(scene._iw - 1, 0)]
+    scene.snake = [(scene.playfield_width - 1, 0)]
     scene.dx, scene.dy = 1, 0
     scene.tick(4)
     assert not scene.alive
     assert "GAME OVER" in scene.render(FRAME, 4).rows[0].text
+    first = render_scene("snake", width=80, height=24, phase=40)
+    assert first == render_scene("snake", width=80, height=24, phase=40)
 
     scene.on_key(KeyEvent("space"))
     assert scene.alive and scene.score == 0 and len(scene.snake) == 4
 
 
-def test_snake_renders_deterministically():
-    first = render_scene("snake", width=80, height=24, phase=40)
-    second = render_scene("snake", width=80, height=24, phase=40)
-    assert first == second
-    assert "snake" in first and "score" in first
-    assert "▀" in first or "▄" in first or "█" in first
-
-
-def test_snake_returns_to_the_menu():
-    assert _snake().on_key(KeyEvent("escape")) == "menu"
-    assert _snake().on_key(KeyEvent("q")) == "menu"
-
-
-def _dashboard() -> DashboardScene:
-    return DashboardScene(Theme.dark())
+@pytest.mark.parametrize(
+    "factory",
+    [
+        lambda: _snake(),
+        lambda: DashboardScene(Theme.dark()),
+        lambda: GalleryScene(Theme.dark()),
+    ],
+)
+def test_sections_return_to_the_menu(factory):
+    assert factory().on_key(KeyEvent("escape")) == "menu"
 
 
 def test_dashboard_pushes_a_sample_every_tick():
-    scene = _dashboard()
+    scene = DashboardScene(Theme.dark())
     before = scene.samples[-1]
     scene.tick(1)
     assert scene.samples[-1] != before
@@ -145,11 +116,6 @@ def test_dashboard_clock_is_derived_from_phase():
     assert "00:02.0" in two and "tick 0060" in two
 
 
-def test_dashboard_returns_to_the_menu():
-    assert _dashboard().on_key(KeyEvent("escape")) == "menu"
-    assert _dashboard().on_key(KeyEvent("q")) == "menu"
-
-
 def _gallery() -> GalleryScene:
     scene = GalleryScene(Theme.dark())
     scene.render(Constraints(width=100, max_height=30), 0)
@@ -160,22 +126,17 @@ def test_gallery_click_reaches_the_tree_and_folds_a_branch():
     scene = _gallery()
     node = scene.tree.root_nodes[0]
     assert node.expanded is True
-    # The gallery's title/gap/divider/gap occupy four rows above the body;
-    # the tree panel's border is the body's first row, so its first node row
-    # is five rows below the centred block's top.
-    scene.on_click(Pos(x=3, y=scene._top + 5))
+    scene.on_click(Pos(x=3, y=scene.origin + 5))
     assert node.expanded is False
-    scene.on_click(Pos(x=3, y=scene._top + 5))
+    scene.on_click(Pos(x=3, y=scene.origin + 5))
     assert node.expanded is True
 
 
 def test_gallery_click_focuses_the_clicked_widget():
     scene = _gallery()
-    assert scene._focus == 0
-    # The middle panel starts after the first panel and its gap; a click in
-    # its content row focuses the Table whatever its own click door says.
-    scene.on_click(Pos(x=40, y=scene._top + 5))
-    assert scene._focus == 1
+    assert scene.focus == 0
+    scene.on_click(Pos(x=40, y=scene.origin + 5))
+    assert scene.focus == 1
 
 
 def test_the_page_phase_has_content_in_the_game_and_the_dashboard():

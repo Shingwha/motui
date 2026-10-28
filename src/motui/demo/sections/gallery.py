@@ -23,11 +23,13 @@ from ...widgets import (
     Tree,
     TreeNode,
 )
+from ..scene import Scene
+from ..version import DEMO_BAND
 
 __all__ = ["GalleryScene"]
 
 
-class GalleryScene:
+class GalleryScene(Scene):
     """A live page of real 2.0 components, not pictures of them.
 
     Three panes share the width: a ``Tree`` (fold/unfold and a cursor), a
@@ -43,8 +45,7 @@ class GalleryScene:
     name = "gallery"
 
     def __init__(self, theme: Theme) -> None:
-        self.theme = theme
-        self._phase = 0
+        super().__init__(theme)
         self._focus = 0
         self._top = 0
         self.tree = Tree(
@@ -74,7 +75,7 @@ class GalleryScene:
         )
         self.table.index = 1
         self.markdown = Markdown(
-            "**2.0 in one page**\n\n"
+            f"**{DEMO_BAND} in one page**\n\n"
             "Every block here is a real widget:\n\n"
             "- `Tree` folds\n"
             "- `Table` selects\n"
@@ -109,6 +110,22 @@ class GalleryScene:
         self._root = Column(
             [self._title, self._divider, body, self._hint], gap=1
         )
+
+    @property
+    def focus(self) -> int:
+        """The index of the focused interactive widget."""
+        return self._focus
+
+    @property
+    def origin(self) -> int:
+        """The top row of the centred block in the last render."""
+        return self._top
+
+    def enter(self) -> None:
+        super().enter()
+        self._set_focus(0)
+        self.input.text = "type here"
+        self.table.index = 1
 
     def _set_focus(self, index: int) -> None:
         """Place the demo's own focus on one interactive widget."""

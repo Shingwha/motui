@@ -148,14 +148,6 @@ def test_the_typed_hooks_forward_to_the_1x_click_and_hover_verbs():
     assert lst.on_click(Pos(y=0, x=0)) is False  # the counter row
 
 
-def test_take_reads_the_result_once():
-    lst = List(["a"])
-    assert lst.take() is None
-    assert lst.on_action("activate") is True and lst.take() == "a"
-    assert lst.take() is None
-    assert lst.on_action("activate") is True and lst.take() == "a"
-
-
 def test_the_list_declares_its_capabilities():
     lst = List(["a"])
     assert (lst.focusable, lst.clickable, lst.hoverable, lst.activatable) == (

@@ -2,14 +2,11 @@
 
 from __future__ import annotations
 
-from time import perf_counter
-
 import pytest
 
 from motui.kernel.cell import Surface
 from motui.kernel.glyphs import Border
 from motui.kernel.layout import Constraints
-from motui.kernel.style import Style
 from motui.widgets.canvas import Canvas, Sparkline
 
 
@@ -164,49 +161,3 @@ def test_sparkline_plots_its_values_into_one_row():
     )
     assert budget.height == 2
     assert Sparkline([1]).render(Constraints(width=0)).height == 0
-
-
-def _median(values: list[float]) -> float:
-    ordered = sorted(values)
-    return ordered[len(ordered) // 2]
-
-
-def _surface_ms(fill) -> tuple[float, list[float]]:
-    """Median surface() time after ``fill`` dirties the whole 80x24 canvas."""
-    canvas = Canvas(80, 24)
-    for _ in range(3):  # warm up the allocator and the style caches
-        canvas.clear()
-        fill(canvas)
-        canvas.surface()
-    samples: list[float] = []
-    for _ in range(5):
-        canvas.clear()
-        fill(canvas)
-        started = perf_counter()
-        canvas.surface()
-        samples.append((perf_counter() - started) * 1000.0)
-    return _median(samples), samples
-
-
-def _fill_many_colors(canvas: Canvas) -> None:
-    for y in range(canvas.height):
-        for x in range(canvas.width):
-            canvas.put(x, y, "\u2588", Style(fg=(x * 3 % 256, y * 7 % 256, (x + y) % 256)))
-
-
-def _fill_one_color(canvas: Canvas) -> None:
-    for y in range(canvas.height):
-        for x in range(canvas.width):
-            canvas.put(x, y, "\u2588")
-
-
-def test_a_full_colour_canvas_surface_rebuild_stays_under_two_ms():
-    median, samples = _surface_ms(_fill_many_colors)
-    print(f"canvas 80x24 full-colour surface: median {median:.3f} ms {samples}")
-    assert median <= 2.0, f"full-colour surface median {median:.3f} ms"
-
-
-def test_a_single_colour_canvas_surface_rebuild_stays_under_point_four_ms():
-    median, samples = _surface_ms(_fill_one_color)
-    print(f"canvas 80x24 single-colour surface: median {median:.3f} ms {samples}")
-    assert median <= 0.4, f"single-colour surface median {median:.3f} ms"

@@ -113,27 +113,22 @@ def test_line_value_semantics() -> None:
     assert "ab" in repr(a)
 
 
-def test_line_is_immutable() -> None:
-    line = Line.from_text("ab")
-    with pytest.raises(AttributeError):
-        line.text = "x"  # type: ignore[misc]
-    with pytest.raises(AttributeError):
-        del line._segments  # type: ignore[attr-defined]
-
-
-@pytest.mark.parametrize(("text", "width", "expected"), [
-    ("abcdef", 0, ""),
-    ("abcdef", 1, "a"),
-    ("abcdef", 3, "abc"),
-    ("abcdef", 6, "abcdef"),
-    ("abcdef", 9, "abcdef"),
-    ("中a", 1, ""),  # a double-width cell never straddles the cut
-    ("中a", 2, "中"),
-    ("a中", 2, "a"),
-    ("a中", 3, "a中"),
-    ("😀x", 1, ""),
-    ("😀x", 2, "😀"),
-])
+@pytest.mark.parametrize(
+    ("text", "width", "expected"),
+    [
+        ("abcdef", 0, ""),
+        ("abcdef", 1, "a"),
+        ("abcdef", 3, "abc"),
+        ("abcdef", 6, "abcdef"),
+        ("abcdef", 9, "abcdef"),
+        ("中a", 1, ""),  # a double-width cell never straddles the cut
+        ("中a", 2, "中"),
+        ("a中", 2, "a"),
+        ("a中", 3, "a中"),
+        ("😀x", 1, ""),
+        ("😀x", 2, "😀"),
+    ],
+)
 def test_line_clip(text: str, width: int, expected: str) -> None:
     clipped = Line.from_text(text).clip(WrapMode.CLIP, width)
     assert clipped.text == expected

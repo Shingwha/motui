@@ -1,0 +1,181 @@
+"""The rings game model: schedule, spawning, judgment and score."""
+
+from __future__ import annotations
+
+import random
+from dataclasses import dataclass
+
+from ...scene import TICK_HZ
+
+__all__ = [
+    "RINGS_SEED",
+    "Ring",
+    "RingsGame",
+]
+
+#: The spawn sequence's seed; a board resize resets the generator to it.
+RINGS_SEED = 20261028
+
+#: The rings schedule, in seconds: the first birth, the spacing, the
+#: approach, the three judgment windows around the deadline, the target
+#: disc's pop, the hit burst and the miss fade.
+BIRTH_DELAY = 0.4
+SPAWN_PERIOD = 1.2
+APPROACH = 1.0
+OUTER_RADIUS = 26
+TARGET_RADIUS = 8
+WINDOW_PERFECT = 0.06
+WINDOW_GOOD = 0.12
+WINDOW_FORCE = 0.20
+POP = 0.15
+BURST = 0.35
+BURST_OVERSHOOT = 20
+MISS_FADE = 0.4
+
+#: The good-window blink: the shrinking ring flashes white at ~10 Hz.
+BLINK_TICKS = 3
+
+#: The four ring slots rotate by concurrency order.
+RING_SLOTS = 4
+
+
+@dataclass(slots=True)
+class Ring:
+    """One judgment circle: position, slot color and where it stands."""
+
+    cx: float
+    cy: float
+    slot: int
+    born: float
+    state: str  # "live" | "burst" | "miss"
+    verdict: str | None  # "perfect" | "good" | "force" on a judged ring
+    at: float  # the judgment or miss time
+
+
+class RingsGame:
+    """The deterministic rings state machine, independent of the canvas.
+
+    Every render is a pure function of the phase and geometry: births are
+    dealt from one seeded :class:`random.Random` in schedule order, misses
+    are decided from the deadline, and a resize starts a fresh game.
+    """
+
+    __slots__ = (
+        "_phase",
+        "_rng",
+        "attempts",
+        "born_count",
+        "combo",
+        "hits",
+        "rings",
+        "score",
+    )
+
+    def __init__(self) -> None:
+        self._phase = 0
+        self._rng = random.Random(RINGS_SEED)
+        self.rings: list[Ring] = []
+        self.born_count = 0
+        self.score = 0
+        self.combo = 0
+        self.hits = 0
+        self.attempts = 0
+
+    @property
+    def phase(self) -> int:
+        return self._phase
+
+    @property
+    def now(self) -> float:
+        return self._phase / TICK_HZ
+
+    def reset(self) -> None:
+        """A fresh game: no rings, the seed and every counter reset."""
+        self._phase = 0
+        self._rng = random.Random(RINGS_SEED)
+        self.rings.clear()
+        self.born_count = 0
+        self.score = 0
+        self.combo = 0
+        self.hits = 0
+        self.attempts = 0
+
+    def sync(self, phase: int, width: int, height: int) -> None:
+        """Advance the bookkeeping to ``phase`` on a ``width x height`` board.
+
+        Births due by ``phase`` are dealt from the seeded RNG in order; a
+        live ring whose force window has passed dissolves as a Miss;
+        finished bursts and fades drop off the list.
+        """
+        self._phase = phase
+        now = phase / TICK_HZ
+        while True:
+            born = BIRTH_DELAY + self.born_count * SPAWN_PERIOD
+            if born > now:
+                break
+            self._spawn(born, width, height)
+        for ring in self.rings:
+            deadline = ring.born + APPROACH + WINDOW_FORCE
+            if ring.state == "live" and now > deadline:
+                ring.state = "miss"
+                ring.at = deadline
+                self.combo = 0
+                self.attempts += 1
+        self.rings = [
+            ring
+            for ring in self.rings
+            if ring.state == "live"
+            or now - ring.at < (BURST if ring.state == "burst" else MISS_FADE)
+        ]
+
+    def _spawn(self, born: float, width: int, height: int) -> None:
+        """Deal one ring: the next slot color and a position inside the margin."""
+        margin = min(34, width // 2, height // 2)
+        self.rings.append(
+            Ring(
+                cx=self._rng.uniform(margin, width - margin),
+                cy=self._rng.uniform(margin, height - margin),
+                slot=1 + self.born_count % RING_SLOTS,
+                born=born,
+                state="live",
+                verdict=None,
+                at=0.0,
+            )
+        )
+        self.born_count += 1
+
+    def judge(self, now: float) -> None:
+        """Judge the nearest unjudged ring against its deadline.
+
+        The windows are the contract: <=0.06 s Perfect +300, <=0.12 s Good
+        +100, <=0.20 s a force hit (combo clears, no points); nothing
+        inside any window and the press is a no-op.
+        """
+        best: Ring | None = None
+        best_error = 0.0
+        for ring in self.rings:
+            if ring.state != "live":
+                continue
+            error = abs(now - (ring.born + APPROACH))
+            if best is None or error < best_error:
+                best, best_error = ring, error
+        if best is None:
+            return
+        if best_error <= WINDOW_PERFECT:
+            verdict, points = "perfect", 300
+        elif best_error <= WINDOW_GOOD:
+            verdict, points = "good", 100
+        elif best_error <= WINDOW_FORCE:
+            verdict, points = "force", 0
+        else:
+            return
+        best.state = "burst"
+        best.verdict = verdict
+        best.at = now
+        self.score += points
+        if verdict == "force":
+            self.combo = 0
+        else:
+            self.combo += 1
+            self.hits += 1
+        self.attempts += 1

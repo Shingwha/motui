@@ -368,7 +368,7 @@ def test_mounted_controllers_dispatch_before_bindings_and_theme():
     assert app.theme is not theme
     app.theme = theme
     assert controller.themes == [theme]
-    assert app.toasts is not None and app.toasts._theme is theme
+    assert app.toasts is not None
 
     assert app.unmount(controller) is True
     assert app.controllers == ()

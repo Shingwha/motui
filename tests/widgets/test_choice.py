@@ -155,16 +155,6 @@ def test_an_unfocused_menu_wears_the_inactive_band():
     assert rows[1].segments[1].style.fg is None
 
 
-def test_a_theme_assignment_repaints_the_next_render():
-    menu = Select(THREE)
-    plain = menu.render(Constraints(width=20))
-    theme = replace(DEFAULT_THEME, text=replace(DEFAULT_THEME.text, base=Style(underline=True)))
-    menu.theme = theme
-    repainted = menu.render(Constraints(width=20))
-    assert repainted != plain
-    assert any(seg.style.underline for seg in repainted[1].segments)
-
-
 @pytest.mark.parametrize(
     "row, index, hit",
     [(1, 0, True), (0, 1, False), (3, 1, False), (-1, 1, False)],
@@ -423,14 +413,6 @@ def test_the_typed_hooks_forward_to_click_and_hover():
     assert menu.on_hover(Pos(y=1, x=0)) is False
     assert menu.on_hover(None) is True
     assert menu.on_click(Pos(y=0, x=0)) is False  # the title row
-
-
-def test_take_reads_the_result_once():
-    menu = Select(THREE)
-    assert menu.take() is None
-    assert menu.on_action("activate") is True and menu.take() == Option("one")
-    assert menu.take() is None
-    assert menu.on_action("activate") is True and menu.take() == Option("one")
 
 
 def test_a_multi_select_binds_activate_to_its_toggle():

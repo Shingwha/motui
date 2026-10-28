@@ -9,7 +9,7 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
 API = ROOT / "tools" / "api.py"
-SNAPSHOT = ROOT / "tools" / "api-2.0.txt"
+SNAPSHOT = ROOT / "tools" / "api-2.1.txt"
 
 
 def run(*args: str) -> subprocess.CompletedProcess[str]:

@@ -4,8 +4,8 @@ Run it from the repository root::
 
     uv run python tools/framebench.py [--frames N]
 
-Nine lines, one per measurement.  Seven are timings, each printing ms per
-operation:
+Thirteen lines, one per measurement.  Eleven are timings, each printing ms
+per operation:
 
 ``stream-single``  one pane, an open Markdown block growing one source line
 per frame (the /md and reply-turn shape);
@@ -241,12 +241,40 @@ the same machine**), and the probe-per-block sweep is what remains.  The
 other timings and ``replay`` are untouched, and ``render-hash`` is still
 ``a82f7968ed986ef2fa99bb9ec25e724b99ca03e26aa75f607e6219ee25a4f379`` --
 the index recomputes less, it renders the same bytes.
+
+**Baseline, 2.1 refactor P0 (2026-10-28): the starting line.**  The 2.1
+wave adds three workloads before moving the pixel engine out of the kernel:
+``pixel-quantize`` re-quantizes a two-layer, fully inked 76x24 board every
+frame; ``scene-render`` measures the slowest showcase scene's
+``Showcase.render`` at 100x30 after a warmup; ``scene-paint`` measures the
+same scene through the headless ``Runtime.paint`` path.  On the refactor's
+starting tree (CPython 3.13.16, Windows) a 60-frame run read
+**3.9 ms p50 / 5.5 ms p95** for ``pixel-quantize``, **3.4 / 4.4 ms** for
+``scene-render`` and **3.2 / 4.2 ms** for ``scene-paint``, with ``splash``
+the slowest scene on that probe.  ``replay`` read 456 ms total and
+``render-hash`` was
+``e7ca544b051b8b3229b2ecbca03bc6c1e821908ad3ac278024e6a645652986da`` --
+recorded as found; the digest differs from the W2 note above, so the 2.1
+wave starts from this value.
+
+**Baseline, 2.1.0 final (2026-10-28): the new lines and the new scene.**
+After the pixel extraction and the demo lifecycle work, a 120-frame run on
+the same machine reads **3.8 ms p50 / 5.1 ms p95** for ``pixel-quantize``,
+**3.2 / 5.0 ms** for ``scene-render`` and **3.2 / 4.3 ms** for
+``scene-paint``; the slowest scene alternates among ``splash``, ``menu``
+and ``dashboard`` across runs, so the tool prints the name rather than
+treating it as a contract.  ``replay`` reads about 410-440 ms total and
+``render-hash`` is still
+``e7ca544b051b8b3229b2ecbca03bc6c1e821908ad3ac278024e6a645652986da``:
+the refactor moved structure, not rendered bytes on the hash path.
 """
 
 from __future__ import annotations
 
 import asyncio
+import math
 import os
+import statistics
 import subprocess
 import sys
 import time
@@ -257,7 +285,12 @@ sys.path.insert(0, str(ROOT / "src"))
 
 from motui import Markdown, Table, Text
 from motui.app import Runtime, Scrollbar
+from motui.demo import SCENES
+from motui.demo.registry import SPEC_BY_NAME
+from motui.demo.shell import Showcase
 from motui.kernel.geom import Axis
+from motui.kernel.layout import Constraints
+from motui.pixel import Marker, PixelLayer, PixelPalette, Raster, quantize
 from motui.terminal import HeadlessScreen, Terminal, TerminalOptions
 
 FIXTURE = (ROOT / "src" / "motui" / "demo" / "fixture.md").read_text(
@@ -394,6 +427,123 @@ def table_open_workload(frames: int) -> float:
     return (time.perf_counter() - t0) / frames * 1000.0
 
 
+def _stats(samples: list[float]) -> tuple[float, float]:
+    """The median and 95th percentile of one sample list."""
+    ordered = sorted(samples)
+    p50 = statistics.median(ordered)
+    p95 = ordered[min(len(ordered) - 1, math.ceil(0.95 * len(ordered)) - 1)]
+    return p50, p95
+
+
+def _timed(fn, frames: int) -> tuple[float, float]:
+    """Warm ``fn`` once, then measure ``frames`` calls; ``(p50, p95)``."""
+    fn()
+    samples: list[float] = []
+    for _ in range(frames):
+        started = time.perf_counter()
+        fn()
+        samples.append((time.perf_counter() - started) * 1000.0)
+    return _stats(samples)
+
+
+#: The worst-case pixel workload: two layers over a 76x24 cell board, the
+#: bottom one filled and both carrying horizontal strokes, so every cell is
+#: inked and a majority of cells are mixed.
+PIXEL_GEOM = (76, 24)
+PIXEL_PALETTE = PixelPalette(
+    slots={
+        1: ((255, 255, 255), (140, 140, 160)),
+        2: ((83, 200, 240), (30, 92, 118)),
+        3: ((242, 193, 78), (124, 94, 36)),
+    },
+    bg=(12, 12, 16),
+)
+
+
+def _pixel_layers():
+    """The two worst-case layers, built once and re-quantized per frame."""
+    layers = []
+    for marker in (Marker.BRAILLE, Marker.HALF):
+        raster = Raster(*PIXEL_GEOM)
+        raster.rect(0, 0, raster.width - 1, raster.height - 1, fill=True, slot=1)
+        for y in range(0, raster.height, 3):
+            raster.line(0, y, raster.width - 1, y, slot=2)
+        layers.append(PixelLayer(raster, marker))
+    return layers
+
+
+def pixel_quantize_workload(frames: int) -> tuple[float, float]:
+    """Worst-case ``quantize`` on a two-layer 76x24 board."""
+    layers = _pixel_layers()
+    return _timed(lambda: quantize(layers, PIXEL_PALETTE), frames)
+
+
+def _scene_frame(name: str, width: int = 100, height: int = 30):
+    """One showcase and its constraint, warmed at the preview phase."""
+    spec = SPEC_BY_NAME[name]
+    showcase = Showcase(name)
+    showcase.phase = spec.preview_phase
+    constraint = Constraints(width=width, max_height=height)
+    showcase.render(constraint)
+    return showcase, constraint
+
+
+def _scene_render_samples(
+    name: str, frames: int, width: int = 100, height: int = 30
+) -> list[float]:
+    """Per-frame ``Showcase.render`` samples with the phase moving each frame."""
+    showcase, constraint = _scene_frame(name, width, height)
+    base = SPEC_BY_NAME[name].preview_phase
+    samples: list[float] = []
+    for index in range(frames):
+        showcase.phase = base + index + 1
+        started = time.perf_counter()
+        showcase.render(constraint)
+        samples.append((time.perf_counter() - started) * 1000.0)
+    return samples
+
+
+def _slowest_scene(width: int = 100, height: int = 30) -> str:
+    """Name the scene with the highest render p95 in a short probe."""
+    ranked: list[tuple[float, str]] = []
+    for name in SCENES:
+        samples = _scene_render_samples(name, 12, width, height)
+        _p50, p95 = _stats(samples)
+        ranked.append((p95, name))
+    return max(ranked)[1]
+
+
+def scene_render_workload(frames: int) -> tuple[str, float, float]:
+    """The slowest scene's render cost at 100x30, ``(name, p50, p95)``."""
+    name = _slowest_scene()
+    samples = _scene_render_samples(name, frames)
+    p50, p95 = _stats(samples)
+    return name, p50, p95
+
+
+def scene_paint_workload(frames: int, name: str) -> tuple[float, float]:
+    """The same slowest scene through the full headless paint path."""
+    screen = HeadlessScreen(100, 30)
+    runtime = Runtime(
+        Terminal(TerminalOptions(screen=screen)),
+        interactive=False,
+    )
+    showcase = Showcase(name)
+    showcase.phase = SPEC_BY_NAME[name].preview_phase
+    runtime.workspace.fill(showcase)
+    runtime.paint()  # warm the layout and the painter's row memo
+
+    base = SPEC_BY_NAME[name].preview_phase
+    samples: list[float] = []
+    for index in range(frames):
+        showcase.phase = base + index + 1
+        runtime.invalidate()
+        started = time.perf_counter()
+        runtime.paint()
+        samples.append((time.perf_counter() - started) * 1000.0)
+    return _stats(samples)
+
+
 #: One line of the paragraph ``stream-paragraph`` grows: long enough to wrap
 #: twice at 180 columns, so the document's row count moves with its line
 #: count and the wrap is real work, not a per-line fit.
@@ -497,6 +647,22 @@ def main() -> None:
     print(f"text-open    : {text_open_workload(frames):7.1f} ms/frame")
     print(f"table-open   : {table_open_workload(frames):7.1f} ms/frame")
     print(f"stream-paragraph: {stream_paragraph_workload(frames):7.1f} ms/frame")
+
+    pixel_p50, pixel_p95 = pixel_quantize_workload(frames)
+    print(
+        f"pixel-quantize: {pixel_p50:7.2f} ms p50 {pixel_p50:5.2f}"
+        f"  p95 {pixel_p95:5.2f}  (76x24, two layers)"
+    )
+    scene, scene_p50, scene_p95 = scene_render_workload(frames)
+    print(
+        f"scene-render : {scene_p50:7.2f} ms p50 {scene_p50:5.2f}"
+        f"  p95 {scene_p95:5.2f}  (100x30, {scene})"
+    )
+    paint_p50, paint_p95 = scene_paint_workload(frames, scene)
+    print(
+        f"scene-paint  : {paint_p50:7.2f} ms p50 {paint_p50:5.2f}"
+        f"  p95 {paint_p95:5.2f}  (100x30, {scene})"
+    )
     print(f"replay       : {replay_workload():7.0f} ms total")
     print(f"render-hash  : {hash_workload()}")
 

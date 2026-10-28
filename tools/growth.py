@@ -175,7 +175,7 @@ def main(argv: list[str] | None = None) -> int:
             print("growth: the probe tree is not the import source")
             return 1
 
-        snapshot = target / "tools" / "api-2.0.txt"
+        snapshot = target / "tools" / "api-2.1.txt"
         baseline = snapshot.read_bytes()
         # The suite's own API test pins the copied snapshot, so refresh it for
         # the probed tree; the gate below compares against the untouched one.

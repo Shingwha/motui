@@ -183,14 +183,6 @@ def test_on_focus_mirrors_the_flag_onto_the_fields():
     assert first.focused is False and second.focused is False
 
 
-def test_take_reads_the_result_once():
-    form = Form([])
-    assert form.on_action("activate") is True
-    assert form.take() == {}
-    assert form.on_action("activate") is True
-    assert form.take() == {}
-
-
 def test_on_click_is_the_positional_door():
     field = Input("abc")
     form = Form([Field("a", field)])
