@@ -299,7 +299,20 @@ class MotionScene:
         return None
 
     def tick(self, phase: int) -> str | None:
-        """Advance the active board; the section itself never leaves."""
+        """Advance the active board; the section itself never leaves.
+
+        The rewind check runs before the mode branch on purpose: a rewind
+        is a fresh entry (the shell resets its phase on every switch), and
+        a scene left on the snake board must still land on rings -- in
+        snake mode :meth:`_sync` is never reached, so the reset has to
+        happen here or a re-entered section re-opens the stale board.
+        """
+        if phase < self._phase:
+            # a rewind is a fresh entry: the default board on a clean slate
+            # -- rings left over from the previous timeline would linger as
+            # ghosts (their timestamps sit in the rewound clock's future)
+            self.mode = "rings"
+            self._reset_board()
         self._phase = phase
         if self.mode == "snake":
             self._snake.tick(phase)

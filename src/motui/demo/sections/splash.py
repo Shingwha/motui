@@ -1,31 +1,34 @@
-"""The splash section: a hand-drawn pixel wordmark in four style packs.
+"""The splash section: the classic 5x7 letterforms as a pixel wordmark.
 
-The wordmark is not a font anymore: "MOTUI" is drawn as sub-cell strokes
-(3-4 sub-cells thick) on a 152x96 design grid, scaled onto whatever
-:class:`~motui.widgets.PixelCanvas` hosts it -- at the nominal resolution
-wherever the pane allows (see :meth:`SplashScene.render`).  The fill layer
-carries the word itself; the art layer carries the pack's motion -- the
-neon sweep's decay trail, the starfield's three-layer parallax drift.
-Every frame is a pure function of the phase: both layers are cleared and
-redrawn with explicit heats, so a headless replay never depends on how
-many decay steps a live run took between frames.  No pack carries a
-palette background: inked strokes stay transparent between sub-rows, so
-they never grow dark notches on a mismatched terminal backdrop.
+The word is the showcase's own verified 5x7 font (:data:`FONT_5X7`) --
+the letterform set the original text logo used -- scaled onto the
+sub-cell grid at an integer multiple (a font cell becomes a 3x4 block,
+with one sub-cell shaved off convex corners), so "MOTUI" reads as
+letters first and pixels second.  The frame carries three layers of
+motion, every one a pure function of the phase:
 
-The four packs keep their identities.  ``neon`` is the cyan-to-lavender
-ramp (:data:`LOGO_START` -> :data:`LOGO_END`) with a white sweep flowing
-through the strokes; ``plasma`` walks the hue wheel along the word;
-``retro`` alternates amber and green CRT phosphor with scanline rows; and
-``starfield`` drifts stars at three depths behind an icy word, with
-occasional red/cyan glitch bands.  The splash never times out: only a key
-or a click leaves for the menu.  ``seed`` pins the style shuffle for a
-headless snapshot; ``None`` seeds from the system, so every live launch
-starts somewhere new.
+* an entrance -- the letters rise into place one after another
+  (staggered ticks, ease-out-back, fading in along the kernel's
+  cool-color curve) and hand over to the loop;
+* the loop -- neon keeps its white decay-trail sweep, plasma walks the
+  hue wheel along the word, retro flips amber/green phosphor with
+  scanline rows, and starfield twinkles a three-layer drift;
+* the breathing pulse dots under the word.
+
+The starfield's stars live only in the bands above and below the
+wordmark's bounding box, reserved by layout: no star can land on a
+stroke in any phase, so the letters never grow holes or freckles.  No
+pack carries a palette background either -- inked strokes stay
+transparent between sub-rows, so they never grow dark notches on a
+mismatched terminal backdrop.
+
+The splash never times out: only a key or a click leaves for the menu.
+``seed`` pins the style shuffle for a headless snapshot; ``None`` seeds
+from the system, so every live launch starts somewhere new.
 """
 
 from __future__ import annotations
 
-import math
 import random
 
 from ...kernel.cell import Line, Segment, Surface
@@ -37,7 +40,7 @@ from ...kernel.style import Style
 from ...kernel.text import WrapMode
 from ...kernel.theme import Theme
 from ...widgets import PixelCanvas
-from ..art import center
+from ..art import FONT_5X7, center
 
 __all__ = [
     "LOGO_END",
@@ -58,8 +61,8 @@ SPLASH_GLYPH_TICKS = 18
 #: The style packs the splash rotates through.  Each is a full identity:
 #: ``neon`` is the cyan-to-lavender ramp with a white sweep, ``plasma``
 #: walks the hue wheel across the word, ``retro`` is an amber or green CRT
-#: with scanlines, and ``starfield`` drifts a three-layer star field
-#: behind the word with occasional red/cyan glitch bands.
+#: with scanlines, and ``starfield`` twinkles a three-layer star field
+#: around the word with occasional red/cyan glitch bands.
 SPLASH_STYLES: tuple[str, ...] = ("neon", "plasma", "retro", "starfield")
 
 #: The fill glyphs each pack's pulse dot morphs between (all single-width).
@@ -76,12 +79,23 @@ LOGO_END = "#c4b5fd"
 
 _CLIP = WrapMode.CLIP
 
-#: The wordmark's virtual canvas: 152x96 sub-cells, five 24-wide letters
-#: joined by 8-wide gaps, drawn in 3-wide brush strokes.
-_MARK_W = 152
-_MARK_H = 96
-_BRUSH = 3
-_BANDS = 12
+#: The letters the wordmark spells (all present in :data:`FONT_5X7`).
+_WORD_CHARS = "MOTUI"
+
+#: Integer scales for the 5x7 skeleton: sub-cells per font cell, largest
+#: first; the biggest one that fits the canvas with margin wins.
+_FONT_SCALES = ((3, 4), (2, 3), (1, 2), (1, 1))
+
+#: Font cells between letters (scaled like the glyphs are).
+_LETTER_GAP = 2
+
+#: The entrance: letter ``i`` starts ``i * stagger`` ticks in and rises
+#: for ``dur`` ticks, from ``drop`` sub-cells below its slot.  Four
+#: letters staggered plus one duration is the whole assembly.
+_ENTRANCE_STAGGER = 9
+_ENTRANCE_DUR = 30
+_ENTRANCE_TICKS = 4 * _ENTRANCE_STAGGER + _ENTRANCE_DUR
+_ENTRANCE_DROP = 20
 
 #: The neon sweep: a white head flowing left-to-right, its decay trail
 #: burning out behind it (one heat step per sub-cell of trail).
@@ -93,6 +107,13 @@ _SWEEP_STEP = 10
 #: The starfield's parallax: per-layer drift as (numerator, denominator)
 #: sub-cells per tick, far to near.
 _STAR_DRIFT = ((1, 12), (1, 6), (1, 3))
+
+#: The virtual space the star seeds were dealt in.
+_STAR_SPACE_W = 152
+_STAR_SPACE_H = 96
+
+#: Twelve color bands across the word (the packs color by band).
+_BANDS = 12
 
 
 def _hsl(hue: float, saturation: float, lightness: float) -> tuple[int, int, int]:
@@ -141,81 +162,142 @@ def _ramp(
     }
 
 
-def _brush(cells: set[tuple[int, int]], x: int, y: int) -> None:
-    """Stamp the square brush at ``(x, y)``, clipped to the virtual canvas."""
-    for dx in range(_BRUSH):
-        for dy in range(_BRUSH):
-            px, py = x + dx, y + dy
-            if 0 <= px < _MARK_W and 0 <= py < _MARK_H:
-                cells.add((px, py))
+def _ease_out_back(t: float) -> float:
+    """The ease-out-back curve: overshoots ~1.1 mid-way, settles on 1.0."""
+    c1 = 1.70158
+    c3 = c1 + 1.0
+    u = t - 1.0
+    return 1.0 + c3 * u * u * u + c1 * u * u
 
 
-def _thick(cells: set[tuple[int, int]], x0: int, y0: int, x1: int, y1: int) -> None:
-    """A brush-width Bresenham line between two virtual points."""
-    dx, dy = abs(x1 - x0), -abs(y1 - y0)
-    sx = 1 if x0 < x1 else -1
-    sy = 1 if y0 < y1 else -1
-    err = dx + dy
-    while True:
-        _brush(cells, x0, y0)
-        if x0 == x1 and y0 == y1:
-            return
-        step = 2 * err
-        if step >= dy:
-            err += dy
-            x0 += sx
-        if step <= dx:
-            err += dx
-            y0 += sy
+def _build_letters(sx: int, sy: int) -> tuple[list[list[tuple[int, int]]], int, int]:
+    """The word's letters at one integer scale: one point list per letter.
+
+    Points are letter-local sub-cell coordinates.  A font cell becomes a
+    solid ``sx x sy`` block, and a convex corner -- both orthogonal font
+    neighbours empty -- loses its one corner sub-cell, the rounding that
+    keeps the big blocks from reading as squared-off brickwork.
+    """
+    letters: list[list[tuple[int, int]]] = []
+    for char in _WORD_CHARS:
+        glyph = FONT_5X7[char]
+        inked = {
+            (col, row)
+            for row, cells in enumerate(glyph)
+            for col, bit in enumerate(cells)
+            if bit == "1"
+        }
+        points: list[tuple[int, int]] = []
+        for col, row in sorted(inked):
+            top = (col, row - 1) in inked
+            bottom = (col, row + 1) in inked
+            left = (col - 1, row) in inked
+            right = (col + 1, row) in inked
+            for i in range(sx):
+                for j in range(sy):
+                    if i == 0 and j == 0 and not left and not top:
+                        continue
+                    if i == sx - 1 and j == 0 and not right and not top:
+                        continue
+                    if i == 0 and j == sy - 1 and not left and not bottom:
+                        continue
+                    if i == sx - 1 and j == sy - 1 and not right and not bottom:
+                        continue
+                    points.append((col * sx + i, row * sy + j))
+        letters.append(points)
+    width = (5 * sx + _LETTER_GAP * sx) * len(_WORD_CHARS) - _LETTER_GAP * sx
+    return letters, width, 7 * sy
 
 
-def _arc(
-    cells: set[tuple[int, int]],
-    cx: int,
-    cy: int,
-    rx: int,
-    ry: int,
-    start: float,
-    stop: float,
-) -> None:
-    """A parametric elliptical arc, brushed (the O bowl, the U bottom)."""
-    steps = 256
-    for index in range(steps + 1):
-        angle = start + (stop - start) * index / steps
-        _brush(cells, round(cx + rx * math.cos(angle)), round(cy + ry * math.sin(angle)))
+_LETTERS_CACHE: dict[
+    tuple[int, int],
+    tuple[list[list[tuple[int, int]]], int, int],
+] = {}
 
 
-def _build_wordmark() -> frozenset[tuple[int, int]]:
-    """The "MOTUI" strokes as one set of virtual sub-cells."""
-    cells: set[tuple[int, int]] = set()
-    _thick(cells, 0, 0, 0, 93)  # M: the two stems...
-    _thick(cells, 21, 0, 21, 93)
-    _thick(cells, 1, 1, 11, 45)  # ...and the V of diagonals
-    _thick(cells, 22, 1, 12, 45)
-    _arc(cells, 44, 48, 11, 45, 0.0, 2 * math.pi)  # O
-    _thick(cells, 64, 1, 85, 1)  # T: the bar...
-    _thick(cells, 75, 1, 75, 93)  # ...and the stem
-    _thick(cells, 96, 0, 96, 70)  # U: the two stems...
-    _thick(cells, 117, 0, 117, 70)
-    _arc(cells, 108, 70, 11, 24, 0.0, math.pi)  # ...and the bottom bowl
-    _thick(cells, 128, 1, 149, 1)  # I: top serif...
-    _thick(cells, 128, 93, 149, 93)  # ...bottom serif...
-    _thick(cells, 139, 0, 139, 93)  # ...and the stem
-    return frozenset(cells)
+def _letters(sx: int, sy: int) -> tuple[list[list[tuple[int, int]]], int, int]:
+    """The scaled letters for one scale, built once."""
+    cached = _LETTERS_CACHE.get((sx, sy))
+    if cached is None:
+        cached = _build_letters(sx, sy)
+        _LETTERS_CACHE[(sx, sy)] = cached
+    return cached
 
 
-#: The wordmark, built once at import: pure data, deterministic.
-_WORDMARK: frozenset[tuple[int, int]] = _build_wordmark()
+def _pick_scale(width: int, height: int) -> tuple[int, int]:
+    """The largest integer scale whose word fits the canvas with margin."""
+    for sx, sy in _FONT_SCALES:
+        if 33 * sx <= width - 4 and 7 * sy <= height - 4:
+            return sx, sy
+    return (1, 1)
 
 
-#: The star field: ``(x, y, layer)`` over the virtual canvas, one seeded
-#: deal at import (far stars outnumber near ones).
+#: The scaled geometry cache: per canvas size and scale, the settled
+#: letters as ``(x, y, index)`` triples, the sweep's column lookup, and
+#: the star band bounds -- a frame's writes are index lookups, never
+#: point math, except for a letter still in flight.
+_GEOM_CACHE: dict[
+    tuple[int, int, int, int],
+    tuple[
+        list[list[tuple[int, int, int]]],
+        dict[int, list[int]],
+        int,
+        int,
+    ],
+] = {}
+
+
+def _geometry(
+    width: int, height: int, sx: int, sy: int
+) -> tuple[
+    list[list[tuple[int, int, int]]],
+    dict[int, list[int]],
+    int,
+    int,
+]:
+    """The centred wordmark on one canvas, plus the star bands.
+
+    ``columns`` maps an x to the raster indices the sweep lights;
+    ``top``/``bottom`` bound the rows stars may occupy -- everything at
+    least two sub-cells clear of the wordmark's box, which is what keeps
+    the sky off the letters.
+    """
+    key = (width, height, sx, sy)
+    cached = _GEOM_CACHE.get(key)
+    if cached is not None:
+        return cached
+    letter_points, mark_w, mark_h = _letters(sx, sy)
+    ox = max(0, (width - mark_w) // 2)
+    oy = max(0, (height - mark_h) // 2)
+    pitch = (5 + _LETTER_GAP) * sx  # one letter's slot plus its gap
+    letters: list[list[tuple[int, int, int]]] = []
+    columns: dict[int, list[int]] = {}
+    for order, points in enumerate(letter_points):
+        lx = order * pitch  # the letter's slot in the word
+        placed: list[tuple[int, int, int]] = []
+        for px, py in points:
+            x, y = ox + lx + px, oy + py
+            if not 0 <= x < width or not 0 <= y < height:
+                continue
+            index = y * width + x
+            placed.append((x, y, index))
+            columns.setdefault(x, []).append(index)
+        letters.append(placed)
+    top = max(0, oy - 2)
+    bottom = min(height, oy + mark_h + 2)
+    cached = (letters, columns, top, bottom)
+    _GEOM_CACHE[key] = cached
+    return cached
+
+
+#: The star seeds: ``(x, y, layer)`` dealt once at import in the virtual
+#: star space (far stars outnumber near ones).
 def _build_stars() -> tuple[tuple[int, int, int], ...]:
     rng = random.Random(20261027)
     stars: list[tuple[int, int, int]] = []
     for layer, count in enumerate((44, 28, 14)):
         for _ in range(count):
-            stars.append((rng.randrange(_MARK_W), rng.randrange(_MARK_H), layer))
+            stars.append((rng.randrange(_STAR_SPACE_W), rng.randrange(_STAR_SPACE_H), layer))
     return tuple(stars)
 
 
@@ -228,8 +310,8 @@ _GLITCH_CYAN = 17
 
 #: The per-pack palettes.  Slot 13 is the neon sweep's white; the starfield
 #: word is an icy ramp on slots 1-12 with stars and glitch above it.  No
-#: pack carries a ``bg`` any more: inked cells stay transparent between
-#: sub-rows, so strokes never grow dark notches on a mismatched backdrop.
+#: pack carries a ``bg``: inked cells stay transparent between sub-rows,
+#: so strokes never grow dark notches on a mismatched backdrop.
 _PALETTES: dict[str, PixelPalette] = {
     "neon": PixelPalette(
         slots={
@@ -256,9 +338,8 @@ _PALETTES: dict[str, PixelPalette] = {
     ),
     "starfield": PixelPalette(
         slots={
-            # The word rides a bright ice ramp: the old deep-blue low end
-            # vanished on a real terminal's dark background.  The star
-            # field and glitch bands keep their own (deeper) colors.
+            # The word rides a bright ice ramp; the star field and glitch
+            # bands keep their own (deeper) colors.
             **_ramp("#a9c6ff", "#ffffff", _BANDS),
             _STAR_SLOTS[0]: ((96, 116, 168), (44, 54, 80)),
             _STAR_SLOTS[1]: ((150, 180, 226), (70, 86, 110)),
@@ -269,47 +350,9 @@ _PALETTES: dict[str, PixelPalette] = {
     ),
 }
 
-#: The scaled geometry cache: ``(band indices, column indices, points)``
-#: for one canvas size, computed on first use (a frame's slot assignment
-#: and the sweep's columns are index lookups, never point math).
-_GEOM_CACHE: dict[
-    tuple[int, int],
-    tuple[list[list[int]], dict[int, list[int]], set[tuple[int, int]]],
-] = {}
-
-
-def _geometry(
-    width: int, height: int
-) -> tuple[list[list[int]], dict[int, list[int]], set[tuple[int, int]]]:
-    """The wordmark scaled onto a ``width x height`` sub-cell canvas.
-
-    Bands split the canvas into :data:`_BANDS` column strips (the packs
-    color by band); columns map an x to the raster indices the sweep
-    lights; the point set is the membership test the stars use to keep
-    from punching holes in the strokes.
-    """
-    cached = _GEOM_CACHE.get((width, height))
-    if cached is not None:
-        return cached
-    sx, sy = width / _MARK_W, height / _MARK_H
-    bands: list[list[int]] = [[] for _ in range(_BANDS)]
-    columns: dict[int, list[int]] = {}
-    points: set[tuple[int, int]] = set()
-    for x, y in _WORDMARK:
-        px, py = int(x * sx), int(y * sy)
-        if not 0 <= px < width or not 0 <= py < height:
-            continue
-        index = py * width + px
-        bands[min(_BANDS - 1, px * _BANDS // width)].append(index)
-        columns.setdefault(px, []).append(index)
-        points.add((px, py))
-    cached = (bands, columns, points)
-    _GEOM_CACHE[(width, height)] = cached
-    return cached
-
 
 class SplashScene:
-    """The opening: the pixel wordmark in one of four animated packs.
+    """The opening: the font-skeleton wordmark in one of four packs.
 
     The splash never times out.  It rotates through :data:`SPLASH_STYLES`
     every :data:`SPLASH_ROTATE_TICKS` animation ticks, reshuffling the
@@ -346,68 +389,80 @@ class SplashScene:
 
     # -- painting ----------------------------------------------------------
 
-    def _paint(self, canvas: PixelCanvas, pack: str, phase: int) -> None:
+    def _paint(self, canvas: PixelCanvas, pack: str, phase: int, sx: int, sy: int) -> None:
         """Redraw the whole canvas as a pure function of the phase.
 
-        The fill layer carries the word; the art layer carries the pack's
-        motion.  The trail heats are written explicitly -- the kernel's
-        decay curve, one step per sub-cell -- rather than accumulated in
-        the raster, so replaying any phase paints the exact same frame.
+        The fill layer carries the word (assembled or in flight); the art
+        layer carries the sky and the pack's motion.  The trail heats are
+        written explicitly -- the kernel's decay curve, one step per
+        sub-cell -- rather than accumulated in the raster, so replaying
+        any phase paints the exact same frame.
         """
         canvas.clear()
         width, height = canvas.art.width, canvas.art.height
         if pack == "starfield":
-            self._paint_stars(canvas, phase, width, height)
-        self._paint_wordmark(canvas, pack, phase, width, height)
-        if pack == "neon":
-            self._paint_sweep(canvas, phase, width)
+            self._paint_stars(canvas, phase, width, height, sx, sy)
+        self._paint_wordmark(canvas, pack, phase, width, height, sx, sy)
+        if pack == "neon" and phase >= _ENTRANCE_TICKS:
+            self._paint_sweep(canvas, phase, width, sx, sy)
 
     def _paint_wordmark(
-        self, canvas: PixelCanvas, pack: str, phase: int, width: int, height: int
+        self,
+        canvas: PixelCanvas,
+        pack: str,
+        phase: int,
+        width: int,
+        height: int,
+        sx: int,
+        sy: int,
     ) -> None:
-        """The strokes on the fill layer, one slot per pack's recipe."""
-        bands, _columns, _points = _geometry(width, height)
-        slot_grid, heat_grid = canvas.fill.slot, canvas.fill.heat
-        if pack == "plasma":
-            shift = phase // 2  # the hue wheel walks along the word
-            for band, indices in enumerate(bands):
-                slot = 1 + (band + shift) % _BANDS
-                for index in indices:
-                    slot_grid[index] = slot
-                    heat_grid[index] = 255
-        elif pack == "retro":
-            # Amber or green phosphor by hold period, dimmed on every
-            # other cell row: the scanlines.
-            amber = (phase // SPLASH_ROTATE_TICKS) % 2 == 1
-            lit, dim = (1, 2) if amber else (3, 4)
-            for indices in bands:
-                for index in indices:
-                    scanline = (index // width // 4) % 2
-                    slot_grid[index] = dim if scanline else lit
-                    heat_grid[index] = 255
-        else:  # neon and starfield: a fixed band ramp (starfield glitches)
-            glitch = pack == "starfield" and (phase // 37) % 4 == 0
-            for band, indices in enumerate(bands):
-                slot = 1 + band
-                for index in indices:
-                    if glitch and (index % width * 7 + index // width * 13 + phase) % 19 < 2:
-                        color = (
-                            _GLITCH_RED
-                            if (index // width + index % width) % 2 == 0
-                            else _GLITCH_CYAN
-                        )
-                        slot_grid[index] = color
-                    else:
-                        slot_grid[index] = slot
-                    heat_grid[index] = 255
+        """The letters on the fill layer, one slot per pack's recipe.
 
-    def _paint_sweep(self, canvas: PixelCanvas, phase: int, width: int) -> None:
-        """The white sweep: a head column flowing across, the strokes it
-        passed cooling behind it through the palette's cool colors."""
-        _bands, columns, _points = _geometry(width, canvas.art.height)
+        Each letter rises for :data:`_ENTRANCE_DUR` ticks, staggered one
+        :data:`_ENTRANCE_STAGGER`-tick step after the previous one: its
+        ink starts ``_ENTRANCE_DROP`` sub-cells low at the cool-color
+        threshold and eases up to the slot at full heat, so the assembly
+        reads as the letters fading up into place, left to right.
+        """
+        letters, _columns, _top, _bottom = _geometry(width, height, sx, sy)
+        slot_grid, heat_grid = canvas.fill.slot, canvas.fill.heat
+        glitch = pack == "starfield" and (phase // 37) % 4 == 0
+        shift = phase // 2  # the plasma hue wheel's step
+        amber = (phase // SPLASH_ROTATE_TICKS) % 2 == 1
+        for order, letter in enumerate(letters):
+            t = (phase - order * _ENTRANCE_STAGGER) / _ENTRANCE_DUR
+            if t <= 0:
+                continue  # this letter has not been called yet
+            drop = 0 if t >= 1 else round((1.0 - _ease_out_back(t)) * _ENTRANCE_DROP)
+            heat = 255 if t >= 1 else 128 + int(127.0 * t)
+            for x, y, index in letter:
+                if drop:
+                    y += drop
+                    if y >= height:
+                        continue
+                    index = y * width + x
+                if pack == "plasma":
+                    band = min(_BANDS - 1, x * _BANDS // width)
+                    slot = 1 + (band + shift) % _BANDS
+                elif pack == "retro":
+                    scanline = (y // 4) % 2
+                    slot = (2 if amber else 4) if scanline else (1 if amber else 3)
+                else:  # neon and starfield: a fixed band ramp (starfield glitches)
+                    slot = 1 + min(_BANDS - 1, x * _BANDS // width)
+                    if glitch and (x * 7 + y * 13 + phase) % 19 < 2:
+                        slot = _GLITCH_RED if (x + y) % 2 == 0 else _GLITCH_CYAN
+                slot_grid[index] = slot
+                heat_grid[index] = heat
+
+    def _paint_sweep(self, canvas: PixelCanvas, phase: int, width: int, sx: int, sy: int) -> None:
+        """The white sweep: a head column flowing across the assembled
+        word, the strokes it passed cooling behind it through the
+        palette's cool colors."""
+        _letters, columns, _top, _bottom = _geometry(width, canvas.art.height, sx, sy)
         slot_grid, heat_grid = canvas.art.slot, canvas.art.heat
         span = width + 2 * _SWEEP_PAD
-        head = (phase % _SWEEP_PERIOD) * span // _SWEEP_PERIOD - _SWEEP_PAD
+        tick = phase - _ENTRANCE_TICKS
+        head = tick % _SWEEP_PERIOD * span // _SWEEP_PERIOD - _SWEEP_PAD
         for step in range(_SWEEP_TRAIL):
             heat = 255 - step * _SWEEP_STEP
             if heat <= 0:
@@ -419,21 +474,38 @@ class SplashScene:
                 slot_grid[index] = 13
                 heat_grid[index] = heat
 
-    def _paint_stars(self, canvas: PixelCanvas, phase: int, width: int, height: int) -> None:
-        """Three parallax depths drifting left behind the word.
+    def _paint_stars(
+        self,
+        canvas: PixelCanvas,
+        phase: int,
+        width: int,
+        height: int,
+        sx: int,
+        sy: int,
+    ) -> None:
+        """Three parallax depths twinkling in the bands around the word.
 
-        Each layer has its own speed (far stars crawl, near ones glide),
-        brightness slot and twinkle; near stars never land on a stroke.
+        The virtual star space maps onto the two bands (top half of the
+        space up, bottom half down), so a star's row never enters the
+        wordmark's box whatever the drift does.  Each layer has its own
+        speed, brightness slot and twinkle; near stars are two-dot sparks.
         """
-        _bands, _columns, points = _geometry(width, height)
+        _letters, _columns, top, bottom = _geometry(width, height, sx, sy)
         slot_grid, heat_grid = canvas.art.slot, canvas.art.heat
         stride = canvas.art.width
+        half = _STAR_SPACE_H // 2
+        lower = height - bottom
         for order, (x, y, layer) in enumerate(_STARS):
             num, den = _STAR_DRIFT[layer]
-            px = (x * width // _MARK_W - phase * num // den) % width
-            py = y * height // _MARK_H
-            if (px, py) in points:
-                continue
+            px = (x * width // _STAR_SPACE_W - phase * num // den) % width
+            if y < half:
+                if top <= 0:
+                    continue
+                py = y * top // half
+            else:
+                if lower <= 0:
+                    continue
+                py = bottom + (y - half) * lower // half
             if layer == 1 and (phase // 6 + order) % 7 == 0:
                 continue
             if layer == 2 and (phase // 4 + order) % 5 == 0:
@@ -442,7 +514,7 @@ class SplashScene:
             index = py * stride + px
             slot_grid[index] = slot
             heat_grid[index] = 255
-            if layer == 2 and (px + 1, py) not in points and px + 1 < width:
+            if layer == 2 and px + 1 < width:
                 spark = index + 1
                 slot_grid[spark] = slot
                 heat_grid[spark] = 200
@@ -486,23 +558,25 @@ class SplashScene:
     def render(self, c: Constraints, phase: int) -> Surface:
         """The centred wordmark canvas over the subtitle, pulse and hint.
 
-        The canvas runs at the wordmark's nominal resolution -- 76x23 cells
-        at a 100x30 pane (152x92 virtual pixels), shrinking only when the
-        pane does.  Since the kernel made blank cells transparent and the
-        palette background opt-in (no pack passes one), a whole frame
-        measures ~3.8-4.0 ms median across the four packs at 100x30 (the
-        pre-transparency kernel forced a 60x17 cap at ~9 ms; that cap is
-        gone).  CPython 3.13.16, Windows; 7 rounds of 200 frames, median
-        of per-round medians.  Wider panes centre the canvas.
+        The canvas runs at 76x23 cells at a 100x30 pane (152x92 virtual
+        pixels), shrinking only when the pane does, and the word is drawn
+        at the largest integer scale of the 5x7 skeleton that fits it.  A
+        whole frame measures 6.4-7.2 ms median across the four loop packs
+        at 100x30 on this session's loaded VM, where the unchanged rings
+        board reads 6.6 under the same load (~2.8-3 ms on a quiet machine)
+        -- inside the 8 ms budget (CPython 3.13.16, Windows; 7-9 rounds of
+        200 frames, median of per-round medians).  Wider panes centre the
+        canvas.
         """
         width = c.width
         height = c.max_height if c.max_height is not None else 24
         pack = self.style_name(phase)
         canvas_w = max(12, min(76, width - 2))
         canvas_h = max(5, min(23, height - 7))
+        sx, sy = _pick_scale(canvas_w * 2, canvas_h * 2)
         canvas = self._canvas(pack)
         canvas.resize(canvas_w, canvas_h)
-        self._paint(canvas, pack, phase)
+        self._paint(canvas, pack, phase, sx, sy)
         pad = max(0, (width - canvas_w) // 2)
         prefix = Line((Segment(" " * pad),)) if pad else None
         # The pad is chosen so every row already fits the pane: clip only
