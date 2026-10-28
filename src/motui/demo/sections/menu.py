@@ -251,14 +251,16 @@ class MenuScene:
         )
 
     def _grid(self, grid_w: int) -> list[list[Line]]:
-        """The tile rows: two rows of three framed, centred tiles."""
+        """The tile rows: two rows of three framed, gap-separated tiles."""
         rows: list[list[Line]] = [[Line() for _ in range(_TILE_H)] for _ in range(2)]
         for index, (_, blurb) in enumerate(_TILES):
             row, col = divmod(index, _COLUMNS)
             tile = self._tile(index, blurb)
             for h, tile_row in enumerate(tile):
-                merged = rows[row][h] + tile_row
-                rows[row][h] = merged
+                merged = rows[row][h]
+                if col:
+                    merged = merged + Line((Segment(" " * _GAP),))
+                rows[row][h] = merged + tile_row
         return rows
 
     def _tile(self, index: int, blurb: str) -> list[Line]:
