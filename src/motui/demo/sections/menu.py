@@ -52,7 +52,7 @@ def _mini_components(phase: int, width: int, theme: Theme) -> list[Line]:
     rows: list[Line] = []
     for index, style in enumerate(styles):
         fraction = 0.5 + 0.5 * _sweep(phase + index * 7, 16)
-        rows.append(_bar(width, fraction, style))
+        rows.append(_bar(width - 1, fraction, style))
     return rows
 
 
@@ -76,7 +76,7 @@ def _mini_layout(phase: int, width: int, theme: Theme) -> list[Line]:
 
 def _mini_motion(phase: int, width: int, theme: Theme) -> list[Line]:
     """Motion preview: a four-dot snake crawling along a small track."""
-    track = max(4, width)
+    track = max(4, width - 1)
     head = theme.status.success
     trail = theme.text.faint
     rows: list[Line] = [Line(), Line()]
@@ -101,7 +101,7 @@ def _mini_dashboard(phase: int, width: int, theme: Theme) -> list[Line]:
     rows: list[Line] = []
     for row in range(6):
         segments: list[Segment] = []
-        for col in range(width):
+        for col in range(width - 1):
             level = (phase // 2 + col * 5 + row * 3) % 11
             segments.append(Segment("\u258f" if level > row * 2 else " ", accent))
         rows.append(Line(tuple(segments)))
@@ -112,7 +112,7 @@ def _mini_terminal(phase: int, width: int, theme: Theme) -> list[Line]:
     """Terminal preview: a prompt whose typed text grows and resets."""
     faint = theme.text.faint
     caret = theme.content.accent
-    typed = phase % max(1, width - 2)
+    typed = phase % max(1, width - 4)
     prompt = Segment("> ", faint)
     text = Segment("motui " * (typed // 6), faint)
     cursor_char = "\u2588" if (phase // 4) % 2 == 0 else " "
@@ -133,7 +133,7 @@ def _mini_themes(phase: int, width: int, theme: Theme) -> list[Line]:
         theme.status.danger,
     )
     active = (phase // 6) % len(swatches)
-    block = max(2, width // len(swatches))
+    block = max(2, (width - 1) // len(swatches))
     rows: list[Line] = [Line()]
     for row in range(2):
         segments: list[Segment] = []
