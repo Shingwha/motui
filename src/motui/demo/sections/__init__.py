@@ -23,6 +23,8 @@ from .layout import LayoutScene
 from .menu import MenuScene
 from .placeholder import PlaceholderScene
 from .splash import SplashScene
+from .terminal import TerminalScene
+from .themes import ThemesScene
 
 __all__ = [
     "SCENES",
@@ -35,6 +37,8 @@ __all__ = [
     "Scene",
     "SnakeScene",
     "SplashScene",
+    "TerminalScene",
+    "ThemesScene",
 ]
 
 #: The scenes in tour order: the splash, the Home tiles, the six sections,
@@ -52,14 +56,6 @@ SCENES: tuple[str, ...] = (
     "snake",
     "gallery",
 )
-
-#: The sections later waves build; each ships as an under-construction
-#: panel so the registry, tiles, golden set and ``--pages`` stay complete.
-_PLACEHOLDERS: tuple[tuple[str, str], ...] = (
-    ("terminal", "keys, mouse and paint, dissected"),
-    ("themes", "the shipped themes, side by side"),
-)
-
 
 class Scene(Protocol):
     """One showcase scene: render a frame, advance, route input.
@@ -95,10 +91,10 @@ def _scenes(theme: Theme, *, seed: int | None = 0) -> dict[str, Scene]:
         "components": ComponentsScene(theme),
         "layout": LayoutScene(theme),
         "dashboard": DashboardScene(theme),
+        "terminal": TerminalScene(theme),
+        "themes": ThemesScene(theme),
         "gallery": GalleryScene(theme),
         "motion": snake,
         "snake": snake,
     }
-    for name, blurb in _PLACEHOLDERS:
-        scenes[name] = PlaceholderScene(theme, name=name, blurb=blurb)
     return {key: scenes[key] for key in SCENES}
