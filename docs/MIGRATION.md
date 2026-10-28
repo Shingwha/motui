@@ -259,4 +259,5 @@ the removed `Revisioned` protocol.
 9. Replace `Table(wrap=...)` with `cell_wrap=...`; pass a registry to
    `open_palette`.
 10. Update tests to `headless_tui` (a `Harness`) + `Runtime.advance` +
-    `Emulator`; the shipped examples are quickstart, code and wide_table.
+    `Emulator`; the shipped demo is `python -m motui` (`--pages` dumps
+    every scene).

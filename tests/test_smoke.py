@@ -14,7 +14,9 @@ from motui.demo import SCENES, main, render_scene, scene_output
 
 
 def test_every_scene_renders_a_bounded_frame():
-    assert SCENES == ("splash", "menu", "snake", "dashboard", "gallery")
+    # The registry grows with the shell's sections; the contract scenes just
+    # have to stay renderable, so pin membership, not the exact tuple.
+    assert {"splash", "menu", "snake", "dashboard", "gallery"} <= set(SCENES)
     for name in SCENES:
         for width, height in ((80, 24), (100, 30)):
             text = render_scene(name, width=width, height=height, phase=8)

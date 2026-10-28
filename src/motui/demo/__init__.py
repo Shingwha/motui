@@ -1,11 +1,11 @@
 """The showcase: ``python -m motui`` is one interactive page, not a tour.
 
-Five scenes share one widget: a splash animates in, the menu offers the
-demos, snake is playable, the dashboard streams samples, and the gallery
-shows the 2.0 components side by side.  The package owns the three entry
-modes:
+The shell opens on a splash, then lands on the Home tiles: six sections
+(components, layout, motion, dashboard, terminal, themes) reachable from
+one grid, plus the standalone snake game and the widget gallery the
+contract keeps renderable.  The package owns the three entry modes:
 
-* a real terminal runs the showcase live (alt screen, mouse, 30 Hz ticks);
+* a real terminal runs the showcase live (alt screen, mouse, timed ticks);
 * a piped run -- or ``--headless`` -- prints the menu's frame and exits 0;
 * ``--pages`` prints every scene as plain text at a fixed phase.
 
@@ -20,10 +20,10 @@ from __future__ import annotations
 
 import contextlib
 import sys
-from collections.abc import Sequence
+from collections.abc import Callable, Sequence
 from dataclasses import dataclass
 
-from ..app import App, Runtime
+from ..app import App, Command, CommandRegistry, Runtime
 from ..kernel.layout import Constraints
 from ..terminal import HeadlessScreen, MouseMode, Terminal, TerminalOptions
 from .showcase import SCENES, Showcase
@@ -35,8 +35,17 @@ __all__ = ["SCENES", "main", "render_scene", "scene_output"]
 #: snake has taken its first steps, and the dashboard window has streamed.
 PAGE_PHASE = 20
 
-#: The live showcase's tick rate (the splash auto-advances after 60 ticks).
-TICK_HZ = 30
+#: The live showcase's tick rate.  The shell's wipe takes nine of these
+#: ticks (~150 ms); the dashboard keeps its own 30 Hz phase semantics.
+TICK_HZ = 60
+
+#: The live launch's theme, as the status line names it (the runner boots
+#: the default dark theme; ``Theme`` itself carries no display name).
+_THEME_LABEL = "Ink & Signal"
+
+#: The scenes that are not sections (the splash is chrome, the snake game
+#: and the gallery hang off their own names rather than Home tiles).
+_NON_SECTIONS = ("splash", "snake", "gallery")
 
 _USAGE = (
     "usage: python -m motui [--pages] [--headless] [--scene NAME] "
@@ -111,21 +120,73 @@ def _pages() -> None:
         print(render_scene(name, width=100, height=30, phase=PAGE_PHASE))
 
 
-def _tick(app: App, showcase: Showcase) -> None:
-    """One animation tick: advance the phase and repaint."""
-    showcase.tick()
-    app.invalidate()
+def _commands(app: App, showcase: Showcase) -> CommandRegistry:
+    """The demo's palette commands: one jump per section, plus chrome."""
+
+    def jump(name: str) -> Callable[[], None]:
+        return lambda: showcase.switch(name)
+
+    def toggle() -> None:
+        showcase.status_line = not showcase.status_line
+
+    commands = [
+        Command(
+            name=f"jump to {name}",
+            description=f"open the {name} section",
+            group="demo",
+            handler=jump(name),
+        )
+        for name in SCENES
+        if name not in _NON_SECTIONS
+    ]
+    commands.append(
+        Command(
+            name="toggle status line",
+            description="show or hide the bottom bar",
+            group="demo",
+            handler=toggle,
+        )
+    )
+    commands.append(
+        Command(
+            name="quit the demo",
+            description="leave the showcase",
+            group="demo",
+            handler=app.quit,
+        )
+    )
+    return CommandRegistry(commands)
 
 
 def _interactive(scene: str) -> None:
     """Run the showcase on a real terminal until the scene asks to quit."""
-    app = App(terminal=TerminalOptions(mouse=MouseMode.MOVE), title="motui showcase")
+    app = App(
+        terminal=TerminalOptions(mouse=MouseMode.MOVE),
+        throttle=1 / TICK_HZ,
+        title="motui showcase",
+    )
     # A live launch starts on a random splash pack; headless snapshots pin 0.
-    showcase = Showcase(scene=scene, seed=None)
+    showcase = Showcase(scene=scene, seed=None, status_line=True)
     showcase.on_quit = app.quit
+    app.bind("ctrl+p", lambda: app.open_palette(_commands(app, showcase)))
+    clock, painter = app.workspace.clock, app.workspace.painter
+    since, frames = clock(), painter.frames
+
+    def tick() -> None:
+        """One animation tick: advance, repaint, sample the frame rate."""
+        showcase.tick()
+        app.invalidate()
+        nonlocal since, frames
+        now, count = clock(), painter.frames
+        elapsed = now - since
+        if elapsed >= 1.0:
+            fps = round((count - frames) / elapsed)
+            showcase.status_note = f"{_THEME_LABEL} \u00b7 {fps} fps"
+            since, frames = now, count
+
     app.fill(showcase)
     app.focus(showcase)
-    app.every(1 / TICK_HZ, lambda: _tick(app, showcase))
+    app.every(1 / TICK_HZ, tick)
     app.run()
 
 

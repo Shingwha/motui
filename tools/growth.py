@@ -54,8 +54,8 @@ PROBE_FIELD = "_growth_probe: int = 0"
 #: One-line description for ``--help`` (``__doc__`` is optional to the type checker).
 DESCRIPTION = "Grow the kernel values in a throw-away copy and run the real gates there."
 
-#: What the probe copy needs: the package, its tests, the tooling and config.
-COPIED = ("src", "tests", "tools", "examples")
+#: What the probe copy needs: the package, its tests and the tooling.
+COPIED = ("src", "tests", "tools")
 #: ``tests/test_packaging.py`` reads these two release files beside the config.
 COPIED_FILES = ("pyproject.toml", "LICENSE", "README.md")
 

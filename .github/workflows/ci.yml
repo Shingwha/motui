@@ -78,11 +78,11 @@ jobs:
       - name: demo -- every page dumped
         run: uv run python -m motui --pages
 
-      - name: example -- quickstart
-        run: uv run python examples/quickstart.py --headless
+      - name: demo -- dashboard replay
+        run: uv run python -m motui --scene dashboard --frames 30 --headless
 
-      - name: example -- code
-        run: uv run python examples/code.py --headless
+      - name: demo -- snake replay
+        run: uv run python -m motui --scene snake --frames 30 --headless
 
-      - name: example -- wide table
-        run: uv run python examples/wide_table.py --headless
+      - name: demo -- placeholder section replay
+        run: uv run python -m motui --scene components --frames 12 --headless
