@@ -124,3 +124,59 @@ src/motui/demo/
    W2-b 若改瓷砖尺寸，两处（`_TILES/_TILE_H/_GAP` 与 `rects` 公式）同源，改 `_tile()` 内容不必动 rect。
 9. 验收后返工记录：174f0e3（迷你动画行宽占用满 content 槽导致压边框，全部收 1 列余量）、
    d3dea78（`_GAP` 只进了 rect 计算没进 `_grid` 拼接，瓷砖贴死且点击错位 1 列）。
+
+## Fix-round · 真机 160 列瓷砖渲染修复（1662d9e 之后的 a7418b3）
+
+用户真机（Windows Terminal ≈160 列）报三条症状：Components 条/▷ 序列画到框外、
+Components 下方错位的重复边框碎片、Layout/Motion 底部两角多余框角。
+上一轮修复（174f0e3）只覆盖了 headless 钉的 80/100 列；本轮在 160x45 / 120x40 / 100x30
+复现并修死，另把 38–160 列 × 21 个 phase 全扫描过。
+
+### 根因（两个，与派工怀疑方向的关系）
+
+1. **`_mini_motion` 的点间隔公式错误（溢出真身）**：`prefix = col - 此前dot数` 把每个尾点的
+   前缀算成 `col-1` 个 `·`，phase=0 时点行宽 **73 列**（track 只有 27），整行把右侧瓷砖顶出
+   pane、被 clip 截断——用户看到的"画到框外"与"重复边框碎片"（同排的 `╚══╝`）都是它。
+   修复：记录上一个点的列，`gap = col - previous - 1`，行宽恒 ≤ track。
+2. **六个 mini 行数不一（2/2+2空/3/4/6 行）→ 瓷砖高度 6~10 行不等**：`_grid()` 按行号拼接时
+   短瓷砖提前闭合底框，三块瓷砖的 `╚══╝` 散落在三行——"多余框角"与"第二层框残留"。
+   修复：`_MINI_H = 6`，`_tile()` 把 mini 输出统一补空行到 6 行（注释契约"6 animation rows"
+   从此由代码保证，将来改任何 mini 不会再散架）。
+
+### 连带修掉的两处窄宽度溢出（扫描时发现）
+
+- Layout blurb "rows, columns, constraints"（26 字符）在 80 列（内宽 22）撑爆右边框：
+  文案改为 "rows, columns, spans"（20，呼应 kernel 的 RowSpan），且 `_centred` 对超长文本
+  截断防御（负 pad 会吃掉右边框）。
+- `_mini_terminal` 硬编码 "60 Hz · 1/60 throttle"（21 字符）在 ≤60 列溢出：截到 `width - 1`
+  （inset 有 1 列前导空格，预算是 `width-1` 不是 `width`——第一版截到 width 仍溢 1 列）。
+- `render` 的 tile_w 下限 20→12：60/50 列时 grid(62/64) 超 pane 被 clip 裁掉第三块瓷砖；
+  下限 12 后 grid 恒 ≤ pane（38 列起三列完整，再窄的裁剪是注释声明过的降级）。
+
+### 复现与验证口径（可重放）
+
+```bash
+uv run python -m motui --headless --width 160 --height 45   # 修复前：motion 点行冲出框外、
+                                                            # 底框散落三行（141/160/65 宽的三种行）
+uv run python -m motui --headless --width 120 --height 40
+uv run python -m motui --headless --width 100 --height 30
+```
+
+扫描器（8 宽度组 × phase 0..63）：每行 `╔/╚` 计数 ∈ {0,3}（无孤立角）、`║` 计数 ∈ {0,6}（无单侧
+边框）、每组 top→bottom 恰 9 行（等高）、含 `║` 的行宽唯一（无中途溢出）。修复前 80 列与
+160 列均红，修复后 38–160 七档全绿。
+
+### golden 与红线
+
+- 仅 `menu.txt` 重录（10 行变化：底框对齐 + 点行收窄 + layout blurb 文案）；其余 9 个 golden
+  逐字未变（--update 的 LF 假 modified 已逐个还原）。
+- 只改 `src/motui/demo/sections/menu.py`；test_demo_scenes.py 零修改；全量 **1659 passed**、
+  ruff 零告警、`--check` 10 scenes match。
+
+### 给后续波的提醒
+
+- 给 mini 加新动画/新文案时：行数不足 6 会被自动补齐（无需自己 pad），但**硬编码文案必须
+  `[: width - 1]` 自卫**——mini 拿到的 `width` 是瓷砖内宽，窄 pane（38–80 列）下 21 字符的
+  句子都会撑破边框。
+- 瓷砖几何现在是 `_TILE_H=10 = 2 边框 + name + blurb + _MINI_H(6)`，三者强耦合；改任何一个
+  先跑上面那个计数扫描。
