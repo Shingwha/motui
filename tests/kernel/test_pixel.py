@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import pytest
+
 from motui.kernel.cell import Segment
 from motui.kernel.pixel import BRAILLE_BITS, PixelPalette, Raster, quantize
 from motui.kernel.style import Style
@@ -132,3 +134,61 @@ def test_quantize_turns_a_hand_drawn_raster_into_exact_styled_segments():
     stray.set(0, 0, 9)
     [line] = quantize([(stray, "braille")], palette)
     assert line.segments == (Segment("\u2801", Style(fg=(255, 255, 255))),)
+
+
+def test_layer_order_gives_the_first_inked_layer_the_cell():
+    """An upper layer's ink covers a lower layer's, cell by cell."""
+    palette = PixelPalette(
+        slots={1: ((255, 0, 0), (150, 0, 0)), 2: ((0, 0, 255), (0, 0, 150))},
+        bg=(10, 10, 30),
+    )
+    top = Raster(2, 1)
+    top.set(0, 0, 1)  # the line layer: one dot in cell 0
+    under = Raster(2, 1)
+    under.rect(0, 0, 3, 1, fill=True, slot=2)  # the fill: both cells' tops
+
+    # Cell 0 belongs to the braille layer; cell 1 lets the fill show.
+    [line] = quantize([(top, "braille"), (under, "half")], palette)
+    assert line.segments == (
+        Segment("\u2801", Style(fg=(255, 0, 0))),
+        Segment("\u2580", Style(fg=(0, 0, 255), bg=(10, 10, 30))),
+    )
+
+    # Reversing the order flips ownership; the two identical fill cells fuse.
+    [line] = quantize([(under, "half"), (top, "braille")], palette)
+    assert line.segments == (Segment("\u2580\u2580", Style(fg=(0, 0, 255), bg=(10, 10, 30))),)
+
+    # Layers must share one geometry and name a real marker.
+    with pytest.raises(ValueError, match="share one geometry"):
+        quantize([(top, "braille"), (Raster(3, 1), "half")], palette)
+    with pytest.raises(ValueError, match="unknown pixel marker"):
+        quantize([(top, "mixed")], palette)
+
+
+def test_same_runs_fuse_by_identity_and_split_when_a_cell_cools():
+    """One style object, one segment: cooling breaks the run, not the object."""
+    palette = PixelPalette(slots={1: ((255, 0, 0), (150, 0, 0))}, bg=(10, 10, 30))
+    raster = Raster(3, 1)
+    raster.set(0, 0, 1)
+    raster.set(2, 0, 1)
+    raster.set(4, 0, 1)
+    [line] = quantize([(raster, "braille")], palette)
+    assert [seg.text for seg in line.segments] == ["\u2801\u2801\u2801"]
+    fresh = line.segments[0].style
+    assert fresh == Style(fg=(255, 0, 0))
+
+    # Cool every cell, then re-freshen the outer two: same glyphs, but the
+    # middle cell now renders in the cool color and splits the run in three.
+    raster.decay(120)
+    raster.set(0, 0, 1)
+    raster.set(4, 0, 1)
+    [line] = quantize([(raster, "braille")], palette)
+    assert [seg.text for seg in line.segments] == ["\u2801", "\u2801", "\u2801"]
+    cool = line.segments[1].style
+    assert cool == Style(fg=(150, 0, 0))
+    assert line.segments[0].style is line.segments[2].style
+    assert cool is not fresh
+
+    # The palette re-hands out the very same style object frame over frame:
+    # the identity the run fusion short-circuits on.
+    assert line.segments[0].style is fresh
