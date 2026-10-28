@@ -13,7 +13,7 @@ background -- so every quantized cell answers at most two colors, one ``fg``
 for its ink and one ``bg`` for what is behind it.  Sub-pixel color within a
 cell is a terminal fact, not a feature any quantizer can add; that ceiling
 is why the raster stores slot + heat per sub-cell and the quantizer chooses
-one slot color per cell (per half-cell for the ``"half"`` marker).
+one slot color per cell (majority slot over the lit sub-pixels).
 
 **Layers.**  ``quantize`` consumes a sequence of :class:`PixelLayer` values,
 each a ``(raster, marker)`` pair with ``marker`` either ``"braille"`` (dot
@@ -36,13 +36,24 @@ inside a 60 fps budget with room to spare.
 from __future__ import annotations
 
 import math
+from collections.abc import Mapping, Sequence
+from dataclasses import dataclass, field
+from types import MappingProxyType
+from typing import Literal
+
+from .cell import Line, Segment
+from .style import Style
 
 __all__ = [
     "BRAILLE_BITS",
+    "COOL_AT",
     "HALF_BOTTOM",
     "HALF_FULL",
     "HALF_TOP",
+    "PixelLayer",
+    "PixelPalette",
     "Raster",
+    "quantize",
 ]
 
 
@@ -207,3 +218,216 @@ class Raster:
             for offset in range(thickness):
                 radius = r + offset - (thickness - 1) / 2
                 self.set(cx + radius * cos, cy + radius * sin, slot)
+
+
+#: One quantization layer: a raster plus the marker its cells quantize to.
+#: A layer is a plain frozen tuple; "mixed" markers are expressed by passing
+#: two layers (a ``"half"`` fill under a ``"braille"`` line layer), never by
+#: a magic marker string.
+PixelLayer = tuple[Raster, Literal["half", "braille"]]
+
+
+#: ``chr(0x2800 + bits)`` for every dot pattern, precomputed so the inner
+#: loop indexes a tuple instead of calling ``chr`` once per cell.
+_BRAILLE_CHARS: tuple[str, ...] = tuple(chr(0x2800 + bits) for bits in range(256))
+
+
+@dataclass(frozen=True, slots=True)
+class PixelPalette:
+    """The colors a quantize may spend: slot color pairs and one background.
+
+    The palette is a caller-provided value -- the kernel ships no pixel
+    theme -- mapping slot ids (what a :class:`Raster` stores, ``1..255``)
+    to ``(main, cool)`` RGB pairs: fresh ink quantizes to the slot's *main*
+    color, and once a cell's peak heat drops below :data:`COOL_AT` it
+    quantizes to the *cool* color -- the cooling-trail look.  ``bg`` is the
+    color a ``"half"`` layer's unlit sub-rows show (its styles carry it as
+    the SGR background); ``"braille"`` styles are fg-only, off dots stay
+    transparent.
+
+    The four styles per slot (main/cool, with and without ``bg``) plus the
+    plain ``bg`` style are prebuilt here once, so :func:`quantize` answers
+    every cell with a dict lookup and reuses one style *object* per
+    (slot, state) -- the identity same-style run fusion short-circuits on.
+    A raster slot with no palette entry quantizes to white.
+    """
+
+    slots: Mapping[int, tuple[tuple[int, int, int], tuple[int, int, int]]]
+    bg: tuple[int, int, int]
+
+    _styles: dict[int, tuple[Style, Style, Style, Style]] = field(
+        init=False, repr=False, compare=False, default_factory=dict
+    )
+    _bg_style: Style = field(init=False, repr=False, compare=False, default=Style())
+    _fallback: tuple[Style, Style, Style, Style] = field(
+        init=False, repr=False, compare=False, default=()
+    )
+
+    def __post_init__(self) -> None:
+        object.__setattr__(self, "slots", MappingProxyType(dict(self.slots)))
+        styles: dict[int, tuple[Style, Style, Style, Style]] = {}
+        for slot_id, (main, cool) in self.slots.items():
+            if not 1 <= slot_id <= 255:
+                raise ValueError(f"palette slot id must be 1..255, got {slot_id}")
+            styles[slot_id] = (
+                Style(fg=main),
+                Style(fg=cool),
+                Style(fg=main, bg=self.bg),
+                Style(fg=cool, bg=self.bg),
+            )
+        object.__setattr__(self, "_styles", styles)
+        object.__setattr__(self, "_bg_style", Style(bg=self.bg))
+        white = (255, 255, 255)
+        object.__setattr__(
+            self,
+            "_fallback",
+            (
+                Style(fg=white),
+                Style(fg=white),
+                Style(fg=white, bg=self.bg),
+                Style(fg=white, bg=self.bg),
+            ),
+        )
+
+
+def _style_of(
+    stats: dict[int, list[int]],
+    styles: Mapping[int, tuple[Style, Style, Style, Style]],
+    fallback: tuple[Style, Style, Style, Style],
+    *,
+    bg: bool,
+) -> Style:
+    """The style for one inked cell: majority slot, then main or cool.
+
+    The majority slot wins by lit-sub-pixel count, ties broken by peak heat
+    then by the lower slot id -- deterministic frame over frame.  The cell's
+    peak heat for that slot picks main (fresh, at or above :data:`COOL_AT`)
+    or cool (decaying), and ``bg`` picks the ``"half"`` variant, whose style
+    carries the palette background under the glyph.
+    """
+    slot_id, entry = max(stats.items(), key=lambda item: (item[1][0], item[1][1], -item[0]))
+    main, cool, main_bg, cool_bg = styles.get(slot_id) or fallback
+    if entry[1] >= COOL_AT:
+        return main_bg if bg else main
+    return cool_bg if bg else cool
+
+
+def quantize(layers: Sequence[PixelLayer], palette: PixelPalette) -> list[Line]:
+    """Quantize layered rasters into one :class:`Line` per cell row.
+
+    ``layers`` is a sequence of ``(raster, marker)`` pairs sharing one
+    geometry (one ``ValueError`` otherwise); ``palette`` maps their slot
+    ids to colors.  Every cell answers to the first layer that has ink in
+    it; its marker picks the glyph:
+
+    - ``"braille"`` -- ``U+2800 + bits`` over the cell's eight sub-cells
+      (:data:`BRAILLE_BITS` order), one fg from the majority lit slot;
+      off dots stay transparent (fg-only style).
+    - ``"half"`` -- the cell's four sub-rows fold in two: both halves lit
+      is :data:`HALF_FULL`, top-only :data:`HALF_TOP`, bottom-only
+      :data:`HALF_BOTTOM`; the style carries ``bg`` so an unlit sub-row
+      shows the palette background.
+
+    A cell with no ink anywhere is a plain space -- unless some layer uses
+    ``"half"``, in which case empty cells paint the palette background
+    (that is what makes a ``"half"`` layer a *fill* layer).  Adjacent
+    cells with the same character and the very same style object fuse into
+    one ``Segment``, so a frame is a handful of runs, not a per-cell
+    bookkeeping walk.  An empty ``layers`` quantizes to no rows.
+    """
+    if not layers:
+        return []
+    cols = layers[0][0].cols
+    rows = layers[0][0].rows
+    grids: list[tuple[bytearray, bytearray, str]] = []
+    for raster, marker in layers:
+        if raster.cols != cols or raster.rows != rows:
+            raise ValueError(
+                f"quantize layers must share one geometry, got {cols}x{rows}"
+                f" and {raster.cols}x{raster.rows}"
+            )
+        if marker not in ("half", "braille"):
+            raise ValueError(f"unknown pixel marker {marker!r}: expected 'half' or 'braille'")
+        grids.append((raster.slot, raster.heat, marker))
+    any_half = any(marker == "half" for _slot, _heat, marker in grids)
+    bg_style = palette._bg_style
+    styles = palette._styles
+    fallback = palette._fallback
+    width = cols * 2
+    lit = _HEAT_LIT
+    chars = _BRAILLE_CHARS
+    cell_rows: list[Line] = []
+    for cy in range(rows):
+        row_base = cy * 4 * width
+        segments: list[Segment] = []
+        run_char: str | None = None
+        run_style: Style | None = None
+        run_start = 0
+        for cx in range(cols + 1):
+            char: str | None = None
+            style: Style | None = None
+            if cx < cols:
+                col_base = row_base + cx * 2
+                for slot_grid, heat_grid, marker in grids:
+                    if marker == "braille":
+                        bits = 0
+                        stats: dict[int, list[int]] = {}
+                        for sy in range(4):
+                            sub = col_base + sy * width
+                            for sx in range(2):
+                                heat = heat_grid[sub + sx]
+                                if heat >= lit:
+                                    bits |= BRAILLE_BITS[sx][sy]
+                                    inked = slot_grid[sub + sx]
+                                    entry = stats.get(inked)
+                                    if entry is None:
+                                        stats[inked] = [1, heat]
+                                    else:
+                                        entry[0] += 1
+                                        if heat > entry[1]:
+                                            entry[1] = heat
+                        if bits:
+                            char = chars[bits]
+                            style = _style_of(stats, styles, fallback, bg=False)
+                            break
+                    else:
+                        top = 0
+                        bottom = 0
+                        stats = {}
+                        for sy in range(4):
+                            sub = col_base + sy * width
+                            for sx in range(2):
+                                heat = heat_grid[sub + sx]
+                                if heat >= lit:
+                                    if sy < 2:
+                                        top += 1
+                                    else:
+                                        bottom += 1
+                                    inked = slot_grid[sub + sx]
+                                    entry = stats.get(inked)
+                                    if entry is None:
+                                        stats[inked] = [1, heat]
+                                    else:
+                                        entry[0] += 1
+                                        if heat > entry[1]:
+                                            entry[1] = heat
+                        if top or bottom:
+                            char = HALF_FULL if top and bottom else HALF_TOP if top else HALF_BOTTOM
+                            style = _style_of(stats, styles, fallback, bg=True)
+                            break
+                if char is None:  # no layer has ink in this cell
+                    char = " "
+                    style = bg_style if any_half else None
+            if char == run_char and style is run_style:
+                continue  # same run: fuse by identity, no segment spent
+            if run_char is not None:
+                count = cx - run_start
+                if run_style is None:
+                    segments.append(Segment(" " * count))
+                else:
+                    segments.append(Segment(run_char * count, run_style))
+            run_char = char
+            run_style = style
+            run_start = cx
+        cell_rows.append(Line(tuple(segments)))
+    return cell_rows
