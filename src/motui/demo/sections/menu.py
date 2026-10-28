@@ -20,10 +20,14 @@ _COLUMNS = 3
 _TILE_H = 10  # 2 border rows + name + blurb + 6 animation rows
 _GAP = 1
 
+#: Every mini animation paints exactly this many rows, so all six tiles
+#: close their bottom border on the same line.
+_MINI_H = 6
+
 #: The six destinations, in tile order (row-major across the grid).
 _TILES: tuple[tuple[str, str], ...] = (
     ("components", "widgets, one page each"),
-    ("layout", "rows, columns, constraints"),
+    ("layout", "rows, columns, spans"),
     ("motion", "rings & snake, live"),
     ("dashboard", "streaming sparklines"),
     ("terminal", "keys, mouse, paint"),
@@ -85,12 +89,16 @@ def _mini_motion(phase: int, width: int, theme: Theme) -> list[Line]:
         for dot in range(4):
             cells[(phase // 2 - dot) % track] = dot
         segments: list[Segment] = []
+        previous: int | None = None
         for col, dot in enumerate(cells):
             if dot is None:
                 continue
             style = head if dot == 0 else trail
-            prefix = "\u00b7" * (col - sum(1 for c in cells[:col] if c is not None))
-            segments.append(Segment(prefix + "\u25cf", style))
+            # The separator is the *actual* gap to the previous dot, so the
+            # row never grows past the track no matter where the dots sit.
+            gap = 0 if previous is None else col - previous - 1
+            segments.append(Segment("\u00b7" * gap + "\u25cf", style))
+            previous = col
         rows.append(Line(tuple(segments)) if segments else Line())
     return rows
 
@@ -116,10 +124,13 @@ def _mini_terminal(phase: int, width: int, theme: Theme) -> list[Line]:
     prompt = Segment("> ", faint)
     text = Segment("motui " * (typed // 6), faint)
     cursor_char = "\u2588" if (phase // 4) % 2 == 0 else " "
+    # The note truncates to the inset budget (one leading space included),
+    # so even a twelve-wide tile keeps its border.
+    note = "60 Hz \u00b7 1/60 throttle"[: width - 1]
     rows = [
         Line((prompt, text, Segment(cursor_char, caret))),
         Line(),
-        Line((Segment("60 Hz \u00b7 1/60 throttle", faint),)),
+        Line((Segment(note, faint),)),
     ]
     return rows
 
@@ -190,7 +201,10 @@ class MenuScene:
     def render(self, c: Constraints, phase: int) -> Surface:
         self._phase = phase
         width = c.width
-        self._tile_w = min(30, max(20, (width - 2 * _GAP - 4) // _COLUMNS))
+        # Twelve columns is the floor where a tile still reads (a ten-char
+        # name between the borders); below that the pane is too narrow for
+        # three tiles and the clip is the graceful degradation.
+        self._tile_w = min(30, max(12, (width - 2 * _GAP - 4) // _COLUMNS))
         grid_w = _COLUMNS * self._tile_w + (_COLUMNS - 1) * _GAP
         grid = self._grid(grid_w)
 
@@ -280,14 +294,23 @@ class MenuScene:
             + (edge_r,),
             (edge_l,) + self._centred(blurb, width, self.theme.text.faint) + (edge_r,),
         ]
-        for mini_row in _MINIS[index](self._phase, width, self.theme):
+        mini_rows = _MINIS[index](self._phase, width, self.theme)
+        # Pad every preview to the same height so the six tiles stay
+        # equal-height and their bottom borders share one line.
+        mini_rows = [*mini_rows, *([Line()] * (_MINI_H - len(mini_rows)))]
+        for mini_row in mini_rows:
             rows.append((edge_l,) + self._inset(mini_row, width) + (edge_r,))
         rows.append((Segment(corner[2] + "\u2550" * width + corner[3], border),))
         return [Line(segments) for segments in rows]
 
     @staticmethod
     def _centred(text: str, width: int, style: Style) -> tuple[Segment, ...]:
-        """One text row between the tile's side borders, centred."""
+        """One text row between the tile's side borders, centred.
+
+        Text longer than the slot truncates, so a narrow pane can never
+        push a tile's border out of line.
+        """
+        text = text[:width]
         pad = max(0, (width - len(text)) // 2)
         rest = width - len(text) - pad
         return (Segment(" " * pad), Segment(text, style), Segment(" " * rest))
