@@ -28,9 +28,12 @@ This module is pure values and pure functions: no I/O, no terminal bytes,
 stdlib only.  Every product is a row-model value, so pixel frames compose
 with text through the ordinary :class:`~motui.kernel.cell.Surface` machinery.
 
-Measured cost of :func:`quantize` on a 76x24 two-layer frame
-(headless, CPython 3.12): see the number in :func:`quantize`'s docstring --
-inside a 60 fps budget with room to spare.
+Measured cost of :func:`quantize` on a 76x24 frame (CPython 3.12.14,
+Windows, 300-frame average): **3.6 ms/frame** for a demo-like sparse
+one-layer scene, **7.9 ms/frame** for a worst-case two-layer scene with
+every cell inked and mixed slots -- inside the 16.7 ms a 60 fps budget
+allows, with the per-cell ``Canvas`` bookkeeping that cost the prototype
+13 ms never entering the picture (rows are built directly).
 """
 
 from __future__ import annotations
@@ -290,26 +293,15 @@ class PixelPalette:
         )
 
 
-def _style_of(
-    stats: dict[int, list[int]],
-    styles: Mapping[int, tuple[Style, Style, Style, Style]],
-    fallback: tuple[Style, Style, Style, Style],
-    *,
-    bg: bool,
-) -> Style:
-    """The style for one inked cell: majority slot, then main or cool.
+def _majority(stats: dict[int, list[int]]) -> tuple[int, int]:
+    """The majority slot's ``(id, peak heat)`` among a cell's lit sub-cells.
 
-    The majority slot wins by lit-sub-pixel count, ties broken by peak heat
-    then by the lower slot id -- deterministic frame over frame.  The cell's
-    peak heat for that slot picks main (fresh, at or above :data:`COOL_AT`)
-    or cool (decaying), and ``bg`` picks the ``"half"`` variant, whose style
-    carries the palette background under the glyph.
+    Majority by lit count, ties broken by peak heat then by the lower slot
+    id -- deterministic frame over frame.  Only mixed-slot cells pay for
+    this: a single-slot cell (the common case) skips the dict entirely.
     """
     slot_id, entry = max(stats.items(), key=lambda item: (item[1][0], item[1][1], -item[0]))
-    main, cool, main_bg, cool_bg = styles.get(slot_id) or fallback
-    if entry[1] >= COOL_AT:
-        return main_bg if bg else main
-    return cool_bg if bg else cool
+    return slot_id, entry[1]
 
 
 def quantize(layers: Sequence[PixelLayer], palette: PixelPalette) -> list[Line]:
@@ -334,12 +326,21 @@ def quantize(layers: Sequence[PixelLayer], palette: PixelPalette) -> list[Line]:
     cells with the same character and the very same style object fuse into
     one ``Segment``, so a frame is a handful of runs, not a per-cell
     bookkeeping walk.  An empty ``layers`` quantizes to no rows.
+
+    The scan has one shape for both markers: walk the cell's eight
+    sub-cells through a flat offset table, tracking the braille bits, the
+    lit counts per half, and the owning slot -- where "owning" keeps a
+    single-slot fast path (one slot id, its peak heat, no dict); only a
+    cell inked by two or more slots falls back to the majority vote in
+    :func:`_majority`.  The palette answers every cell with one dict
+    lookup, returning a style *object* the run fusion below compares by
+    identity.
     """
     if not layers:
         return []
     cols = layers[0][0].cols
     rows = layers[0][0].rows
-    grids: list[tuple[bytearray, bytearray, str]] = []
+    grids: list[tuple[bytearray, bytearray, int]] = []
     for raster, marker in layers:
         if raster.cols != cols or raster.rows != rows:
             raise ValueError(
@@ -348,14 +349,30 @@ def quantize(layers: Sequence[PixelLayer], palette: PixelPalette) -> list[Line]:
             )
         if marker not in ("half", "braille"):
             raise ValueError(f"unknown pixel marker {marker!r}: expected 'half' or 'braille'")
-        grids.append((raster.slot, raster.heat, marker))
-    any_half = any(marker == "half" for _slot, _heat, marker in grids)
+        grids.append((raster.slot, raster.heat, 0 if marker == "braille" else 1))
+    any_half = any(kind for _slot, _heat, kind in grids)
     bg_style = palette._bg_style
-    styles = palette._styles
+    styles_get = palette._styles.get
     fallback = palette._fallback
     width = cols * 2
     lit = _HEAT_LIT
+    cool_at = COOL_AT
     chars = _BRAILLE_CHARS
+    majority = _majority
+    # Dot bits paired with sub-cell offsets from the cell's top left corner,
+    # upper two sub-rows first: one scan shape serves both markers.
+    top_offsets = (
+        (0x01, 0),
+        (0x08, 1),
+        (0x02, width),
+        (0x10, width + 1),
+    )
+    bottom_offsets = (
+        (0x04, width * 2),
+        (0x20, width * 2 + 1),
+        (0x40, width * 3),
+        (0x80, width * 3 + 1),
+    )
     cell_rows: list[Line] = []
     for cy in range(rows):
         row_base = cy * 4 * width
@@ -368,53 +385,75 @@ def quantize(layers: Sequence[PixelLayer], palette: PixelPalette) -> list[Line]:
             style: Style | None = None
             if cx < cols:
                 col_base = row_base + cx * 2
-                for slot_grid, heat_grid, marker in grids:
-                    if marker == "braille":
-                        bits = 0
-                        stats: dict[int, list[int]] = {}
-                        for sy in range(4):
-                            sub = col_base + sy * width
-                            for sx in range(2):
-                                heat = heat_grid[sub + sx]
-                                if heat >= lit:
-                                    bits |= BRAILLE_BITS[sx][sy]
-                                    inked = slot_grid[sub + sx]
-                                    entry = stats.get(inked)
-                                    if entry is None:
-                                        stats[inked] = [1, heat]
-                                    else:
-                                        entry[0] += 1
-                                        if heat > entry[1]:
-                                            entry[1] = heat
-                        if bits:
+                for slot_grid, heat_grid, kind in grids:
+                    bits = 0
+                    top = 0
+                    bottom = 0
+                    solo = 0  # the only slot seen so far (0 = none yet)
+                    solo_n = 0
+                    peak = 0
+                    stats: dict[int, list[int]] | None = None
+                    for bit, off in top_offsets:
+                        cell = col_base + off
+                        heat = heat_grid[cell]
+                        if heat >= lit:
+                            bits |= bit
+                            top += 1
+                            inked = slot_grid[cell]
+                            if solo == 0:
+                                solo, solo_n, peak = inked, 1, heat
+                            elif inked == solo:
+                                solo_n += 1
+                                if heat > peak:
+                                    peak = heat
+                            else:
+                                if stats is None:
+                                    stats = {solo: [solo_n, peak]}
+                                entry = stats.get(inked)
+                                if entry is None:
+                                    stats[inked] = [1, heat]
+                                else:
+                                    entry[0] += 1
+                                    if heat > entry[1]:
+                                        entry[1] = heat
+                    for bit, off in bottom_offsets:
+                        cell = col_base + off
+                        heat = heat_grid[cell]
+                        if heat >= lit:
+                            bits |= bit
+                            bottom += 1
+                            inked = slot_grid[cell]
+                            if solo == 0:
+                                solo, solo_n, peak = inked, 1, heat
+                            elif inked == solo:
+                                solo_n += 1
+                                if heat > peak:
+                                    peak = heat
+                            else:
+                                if stats is None:
+                                    stats = {solo: [solo_n, peak]}
+                                entry = stats.get(inked)
+                                if entry is None:
+                                    stats[inked] = [1, heat]
+                                else:
+                                    entry[0] += 1
+                                    if heat > entry[1]:
+                                        entry[1] = heat
+                    if bits:
+                        if kind == 0:  # braille: fg-only, transparent off dots
                             char = chars[bits]
-                            style = _style_of(stats, styles, fallback, bg=False)
-                            break
-                    else:
-                        top = 0
-                        bottom = 0
-                        stats = {}
-                        for sy in range(4):
-                            sub = col_base + sy * width
-                            for sx in range(2):
-                                heat = heat_grid[sub + sx]
-                                if heat >= lit:
-                                    if sy < 2:
-                                        top += 1
-                                    else:
-                                        bottom += 1
-                                    inked = slot_grid[sub + sx]
-                                    entry = stats.get(inked)
-                                    if entry is None:
-                                        stats[inked] = [1, heat]
-                                    else:
-                                        entry[0] += 1
-                                        if heat > entry[1]:
-                                            entry[1] = heat
-                        if top or bottom:
+                            variant = 0
+                        else:  # half: the bg rides so an unlit sub-row shows it
                             char = HALF_FULL if top and bottom else HALF_TOP if top else HALF_BOTTOM
-                            style = _style_of(stats, styles, fallback, bg=True)
-                            break
+                            variant = 2
+                        if stats is None:  # single-slot cell: no vote needed
+                            quad = styles_get(solo) or fallback
+                            style = quad[variant] if peak >= cool_at else quad[variant + 1]
+                        else:
+                            slot_id, peak = majority(stats)
+                            quad = styles_get(slot_id) or fallback
+                            style = quad[variant] if peak >= cool_at else quad[variant + 1]
+                        break
                 if char is None:  # no layer has ink in this cell
                     char = " "
                     style = bg_style if any_half else None
