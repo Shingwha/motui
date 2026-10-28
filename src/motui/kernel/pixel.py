@@ -245,18 +245,20 @@ class PixelPalette:
     color, and once a cell's peak heat drops below :data:`COOL_AT` it
     quantizes to the *cool* color -- the cooling-trail look.  ``bg`` is the
     color a ``"half"`` layer's unlit sub-rows show (its styles carry it as
-    the SGR background); ``"braille"`` styles are fg-only, off dots stay
-    transparent.
+    the SGR background); ``None`` -- the default -- keeps them transparent
+    (the terminal's own background shows through, so strokes never grow
+    dark notches on a mismatched backdrop); ``"braille"`` styles are
+    fg-only either way, off dots stay transparent.
 
-    The four styles per slot (main/cool, with and without ``bg``) plus the
-    plain ``bg`` style are prebuilt here once, so :func:`quantize` answers
+    The four styles per slot (main/cool, with and without ``bg``) are
+    prebuilt here once, so :func:`quantize` answers
     every cell with a dict lookup and reuses one style *object* per
     (slot, state) -- the identity same-style run fusion short-circuits on.
     A raster slot with no palette entry quantizes to white.
     """
 
     slots: Mapping[int, tuple[tuple[int, int, int], tuple[int, int, int]]]
-    bg: tuple[int, int, int]
+    bg: tuple[int, int, int] | None = None
 
     _styles: dict[int, tuple[Style, Style, Style, Style]] = field(
         init=False, repr=False, compare=False, default_factory=dict

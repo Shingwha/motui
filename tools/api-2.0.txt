@@ -94,7 +94,7 @@ motui.kernel	Overlay	class	(*args, **kwargs)
 motui.kernel	Pane	class	(id: 'str', rect: 'Rect', viewport: 'Viewport', chrome: 'tuple' = (), division: 'Split | None' = None, children: 'tuple[Pane, ...]' = (), _frame: 'Frame | None' = None, _negotiation: 'tuple[Rect, tuple, Rect, tuple] | None' = None) -> None
 motui.kernel	PasteEvent	class	(text: 'str') -> None
 motui.kernel	PixelLayer	function	(iterable=(), /)
-motui.kernel	PixelPalette	class	(slots: 'Mapping[int, tuple[tuple[int, int, int], tuple[int, int, int]]]', bg: 'tuple[int, int, int]') -> None
+motui.kernel	PixelPalette	class	(slots: 'Mapping[int, tuple[tuple[int, int, int], tuple[int, int, int]]]', bg: 'tuple[int, int, int] | None' = None) -> None
 motui.kernel	Pos	class	(*, x: 'int' = 0, y: 'int' = 0) -> None
 motui.kernel	RESET	value	'\x1b[0m'
 motui.kernel	Raster	class	(cols: 'int', rows: 'int') -> 'None'
