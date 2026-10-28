@@ -263,7 +263,6 @@ class PixelPalette:
     _styles: dict[int, tuple[Style, Style, Style, Style]] = field(
         init=False, repr=False, compare=False, default_factory=dict
     )
-    _bg_style: Style = field(init=False, repr=False, compare=False, default=Style())
     _fallback: tuple[Style, Style, Style, Style] = field(
         init=False, repr=False, compare=False, default=()
     )
@@ -281,7 +280,6 @@ class PixelPalette:
                 Style(fg=cool, bg=self.bg),
             )
         object.__setattr__(self, "_styles", styles)
-        object.__setattr__(self, "_bg_style", Style(bg=self.bg))
         white = (255, 255, 255)
         object.__setattr__(
             self,
