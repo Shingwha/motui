@@ -1,11 +1,11 @@
 """The showcase: ``python -m motui`` is one interactive page, not a tour.
 
-Five scenes share one widget: a splash animates in, the menu offers the
-demos, snake is playable, the dashboard streams samples, and the gallery
-shows the 2.0 components side by side.  The package owns the three entry
-modes:
+The shell opens on a splash, then lands on the Home tiles: six sections
+(components, layout, motion, dashboard, terminal, themes) reachable from
+one grid, plus the standalone snake game and the widget gallery the
+contract keeps renderable.  The package owns the three entry modes:
 
-* a real terminal runs the showcase live (alt screen, mouse, 30 Hz ticks);
+* a real terminal runs the showcase live (alt screen, mouse, timed ticks);
 * a piped run -- or ``--headless`` -- prints the menu's frame and exits 0;
 * ``--pages`` prints every scene as plain text at a fixed phase.
 

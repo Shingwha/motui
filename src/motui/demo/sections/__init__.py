@@ -19,6 +19,7 @@ from ..snake import SnakeScene
 from .dashboard import DashboardScene
 from .gallery import GalleryScene
 from .menu import MenuScene
+from .placeholder import PlaceholderScene
 from .splash import SplashScene
 
 __all__ = [
@@ -26,13 +27,36 @@ __all__ = [
     "DashboardScene",
     "GalleryScene",
     "MenuScene",
+    "PlaceholderScene",
     "Scene",
     "SnakeScene",
     "SplashScene",
 ]
 
-#: The scenes in tour order: splash, menu, snake, dashboard, gallery.
-SCENES: tuple[str, ...] = ("splash", "menu", "snake", "dashboard", "gallery")
+#: The scenes in tour order: the splash, the Home tiles, the six sections,
+#: then the two standalone tours the contract pins (the snake game also
+#: serves as the motion section until wave 4 gives it its own file).
+SCENES: tuple[str, ...] = (
+    "splash",
+    "menu",
+    "components",
+    "layout",
+    "motion",
+    "dashboard",
+    "terminal",
+    "themes",
+    "snake",
+    "gallery",
+)
+
+#: The four sections later waves build; each ships as an under-construction
+#: panel so the registry, tiles, golden set and ``--pages`` stay complete.
+_PLACEHOLDERS: tuple[tuple[str, str], ...] = (
+    ("components", "the widget gallery, rebuilt on the shell"),
+    ("layout", "rows, columns and constraint drills"),
+    ("terminal", "keys, mouse and paint, dissected"),
+    ("themes", "the shipped themes, side by side"),
+)
 
 
 class Scene(Protocol):
@@ -56,11 +80,21 @@ class Scene(Protocol):
 
 
 def _scenes(theme: Theme, *, seed: int | None = 0) -> dict[str, Scene]:
-    """Build one scene object per :data:`SCENES`, in tour order."""
-    return {
+    """Build one scene object per :data:`SCENES`, in tour order.
+
+    ``motion`` and ``snake`` share one game object: the tiles open the
+    section name while the contract keeps ``"snake"`` renderable; wave 4
+    migrates the code into its own file under the same registry name.
+    """
+    snake = SnakeScene(theme)
+    scenes: dict[str, Scene] = {
         "splash": SplashScene(theme, seed=seed),
         "menu": MenuScene(theme),
-        "snake": SnakeScene(theme),
         "dashboard": DashboardScene(theme),
         "gallery": GalleryScene(theme),
+        "motion": snake,
+        "snake": snake,
     }
+    for name, blurb in _PLACEHOLDERS:
+        scenes[name] = PlaceholderScene(theme, name=name, blurb=blurb)
+    return {key: scenes[key] for key in SCENES}
