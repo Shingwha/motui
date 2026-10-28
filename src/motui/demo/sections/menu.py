@@ -24,7 +24,7 @@ _GAP = 1
 _TILES: tuple[tuple[str, str], ...] = (
     ("components", "widgets, one page each"),
     ("layout", "rows, columns, constraints"),
-    ("motion", "the snake, live"),
+    ("motion", "rings & snake, live"),
     ("dashboard", "streaming sparklines"),
     ("terminal", "keys, mouse, paint"),
     ("themes", "ink & signal variants"),

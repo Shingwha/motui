@@ -22,7 +22,6 @@ from .gallery import GalleryScene
 from .layout import LayoutScene
 from .menu import MenuScene
 from .motion import MotionScene
-from .placeholder import PlaceholderScene
 from .splash import SplashScene
 from .terminal import TerminalScene
 from .themes import ThemesScene
@@ -35,7 +34,6 @@ __all__ = [
     "LayoutScene",
     "MenuScene",
     "MotionScene",
-    "PlaceholderScene",
     "Scene",
     "SnakeScene",
     "SplashScene",

@@ -1,6 +1,6 @@
 # Spec demo-showcase · demo 整体重构：像素层进 kernel + examples 退场 + 七节新壳
 
-> ✅ 进行中（rev 2，2026-10-28 14:05 重写：用户拍板"examples 全部删除、像素核心直接进 kernel，不留平行实现"）。启动：2026-10-28 13:49（UTC+8）；基线 main `148ce4a`；基线 `uv run pytest -q` = **1641 passed in 13.26s**；W1-b 合并后预期 **1638**（删 test_examples 3 条）。
+> ✅ 已合并 2026-10-28 —— 七波全部落地 main（W1-a `dm-w1a-pixel-core`、W1-b `dm-w1b-demo-shell`、W2-a `dm-w2a-pixel-canvas`、W2-b `dm-w2b-sections`、W3-a `dm-w3a-report-themes`、W3-b `dm-w3b-motion-splash`），终验 1659 passed / ruff 零告警 / golden 10 场景 / api 198 名。rev 2，2026-10-28 14:05 重写：用户拍板"examples 全部删除、像素核心直接进 kernel，不留平行实现"）。启动：2026-10-28 13:49（UTC+8）；基线 main `148ce4a`；基线 `uv run pytest -q` = **1641 passed in 13.26s**；W1-b 合并后预期 **1638**（删 test_examples 3 条）。
 
 ## 目标
 

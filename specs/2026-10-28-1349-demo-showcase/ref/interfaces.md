@@ -24,12 +24,12 @@ demo/__init__.py   入口 + _commands（palette：7 条 jump + toggle status lin
 demo/shell.py      Showcase 壳：switch/tick/on_key/on_click、wipe（列裁剪 9 tick）、StatusLine
 demo/sections/     __init__(Scene 协议+SCENES+_scenes)、splash、menu(瓷砖)、
                    components(W2-b：三 tabs 游乐场+同步代码面板)、layout(W2-b：split/dock/
-                   滚动/宽表 drill)、placeholder(terminal/themes 仍占位，W3-a 接手)、
+                   滚动/宽表 drill)、terminal(W3-a 报告节)、themes(W3-a 换肤节)；placeholder.py 已删除、
                    dashboard、gallery
 demo/snake.py      SnakeScene（motion 场景当前复用同一对象；W3-b 重排）
 ```
 
-W2-a 现实：`motui.widgets.PixelCanvas(width, height, *, marker="braille"|"half",
+W2-a 现实：`motui.widgets.PixelCanvas(width, height, *, marker="braille"|"half",  # octant 未实现
 palette: PixelPalette, theme, styles)`；`art`（线条层，marker 量化）+ `fill`（垫底层，
 恒 half）两个 Raster 出口；动词 set/unset/line/rect/disc/ring/decay/clear（decay 只衰
 art）；octant 档与探测**未实现**（W3-a 的 Terminal 节按"未探测"展示）。
