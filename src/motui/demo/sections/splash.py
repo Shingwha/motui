@@ -2,13 +2,15 @@
 
 The wordmark is not a font anymore: "MOTUI" is drawn as sub-cell strokes
 (3-4 sub-cells thick) on a 152x96 design grid, scaled onto whatever
-:class:`~motui.widgets.PixelCanvas` hosts it (the canvas caps at 60x18
-cells to hold the 8 ms frame budget -- see :meth:`SplashScene.render`).  The fill layer
+:class:`~motui.widgets.PixelCanvas` hosts it -- at the nominal resolution
+wherever the pane allows (see :meth:`SplashScene.render`).  The fill layer
 carries the word itself; the art layer carries the pack's motion -- the
 neon sweep's decay trail, the starfield's three-layer parallax drift.
 Every frame is a pure function of the phase: both layers are cleared and
 redrawn with explicit heats, so a headless replay never depends on how
-many decay steps a live run took between frames.
+many decay steps a live run took between frames.  No pack carries a
+palette background: inked strokes stay transparent between sub-rows, so
+they never grow dark notches on a mismatched terminal backdrop.
 
 The four packs keep their identities.  ``neon`` is the cyan-to-lavender
 ramp (:data:`LOGO_START` -> :data:`LOGO_END`) with a white sweep flowing
@@ -122,7 +124,7 @@ def _rgb(value: str) -> tuple[int, int, int]:
 
 def _mix(start: tuple[int, int, int], end: tuple[int, int, int], t: float) -> tuple[int, int, int]:
     """One interpolated step between two RGB triples."""
-    return tuple(round(first + (last - first) * t) for first, last in zip(start, end))
+    return tuple(round(first + (last - first) * t) for first, last in zip(start, end, strict=False))
 
 
 def _ramp(
@@ -225,14 +227,15 @@ _GLITCH_RED = 16
 _GLITCH_CYAN = 17
 
 #: The per-pack palettes.  Slot 13 is the neon sweep's white; the starfield
-#: word is an icy ramp on slots 1-12 with stars and glitch above it.
+#: word is an icy ramp on slots 1-12 with stars and glitch above it.  No
+#: pack carries a ``bg`` any more: inked cells stay transparent between
+#: sub-rows, so strokes never grow dark notches on a mismatched backdrop.
 _PALETTES: dict[str, PixelPalette] = {
     "neon": PixelPalette(
         slots={
             **_ramp(LOGO_START, LOGO_END, _BANDS),
             13: ((255, 255, 255), (170, 174, 192)),
         },
-        bg=(10, 10, 18),
     ),
     "plasma": PixelPalette(
         slots={
@@ -242,7 +245,6 @@ _PALETTES: dict[str, PixelPalette] = {
             )
             for index in range(_BANDS)
         },
-        bg=(16, 8, 20),
     ),
     "retro": PixelPalette(
         slots={
@@ -251,18 +253,19 @@ _PALETTES: dict[str, PixelPalette] = {
             3: ((51, 255, 153), (24, 118, 72)),  # green phosphor, lit and dim
             4: ((30, 150, 90), (14, 70, 44)),
         },
-        bg=(10, 8, 6),
     ),
     "starfield": PixelPalette(
         slots={
-            **_ramp("#7896e6", "#ebf2ff", _BANDS),
+            # The word rides a bright ice ramp: the old deep-blue low end
+            # vanished on a real terminal's dark background.  The star
+            # field and glitch bands keep their own (deeper) colors.
+            **_ramp("#a9c6ff", "#ffffff", _BANDS),
             _STAR_SLOTS[0]: ((96, 116, 168), (44, 54, 80)),
             _STAR_SLOTS[1]: ((150, 180, 226), (70, 86, 110)),
             _STAR_SLOTS[2]: ((222, 236, 255), (110, 120, 140)),
             _GLITCH_RED: ((255, 92, 108), (120, 44, 52)),
             _GLITCH_CYAN: ((92, 232, 255), (44, 112, 124)),
         },
-        bg=(5, 6, 12),
     ),
 }
 
@@ -483,19 +486,20 @@ class SplashScene:
     def render(self, c: Constraints, phase: int) -> Surface:
         """The centred wordmark canvas over the subtitle, pulse and hint.
 
-        The canvas caps at 60x17 cells -- a 120x68-sub-cell wordmark, about
-        four fifths of the nominal 152x96 -- because the frame budget is
-        8 ms and quantize scales with cell area: at the nominal 76x23 the
-        dense wordmark measured ~9 ms median, at the cap the four packs
-        answer 5.9-6.3 ms (CPython 3.13.16, Windows; 7 rounds of 200
-        frames, median of per-round medians, 100x30 pane).  Wider panes
-        centre the canvas.
+        The canvas runs at the wordmark's nominal resolution -- 76x23 cells
+        at a 100x30 pane (152x92 virtual pixels), shrinking only when the
+        pane does.  Since the kernel made blank cells transparent and the
+        palette background opt-in (no pack passes one), a whole frame
+        measures ~3.8-4.0 ms median across the four packs at 100x30 (the
+        pre-transparency kernel forced a 60x17 cap at ~9 ms; that cap is
+        gone).  CPython 3.13.16, Windows; 7 rounds of 200 frames, median
+        of per-round medians.  Wider panes centre the canvas.
         """
         width = c.width
         height = c.max_height if c.max_height is not None else 24
         pack = self.style_name(phase)
-        canvas_w = max(12, min(60, width - 2))
-        canvas_h = max(5, min(17, height - 7))
+        canvas_w = max(12, min(76, width - 2))
+        canvas_h = max(5, min(23, height - 7))
         canvas = self._canvas(pack)
         canvas.resize(canvas_w, canvas_h)
         self._paint(canvas, pack, phase)

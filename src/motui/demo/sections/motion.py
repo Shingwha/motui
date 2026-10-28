@@ -28,12 +28,16 @@ host capability and a widget never probes the terminal.
 
 Measured cost of a whole motion frame at 100x30 (CPython 3.13.16, Windows;
 7 rounds of 200 frames, median of per-round medians): rings mode with three
-live rings answers **5.0 ms** (4.6 ms at 80x24) -- the board caps at
-68x20 cells because quantize scales with cell area, and that cap keeps the
-default mode well inside the 8 ms budget.  Snake mode answers ~8.1 ms, of
-which ~7.4 ms is the unchanged whole-cell snake board itself and the rest
-the ladder chrome.  The splash's pixel wordmark measures 5.9-6.3 ms across
-its four packs at the same geometry and protocol.
+live rings answers **2.8 ms** (2.0 ms at 80x24).  The board rides the
+kernel's transparent blank cells (no palette background is painted any
+more -- the target disc is a solid half-block disc on the fill layer, the
+rings braille two sub-cells thick), which is both the readable-on-a-real-
+terminal shape and roughly three times cheaper than the pre-transparency
+quantize; the 8 ms budget holds with room to spare at the full 80-cell
+board.  Snake mode answers ~8.1 ms on the same protocol, of which ~7.4 ms
+is the unchanged whole-cell snake board itself and the rest the ladder
+chrome.  The splash's pixel wordmark measures 3.9-4.0 ms across its four
+packs at the same geometry and protocol.
 """
 
 from __future__ import annotations
@@ -103,14 +107,10 @@ _RING_PALETTE = PixelPalette(
         7: ((150, 154, 172), (86, 90, 106)),
         8: ((196, 181, 253), (94, 84, 130)),
     },
-    bg=(12, 12, 18),
 )
 
 #: The ladder palette: one accent, so both markers draw the same circle.
-_LADDER_PALETTE = PixelPalette(
-    slots={1: ((83, 200, 240), (30, 92, 118))},
-    bg=(12, 12, 18),
-)
+_LADDER_PALETTE = PixelPalette(slots={1: ((83, 200, 240), (30, 92, 118))})
 
 #: Burst colors by verdict: Perfect bursts white, Good pink, force cold.
 _BURST_SLOTS = {"perfect": 5, "good": 6}
@@ -328,13 +328,13 @@ class MotionScene:
     def _render_rings(self, width: int, height: int, phase: int) -> list[Line]:
         """The pixel board: HUD row, then the quantized rings frame.
 
-        The board caps at 68x20 cells (a 136x80-sub-cell playfield, still
-        room for the widest ring and its burst): quantize scales with cell
-        area, and the 8 ms frame budget buys more score than empty cells
-        would.  A wider or taller pane centres the board instead.
+        The board caps at 80 cells wide like the snake's block; a wider or
+        taller pane centres the board rather than stretching it.  Since the
+        kernel stopped painting blank cells, a 100x30 frame measures ~2 ms
+        median and no further size cap is needed.
         """
-        board_h = max(4, min(20, height - _LADDER_ROWS - 2))
-        board_w = max(12, min(68, width))
+        board_h = max(4, height - _LADDER_ROWS - 2)
+        board_w = max(12, min(80, width))
         self._fit_board(board_w, board_h)
         self._sync(phase)
         canvas = self._board
@@ -357,7 +357,14 @@ class MotionScene:
         self._geom = (self._board.art.width, self._board.art.height)
 
     def _paint(self, canvas: PixelCanvas, ring: _Ring, now: float, phase: int) -> None:
-        """One ring's frame: approach ring, target disc, burst or fade."""
+        """One ring's frame: approach ring, target disc, burst or fade.
+
+        The target disc lands on the **fill** layer: a solid half-block
+        disc survives every terminal font, while a braille disc reads as
+        sparse dots (the marker ladder shows exactly that).  The rings
+        ride the art layer two sub-cells thick so their braille dots
+        bridge the font's gaps.
+        """
         if ring.state == "live":
             age = now - ring.born
             if age <= _APPROACH:
@@ -365,9 +372,9 @@ class MotionScene:
                 radius = _OUTER_RADIUS + (_TARGET_RADIUS - _OUTER_RADIUS) * t
                 error = abs(now - (ring.born + _APPROACH))
                 flash = error <= _WINDOW_GOOD and (phase // _BLINK_TICKS) % 2 == 0
-                canvas.ring(ring.cx, ring.cy, radius, 1, 5 if flash else ring.slot)
+                canvas.ring(ring.cx, ring.cy, radius, 2, 5 if flash else ring.slot)
             pop = min(1.0, age / _POP)
-            canvas.disc(ring.cx, ring.cy, _TARGET_RADIUS * _ease_out_back(pop), ring.slot)
+            canvas.fill_disc(ring.cx, ring.cy, _TARGET_RADIUS * _ease_out_back(pop), ring.slot)
         elif ring.state == "burst":
             t = (now - ring.at) / _BURST
             radius = _TARGET_RADIUS + _BURST_OVERSHOOT * _ease_out_back(min(1.0, t))
@@ -399,7 +406,10 @@ class MotionScene:
         ring -- a burst burning out or a miss dissolving -- writes the
         public rasters directly, the documented pattern
         :meth:`PixelCanvas.unset` uses.  This is drawing, not quantizing:
-        the kernel still owns the pixels-to-cells pass.
+        the kernel still owns the pixels-to-cells pass.  Two half-step
+        radii give the ring the same two-sub-cell thickness as
+        :meth:`Raster.ring` at ``thickness=2``, so braille dots bridge
+        the font's gaps.
         """
         art = canvas.art
         width, height = art.width, art.height
@@ -407,12 +417,13 @@ class MotionScene:
         steps = max(32, int(2 * math.pi * r * 2))
         for index in range(steps):
             angle = 2 * math.pi * index / steps
-            x = int(cx + r * math.cos(angle))
-            y = int(cy + r * math.sin(angle))
-            if 0 <= x < width and 0 <= y < height:
-                cell = y * width + x
-                slot_grid[cell] = slot
-                heat_grid[cell] = heat
+            for radius in (r - 0.5, r + 0.5):
+                x = int(cx + radius * math.cos(angle))
+                y = int(cy + radius * math.sin(angle))
+                if 0 <= x < width and 0 <= y < height:
+                    cell = y * width + x
+                    slot_grid[cell] = slot
+                    heat_grid[cell] = heat
 
     # -- chrome ------------------------------------------------------------
 
