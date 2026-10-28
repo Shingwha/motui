@@ -16,16 +16,20 @@ from ...kernel.geom import Pos
 from ...kernel.layout import Constraints
 from ...kernel.theme import Theme
 from ..snake import SnakeScene
+from .components import ComponentsScene
 from .dashboard import DashboardScene
 from .gallery import GalleryScene
+from .layout import LayoutScene
 from .menu import MenuScene
 from .placeholder import PlaceholderScene
 from .splash import SplashScene
 
 __all__ = [
     "SCENES",
+    "ComponentsScene",
     "DashboardScene",
     "GalleryScene",
+    "LayoutScene",
     "MenuScene",
     "PlaceholderScene",
     "Scene",
@@ -49,11 +53,9 @@ SCENES: tuple[str, ...] = (
     "gallery",
 )
 
-#: The four sections later waves build; each ships as an under-construction
+#: The sections later waves build; each ships as an under-construction
 #: panel so the registry, tiles, golden set and ``--pages`` stay complete.
 _PLACEHOLDERS: tuple[tuple[str, str], ...] = (
-    ("components", "the widget gallery, rebuilt on the shell"),
-    ("layout", "rows, columns and constraint drills"),
     ("terminal", "keys, mouse and paint, dissected"),
     ("themes", "the shipped themes, side by side"),
 )
@@ -90,6 +92,8 @@ def _scenes(theme: Theme, *, seed: int | None = 0) -> dict[str, Scene]:
     scenes: dict[str, Scene] = {
         "splash": SplashScene(theme, seed=seed),
         "menu": MenuScene(theme),
+        "components": ComponentsScene(theme),
+        "layout": LayoutScene(theme),
         "dashboard": DashboardScene(theme),
         "gallery": GalleryScene(theme),
         "motion": snake,
