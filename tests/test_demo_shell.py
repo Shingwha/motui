@@ -1,9 +1,9 @@
-"""The new shell: Home tiles, the wipe, the placeholders, the coverage.
+"""The new shell: Home tiles, the wipe, the report sections, the coverage.
 
 ``test_smoke`` boots the entries and ``test_demo_scenes`` pins the scene
 mechanics; this file pins what the shell wave added: the tile grid's
-routing, the wipe's tick-for-tick replay, the placeholder round trip and
-the SCENES/golden alignment.
+routing, the wipe's tick-for-tick replay, the section round trips, the
+W3-a terminal/themes reports and the SCENES/golden alignment.
 """
 
 from __future__ import annotations
@@ -61,16 +61,62 @@ def test_a_wipe_replays_tick_for_tick_and_lands_on_the_static_frame():
     assert first[-1] == _frame(static)  # the tail is the plain dashboard
 
 
-def test_the_placeholder_sections_enter_render_and_return_home():
-    # The components and layout sections are real scenes now (W2-b); the
-    # two placeholders this wave left behind are terminal and themes.
+def test_the_report_sections_enter_render_and_return_home():
+    # W3-a made terminal and themes real scenes: no placeholder remains.
     for name in ("terminal", "themes"):
         showcase = Showcase(name)
         text = _frame(showcase)
-        assert "under construction" in text, name
+        assert "under construction" not in text, name
+        assert text.strip(), name
         showcase.on_key(KeyEvent("escape"))
         assert showcase.scene == "menu"
         assert _frame(showcase)  # Home renders after the round trip
+
+
+def _terminal_frame_after_clicks() -> str:
+    """One terminal frame after two scripted clicks (the live feed fed)."""
+    showcase = Showcase("terminal")
+    scene = showcase._scenes["terminal"]
+    scene.render(Constraints(width=100, max_height=30), 0)
+    scene.on_click(Pos(x=20, y=10))
+    scene.on_click(Pos(x=21, y=11))
+    return _frame(showcase, width=100, height=30)
+
+
+def test_the_terminal_report_dissects_the_pipe_and_replays():
+    text = _terminal_frame_after_clicks()
+    assert "100 x 30 cells" in text  # the frame reports its own budget
+    assert "\\x1b[?2026h" in text and "\\x1b[?2026l" in text  # DECSET 2026, literal
+    assert "\\x1b[?1000h" in text  # the mouse triple a MOVE session enables
+    assert text.count("\u2713") == 3  # cell, half, braille: the ladder passes
+    assert "octant" in text and "not probed" in text  # honestly unprobed
+    assert "click (21, 11)" in text  # the newest report landed in the feed
+    assert _terminal_frame_after_clicks() == text  # two runs, one frame
+
+
+def test_the_themes_section_switches_skins_live():
+    def frame_after(keys: tuple[str, ...], clicks=()) -> str:
+        showcase = Showcase("themes")
+        scene = showcase._scenes["themes"]
+        scene.render(Constraints(width=100, max_height=30), 0)
+        for key in keys:
+            scene.on_key(KeyEvent(key))
+        for pos in clicks:
+            scene.on_click(pos)
+        return _frame(showcase, width=100, height=30)
+
+    dark = frame_after(())
+    light = frame_after(("right",))
+    sepia = frame_after(("4",))
+    compare = frame_after(("c",))
+    assert "Theme.dark()" in dark and "Theme.light()" in light
+    assert "from_palette" in sepia  # the authored palette's derivation route
+    assert len({dark, light, sepia, compare}) == 4  # each skin really repaints
+    assert all(name in compare for name in ("dark", "light", "flat", "sepia"))
+    # A click on the strip's own row picks the theme under the pointer.
+    clicked = frame_after((), clicks=(Pos(x=8, y=1),))
+    assert "Theme.light()" in clicked  # x=8 sits on the second label
+    assert frame_after(("right",)) == light  # driven replay lands byte for byte
 
 
 def test_scenes_and_the_golden_set_cover_each_other():
