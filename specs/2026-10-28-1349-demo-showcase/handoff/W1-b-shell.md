@@ -57,7 +57,7 @@ src/motui/demo/
 
 | 文件 | 动作 | 原因 |
 |---|---|---|
-| `menu.txt` | 重录 | Home 瓷砖重绘（T2 视觉变化，P8 预告项） |
+| `menu.txt` | 重录 | Home 瓷砖重绘（T2 视觉变化，P8 预告项）；终态又经两轮打磨：迷你动画收进边框内（174f0e3）、瓷砖间隙列落位（d3dea78），每次 `--update` 后重录 |
 | `components.txt` `layout.txt` `terminal.txt` `themes.txt` | 新增 | 新注册占位节（P3"有 golden"） |
 | `motion.txt` | 新增 | motion 节入册；内容=snake 同相位帧（同一对象） |
 | `splash.txt` `snake.txt` `dashboard.txt` `gallery.txt` | **零变化** | `--update` 的 LF 重写造成的假 modified 已 `git checkout` 还原，逐字未变（P8 预告"不应变化"成立） |
@@ -119,3 +119,8 @@ src/motui/demo/
 6. 计数口径：验收"1638" = 1641 − 3（examples），但 P9 同时强制新增 ≤4 条测试；本波新增恰 4 条
    （`tests/test_demo_shell.py`），故真实全量 = **1642 passed**。
 7. `Widget` 子类若声明 `__slots__`，新属性（`status_line`/`status_note`/`_wipe_from`）必须一并列入。
+8. 瓷砖几何：`_TILE_H=10`、`_GAP=1`、3 列；`_grid()` 逐行拼接 `Line + Line`，间隙列是真实的空 Segment
+   （tile_w 在 80/100 宽下分别为 24/30）；点击 rect 在 `render` 里随排版重算，与视觉逐列对齐（间隙列死区）。
+   W2-b 若改瓷砖尺寸，两处（`_TILES/_TILE_H/_GAP` 与 `rects` 公式）同源，改 `_tile()` 内容不必动 rect。
+9. 验收后返工记录：174f0e3（迷你动画行宽占用满 content 槽导致压边框，全部收 1 列余量）、
+   d3dea78（`_GAP` 只进了 rect 计算没进 `_grid` 拼接，瓷砖贴死且点击错位 1 列）。
