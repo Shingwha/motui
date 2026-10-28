@@ -180,6 +180,9 @@ class MotionScene:
         """
         if phase < self._phase or phase - self._phase > _MAX_SYNC:
             self._reset_board()
+            # a rewind is a fresh entry (the shell resets its phase on every
+            # switch): land on the default board, never a stale tab choice
+            self.mode = "rings"
         self._phase = phase
         now = phase / _TICK_HZ
         while True:
