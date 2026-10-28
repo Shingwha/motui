@@ -126,3 +126,65 @@ plasma 12 槽色相轮 `+phase//2` 步进；retro 琥珀/绿按 SPLASH_ROTATE_TI
   `handoff/W1-b-shell.md` B 节（wipe/60Hz）
 - 建议后续（非本波）：kernel `Raster` 增 `unset`/带 heat 写入动词 →
   `_fading_ring` 转发；quantize 空层快路径 → 两处尺寸帽恢复满规格。
+
+## D · fix round（真机验收后，基于 main `4e62978`）
+
+真机两组问题（rings 板不可见、starfield 笔画过暗）+ kernel 两连改
+（`1662d9e` 空格透明、`fd35c38`/`0d625e6` bg 可选化默认 None）引发的修订，
+全部落在 `sections/motion.py`、`sections/splash.py` 与两个 golden 内。
+波末 `uv run pytest -q` = **1659 passed**，ruff 零告警（demo 目录已被 ratchet
+纳入 lint），golden 10 场景 match，api 198 名不变。
+
+### D.1 改动清单
+
+1. **rings 真机可见性（最高优先）**：目标盘从 art 层改画 **fill 层**
+   （`canvas.fill_disc(...)`，half 实心块，真机任何字体都清晰——盲文字体里
+   braille 盘曾是稀疏点块）；缩圈环 `thickness 1→2`；爆散/MISS 淡出环
+   （`_fading_ring` 直写路径）同改两个半径（r∓0.5）达到等效 thickness 2；
+   入窗白闪逻辑不变。阶梯对比条**故意保持 thickness 1**——它的职责就是展示
+   marker 差距。
+2. **starfield 笔画提亮**：wordmark 冰蓝 ramp `#7896e6→#ebf2ff` 改为
+   `#a9c6ff→#ffffff`（旧低端深蓝在真机黑底上 M/O 几乎不可见）；星野三层槽位与
+   红青 glitch 槽位原样保留（身份不变）。
+3. **六个调色板全部删 `bg=(...)`**（_RING/_LADDER + splash 四包）：kernel 默认
+   None = 半格未亮半行透终端背景。retro CRT 观感验证：扫描线靠明/暗双槽位色
+   （绿 period 实测 (51,255,153)+(30,150,90) 同帧并存），与 bg 无关，不保留
+   任何包的 bg。头less 字节断言两场景均无 `48;2`/`49m` SGR。
+4. **两处尺寸帽恢复满规格**：上一轮因 8ms 预算落的 splash 60x17 / rings 68x20
+   帽**撤销**，恢复 splash 76x23（≈工单"约152×96"）与 rings 板 80 宽×pane 高。
+   依据：空格透明后 quantize 省掉全部空格 bg 涂色 + 空格 styled run，实测帧时
+   降为原来的 ~1/3，帽的存在理由消失。
+5. **golden 重录**：motion（阶梯半格 SGR 去 bg 尾）、splash（满规格画布 + 无
+   bg + 提亮 ramp）；其余 8 个 LF 假 modified 已 `git checkout --` 还原。
+   注意：phase 20 的 rings 板为空（首生 0.4s 未到），motion golden 的变化
+   **只来自阶梯**；rings 新画法在 golden 相位不可见，真机/测试相位可见。
+6. 顺带：`_mix` 的 `zip` 补 `strict=False`（demo 目录已被 ratchet 纳入 lint，
+   B905 新上榜）。
+
+### D.2 fix-round 性能复测（协议同 A.4：7 轮 × 200 帧 med-of-med，100x30）
+
+| 场景 | best | med-of-med |
+|---|---|---|
+| motion rings（3 活环，满规格板）@100x30 | 2.73 | **2.84 ms** |
+| motion rings @80x24 | 1.99 | 2.03 ms |
+| splash 四包（满规格 76x23，无 bg）@100x30 | 3.79–3.89 | **3.88–4.02 ms** |
+
+较 A.4（5.0/5.9-6.3ms）全面下降：kernel 空格透明是主因。8ms 预算满规格下
+余量 ~2-3 倍。snake 模式未复测（板与 chrome 未变，参照 A.4 的 8.1ms 上界仍有效）。
+
+### D.3 fix-round 偏差与坑
+
+1. **seed=0 轮转里 amber retro 永不出现**：包序 [retro,neon,plasma,starfield]
+   使 retro 只落在偶数 style period（0,4,8…），而包内琥珀/绿翻转按奇偶周期，
+   偶数 period 恒绿。琥珀槽位/扫描线路径存在且与绿完全对称（live 随机包序会
+   展示），快照与 golden 里看不到——非缺陷，但看 golden 别误以为琥珀丢了。
+2. **`bg` 现在是"要不要底色"的显式选择**：任何想让半格图形自带底色的调用方
+   必须显式传（demo 六板全不传）。若将来想要"画布自带暗底"的观感，正路是
+   `fill_rect` 显式垫底，不是 palette.bg。
+3. **满规格恢复后 motion golden 的盲区**：golden 相位（20）早于首圈出生
+   （24），rings 画法的回归保护靠 `tests/test_demo_motion.py` 的判定链 +
+   本轮 headless 帧目检，不靠 golden。若想 golden 也覆盖 rings，需要 lead
+   调 PAGE_PHASE（牵动全部场景 golden，本波不动）。
+4. demo 目录 ruff 排除已被 ratchet 摘除：`sections/*` 现在**逐文件 lint**，
+   新写 demo 代码注意 B905（zip strict）/行长 100。
+
