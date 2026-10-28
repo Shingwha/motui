@@ -23,9 +23,19 @@ hub 场景名 `"menu"`（Home 瓷砖）；`"snake"` 与 `"motion"` 是同一对�
 demo/__init__.py   入口 + _commands（palette：7 条 jump + toggle status line + quit）
 demo/shell.py      Showcase 壳：switch/tick/on_key/on_click、wipe（列裁剪 9 tick）、StatusLine
 demo/sections/     __init__(Scene 协议+SCENES+_scenes)、splash、menu(瓷砖)、
-                   placeholder(占位节：components/layout/terminal/themes)、dashboard、gallery
-demo/snake.py      SnakeScene（W3-b 迁入 motion）
+                   components(W2-b：三 tabs 游乐场+同步代码面板)、layout(W2-b：split/dock/
+                   滚动/宽表 drill)、placeholder(terminal/themes 仍占位，W3-a 接手)、
+                   dashboard、gallery
+demo/snake.py      SnakeScene（motion 场景当前复用同一对象；W3-b 重排）
 ```
+
+W2-a 现实：`motui.widgets.PixelCanvas(width, height, *, marker="braille"|"half",
+palette: PixelPalette, theme, styles)`；`art`（线条层，marker 量化）+ `fill`（垫底层，
+恒 half）两个 Raster 出口；动词 set/unset/line/rect/disc/ring/decay/clear（decay 只衰
+art）；octant 档与探测**未实现**（W3-a 的 Terminal 节按"未探测"展示）。
+导出登记册：`tools/api-2.0.txt`（198 名）+ `tests/test_invariants.py` CASES 矩阵（widget
+导出的完备性钉子，加 widget 必须同步）。W2-b 两节各 485/420 行，`render_scene` 逐字
+确定性已测试钉住。
 
 已知连带面：`_DASHBOARD_FPS=30` 被 `test_dashboard_clock_is_derived_from_phase` 钉死
 （phase=30→"00:01.0"），节内 per-tick 动画墙钟速度因此 ×2；W3 调整须连契约测试一起改。
