@@ -21,6 +21,7 @@ from .dashboard import DashboardScene
 from .gallery import GalleryScene
 from .layout import LayoutScene
 from .menu import MenuScene
+from .motion import MotionScene
 from .placeholder import PlaceholderScene
 from .splash import SplashScene
 from .terminal import TerminalScene
@@ -33,6 +34,7 @@ __all__ = [
     "GalleryScene",
     "LayoutScene",
     "MenuScene",
+    "MotionScene",
     "PlaceholderScene",
     "Scene",
     "SnakeScene",
@@ -42,8 +44,8 @@ __all__ = [
 ]
 
 #: The scenes in tour order: the splash, the Home tiles, the six sections,
-#: then the two standalone tours the contract pins (the snake game also
-#: serves as the motion section until wave 4 gives it its own file).
+#: then the two standalone tours the contract pins (the snake game stays
+#: renderable under its own name beside the motion section).
 SCENES: tuple[str, ...] = (
     "splash",
     "menu",
@@ -80,11 +82,10 @@ class Scene(Protocol):
 def _scenes(theme: Theme, *, seed: int | None = 0) -> dict[str, Scene]:
     """Build one scene object per :data:`SCENES`, in tour order.
 
-    ``motion`` and ``snake`` share one game object: the tiles open the
-    section name while the contract keeps ``"snake"`` renderable; wave 4
-    migrates the code into its own file under the same registry name.
+    ``motion`` is the pixel rings board (with the snake board one ``tab``
+    away); ``snake`` stays its own standalone scene object so the contract
+    name keeps rendering the classic game.
     """
-    snake = SnakeScene(theme)
     scenes: dict[str, Scene] = {
         "splash": SplashScene(theme, seed=seed),
         "menu": MenuScene(theme),
@@ -94,7 +95,7 @@ def _scenes(theme: Theme, *, seed: int | None = 0) -> dict[str, Scene]:
         "terminal": TerminalScene(theme),
         "themes": ThemesScene(theme),
         "gallery": GalleryScene(theme),
-        "motion": snake,
-        "snake": snake,
+        "motion": MotionScene(theme),
+        "snake": SnakeScene(theme),
     }
     return {key: scenes[key] for key in SCENES}
