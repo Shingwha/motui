@@ -37,7 +37,7 @@ The wheel carries its own demo, so `python -m motui` works right away.
 ## Quickstart
 
 The smallest app: a `Text` row and an `Input`, painted once headless. The
-runnable copy is `examples/quickstart.py`.
+shipped demo runs the same way: `python -m motui`.
 
 ```python
 from motui import App, Input, Text
@@ -70,16 +70,17 @@ What each piece did:
 |---|---|---|
 | Playable game | `Canvas` cell grid, `Sizing.FILL`, `app.every`, `app.bind` | `python -m motui --scene snake` |
 | Live dashboard | `Sparkline`, `ProgressBar`, `Table`, `App.every`/`invalidate` | `python -m motui --scene dashboard` |
-| Wide table | `Table(cell_wrap=WrapMode.OVERFLOW)` inside `ScrollPanel(axis="x")` | `examples/wide_table.py` |
-| Two-axis code view | `WrapMode.OVERFLOW` inside `ScrollPanel(axis="both")` | `examples/code.py` |
+| Wide table | `Table(cell_wrap=WrapMode.OVERFLOW)` inside `ScrollPanel(axis="x")` | `python -m motui --scene gallery` |
+| Two-axis code view | `WrapMode.OVERFLOW` inside `ScrollPanel(axis="both")` | `python -m motui --scene gallery` |
 | Streaming document | `Markdown.text += chunk`, section generation cache, `ScrollPanel` | below |
 | Split IDE | `split(Axis.X)`, `dock(placement=Placement.BOTTOM)`, `Panel`, `StatusLine` | [ARCHITECTURE](docs/ARCHITECTURE.md) |
 | Forms and dialogs | `Form`/`Field`, `Input`/`Editor`, `Dialog` through `App.open_modal` | [WIDGETS](docs/WIDGETS.md) |
 
-The three shipped examples are `quickstart`, `code` and `wide_table`. The
-interactive demo is one page with five scenes: a splash that cycles Neon,
-Plasma, Retro CRT and Starfield until a key, a menu, Snake, Dashboard and a
-component Gallery.
+The interactive demo is the only showcase: a splash that cycles Neon,
+Plasma, Retro CRT and Starfield until a key, then the Home tiles over the
+seven sections -- components, layout, motion, dashboard, terminal and
+themes around the tile grid itself -- plus the standalone Snake game and
+the component Gallery. `python -m motui --pages` dumps every scene.
 
 Wide content is the one horizontal-scroll case: `ScrollPanel(axis="x"` or
 `"both")` windows a component that may render wider than its constraints
@@ -446,23 +447,29 @@ deadlines rather than accumulating drift.
 
 ## The demo
 
-`python -m motui` starts the five-scene showcase that ships in the wheel:
-a persistent MOTUI splash (Neon / Plasma / Retro CRT / Starfield, until any key), menu, Snake,
-Dashboard and Component Gallery. No network, no model, no assets beyond the
-package.
+`python -m motui` starts the showcase that ships in the wheel: a persistent
+MOTUI splash (Neon / Plasma / Retro CRT / Starfield, until any key), then
+the Home tiles over seven sections -- components, layout, motion,
+dashboard, terminal and themes as placeholders this release -- plus the
+standalone Snake game and Component Gallery. No network, no model, no
+assets beyond the package.
 
 ```bash
-python -m motui                          # a real terminal: the splash and menu
+python -m motui                          # a real terminal: splash, then Home
 python -m motui --scene gallery          # start on one scene
 python -m motui --headless --frames 60   # deterministic text frame, no TTY
-python -m motui < /dev/null              # piped: print the menu frame, exit 0
-python -m motui --pages                  # all five scenes as plain text
+python -m motui < /dev/null              # piped: print the Home frame, exit 0
+python -m motui --pages                  # all ten scenes as plain text
 ```
 
-In the live menu, arrows and `enter` (or a click) pick Snake, Dashboard,
-Gallery or Quit; `esc` returns to the splash. Snake plays with the arrow keys or WASD, `space` pauses, and `q` or `esc` returns to the menu.
-The Gallery keeps a real `Tree`, `Table`, `ProgressBar`, `Slider` and
-`Input` side by side; `tab` cycles their focus.
+On Home, arrows and `enter` (or a click) open a tile; `esc` returns to the
+splash. Entering a section wipes it in column by column over ~150 ms, and a
+status line pins the section name plus a theme/fps note to the bottom row.
+`ctrl+p` opens the command palette: one jump command per section, the
+status-line toggle and quit. Snake plays with the arrow keys or WASD,
+`space` pauses, and `q` or `esc` returns to Home. The Gallery keeps a real
+`Tree`, `Table`, `ProgressBar`, `Slider` and `Input` side by side; `tab`
+cycles their focus.
 
 ## Docs
 
