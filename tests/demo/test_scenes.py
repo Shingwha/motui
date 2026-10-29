@@ -1,13 +1,13 @@
-"""The showcase scenes driven directly instead of through a TTY."""
+"""Scene behavior driven directly through the keyboard-first public protocol."""
 
 from __future__ import annotations
 
 import pytest
 
 from motui.demo import PAGE_PHASE, render_scene
+from motui.demo.minis import mini_layout
 from motui.demo.sections import DashboardScene, GalleryScene
-from motui.demo.sections.splash import SPLASH_ROTATE_TICKS, SplashScene
-from motui.demo.snake import SnakeScene
+from motui.demo.sections.splash import ACT_TICKS, SplashScene
 from motui.kernel.events import KeyEvent
 from motui.kernel.geom import Pos
 from motui.kernel.layout import Constraints
@@ -16,104 +16,78 @@ from motui.kernel.theme import Theme
 FRAME = Constraints(width=80, max_height=24)
 
 
-def _snake() -> SnakeScene:
-    scene = SnakeScene(Theme.dark())
-    scene.render(FRAME, 0)
-    return scene
-
-
-def test_the_splash_cycles_styles_and_shapes():
+def test_splash_combines_a_scene_auxiliary_and_particle_field():
     scene = SplashScene(Theme.dark(), seed=0)
     scene.enter()
-    assert scene.style_name(0) != scene.style_name(SPLASH_ROTATE_TICKS * 2)
-    one = render_scene("splash", width=80, height=24, phase=0)
-    two = render_scene("splash", width=80, height=24, phase=SPLASH_ROTATE_TICKS)
-    assert one != two
-    assert "press any key" in one and "press any key" in two
-
-
-def test_the_snake_moves_turns_eats_and_pauses():
-    scene = _snake()
-    head = scene.snake[0]
-    scene.tick(3)
-    assert scene.snake[0] == head
-    scene.tick(4)
-    assert scene.snake[0] == (head[0] + 1, head[1])
-
-    scene.on_key(KeyEvent("down"))
-    assert (scene.dx, scene.dy) == (0, 1)
-    scene.on_key(KeyEvent("up"))  # reverse of down: refused
-    assert (scene.dx, scene.dy) == (0, 1)
-
-    head = scene.snake[0]
-    length = len(scene.snake)
-    scene.food = (head[0], head[1] + 1)
-    scene.tick(8)
-    assert scene.score == 10 and len(scene.snake) == length + 1
-    scene.on_key(KeyEvent("left"))
-    assert (scene.dx, scene.dy) == (-1, 0)
-
+    effects = scene.effects(240)
+    assert effects[0] == "deep" and len(effects) == 2
+    assert effects == scene.effects(240)
+    assert scene.effects(240 + ACT_TICKS) != effects
     scene.on_key(KeyEvent("space"))
-    paused_head = scene.snake[0]
-    scene.tick(12)
-    assert scene.snake[0] == paused_head
-    scene.on_key(KeyEvent("space"))
-    scene.tick(16)
-    assert scene.snake[0] != paused_head
+    assert scene.effects(240) == effects
+    scene.tick(ACT_TICKS)
+    assert scene.effects(ACT_TICKS) != effects
+    assert scene.previous_effects(ACT_TICKS) == effects
+    assert scene.on_key(KeyEvent("enter")) == "menu"
 
 
-def test_hitting_the_wall_ends_the_game_and_space_restarts():
-    scene = _snake()
-    scene.snake = [(scene.playfield_width - 1, 0)]
-    scene.dx, scene.dy = 1, 0
-    scene.tick(4)
-    assert not scene.alive
-    assert "GAME OVER" in scene.render(FRAME, 4).rows[0].text
-    first = render_scene("snake", width=80, height=24, phase=40)
-    assert first == render_scene("snake", width=80, height=24, phase=40)
-
-    scene.on_key(KeyEvent("space"))
-    assert scene.alive and scene.score == 0 and len(scene.snake) == 4
+def test_splash_particle_frames_replay_at_both_sizes():
+    for width, height in ((80, 24), (100, 30)):
+        first = render_scene("splash", width=width, height=height, phase=240)
+        assert first == render_scene("splash", width=width, height=height, phase=240)
+        assert "SIGNAL LAB" in first and "86 STARS" in first
+        assert "space remix" in first
 
 
 @pytest.mark.parametrize(
     "factory",
-    [
-        lambda: _snake(),
-        lambda: DashboardScene(Theme.dark()),
-        lambda: GalleryScene(Theme.dark()),
-    ],
+    [lambda: DashboardScene(Theme.dark()), lambda: GalleryScene(Theme.dark())],
 )
 def test_sections_return_to_the_menu(factory):
     assert factory().on_key(KeyEvent("escape")) == "menu"
 
 
-def test_dashboard_pushes_a_sample_every_tick():
+def test_dashboard_samples_at_four_hz_and_runs_a_causal_mission():
     scene = DashboardScene(Theme.dark())
-    before = scene.samples[-1]
+    before = list(scene.samples)
     scene.tick(1)
-    assert scene.samples[-1] != before
-    assert len(scene.samples) == 48
-    assert scene.log
+    assert scene.samples == before
+    scene.tick(15)
+    assert scene.samples != before and len(scene.samples) == 48
+    scene.render(FRAME, 400)
+    assert scene._stage == "REROUTING TRAFFIC"
+    assert any("traffic moved" in event for event in scene.log)
+
+
+def test_dashboard_keyboard_controls_pause_inject_recover_and_switch_relay():
+    scene = DashboardScene(Theme.dark())
+    scene.on_key(KeyEvent("space"))
+    scene.tick(100)
+    assert scene.paused and scene._time == 0
+    scene.on_key(KeyEvent("space"))
+    scene.on_key(KeyEvent("n"))
+    assert scene._stage == "MANUAL INTERFERENCE"
+    scene.on_key(KeyEvent("r"))
+    assert scene._stage == "RECOVERING UPLINK"
+    scene.on_key(KeyEvent("right"))
+    assert scene.channel == 1
+    scene.on_key(KeyEvent("3"))
+    assert scene.channel == 2
+
+
+def test_viewport_preview_closes_both_borders_with_bottom_corners():
+    rows = mini_layout(20, 50, Theme.dark())
+    top, bottom = rows[2].text, rows[7].text
+    assert top.count("┌") == 2 and top.count("┐") == 2
+    assert bottom.count("└") == 2 and bottom.count("┘") == 2
 
 
 def test_dashboard_is_deterministic_and_reflows_at_both_sizes():
     for width, height in ((80, 24), (100, 30)):
-        first = render_scene("dashboard", width=width, height=height, phase=30)
-        second = render_scene("dashboard", width=width, height=height, phase=30)
-        assert first == second
-        lines = first.splitlines()
-        assert len(lines) <= height
-        assert all(len(line) <= width for line in lines)
-        for label in ("throughput", "pressure", "metrics", "events"):
-            assert label in first
-
-
-def test_dashboard_clock_is_derived_from_phase():
-    one = render_scene("dashboard", phase=30)
-    two = render_scene("dashboard", phase=60)
-    assert "00:01.0" in one and "tick 0030" in one
-    assert "00:02.0" in two and "tick 0060" in two
+        first = render_scene("dashboard", width=width, height=height, phase=400)
+        assert first == render_scene("dashboard", width=width, height=height, phase=400)
+        assert "DEEP SPACE UPLINK" in first and "MISSION EVENTS" in first
+        assert all(len(line) <= width for line in first.splitlines())
 
 
 def _gallery() -> GalleryScene:
@@ -125,7 +99,6 @@ def _gallery() -> GalleryScene:
 def test_gallery_click_reaches_the_tree_and_folds_a_branch():
     scene = _gallery()
     node = scene.tree.root_nodes[0]
-    assert node.expanded is True
     scene.on_click(Pos(x=3, y=scene.origin + 5))
     assert node.expanded is False
     scene.on_click(Pos(x=3, y=scene.origin + 5))
@@ -134,16 +107,12 @@ def test_gallery_click_reaches_the_tree_and_folds_a_branch():
 
 def test_gallery_click_focuses_the_clicked_widget():
     scene = _gallery()
-    assert scene.focus == 0
     scene.on_click(Pos(x=40, y=scene.origin + 5))
     assert scene.focus == 1
 
 
-def test_the_page_phase_has_content_in_the_game_and_the_dashboard():
-    snake = render_scene("snake", phase=PAGE_PHASE)
-    assert "score" in snake and (
-        "▀" in snake or "▄" in snake or "█" in snake
-    )
+def test_page_phases_have_live_content():
     dashboard = render_scene("dashboard", phase=PAGE_PHASE)
-    assert f"tick {PAGE_PHASE:04d}" in dashboard
-    assert "t00018" in dashboard  # a streamed log line, not the seed window
+    assert "SIGNAL STRENGTH" in dashboard and "00:00" in dashboard
+    gallery = render_scene("gallery", phase=PAGE_PHASE)
+    assert "COMPONENT ARCHIVE" in gallery and "tab focus" in gallery

@@ -24,10 +24,11 @@ run. The header's cursor is the emulator's zero-based final position, so a
 moved focus/anchor shows up even when no glyph does.
 
 The byte golden (`tools/golden.py`, `topics/*.txt`) was deleted in C4a
-together with the 57-topic tour. The showcase has ten scenes, so the semantic set has ten files; there is
-no second byte-for-byte set to keep in step. Each scene records at its
-registry preview phase: most use 20, where the splash is mid-style and the
-snake has taken its first steps; motion uses 96 so its board is not empty.
+together with the 57-topic tour. The Signal Lab has nine scenes, so the
+semantic set has nine files; there is no second byte-for-byte set to keep in
+step. Each scene records at its registry preview phase: most use 20, the
+splash uses 240 with its wordmark assembled, and motion uses 96 so its board
+is not empty.
 
 **Re-recording.** `uv run python tools/semantic.py --update` rewrites the
 whole set; `--check` (the CI step) compares it byte for byte and fails on a

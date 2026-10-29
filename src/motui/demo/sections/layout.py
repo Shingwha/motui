@@ -42,18 +42,18 @@ _SASH_STEPS = 24
 #: The long file the scroll drill windows: one measured line far wider than
 #: any pane, so "scroll right to the tail" is a real journey.
 _LONG_CODE = '''\
-"""manifest.py -- the freight manifest, both axes wide."""
+"""uplink.py -- one console, both axes wide."""
 
-MANIFEST = {
-    "vessel": "Rainbow",
-    "home port": "Rotterdam",
+UPLINK = {
+    "station": "DSN-07",
+    "sector": "N-42",
     # One measured line, wider than any pane -- scroll right to its tail:
-    "longest field": "twelve hundred reefer crates, seals inspected at the quay, cold chain unbroken from orchard to hold, signed by the harbour master",
-    "crates": {"apples": 12, "bergamot": 4, "cherries": 30},
+    "mission": "maintain the deep-space signal through solar wind, reroute packets across the relay mesh, and recover a clean lock",
+    "relays": {"andromeda": 42, "borealis": 68, "cygnus": 31},
 }
 
-def total(manifest):
-    return sum(manifest["crates"].values())
+def mean_ping(uplink):
+    return sum(uplink["relays"].values()) / len(uplink["relays"])
 '''
 
 #: The wide table's seed manifest: ten columns, natural grid ~120 columns.
@@ -217,8 +217,8 @@ class LayoutScene(Scene):
         """The one-row title: the section's name and its one-line pitch."""
         return Line(
             (
-                Segment("Layout", self.theme.content.accent),
-                Segment(" \u00b7 constraints you can drive", self.theme.text.faint),
+                Segment("VIEWPORT LAB", self.theme.content.accent),
+                Segment(" \u00b7 one console, every constraint", self.theme.text.faint),
             )
         )
 

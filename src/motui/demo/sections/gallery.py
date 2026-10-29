@@ -88,8 +88,8 @@ class GalleryScene(Scene):
         self.input = Input("type here", placeholder="type\u2026", theme=theme)
         self._targets = [self.tree, self.table, self.slider, self.input]
         self._set_focus(0)
-        self._title = Text("Gallery", style=theme.content.accent, theme=theme)
-        self._divider = Divider(label="real components", theme=theme)
+        self._title = Text("COMPONENT ARCHIVE", style=theme.content.accent, theme=theme)
+        self._divider = Divider(label="the widget bench", theme=theme)
         self._hint = Text(
             "tab focus \u00b7 \u2191\u2193 rows \u00b7 \u2190\u2192 value \u00b7 "
             "esc menu",
@@ -145,7 +145,7 @@ class GalleryScene(Scene):
 
     def tick(self, phase: int) -> str | None:
         self._phase = phase
-        self.progress.fraction = 0.55 + 0.4 * math.sin(phase / 7)
+        self.progress.fraction = 0.55 + 0.4 * math.sin(phase / 60)
         return None
 
     def on_key(self, event: KeyEvent) -> str | None:

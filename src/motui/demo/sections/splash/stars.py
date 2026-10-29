@@ -1,26 +1,21 @@
-"""The starfield pack's three parallax layers."""
+"""The original three-layer starfield, restored around the wordmark."""
 
 from __future__ import annotations
 
 import random
 
 from ....widgets import LayerName, PixelCanvas
-from .packs import STAR_SLOTS
 from .wordmark import _geometry
 
 __all__ = ["paint_stars"]
 
-#: The starfield's parallax: per-layer drift as (numerator, denominator)
-#: sub-cells per tick, far to near.
 _STAR_DRIFT = ((1, 12), (1, 6), (1, 3))
-
-#: The virtual space the star seeds were dealt in.
 _STAR_SPACE_W = 152
 _STAR_SPACE_H = 96
+_STAR_SLOTS = (8, 7, 13)
 
 
 def _build_stars() -> tuple[tuple[int, int, int], ...]:
-    """The star seeds: ``(x, y, layer)`` dealt once at import."""
     rng = random.Random(20261027)
     stars: list[tuple[int, int, int]] = []
     for layer, count in enumerate((44, 28, 14)):
@@ -31,7 +26,7 @@ def _build_stars() -> tuple[tuple[int, int, int], ...]:
     return tuple(stars)
 
 
-_STARS: tuple[tuple[int, int, int], ...] = _build_stars()
+_STARS = _build_stars()
 
 
 def paint_stars(
@@ -42,7 +37,6 @@ def paint_stars(
     sx: int,
     sy: int,
 ) -> None:
-    """Three parallax depths twinkling in the bands around the word."""
     if width <= 0:
         return
     _letters, _columns, top, bottom = _geometry(width, height, sx, sy)
@@ -64,7 +58,7 @@ def paint_stars(
             continue
         if layer == 2 and (phase // 4 + order) % 5 == 0:
             continue
-        slot = STAR_SLOTS[layer]
+        slot = _STAR_SLOTS[layer]
         groups.setdefault((slot, 255), []).append((px, py))
         if layer == 2 and px + 1 < width:
             groups.setdefault((slot, 200), []).append((px + 1, py))

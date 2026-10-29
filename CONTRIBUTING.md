@@ -19,7 +19,7 @@ process.
    cross-widget contract may live in one parameterized `test_contracts.py`
    instead of being copied into every family.
 4. **Rendering is pinned.** `tests/golden/semantic/` is the cell-grid
-   contract: ten showcase scenes, one file each, each recorded at its
+   contract: nine showcase scenes, one file each, each recorded at its
    registry preview phase. `tools/framebench.py`'s render hash is the coarse
    proof that a refactor moved nothing.
 5. **No compatibility shims.** A renamed name is deleted with its last
@@ -58,7 +58,7 @@ src/motui/
 tests/
   kernel/ pixel/ widgets/ app/ terminal/ testing/   behavior and contract tests
   demo/                            registry, lifecycle, scenes, entry, golden
-  golden/semantic/                 ten cell-grid scene snapshots
+  golden/semantic/                 nine cell-grid scene snapshots
 tools/
   semantic.py                      the semantic frame gate
   framebench.py                    timing workloads and render hash
@@ -90,7 +90,7 @@ uv run python tools/semantic.py --check
 uv run python tools/framebench.py
 uv run python -m motui < /dev/null
 uv run python -m motui --pages
-uv run python -m motui --scene snake --frames 30 --headless
+uv run python -m motui --scene splash --frames 240 --headless
 uv run python -m motui --scene dashboard --frames 30 --headless
 uv run ruff check .
 uv run ruff check src/motui/widgets/pixel_canvas.py tests/widgets/test_pixel_canvas.py --config "exclude=[]"
@@ -107,7 +107,7 @@ What each protects:
 | `pytest` | behavior, the API pin, the import graph and packaging |
 | `semantic.py --check` | the cell grid users actually see |
 | `framebench.py` | timing workloads and the render hash |
-| the piped demo entries | headless replay, the plain-text page dump and the two game scenes |
+| the piped demo entries | headless replay, the plain-text page dump and live scene replays |
 | `ruff` / `pyright` | style, imports and types |
 | `lint-imports` | the four layering contracts |
 | `api.py --check` | every exported name and signature |
@@ -194,7 +194,7 @@ from the phase, never from the clock, stdin or randomness.
 Then:
 
 ```bash
-uv run python tools/semantic.py --update    # ten scene snapshots
+uv run python tools/semantic.py --update    # nine scene snapshots
 uv run python -m motui --pages              # review the plain-text dump
 ```
 

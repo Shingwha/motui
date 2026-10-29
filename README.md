@@ -68,22 +68,20 @@ What each piece did:
 
 | Goal | What ships | Where it runs |
 |---|---|---|
-| Playable game | `Canvas` cell grid, `Sizing.FILL`, `app.every`, `app.bind` | `python -m motui --scene snake` |
-| Pixel art | `PixelCanvas`, `motui.pixel`, braille/half markers, slot/heat trails | `python -m motui --scene motion` |
-| Live dashboard | `Sparkline`, `ProgressBar`, `Table`, `App.every`/`invalidate` | `python -m motui --scene dashboard` |
-| Wide table | `Table(cell_wrap=WrapMode.OVERFLOW)` inside `ScrollPanel(axis="x")` | `python -m motui --scene gallery` |
-| Two-axis code view | `WrapMode.OVERFLOW` inside `ScrollPanel(axis="both")` | `python -m motui --scene gallery` |
+| Pixel rhythm game | `PixelCanvas`, `motui.pixel`, braille/half markers, slot/heat trails | `python -m motui --scene motion` |
+| Live mission dashboard | `Sparkline`, `ProgressBar`, `Table`, `App.every`/`invalidate` | `python -m motui --scene dashboard` |
+| Global themes | `Theme.from_palette`, role-based widgets and pixel palettes | `python -m motui --scene themes` |
+| Wide table | `Table(cell_wrap=WrapMode.OVERFLOW)` inside `ScrollPanel(axis="x")` | `python -m motui --scene layout` |
+| Two-axis code view | `WrapMode.OVERFLOW` inside `ScrollPanel(axis="both")` | `python -m motui --scene layout` |
 | Streaming document | `Markdown.text += chunk`, section generation cache, `ScrollPanel` | below |
 | Split IDE | `split(Axis.X)`, `dock(placement=Placement.BOTTOM)`, `Panel`, `StatusLine` | [ARCHITECTURE](docs/ARCHITECTURE.md) |
 | Forms and dialogs | `Form`/`Field`, `Input`/`Editor`, `Dialog` through `App.open_modal` | [WIDGETS](docs/WIDGETS.md) |
 
-The interactive demo is the only showcase: a splash that cycles Neon,
-Plasma, Retro CRT and Starfield until a key, then the Home tiles over six
-sections -- components, layout, motion, dashboard, terminal and themes --
-plus the standalone Snake game and the component Gallery. The splash
-wordmark and the motion rings are painted by `PixelCanvas`; the marker
-ladder lives in the terminal report. `python -m motui --pages` dumps every
-scene.
+The interactive demo is the Signal Lab: a restored three-layer starfield
+around a transforming wordmark, then six keyboard-first experiments --
+Console Foundry, Viewport Lab, Pulse, Deep Space, X-Ray and Skin Lab -- plus
+the Component Archive. Five global palettes re-skin every scene and pixel
+layer. `python -m motui --pages` dumps every scene.
 
 ## PixelCanvas
 
@@ -478,31 +476,27 @@ deadlines rather than accumulating drift.
 
 ## The demo
 
-`python -m motui` starts the showcase that ships in the wheel: a persistent
-MOTUI splash (Neon / Plasma / Retro CRT / Starfield, until any key), then
-the Home tiles over six real sections -- components, layout, motion,
-dashboard, terminal and themes -- plus the standalone Snake game and the
-component Gallery. No network, no model, no assets beyond the package.
+`python -m motui` starts the Signal Lab: a persistent, layered Splash with
+the original three-depth starfield, precise wordmark transformations and
+short accent effects, then six experiments plus the Component Archive. No
+network, model or external assets are used.
 
 ```bash
-python -m motui                          # a real terminal: splash, then Home
+python -m motui                          # a real terminal: splash, then the Lab
 python -m motui --scene gallery          # start on one scene
 python -m motui --headless --frames 60   # deterministic text frame, no TTY
 python -m motui < /dev/null              # piped: print the Home frame, exit 0
-python -m motui --pages                  # all ten scenes as plain text
+python -m motui --pages                  # all nine scenes as plain text
 python -m motui --list                   # scene names, titles and blurbs
 python -m motui --version                # the distribution version
 ```
 
-On Home, arrows and `enter` (or a click) open a tile; `s` opens Snake and
-`g` opens Gallery; `esc` returns to the splash. Entering a section wipes it
-in column by column over ~150 ms, and a status line pins the section title
-plus a theme/fps note to the bottom row. `ctrl+p` opens the command palette
-(every jumpable scene, help, the status-line toggle and quit); `F1` opens a
-help panel with the current scene's keys and pauses the clock. Snake plays
-with the arrow keys or WASD, `space` pauses, and `q` or `esc` returns to
-Home. The Gallery keeps a real `Tree`, `Table`, `ProgressBar`, `Slider` and
-`Input` side by side; `tab` cycles their focus.
+On Home, arrows, `tab`, number keys and `enter` select and launch an
+experiment; `g` opens the Component Archive. Every scene is operable without
+a mouse. `F1` opens the manual, `F2` toggles calm mode, `ctrl+t` cycles the
+global theme, and `ctrl+p` opens all commands. Dashboard controls include
+pause, interference and relay switching; Pulse supports judging, pause and
+reset; X-Ray moves and emits with arrows and `enter`/`space`.
 
 ## Docs
 

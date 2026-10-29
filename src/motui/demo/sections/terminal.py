@@ -14,15 +14,11 @@ every number on it is a value, never a probe:
   ``half`` and ``braille`` markers.  The octant step is reported as
   *not probed* -- the pixel core ships half and braille, and this
   section invents no probe of its own;
-* a live mouse feed: a headless run shows the empty state (the enable
-  bytes a real session sends and the report formats the decoder
-  understands), and a live run lands every click with its cell.
+* a live event feed driven by clicks or the keyboard probe: arrows move the
+  probe and enter/space emits an event at its cell.
 
-Frame counting is the tick number (the shell's phase, one per animation
-tick), and the ms/frame figure is the 60 Hz budget -- wall-clock
-throughput is the live runner's job (it diffs ``Painter.frames`` into
-the status note), never a scene's.  Nothing here reads the clock, the
-environment or the screen: two replays paint one frame.
+The ms/frame figure is the 60 Hz budget, not a measurement. Nothing here
+reads the clock, environment or screen: two replays paint one frame.
 """
 
 from __future__ import annotations
@@ -111,7 +107,10 @@ class TerminalScene(Scene):
 
     def __init__(self, theme: Theme) -> None:
         super().__init__(theme)
-        self._feed: list[str] = []  # recent click reports, newest last
+        self._feed: list[str] = []
+        self._cursor = Pos(x=0, y=0)
+        self._width = 100
+        self._height = 30
 
         # -- the two static panels -----------------------------------
         self._bars = LinesView(theme)
@@ -122,7 +121,7 @@ class TerminalScene(Scene):
         self._session = LinesView(theme)
         self._feed_view = LinesView(theme)
         self._session_panel = Panel(self._session, title="session", theme=theme)
-        self._feed_panel = Panel(self._feed_view, title="mouse \u00b7 live", theme=theme)
+        self._feed_panel = Panel(self._feed_view, title="events \u00b7 live", theme=theme)
         self._bars_panel = Panel(
             self._bars, title="color by capability", theme=theme
         )
@@ -219,17 +218,17 @@ class TerminalScene(Scene):
         )
 
     def _refresh_session(self, width: int, height: int) -> None:
-        """The frame's own facts: size, sync pair, mode, ticks, budget."""
+        self._width, self._height = width, height
         self._session.lines = [
             self._fact("size", f"{width} x {height} cells"),
+            self._fact("probe", f"({self._cursor.x}, {self._cursor.y}) · arrows move"),
             self._fact("sync", f"{_SYNC_OPEN} {_SYNC_CLOSE}"),
-            self._fact("color", "screen.color_mode (headless: truecolor)"),
-            self._fact("frames", f"tick {self._phase:04d} \u00b7 one diff per changed row"),
-            self._fact("budget", f"{_BUDGET_MS} ms/frame at {_FRAME_HZ} Hz"),
+            self._fact("route", "key → event → widget → diff → cells"),
+            self._fact("budget", f"{_BUDGET_MS} ms/frame · unchanged rows write zero"),
         ]
 
     def _refresh_feed(self) -> None:
-        """The mouse feed: the enable triple, then reports or the empty state."""
+        """The keyboard and mouse event feed, then reports or the empty state."""
         lines = [
             Line(
                 (
@@ -305,15 +304,18 @@ class TerminalScene(Scene):
         """The one-row title: the section's name and its one-line pitch."""
         return Line(
             (
-                Segment("Terminal", self.theme.content.accent),
-                Segment(" \u00b7 keys, mouse and paint, dissected", self.theme.text.faint),
+                Segment("X-RAY / INPUT TO CELLS", self.theme.content.accent),
+                Segment(
+                    " \u00b7 follow every event through the paint pipeline",
+                    self.theme.text.faint,
+                ),
             )
         )
 
     def _hint(self) -> Line:
         """The one-row key hint bar."""
         return Line.from_text(
-            "click lands in the feed \u00b7 esc menu \u00b7 q quit",
+            "arrows move \u00b7 enter/space emit \u00b7 click reports \u00b7 esc lab",
             self.theme.text.faint,
         )
 
@@ -324,15 +326,30 @@ class TerminalScene(Scene):
         return None
 
     def on_key(self, event: KeyEvent) -> str | None:
-        if event.key == "escape":
+        key = event.key
+        if key == "escape":
             return "menu"
-        if event.key == "q":
+        if key == "q":
             return "quit"
+        if key in ("left", "right", "up", "down"):
+            dx = -1 if key == "left" else 1 if key == "right" else 0
+            dy = -1 if key == "up" else 1 if key == "down" else 0
+            self._cursor = Pos(
+                x=max(0, min(self._width - 1, self._cursor.x + dx)),
+                y=max(0, min(self._height - 1, self._cursor.y + dy)),
+            )
+            self._refresh_session(self._width, self._height)
+        elif key in ("enter", "space"):
+            self._emit(f"{key} ({self._cursor.x}, {self._cursor.y})")
         return None
 
     def on_click(self, pos: Pos) -> str | None:
-        """Land one click report in the live feed (newest last, depth-capped)."""
-        self._feed.append(f"click ({pos.x}, {pos.y})")
+        self._cursor = pos
+        self._emit(f"click ({pos.x}, {pos.y})")
+        return None
+
+    def _emit(self, report: str) -> None:
+        self._feed.append(report)
         del self._feed[:-_FEED_DEPTH]
         self._refresh_feed()
-        return None
+        self._refresh_session(self._width, self._height)

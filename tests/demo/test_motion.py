@@ -21,22 +21,44 @@ def _motion() -> MotionScene:
 
 def test_rings_judge_on_the_contract_windows():
     scene = _motion()
-    # Ring 1 is born at 0.4 s and judged exactly on its deadline: Perfect.
     scene.render(FRAME, 24)
     scene.render(FRAME, 84)
     scene.on_key(KeyEvent("space"))
     assert (scene.score, scene.combo, scene.hits, scene.attempts) == (300, 1, 1, 1)
-    # Ring 2 (born 1.6 s) judged 0.10 s past its deadline: a Good.
-    scene.render(FRAME, 162)
+    # 0.15 s late is Good inside the wider 0.20 s window.
+    scene.render(FRAME, 165)
     scene.on_key(KeyEvent("space"))
     assert (scene.score, scene.combo, scene.hits, scene.attempts) == (400, 2, 2, 2)
-    # Ring 3 (born 2.8 s) judged 0.15 s late: a force hit, combo clears.
-    scene.render(FRAME, 237)
+    # 0.30 s late is a Close hit: 40 points, but the combo clears.
+    scene.render(FRAME, 246)
     scene.on_key(KeyEvent("space"))
-    assert (scene.score, scene.combo, scene.hits, scene.attempts) == (400, 0, 2, 3)
-    # Ring 4 (born 4.0 s) is never judged: it misses on its own at +1.2 s.
-    scene.render(FRAME, 313)
+    assert (scene.score, scene.combo, scene.hits, scene.attempts) == (440, 0, 2, 3)
+    scene.render(FRAME, 330)
     assert (scene.attempts, scene.combo, scene.hits) == (4, 0, 2)
+
+
+def test_space_and_click_share_judgment_score_and_feedback():
+    keyboard = _motion()
+    mouse = _motion()
+    keyboard.render(FRAME, 84)
+    mouse.render(FRAME, 84)
+    keyboard.on_key(KeyEvent("space"))
+    mouse.on_click(Pos(x=1, y=1))
+    assert keyboard.score == mouse.score == 300
+    assert keyboard.verdict == mouse.verdict == "perfect"
+    assert "PERFECT +300" in keyboard._hud(80).text
+    assert "PERFECT +300" in mouse._hud(80).text
+
+
+def test_judgment_windows_have_distinct_ready_hit_and_perfect_cues():
+    scene = _motion()
+    assert scene._game.stage == "approach"
+    scene.render(FRAME, 66)
+    assert scene._game.stage == "close" and "READY" in scene._hud(80).text
+    scene.render(FRAME, 72)
+    assert scene._game.stage == "good" and "HIT" in scene._hud(80).text
+    scene.render(FRAME, 78)
+    assert scene._game.stage == "perfect" and "PERFECT" in scene._hud(80).text
 
 
 def test_the_motion_frame_is_deterministic_and_has_a_live_board():
@@ -49,19 +71,19 @@ def test_the_motion_frame_is_deterministic_and_has_a_live_board():
 
 def test_enter_lands_on_a_fresh_rings_board():
     scene = _motion()
-    for phase in range(1, 100):
+    for phase in range(1, 110):
         scene.tick(phase)
     assert scene.attempts > 0  # the auto-missed rings left a real residue
     scene.enter()
     assert (scene.score, scene.attempts, len(scene.rings)) == (0, 0, 0)
     scene.render(FRAME, 1)
-    assert "rings" in "\n".join(row.text for row in scene.render(FRAME, 1))
+    assert "PULSE" in "\n".join(row.text for row in scene.render(FRAME, 1))
 
 
 def test_the_splash_paints_a_pixel_wordmark():
-    frame = render_scene("splash", width=80, height=24, phase=30)
-    assert "press any key" in frame
-    assert "\u2580" in frame or "\u2584" in frame or "\u2588" in frame  # wordmark
+    frame = render_scene("splash", width=80, height=24, phase=240)
+    assert "space remix" in frame
+    assert any("\u2800" < char < "\u2900" for char in frame)  # braille wordmark
     scene = SplashScene(Theme.dark(), seed=0)
     assert scene.tick(10_000) is None  # never times out
     assert scene.on_key(KeyEvent("x")) == "menu"

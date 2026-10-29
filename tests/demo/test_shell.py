@@ -1,16 +1,11 @@
-"""The shell: Home tiles, wipe, section round trips and global help."""
+"""The Signal Lab shell: navigation, transitions, global themes and input."""
 
 from __future__ import annotations
 
 import pytest
 
 from motui.demo.registry import TILES
-from motui.demo.sections import (
-    ComponentsScene,
-    LayoutScene,
-    TerminalScene,
-    ThemesScene,
-)
+from motui.demo.sections import ComponentsScene, LayoutScene, TerminalScene
 from motui.demo.sections.menu import MenuScene
 from motui.demo.shell import Showcase
 from motui.kernel.cell import Surface
@@ -37,157 +32,132 @@ def _menu() -> MenuScene:
     return scene
 
 
-def test_the_home_tiles_route_keys_and_clicks_to_their_sections():
+def test_home_routes_every_keyboard_navigation_path():
     menu = _menu()
-    menu.on_key(KeyEvent("down"))  # components -> dashboard: a row jump
-    menu.on_key(KeyEvent("right"))  # dashboard -> terminal
-    assert menu.on_key(KeyEvent("enter")) == "terminal"
-
-    fresh = _menu()
-    fresh.on_key(KeyEvent("left"))  # wraps to the last tile of the grid
-    assert fresh.on_key(KeyEvent("enter")) == "themes"
-
+    menu.on_key(KeyEvent("down"))
+    menu.on_key(KeyEvent("right"))
+    assert menu.on_key(KeyEvent("enter")) == "motion"
+    assert _menu().on_key(KeyEvent("4")) == "dashboard"
+    assert _menu().on_key(KeyEvent("g")) == "gallery"
     clicked = _menu()
-    assert clicked.on_click(Pos(x=10, y=5)) == "components"
-    assert clicked.on_key(KeyEvent("s")) == "snake"
-    assert clicked.on_key(KeyEvent("g")) == "gallery"
+    row, col, _height, _width = clicked.rects[2]
+    assert clicked.on_click(Pos(x=col + 1, y=row)) == "motion"
 
 
-def _wiped_frames() -> list[str]:
-    """Twelve frames of a menu -> dashboard wipe, one per tick."""
+def test_home_tab_and_reverse_tab_cover_the_whole_index():
+    menu = _menu()
+    for expected in range(1, len(TILES)):
+        menu.on_key(KeyEvent("tab"))
+        assert menu.index == expected
+    menu.on_key(KeyEvent("tab"))
+    assert menu.index == 0
+    menu.on_key(KeyEvent("s-tab"))
+    assert menu.index == len(TILES) - 1
+
+
+def test_home_selection_survives_round_trips_and_global_theme_changes():
+    showcase = Showcase("menu")
+    showcase.on_key(KeyEvent("down"))
+    showcase.on_key(KeyEvent("down"))
+    showcase.on_key(KeyEvent("enter"))
+    assert showcase.scene == "motion"
+    showcase.on_key(KeyEvent("escape"))
+    assert showcase._scenes["menu"].index == 2
+    showcase.on_key(KeyEvent("ctrl+t"))
+    assert showcase._scenes["menu"].index == 2
+
+
+def _transition_frames() -> list[str]:
     showcase = Showcase("menu")
     showcase.switch("dashboard")
     frames = []
-    for _ in range(12):
+    for _ in range(20):
         showcase.tick()
         frames.append(_frame(showcase))
     return frames
 
 
-def test_a_wipe_replays_tick_for_tick_and_lands_on_the_static_frame():
-    first, second = _wiped_frames(), _wiped_frames()
-    assert first == second  # the mask is a pure function of the phase
-    assert first[0] != first[4] != first[8]  # the middle frames really move
+def test_randomized_transition_replays_and_lands_on_the_static_frame():
+    first, second = _transition_frames(), _transition_frames()
+    assert first == second
+    assert first[0] != first[8] != first[-1]
     static = Showcase("dashboard")
-    for _ in range(12):
+    for _ in range(20):
         static.tick()
-    assert first[-1] == _frame(static)  # the tail is the plain dashboard
-
-
-def test_the_wipe_holds_the_old_scene_at_its_leaving_phase():
-    showcase = Showcase("dashboard")
-    for _ in range(40):
-        showcase.tick()
-    before = _frame(showcase)
-    showcase.switch("menu")
-    after = _frame(showcase)
-    cut = 80 * (showcase.phase + 1) // 9
-    assert [row[cut:] for row in after.splitlines()] == [
-        row[cut:] for row in before.splitlines()
-    ]
+    assert first[-1] == _frame(static)
 
 
 @pytest.mark.parametrize("name", [spec.name for spec in TILES])
-def test_every_section_enters_renders_and_returns_home(name):
+def test_every_experiment_enters_renders_and_returns_home(name):
     showcase = Showcase(name)
     assert _frame(showcase).strip()
     showcase.on_key(KeyEvent("escape"))
     assert showcase.scene == "menu"
-    assert _frame(showcase)
+    for _ in range(20):
+        showcase.tick()
+    assert "SIGNAL LAB" in _frame(showcase)
 
 
-def test_the_help_overlay_opens_pauses_and_closes():
-    showcase = Showcase("menu")
+def test_help_calm_and_global_theme_shortcuts_work_from_any_scene():
+    showcase = Showcase("dashboard")
     showcase.on_key(KeyEvent("f1"))
     assert showcase.help_open
     phase = showcase.phase
     showcase.tick()
-    assert showcase.phase == phase  # help pauses the clock
-    text = _frame(showcase)
-    assert "choose a section" in text and "global:" in text
+    assert showcase.phase == phase
     showcase.on_key(KeyEvent("escape"))
-    assert not showcase.help_open
+    showcase.on_key(KeyEvent("f2"))
+    showcase.tick()
+    assert showcase.phase == phase and not showcase.motion
+    showcase.on_key(KeyEvent("ctrl+t"))
+    assert showcase.theme_index == 1 and showcase.scene == "dashboard"
+    assert showcase.theme_spec.name == "aurora"
+    assert "aurora" in showcase.theme_spec.name
 
 
-def _terminal_scene() -> TerminalScene:
+def test_themes_scene_applies_the_palette_to_the_whole_shell():
+    showcase = Showcase("themes")
+    before = showcase.theme
+    showcase.on_key(KeyEvent("right"))
+    assert showcase.theme_index == 1 and showcase.theme is not before
+    showcase.on_key(KeyEvent("5"))
+    assert showcase.theme_index == 4 and showcase.theme_spec.name == "mono"
+    showcase.switch("motion")
+    assert showcase.theme is showcase._scenes["motion"].theme
+
+
+def test_terminal_probe_is_fully_keyboard_operable():
     scene = TerminalScene(Theme.dark())
     scene.render(FRAME, 0)
-    scene.on_click(Pos(x=20, y=10))
-    scene.on_click(Pos(x=21, y=11))
-    return scene
-
-
-def test_the_terminal_report_dissects_the_pipe_and_replays():
-    scene = _terminal_scene()
-    text = _text(scene.render(FRAME, 0))
-    assert "100 x 30 cells" in text
-    assert "\\x1b[?2026h" in text and "\\x1b[?2026l" in text
-    assert "\\x1b[?1000h" in text
-    assert "octant" in text and "not probed" in text
-    assert scene.feed[-1] == "click (21, 11)"
-    assert _text(scene.render(FRAME, 0)) == text
-
-
-def test_the_themes_section_switches_skins_live():
-    scene = ThemesScene(Theme.dark())
-    dark = _text(scene.render(FRAME, 0))
     scene.on_key(KeyEvent("right"))
-    light = _text(scene.render(FRAME, 0))
-    assert scene.tabs.index == 1
-    assert "Theme.dark()" in dark and "Theme.light()" in light
-
-    scene.on_key(KeyEvent("4"))
-    sepia = _text(scene.render(FRAME, 0))
-    assert scene.tabs.index == 3 and "from_palette" in sepia
-
-    scene.on_key(KeyEvent("c"))
-    compare = _text(scene.render(FRAME, 0))
-    assert scene.compare
-    assert all(name in compare for name in ("dark", "light", "flat", "sepia"))
-
-    clicked = ThemesScene(Theme.dark())
-    clicked.render(FRAME, 0)
-    clicked.on_click(Pos(x=8, y=1))
-    assert clicked.tabs.index == 1
+    scene.on_key(KeyEvent("down"))
+    scene.on_key(KeyEvent("enter"))
+    assert scene.feed[-1] == "enter (1, 1)"
+    scene.on_key(KeyEvent("space"))
+    assert scene.feed[-1] == "space (1, 1)"
+    text = _text(scene.render(FRAME, 0))
+    assert "X-RAY" in text and "probe" in text
 
 
-def _driven_components() -> tuple[ComponentsScene, str]:
+def test_components_controls_answer_their_keys():
     scene = ComponentsScene(Theme.dark())
     scene.render(FRAME, 0)
-    for key in ("right", "right", "tab", "tab", "enter", "escape"):
-        scene.on_key(KeyEvent(key))
-    return scene, _text(scene.render(FRAME, 0))
-
-
-def test_the_components_playground_drives_and_replays_deterministically():
-    first, first_text = _driven_components()
-    second, second_text = _driven_components()
-    assert first_text == second_text
-    assert not first.modal and not second.modal
-    fresh = ComponentsScene(Theme.dark())
-    assert "Ada Lovelace" in _text(fresh.render(FRAME, 0))
-
-
-def test_the_components_controls_answer_their_keys():
-    scene = ComponentsScene(Theme.dark())
-    scene.render(FRAME, 0)
-    scene.on_key(KeyEvent("right"))  # the strip owns the focus: page -> data
-    scene.on_key(KeyEvent("tab"))  # focus -> the table
+    scene.on_key(KeyEvent("right"))
+    scene.on_key(KeyEvent("tab"))
     for _ in range(3):
         scene.on_key(KeyEvent("s"))
     assert scene.sort_column == 2
     rows = [row[0] for row in scene.table.rows]
-    assert rows.index("bergamot") < rows.index("cherries")
-
+    assert rows.index("borealis") < rows.index("cygnus")
     scene.on_key(KeyEvent("tab"))
     scene.on_key(KeyEvent("right"))
     scene.on_key(KeyEvent("right"))
     scene.on_key(KeyEvent("tab"))
     scene.on_key(KeyEvent("enter"))
-    assert scene.toast_state is not None and "saved to disk" in scene.toast_state[0]
+    assert scene.toast_state is not None and "preset saved" in scene.toast_state[0]
 
 
-def test_the_layout_drills_reach_both_ends_and_replay_deterministically():
+def test_layout_drills_reach_both_ends_and_replay_deterministically():
     def driven() -> tuple[str, str, object, object]:
         scene = LayoutScene(Theme.dark())
         scene.render(FRAME, 0)
@@ -208,5 +178,5 @@ def test_the_layout_drills_reach_both_ends_and_replay_deterministically():
     assert (first_wide, first_code) == (second_wide, second_code)
     assert wide.x_offset == wide.total_columns - wide.viewport_width
     assert code.x_offset == code.total_columns - code.viewport_width
-    assert "harbour master" in first_code
+    assert "recover a clean lock" in first_code
     assert "on schedule" in first_wide

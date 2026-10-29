@@ -34,6 +34,24 @@ def build_commands(app: App, showcase: Showcase) -> CommandRegistry:
     commands.extend(
         (
             Command(
+                name="next global theme",
+                description="re-skin the entire Signal Lab",
+                group="appearance",
+                handler=showcase.cycle_theme,
+            ),
+            Command(
+                name="previous global theme",
+                description="re-skin the entire Signal Lab",
+                group="appearance",
+                handler=lambda: showcase.cycle_theme(-1),
+            ),
+            Command(
+                name="toggle calm mode",
+                description="pause or resume ambient motion",
+                group="appearance",
+                handler=showcase.toggle_motion,
+            ),
+            Command(
                 name="show help",
                 description="open the keys panel",
                 group="demo",

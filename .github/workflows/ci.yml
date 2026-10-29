@@ -84,8 +84,8 @@ jobs:
       - name: demo -- dashboard replay
         run: uv run python -m motui --scene dashboard --frames 30 --headless
 
-      - name: demo -- snake replay
-        run: uv run python -m motui --scene snake --frames 30 --headless
+      - name: demo -- splash replay
+        run: uv run python -m motui --scene splash --frames 240 --headless
 
       - name: demo -- components replay
         run: uv run python -m motui --scene components --frames 12 --headless

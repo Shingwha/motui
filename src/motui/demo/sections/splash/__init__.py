@@ -1,23 +1,8 @@
-"""The splash scene package: font, packs, wordmark, stars and chrome."""
+"""The layered Signal Lab opening sequence."""
 
 from __future__ import annotations
 
-from .packs import (
-    LOGO_END,
-    LOGO_START,
-    SPLASH_GLYPH_TICKS,
-    SPLASH_GLYPHS,
-    SPLASH_ROTATE_TICKS,
-    SPLASH_STYLES,
-)
+from .effects import ACT_TICKS, EFFECTS
 from .scene import SplashScene
 
-__all__ = [
-    "LOGO_END",
-    "LOGO_START",
-    "SPLASH_GLYPHS",
-    "SPLASH_GLYPH_TICKS",
-    "SPLASH_ROTATE_TICKS",
-    "SPLASH_STYLES",
-    "SplashScene",
-]
+__all__ = ["ACT_TICKS", "EFFECTS", "SplashScene"]

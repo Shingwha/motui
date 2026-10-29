@@ -1,10 +1,13 @@
-"""The Home tiles' deterministic miniature animations."""
+"""Large, low-frequency previews for the selected Home experiment."""
 
 from __future__ import annotations
 
+import math
+
 from ..kernel.cell import Line, Segment
-from ..kernel.style import Style
+from ..kernel.layout import Constraints
 from ..kernel.theme import Theme
+from ..widgets import Sparkline
 
 __all__ = [
     "mini_components",
@@ -16,123 +19,147 @@ __all__ = [
 ]
 
 
-def _bar(width: int, fraction: float, style: Style) -> Line:
-    """One progress-style bar of ``width`` cells, ``fraction`` filled."""
+def _text(text: str, theme: Theme, accent: bool = False) -> Line:
+    return Line.from_text(text, theme.content.accent if accent else theme.text.muted)
+
+
+def _bar(width: int, fraction: float, theme: Theme) -> Line:
     filled = max(0, min(width, round(width * fraction)))
-    if filled <= 0:
-        return Line()
-    if filled >= width:
-        return Line((Segment("\u2588" * width, style),))
     return Line(
         (
-            Segment("\u2588" * filled, style),
-            Segment("\u25b7" * (width - filled), style),
+            Segment("█" * filled, theme.content.accent),
+            Segment("░" * (width - filled), theme.text.faint),
         )
     )
 
 
-def _sweep(phase: int, period: int) -> float:
-    """A deterministic 0..1..0 triangle wave over ``period`` ticks."""
-    step = phase % period
-    span = period / 2
-    return abs(step - span) / span
-
-
 def mini_components(phase: int, width: int, theme: Theme) -> list[Line]:
-    """Widget preview: three stacked bars pulsing one after another."""
-    styles = (theme.content.accent, theme.status.success, theme.status.warning)
-    rows: list[Line] = []
-    for index, style in enumerate(styles):
-        fraction = 0.5 + 0.5 * _sweep(phase + index * 7, 16)
-        rows.append(_bar(width - 1, fraction, style))
+    value = 4 + (phase // 24) % 7
+    focused = (phase // 90) % 3
+    fields = ("callsign", "channel", "gain")
+    rows = [_text("COMPOSE A LIVE CONSOLE", theme, True), Line()]
+    for index, label in enumerate(fields):
+        cursor = ">" if index == focused else " "
+        rows.append(_text(f"{cursor} {label:<9} {'─' * max(2, width - 15)}", theme))
+    rows.extend(
+        [
+            Line(),
+            _text(f"  gain {value:02d}/10", theme),
+            _bar(max(4, width - 4), value / 10, theme),
+            Line(),
+            _text("  [ arm signal ]   every control is real", theme, True),
+        ]
+    )
     return rows
 
 
 def mini_layout(phase: int, width: int, theme: Theme) -> list[Line]:
-    """Layout preview: a 2x2 grid whose active quadrant rotates."""
-    active = (phase // 8) % 4
-    hot = theme.content.accent
-    cold = theme.borders.base
-    half = max(1, (width - 1) // 2)
-    rows: list[Line] = []
-    for row in range(2):
-        cells: list[Segment] = []
-        for col in range(2):
-            style = hot if row * 2 + col == active else cold
-            cells.append(Segment("\u2500" * half, style))
-            if col == 0:
-                cells.append(Segment(" ", Style()))
-        rows.append(Line(tuple(cells)))
+    split = 0.35 + 0.15 * math.sin(phase / 90)
+    left = max(6, round((width - 3) * split))
+    right = max(6, width - 3 - left)
+    rows = [_text(f"CONSTRAINTS  {width} x 10  ·  split {split:.2f}", theme, True), Line()]
+    for row in range(6):
+        if row in (0, 5):
+            left_corner, right_corner = ("┌", "┐") if row == 0 else ("└", "┘")
+            rows.append(
+                _text(
+                    f"{left_corner}{'─' * (left - 2)}{right_corner} "
+                    f"{left_corner}{'─' * (right - 2)}{right_corner}",
+                    theme,
+                )
+            )
+        else:
+            left_text = " FLOW " if row == 2 else ""
+            right_text = " DOCK " if row == 3 else ""
+            rows.append(
+                _text(
+                    f"│{left_text:<{left - 2}}│ │{right_text:<{right - 2}}│",
+                    theme,
+                )
+            )
+    rows.extend([Line(), _text("One tree. Every size. No fixed canvas.", theme)])
     return rows
 
 
 def mini_motion(phase: int, width: int, theme: Theme) -> list[Line]:
-    """Motion preview: a four-dot snake crawling along a small track."""
-    track = max(4, width - 1)
-    head = theme.status.success
-    trail = theme.text.faint
-    rows: list[Line] = [Line(), Line()]
-    for _row in range(2):
-        cells: list[str | None] = [None] * track
-        for dot in range(4):
-            cells[(phase // 2 - dot) % track] = str(dot)
-        segments: list[Segment] = []
-        previous: int | None = None
-        for col, dot in enumerate(cells):
-            if dot is None:
-                continue
-            style = head if dot == "0" else trail
-            gap = 0 if previous is None else col - previous - 1
-            segments.append(Segment("\u00b7" * gap + "\u25cf", style))
-            previous = col
-        rows.append(Line(tuple(segments)) if segments else Line())
+    rows = [_text("SUB-CELL PARTICLE FIELD", theme, True)]
+    height = 9
+    cx, cy = (width - 1) / 2, 4
+    for y in range(height):
+        cells = [" "] * width
+        for orbit in range(3):
+            radius_x = 5 + orbit * max(3, width // 8)
+            radius_y = 1.5 + orbit
+            angle = phase * (0.008 + orbit * 0.003) + orbit * 2
+            x = round(cx + math.cos(angle) * radius_x)
+            py = round(cy + math.sin(angle) * radius_y)
+            if 0 <= x < width and 0 <= py < height:
+                cells[py] = "●" if orbit == 0 else "○"
+        if 0 <= round(cx) < width and y == cy:
+            cells[round(cx)] = "✦"
+        style = theme.content.accent if y % 2 else theme.content.inline_code
+        rows.append(Line.from_text("".join(cells).rstrip(), style))
     return rows
 
 
 def mini_dashboard(phase: int, width: int, theme: Theme) -> list[Line]:
-    """Dashboard preview: a wave of sparkline bars, 6 rows tall."""
-    accent = theme.content.accent
-    rows: list[Line] = []
-    for row in range(6):
-        segments: list[Segment] = []
-        for col in range(width - 1):
-            level = (phase // 2 + col * 5 + row * 3) % 11
-            segments.append(Segment("\u258f" if level > row * 2 else " ", accent))
-        rows.append(Line(tuple(segments)))
-    return rows
-
-
-def mini_terminal(phase: int, width: int, theme: Theme) -> list[Line]:
-    """Terminal preview: a prompt whose typed text grows and resets."""
-    faint = theme.text.faint
-    caret = theme.content.accent
-    typed = phase % max(1, width - 4)
-    prompt = Segment("> ", faint)
-    text = Segment("motui " * (typed // 6), faint)
-    cursor_char = "\u2588" if (phase // 4) % 2 == 0 else " "
-    note = "60 Hz \u00b7 1/60 throttle"[: width - 1]
+    values = [
+        0.5 + 0.28 * math.sin((phase + index) / 22) + 0.12 * math.cos((phase + index) / 9)
+        for index in range(48)
+    ]
+    spark = Sparkline(values, marker="braille", style=theme.status.success)
+    graph = list(spark.render(Constraints(width=max(4, width - 2), max_height=4)))
+    signal = round(92 + 6 * math.sin(phase / 45))
     return [
-        Line((prompt, text, Segment(cursor_char, caret))),
+        _text("DSN-07 / LIVE UPLINK", theme, True),
+        _text(f"SIGNAL LOCKED  {signal}%  ·  42 ms  ·  0 drops", theme),
         Line(),
-        Line((Segment(note, faint),)),
+        *graph,
+        Line(),
+        _text("02:14:21  route  traffic moved to relay-04", theme),
+        _text("02:14:29  signal lock recovered", theme),
     ]
 
 
+def mini_terminal(phase: int, width: int, theme: Theme) -> list[Line]:
+    stages = ("KEY", "EVENT", "WIDGET", "DIFF", "CELLS")
+    active = (phase // 45) % len(stages)
+    rows = [_text("FOLLOW ONE KEYSTROKE", theme, True), Line()]
+    for index, stage in enumerate(stages):
+        marker = "●" if index == active else "○"
+        rows.append(_text(f"  {marker} {stage:<8} {'→' if index < 4 else '✓'}", theme))
+    rows.extend(
+        [
+            Line(),
+            _text("enter  →  KeyEvent('enter')", theme),
+            _text("3 rows changed  →  one synchronized flush", theme),
+            Line(),
+            _text("16.7 ms budget · unchanged rows write zero bytes", theme, True),
+        ]
+    )
+    return rows
+
+
 def mini_themes(phase: int, width: int, theme: Theme) -> list[Line]:
-    """Themes preview: four swatches whose highlight cycles."""
-    swatches = (
+    names = ("signal", "aurora", "ember", "paper", "mono")
+    active = (phase // 120) % len(names)
+    rows = [_text("ONE UI / FIVE GLOBAL SKINS", theme, True), Line()]
+    styles = (
         theme.content.accent,
+        theme.content.inline_code,
         theme.status.success,
         theme.status.warning,
         theme.status.danger,
     )
-    active = (phase // 6) % len(swatches)
-    block = max(2, (width - 1) // len(swatches))
-    rows: list[Line] = [Line()]
-    for _row in range(2):
-        segments: list[Segment] = []
-        for index, style in enumerate(swatches):
-            glyph = "\u2588" * block if index == active else "\u2591" * block
-            segments.append(Segment(glyph, style))
-        rows.append(Line(tuple(segments)))
+    for index, name in enumerate(names):
+        marker = ">" if index == active else " "
+        rows.append(Line((Segment(f"{marker} {name:<9}"),)))
+        rows.append(
+            Line(
+                tuple(
+                    Segment("████" if index == active else "▒▒▒▒", style)
+                    for style in styles
+                )
+            )
+        )
     return rows

@@ -1,7 +1,8 @@
-"""The showcase shell: one widget owning the current scene and phase."""
+"""The Signal Lab shell: scenes, global themes and deterministic transitions."""
 
 from __future__ import annotations
 
+import random
 from collections.abc import Callable
 
 from ..kernel.cell import Line, Segment, Surface, cut_line
@@ -12,47 +13,39 @@ from ..kernel.text import WrapMode
 from ..kernel.theme import Theme
 from ..widgets import Panel, Text
 from ..widgets.base import Widget
-from .registry import SCENES, SPEC_BY_NAME, build_scenes
+from .palettes import DEMO_THEMES
+from .registry import JUMPABLE, SCENES, SPEC_BY_NAME, build_scenes
 from .scene import START_PHASE
 
 __all__ = ["START_PHASE", "Showcase"]
 
-#: The wipe's length in ticks: nine ticks at the 60 Hz shell is ~150 ms.
-_WIPE_TICKS = 9
-
 _CLIP = WrapMode.CLIP
+_TRANSITION_TICKS = 10
+_TRANSITIONS = ("slice", "scan")
 
 
 class Showcase(Widget):
-    """The whole demo: a scene, a phase, the transition chrome and help.
-
-    ``render`` delegates to the current scene and pads the answer to the
-    pane's height budget.  While a wipe runs it holds the old scene at the
-    phase it was left on, so the reveal never shows a reset scene.  ``tick``
-    advances the phase; ``enter`` is the one reset door the shell calls on
-    the initial scene and on every switch.
-    """
+    focusable = True
+    clickable = True
 
     __slots__ = (
         "_help",
+        "_previous",
+        "_previous_phase",
+        "_rng",
         "_scenes",
-        "_wipe_from",
-        "_wipe_phase",
+        "_seed",
+        "_transition",
+        "motion",
         "on_quit",
         "phase",
         "scene",
         "status_line",
         "status_note",
+        "theme_index",
     )
 
-    focusable = True
-    clickable = True
-
     on_quit: Callable[[], None] | None
-    status_line: bool
-    status_note: str
-    _wipe_from: str | None
-    _wipe_phase: int | None
 
     def __init__(
         self,
@@ -65,14 +58,19 @@ class Showcase(Widget):
     ) -> None:
         if scene not in SPEC_BY_NAME:
             raise ValueError(f"unknown scene {scene!r}: expected one of {SCENES}")
-        resolved = Theme.dark() if theme is None else theme
+        resolved = DEMO_THEMES[0].theme if theme is None else theme
         super().__init__(resolved)
+        self._rng = random.Random(seed)
+        self._seed = seed
+        self.theme_index = 0
         self._scenes = build_scenes(resolved, seed)
         self.scene = scene
         self.phase = phase
-        self._wipe_from = None
-        self._wipe_phase = None
+        self._previous: str | None = None
+        self._previous_phase: int | None = None
+        self._transition = "slice"
         self._help = False
+        self.motion = True
         self.status_line = status_line
         self.status_note = "--"
         self.on_quit = None
@@ -80,28 +78,51 @@ class Showcase(Widget):
 
     @property
     def spec(self):
-        """The current scene's registry descriptor."""
         return SPEC_BY_NAME[self.scene]
+
+    @property
+    def theme_spec(self):
+        return DEMO_THEMES[self.theme_index]
 
     @property
     def help_open(self) -> bool:
         return self._help
 
     def toggle_help(self) -> None:
-        """Open or close the global help overlay; opening pauses ticks."""
         self._help = not self._help
         self.touch()
 
+    def toggle_motion(self) -> None:
+        self.motion = not self.motion
+        self.touch()
+
+    def set_theme(self, index: int) -> None:
+        menu_index = self._scenes["menu"].index
+        self.theme_index = index % len(DEMO_THEMES)
+        self.theme = self.theme_spec.theme
+        self._scenes = build_scenes(self.theme, self._seed)
+        self._scenes["menu"].index = menu_index
+        themes = self._scenes.get("themes")
+        if themes is not None:
+            themes.index = self.theme_index
+        self._scenes[self.scene].enter()
+        self._previous = None
+        self._previous_phase = None
+        self.touch()
+
+    def cycle_theme(self, step: int = 1) -> None:
+        self.set_theme(self.theme_index + step)
+
     def switch(self, name: str, *, phase: int = START_PHASE) -> None:
-        """Make ``name`` the current scene, wiping it in over the old one."""
         if name not in SPEC_BY_NAME:
             raise ValueError(f"unknown scene {name!r}: expected one of {SCENES}")
-        if name != self.scene:
-            self._wipe_from = self.scene
-            self._wipe_phase = self.phase
+        if name != self.scene and self.motion:
+            self._previous = self.scene
+            self._previous_phase = self.phase
+            self._transition = self._rng.choice(_TRANSITIONS)
         else:
-            self._wipe_from = None
-            self._wipe_phase = None
+            self._previous = None
+            self._previous_phase = None
         self._scenes[name].enter()
         self.scene = name
         self.phase = phase
@@ -109,24 +130,22 @@ class Showcase(Widget):
         self.touch()
 
     def seek(self, phase: int) -> None:
-        """Move the phase; a rewind enters the current scene afresh."""
         if phase < self.phase:
             self._scenes[self.scene].enter()
             self.phase = START_PHASE
-            self._wipe_from = None
-            self._wipe_phase = None
+            self._previous = None
+            self._previous_phase = None
         self.phase = phase
         self._help = False
         self.touch()
 
     def tick(self) -> str | None:
-        """Advance one animation tick; a help overlay pauses the clock."""
-        if self._help:
+        if self._help or not self.motion:
             return None
         self.phase += 1
-        if self._wipe_from is not None and self.phase >= _WIPE_TICKS:
-            self._wipe_from = None
-            self._wipe_phase = None
+        if self._previous is not None and self.phase >= _TRANSITION_TICKS:
+            self._previous = None
+            self._previous_phase = None
         target = self._scenes[self.scene].tick(self.phase)
         if target is not None:
             self._route(target)
@@ -135,12 +154,18 @@ class Showcase(Widget):
         return target
 
     def on_key(self, event: KeyEvent) -> bool:
-        """Route a key; F1 toggles help before the scene sees the event."""
-        if event.key == "f1":
+        key = event.key
+        if key in ("f1", "?"):
             self.toggle_help()
             return True
+        if key == "f2":
+            self.toggle_motion()
+            return True
+        if key == "ctrl+t":
+            self.cycle_theme()
+            return True
         if self._help:
-            if event.key == "escape":
+            if key == "escape":
                 self.toggle_help()
             return True
         target = self._scenes[self.scene].on_key(event)
@@ -148,7 +173,6 @@ class Showcase(Widget):
         return True
 
     def on_click(self, pos: Pos) -> bool:
-        """A click closes help or routes to the scene."""
         if self._help:
             self.toggle_help()
             return True
@@ -157,21 +181,28 @@ class Showcase(Widget):
         return True
 
     def _route(self, target: str | None) -> None:
-        """Apply one scene transition (``None`` is a no-op)."""
         if target is None:
             return
         if target == "quit":
             if self.on_quit is not None:
                 self.on_quit()
-            return
-        self.switch(target)
+        elif target == "theme-next":
+            self.cycle_theme()
+        elif target == "theme-prev":
+            self.cycle_theme(-1)
+        elif target.startswith("theme:"):
+            self.set_theme(int(target.split(":", 1)[1]))
+        elif target == "next":
+            index = JUMPABLE.index(self.scene)
+            self.switch(JUMPABLE[(index + 1) % len(JUMPABLE)])
+        else:
+            self.switch(target)
 
     def render(self, c: Constraints) -> Surface:
-        """The current scene's rows: wiped in, padded, help and status last."""
         surface = self._scenes[self.scene].render(c, self.phase)
-        if self._wipe_from is not None and self._wipe_phase is not None:
-            previous = self._scenes[self._wipe_from].render(c, self._wipe_phase)
-            rows = self._wipe(surface, previous, c.width)
+        if self._previous is not None and self._previous_phase is not None:
+            previous = self._scenes[self._previous].render(c, self._previous_phase)
+            rows = self._transition_rows(surface, previous, c.width)
         else:
             rows = list(surface)
         budget = c.max_height
@@ -184,51 +215,62 @@ class Showcase(Widget):
             rows = self._help_overlay(rows, c.width)
         return Surface.of(rows, c.width)
 
-    def _wipe(self, current: Surface, previous: Surface, width: int) -> list[Line]:
-        """Splice ``current`` over ``previous`` at the phase's reveal column.
-
-        The column count is a pure function of the phase, so a wipe replay
-        reproduces every middle frame exactly; ``phase + 1`` keeps the first
-        frame after a switch from being empty.
-        """
-        cols = min(width, width * (self.phase + 1) // _WIPE_TICKS)
-        if cols <= 0:
-            return list(previous)
-        if cols >= width:
-            return list(current)
-        return [
-            cut_line(new, 0, cols) + cut_line(old, cols, width)
-            for new, old in zip(current, previous, strict=False)
-        ]
+    def _transition_rows(
+        self, current: Surface, previous: Surface, width: int
+    ) -> list[Line]:
+        progress = min(1.0, (self.phase + 1) / _TRANSITION_TICKS)
+        new_rows = list(current)
+        old_rows = list(previous)
+        rows: list[Line] = []
+        for y, (new, old) in enumerate(zip(new_rows, old_rows, strict=False)):
+            if self._transition == "slice":
+                offset = (y % 5) * width // 25
+                cols = max(0, min(width, round(width * progress) - offset))
+                if y % 2:
+                    rows.append(cut_line(old, 0, width - cols) + cut_line(new, width - cols, width))
+                else:
+                    rows.append(cut_line(new, 0, cols) + cut_line(old, cols, width))
+            else:
+                local = max(0.0, min(1.0, progress * 1.5 - (y % 4) * 0.12))
+                cols = round(width * local)
+                if y % 2:
+                    rows.append(
+                        cut_line(old, 0, width - cols)
+                        + cut_line(new, width - cols, width)
+                    )
+                else:
+                    rows.append(cut_line(new, 0, cols) + cut_line(old, cols, width))
+        return rows
 
     def _status(self, width: int) -> Line:
-        """The bottom bar: the scene title, then the theme/fps note."""
-        title = self.spec.title
-        note = self.status_note
-        gap = max(1, width - len(title) - len(note))
-        line = Line(
+        left = f"SIGNAL LAB / {self.spec.title}"
+        mode = "LIVE" if self.motion else "CALM"
+        right = f"{self.theme_spec.label} · {mode} · {self.status_note}"
+        gap = max(1, width - len(left) - len(right) - 2)
+        return Line(
             (
-                Segment(title, self.theme.content.accent),
-                Segment(" " * gap, self.theme.text.faint),
-                Segment(note, self.theme.text.faint),
+                Segment(" "),
+                Segment(left, self.theme.content.accent),
+                Segment(" " * gap),
+                Segment(right, self.theme.text.faint),
+                Segment(" "),
             )
-        )
-        return line.clip(_CLIP, width)
+        ).clip(_CLIP, width)
 
     def _help_overlay(self, rows: list[Line], width: int) -> list[Line]:
-        """A centred help panel over the current scene; covers its rows."""
         spec = self.spec
         lines = [
-            f"{spec.title} \u2014 {spec.blurb}",
+            f"{spec.title} — {spec.blurb}",
             "",
-            "global: F1 close \u00b7 ctrl+p commands \u00b7 esc back \u00b7 q quit",
+            "global  F1/? help · F2 calm · ctrl+t theme · ctrl+p commands",
+            "        esc back · q quit (outside text fields)",
             "",
         ]
-        lines.extend(f"{key:<16} {action}" for key, action in spec.keys)
-        panel_w = min(68, max(24, width - 6))
+        lines.extend(f"{key:<18} {action}" for key, action in spec.keys)
+        panel_w = min(76, max(24, width - 6))
         panel = Panel(
             Text("\n".join(lines), theme=self.theme),
-            title="help",
+            title="SIGNAL LAB / field manual",
             theme=self.theme,
         )
         panel_rows = list(

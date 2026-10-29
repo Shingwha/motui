@@ -1,4 +1,4 @@
-"""The one scene registry: shell, Home tiles, palette and snapshots."""
+"""The one registry driving Home, the palette, headless pages and snapshots."""
 
 from __future__ import annotations
 
@@ -11,7 +11,7 @@ from .minis import (
     mini_terminal,
     mini_themes,
 )
-from .scene import PAGE_PHASE, Scene, SceneSpec
+from .scene import Scene, SceneSpec
 from .sections.components import ComponentsScene
 from .sections.dashboard import DashboardScene
 from .sections.gallery import GalleryScene
@@ -21,132 +21,110 @@ from .sections.motion import MotionScene
 from .sections.splash import SplashScene
 from .sections.terminal import TerminalScene
 from .sections.themes import ThemesScene
-from .snake import SnakeScene
 
 __all__ = ["JUMPABLE", "SCENES", "SPECS", "SPEC_BY_NAME", "TILES", "build_scenes"]
 
-#: The scenes in tour order.  Motion's preview phase sits after its first
-#: rings are alive, so ``--pages`` and the semantic snapshot are not empty.
 SPECS: tuple[SceneSpec, ...] = (
     SceneSpec(
         "splash",
-        "Splash",
-        "the opening wordmark",
+        "Opening",
+        "particle assembly and remixed pixel layers",
         lambda theme, seed: SplashScene(theme, seed=seed),
-        keys=(("any key", "enter the showcase"),),
-        preview_phase=PAGE_PHASE,
+        keys=(("enter / any key", "launch"), ("space", "remix layers")),
+        preview_phase=240,
         jumpable=False,
     ),
     SceneSpec(
         "menu",
-        "Home",
-        "choose a section",
+        "Signal Lab",
+        "six experiments, one living preview",
         lambda theme, _seed: MenuScene(theme, TILES),
         keys=(
-            ("arrows", "choose"),
-            ("enter", "open"),
-            ("esc", "back to splash"),
-            ("q", "quit"),
+            ("arrows / tab", "select experiment"),
+            ("enter / 1-6", "launch"),
+            ("g", "component archive"),
+            ("esc", "opening"),
         ),
     ),
     SceneSpec(
         "components",
-        "Components",
-        "widgets, one page each",
+        "Console Foundry",
+        "compose a console with real widgets",
         lambda theme, _seed: ComponentsScene(theme),
         mini=mini_components,
         keys=(
-            ("tab", "cycle focus"),
-            ("enter/space", "activate"),
-            ("s", "sort the table"),
-            ("esc", "close / back"),
-            ("q", "quit unless typing"),
+            ("tab / shift-tab", "cycle focus"),
+            ("arrows / type", "edit controls"),
+            ("enter / space", "activate"),
+            ("s", "sort probes"),
+            ("esc", "close / lab"),
         ),
     ),
     SceneSpec(
         "layout",
-        "Layout",
-        "rows, columns, spans",
+        "Viewport Lab",
+        "drive constraints, docks and overflow",
         lambda theme, _seed: LayoutScene(theme),
         mini=mini_layout,
-        keys=(("1-4", "drill"), ("arrows", "adjust"), ("esc", "menu"), ("q", "quit")),
+        keys=(("1-4", "select drill"), ("arrows", "adjust geometry"), ("esc", "lab")),
     ),
     SceneSpec(
         "motion",
-        "Motion",
-        "pixel rings, live",
+        "Pulse",
+        "a sub-cell rhythm instrument",
         lambda theme, _seed: MotionScene(theme),
         mini=mini_motion,
         preview_phase=96,
-        keys=(("space/click", "judge"), ("esc", "menu"), ("q", "quit")),
+        keys=(("space / click", "judge"), ("p", "pause"), ("r", "reset"), ("esc", "lab")),
     ),
     SceneSpec(
         "dashboard",
-        "Dashboard",
-        "streaming sparklines",
+        "Deep Space",
+        "control a living deep-space uplink",
         lambda theme, _seed: DashboardScene(theme),
         mini=mini_dashboard,
-        keys=(("esc", "menu"), ("q", "quit")),
-    ),
-    SceneSpec(
-        "terminal",
-        "Terminal",
-        "keys, mouse, paint",
-        lambda theme, _seed: TerminalScene(theme),
-        mini=mini_terminal,
-        keys=(("click", "land a report"), ("esc", "menu"), ("q", "quit")),
-    ),
-    SceneSpec(
-        "themes",
-        "Themes",
-        "ink & signal variants",
-        lambda theme, _seed: ThemesScene(theme),
-        mini=mini_themes,
         keys=(
-            ("1-4 / left-right", "pick"),
-            ("c", "compare"),
-            ("esc", "menu"),
-            ("q", "quit"),
+            ("space", "pause"),
+            ("n / r", "interfere / recover"),
+            ("arrows / 1-3", "switch relay"),
+            ("esc", "lab"),
         ),
     ),
     SceneSpec(
-        "snake",
-        "Snake",
-        "the classic game",
-        lambda theme, _seed: SnakeScene(theme),
+        "terminal",
+        "X-Ray",
+        "trace input into terminal cells",
+        lambda theme, _seed: TerminalScene(theme),
+        mini=mini_terminal,
+        keys=(("arrows", "move probe"), ("enter / space", "emit event"), ("esc", "lab")),
+    ),
+    SceneSpec(
+        "themes",
+        "Skin Lab",
+        "re-skin the entire Signal Lab",
+        lambda theme, _seed: ThemesScene(theme),
+        mini=mini_themes,
         keys=(
-            ("arrows/wasd", "steer"),
-            ("space", "pause"),
-            ("esc", "menu"),
-            ("q", "quit"),
+            ("1-5 / arrows", "apply global theme"),
+            ("c", "compare palettes"),
+            ("ctrl+t", "cycle anywhere"),
+            ("esc", "lab"),
         ),
     ),
     SceneSpec(
         "gallery",
-        "Gallery",
-        "real widgets on one page",
+        "Component Archive",
+        "the widget bench in one page",
         lambda theme, _seed: GalleryScene(theme),
-        keys=(
-            ("tab", "focus"),
-            ("arrows", "move"),
-            ("esc", "menu"),
-            ("q", "quit unless typing"),
-        ),
+        keys=(("tab", "focus"), ("arrows / type", "operate"), ("esc", "lab")),
     ),
 )
 
-#: The Home tiles: every spec with a miniature.
 TILES: tuple[SceneSpec, ...] = tuple(spec for spec in SPECS if spec.mini is not None)
-
-#: All scene names, in tour order.
 SCENES: tuple[str, ...] = tuple(spec.name for spec in SPECS)
-
-#: The scenes the command palette may jump to.
 JUMPABLE: tuple[str, ...] = tuple(spec.name for spec in SPECS if spec.jumpable)
-
 SPEC_BY_NAME: dict[str, SceneSpec] = {spec.name: spec for spec in SPECS}
 
 
 def build_scenes(theme: Theme, seed: int | None) -> dict[str, Scene]:
-    """Build one scene object per spec, in tour order."""
     return {spec.name: spec.factory(theme, seed) for spec in SPECS}

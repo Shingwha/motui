@@ -8,9 +8,11 @@ from dataclasses import dataclass
 from ...scene import TICK_HZ
 
 __all__ = [
+    "POINTS",
     "RINGS_SEED",
     "Ring",
     "RingsGame",
+    "window_stage",
 ]
 
 #: The spawn sequence's seed; a board resize resets the generator to it.
@@ -24,16 +26,14 @@ SPAWN_PERIOD = 1.2
 APPROACH = 1.0
 OUTER_RADIUS = 26
 TARGET_RADIUS = 8
-WINDOW_PERFECT = 0.06
-WINDOW_GOOD = 0.12
-WINDOW_FORCE = 0.20
+WINDOW_PERFECT = 0.10
+WINDOW_GOOD = 0.20
+WINDOW_FORCE = 0.35
+POINTS = {"perfect": 300, "good": 100, "force": 40}
 POP = 0.15
 BURST = 0.35
 BURST_OVERSHOOT = 20
 MISS_FADE = 0.4
-
-#: The good-window blink: the shrinking ring flashes white at ~10 Hz.
-BLINK_TICKS = 3
 
 #: The four ring slots rotate by concurrency order.
 RING_SLOTS = 4
@@ -50,6 +50,16 @@ class Ring:
     state: str  # "live" | "burst" | "miss"
     verdict: str | None  # "perfect" | "good" | "force" on a judged ring
     at: float  # the judgment or miss time
+
+
+def window_stage(error: float) -> str:
+    if error <= WINDOW_PERFECT:
+        return "perfect"
+    if error <= WINDOW_GOOD:
+        return "good"
+    if error <= WINDOW_FORCE:
+        return "close"
+    return "approach"
 
 
 class RingsGame:
@@ -88,6 +98,15 @@ class RingsGame:
     @property
     def now(self) -> float:
         return self._phase / TICK_HZ
+
+    @property
+    def stage(self) -> str:
+        errors = [
+            abs(self.now - (ring.born + APPROACH))
+            for ring in self.rings
+            if ring.state == "live"
+        ]
+        return window_stage(min(errors, default=float("inf")))
 
     def reset(self) -> None:
         """A fresh game: no rings, the seed and every counter reset."""
@@ -144,13 +163,8 @@ class RingsGame:
         )
         self.born_count += 1
 
-    def judge(self, now: float) -> None:
-        """Judge the nearest unjudged ring against its deadline.
-
-        The windows are the contract: <=0.06 s Perfect +300, <=0.12 s Good
-        +100, <=0.20 s a force hit (combo clears, no points); nothing
-        inside any window and the press is a no-op.
-        """
+    def judge(self, now: float) -> Ring | None:
+        """Judge the nearest ring and return it when it enters a hit window."""
         best: Ring | None = None
         best_error = 0.0
         for ring in self.rings:
@@ -160,22 +174,23 @@ class RingsGame:
             if best is None or error < best_error:
                 best, best_error = ring, error
         if best is None:
-            return
+            return None
         if best_error <= WINDOW_PERFECT:
-            verdict, points = "perfect", 300
+            verdict = "perfect"
         elif best_error <= WINDOW_GOOD:
-            verdict, points = "good", 100
+            verdict = "good"
         elif best_error <= WINDOW_FORCE:
-            verdict, points = "force", 0
+            verdict = "force"
         else:
-            return
+            return None
         best.state = "burst"
         best.verdict = verdict
         best.at = now
-        self.score += points
+        self.score += POINTS[verdict]
         if verdict == "force":
             self.combo = 0
         else:
             self.combo += 1
             self.hits += 1
         self.attempts += 1
+        return best

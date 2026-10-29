@@ -1,4 +1,4 @@
-"""The dashboard section: a live operations page streaming phase-derived data."""
+"""A controllable deep-space uplink built from live data widgets."""
 
 from __future__ import annotations
 
@@ -10,227 +10,233 @@ from ...kernel.geom import Pos
 from ...kernel.layout import Constraints
 from ...kernel.text import WrapMode
 from ...kernel.theme import Theme
-from ...widgets import (
-    Column,
-    Divider,
-    Panel,
-    ProgressBar,
-    Row,
-    Sparkline,
-    Table,
-    Text,
-)
-from ..common import FixedHeight
+from ...widgets import Column, Panel, ProgressBar, Row, Sparkline, Table, Text
+from ..common import FixedHeight, LinesView, pad_rows
 from ..scene import Scene
 
 __all__ = ["DashboardScene"]
 
-#: Single-row clip for the composed hint rows (no ellipsis on chrome).
 _CLIP = WrapMode.CLIP
-
-#: The dashboard's rolling window, log depth and simulated frame rate.
-_DASHBOARD_POINTS = 48
-_DASHBOARD_LOG = 4
-_DASHBOARD_FPS = 30
+_CHANNELS = ("relay-02 / N-42", "relay-04 / K-17", "relay-07 / A-09")
+_STAGES = (
+    (0, "SIGNAL LOCKED", "nominal"),
+    (240, "SOLAR WIND RISING", "interference"),
+    (390, "REROUTING TRAFFIC", "reroute"),
+    (510, "SIGNAL RECOVERED", "recovery"),
+    (660, "SIGNAL LOCKED", "nominal"),
+)
 
 
 class DashboardScene(Scene):
-    """A live operations page built from real widgets, never a clock read.
-
-    The scene keeps a rolling window of 48 samples and pushes one point per
-    tick, so a replay at phase N paints the same values on every machine.
-    Four panels share a 2x2 grid: a braille ``Sparkline``, two
-    ``ProgressBar`` gauges, a metric ``Table`` and a wrapped event log.  The
-    grid is rebuilt from ``c.width``/``c.max_height`` every frame, so 80x24
-    and 100x30 both reflow without clipping; the header's clock is
-    ``phase // 30`` seconds, not the wall clock.
-    """
-
     name = "dashboard"
 
     def __init__(self, theme: Theme) -> None:
         super().__init__(theme)
+        self._time = 0
+        self._channel = 0
+        self._paused = False
+        self._incident_at: int | None = None
+        self._recovery_at: int | None = None
+        self._stage = ""
         self.samples: list[float] = []
         self.log: list[str] = []
-        self.cpu = 0.0
-        self.mem = 0.0
-        self.rps = 0
-        self.p95 = 0
-        self.errors = 0
-        self._seed()
-
-        self.spark = Sparkline(
-            list(self.samples), marker="braille", style=theme.status.success
-        )
-        self.cpu_bar = ProgressBar(self.cpu, label="cpu", theme=theme)
-        self.mem_bar = ProgressBar(self.mem, label="mem", theme=theme)
-        self.table = Table(
-            ["metric", "value"],
-            self._metric_rows(0),
-            aligns=["left", "right"],
+        self.spark = Sparkline([0.5] * 48, marker="braille", style=theme.status.success)
+        self.signal_bar = ProgressBar(0.96, label="signal", theme=theme)
+        self.relay_table = Table(
+            ["id", "ms", "state"],
+            [
+                ["02", "42", "on"],
+                ["04", "68", "idle"],
+                ["07", "91", "idle"],
+            ],
             theme=theme,
         )
         self._summary = Text("", style=theme.text.muted, theme=theme)
-        self._events = Text("", style=theme.text.faint, theme=theme)
-        self._spark_box = FixedHeight(self.spark, 0)
-        self._pressure_box = FixedHeight(
-            Column([self.cpu_bar, self.mem_bar, self._summary], gap=0), 0
+        self._events = LinesView(theme)
+        self._graph_box = FixedHeight(self.spark, 8)
+        self._side_box = FixedHeight(
+            Column([self.signal_bar, self.relay_table, self._summary], gap=0),
+            8,
         )
-        self._metrics_box = FixedHeight(self.table, 0)
-        self._events_box = FixedHeight(self._events, 0)
-        self._spark_panel = Panel(
-            self._spark_box, title="throughput", theme=theme
-        )
-        self._pressure_panel = Panel(
-            self._pressure_box, title="pressure", theme=theme
-        )
-        self._metrics_panel = Panel(self._metrics_box, title="metrics", theme=theme)
-        self._events_panel = Panel(self._events_box, title="events", theme=theme)
-        self._refresh()
+        self._sync(0, force=True)
 
     def enter(self) -> None:
         super().enter()
-        self._seed()
-        self._refresh()
-
-    # -- data --------------------------------------------------------------
-
-    def _seed(self) -> None:
-        """Fill the rolling window with the deterministic pre-history."""
-        self.samples = [
-            _sample(step) for step in range(-_DASHBOARD_POINTS + 1, 1)
-        ]
+        self._time = 0
+        self._channel = 0
+        self._paused = False
+        self._incident_at = None
+        self._recovery_at = None
+        self._stage = ""
         self.log = []
-        for step in range(-_DASHBOARD_POINTS, 1, 6):
-            self.log.append(_log_line(step))
-        del self.log[:-_DASHBOARD_LOG]
-        self._set_gauges(0)
+        self._sync(0, force=True)
 
-    def _set_gauges(self, step: int) -> None:
-        """Derive the gauges and counters from the tick number alone."""
-        self.cpu = _clamp(0.42 + 0.30 * math.sin(step / 9.0) + 0.06 * math.cos(step / 2.5))
-        self.mem = _clamp(0.55 + 0.18 * math.sin(step / 17.0 + 1.2))
-        self.rps = 820 + round(140 * math.sin(step / 5.0) + 35 * math.cos(step / 1.9))
-        self.p95 = 38 + (step * 7) % 23
-        self.errors = (step * 3) % 4
+    @property
+    def paused(self) -> bool:
+        return self._paused
 
-    def _metric_rows(self, step: int) -> list[list[str]]:
-        """The metrics table as it reads at ``step`` (uptime rides the summary)."""
-        return [
-            ["requests", f"{self.rps}/s"],
-            ["p95", f"{self.p95} ms"],
-            ["errors", str(self.errors)],
-        ]
+    @property
+    def channel(self) -> int:
+        return self._channel
 
-    def _push(self, step: int) -> None:
-        """Append one sample and move every gauge with it (no refresh)."""
-        self.samples = [*self.samples[1:], _sample(step)]
-        self._set_gauges(step)
-        if step % 6 == 0:
-            self.log.append(_log_line(step))
-            del self.log[:-_DASHBOARD_LOG]
+    def _story(self, step: int) -> tuple[str, str]:
+        cycle = step % 720
+        stage = _STAGES[0][1:]
+        for start, title, name in _STAGES:
+            if cycle >= start:
+                stage = (title, name)
+        if self._incident_at is not None and step >= self._incident_at:
+            if self._recovery_at is None or step < self._recovery_at:
+                stage = ("MANUAL INTERFERENCE", "interference")
+            elif step - self._recovery_at < 150:
+                stage = ("RECOVERING UPLINK", "recovery")
+        return stage
 
-    def _refresh(self) -> None:
-        """Copy the model onto the real widgets (each assignment touches)."""
-        self.spark.values = list(self.samples)
-        self.cpu_bar.fraction = self.cpu
-        self.mem_bar.fraction = self.mem
-        self.table.rows = self._metric_rows(self._phase)
-        self._summary.text = (
-            f"{self.rps}/s \u00b7 p95 {self.p95} ms \u00b7 "
-            f"{self.errors} errors \u00b7 up {max(0, self._phase) // _DASHBOARD_FPS}s"
-        )
-        self._events.text = "\n".join(self.log)
+    def _strength(self, step: int) -> float:
+        cycle = step % 720
+        automatic = 0.0
+        if 240 <= cycle < 390:
+            automatic = min(1.0, (cycle - 240) / 90)
+        elif 390 <= cycle < 510:
+            automatic = 0.9
+        elif 510 <= cycle < 660:
+            automatic = max(0.0, 0.9 * (1 - (cycle - 510) / 150))
+        manual = 0.0
+        if self._incident_at is not None and step >= self._incident_at:
+            manual = min(1.0, (step - self._incident_at) / 75)
+            if self._recovery_at is not None and step >= self._recovery_at:
+                manual *= max(0.0, 1 - (step - self._recovery_at) / 150)
+        return max(automatic, manual)
 
-    def _sync(self, phase: int) -> None:
-        """Advance the window to ``phase`` and refresh the widgets once.
+    def _sample(self, step: int) -> float:
+        strength = self._strength(step)
+        wave = 0.035 * math.sin(step / 38 + self._channel) + 0.018 * math.cos(step / 17)
+        return max(0.08, min(1.0, 0.91 - strength * 0.55 + wave))
 
-        A larger jump than the window is rebuilt directly instead of
-        replaying thousands of steps; the models are all pure functions of
-        the tick number, so the result is identical.
-        """
-        steps = phase - self._phase
-        if steps > _DASHBOARD_POINTS:
-            first = phase - _DASHBOARD_POINTS + 1
-            self.samples = [_sample(step) for step in range(first, phase + 1)]
-            latest = phase - phase % 6
-            self.log = [
-                _log_line(step) for step in range(latest - 18, latest + 1, 6)
-            ]
-            self._set_gauges(phase)
-        elif steps > 0:
-            for step in range(self._phase + 1, phase + 1):
-                self._push(step)
-        else:
+    def _append(self, text: str) -> None:
+        seconds = self._time // 60
+        self.log.append(f"{seconds // 60:02d}:{seconds % 60:02d}  {text}")
+        del self.log[:-6]
+
+    def _sync(self, step: int, *, force: bool = False) -> None:
+        previous_stage = self._stage
+        self._time = max(0, step)
+        self._stage, _name = self._story(self._time)
+        if self._stage != previous_stage:
+            messages = {
+                "SIGNAL LOCKED": "signal    lock confirmed · all probes nominal",
+                "SOLAR WIND RISING": "solarwind interference rising · watch latency",
+                "REROUTING TRAFFIC": "route     traffic moved to relay-04",
+                "SIGNAL RECOVERED": "signal    lock recovered · error budget stable",
+                "MANUAL INTERFERENCE": "operator  interference injected from console",
+                "RECOVERING UPLINK": "operator  recovery sequence engaged",
+            }
+            self._append(messages.get(self._stage, "signal    state changed"))
+        if not force and self._time % 15 != 0 and self._stage == previous_stage:
             return
-        self._phase = phase
-        self._refresh()
-
-    # -- protocol ----------------------------------------------------------
+        strength = self._strength(self._time)
+        self.samples = [self._sample(self._time - index * 15) for index in range(47, -1, -1)]
+        signal = 1 - strength * 0.58
+        latency = round(42 + strength * 104 + self._channel * 13)
+        throughput = round(880 - strength * 310 + 28 * math.sin(self._time / 80))
+        drops = round(strength * 17)
+        self.spark.values = self.samples
+        self.spark.style = (
+            self.theme.status.danger if strength > 0.65 else self.theme.status.success
+        )
+        self.signal_bar.fraction = signal
+        rows = []
+        for index in range(3):
+            active = index == self._channel
+            ping = latency if active else 55 + index * 21 + round(strength * 30)
+            rows.append([f"{2 + index * 2:02d}", str(ping), "on" if active else "idle"])
+        self.relay_table.rows = rows
+        self._summary.text = f"{throughput}/s · {drops} drop · {latency}ms"
+        self._events.lines = [
+            Line.from_text(entry, self.theme.text.muted) for entry in self.log[-3:]
+        ]
 
     def tick(self, phase: int) -> str | None:
-        self._sync(phase)
+        if not self._paused:
+            self._sync(phase)
         return None
 
     def on_key(self, event: KeyEvent) -> str | None:
-        return "menu" if event.key in ("escape", "q") else None
+        key = event.key
+        if key == "space":
+            self._paused = not self._paused
+        elif key == "n":
+            self._incident_at = self._time
+            self._recovery_at = None
+            self._sync(self._time, force=True)
+        elif key == "r":
+            if self._incident_at is None:
+                self._incident_at = self._time
+            self._recovery_at = self._time
+            self._sync(self._time, force=True)
+        elif key in ("left", "right"):
+            step = -1 if key == "left" else 1
+            self._channel = (self._channel + step) % len(_CHANNELS)
+            self._sync(self._time, force=True)
+        elif key in ("1", "2", "3"):
+            self._channel = int(key) - 1
+            self._sync(self._time, force=True)
+        elif key in ("escape", "q"):
+            return "menu" if key == "escape" else "quit"
+        return None
 
     def on_click(self, pos: Pos) -> str | None:
+        if 3 <= pos.y < 3 + self._top_h:
+            if pos.x < self._left_w:
+                self.on_key(KeyEvent("n"))
+            else:
+                self.on_key(KeyEvent("right"))
+        elif pos.y >= 4 + self._top_h:
+            self.on_key(KeyEvent("r"))
         return None
 
     def render(self, c: Constraints, phase: int) -> Surface:
-        """Compose the header, the 2x2 panel grid and the hint for this size."""
-        height = c.max_height if c.max_height is not None else 24
-        self._sync(phase)
-        width = c.width
-
-        inner = max(2, height - 4)
-        top_h = max(3, inner // 2)
-        bottom_h = max(3, inner - top_h)
-        left_w = max(1, (width - 1) // 2)
-        right_w = max(1, width - 1 - left_w)
-        self._spark_box.height = max(0, top_h - 2)
-        self._pressure_box.height = max(0, top_h - 2)
-        self._metrics_box.height = max(0, bottom_h - 2)
-        self._events_box.height = max(0, bottom_h - 2)
-        top = Row(
-            [self._spark_panel, self._pressure_panel],
-            widths=[left_w, right_w],
-            gap=1,
-        ).render(Constraints(width=width))
-        bottom = Row(
-            [self._metrics_panel, self._events_panel],
-            widths=[left_w, right_w],
-            gap=1,
-        ).render(Constraints(width=width))
-
-        divider = Divider(label="live", theme=self.theme).render(
+        if not self._paused:
+            self._sync(phase)
+        width, height = c.width, c.max_height or 24
+        top_h = max(12, height - 11)
+        left_w = max(28, width * 64 // 100)
+        right_w = max(20, width - left_w - 1)
+        self._top_h = top_h
+        self._left_w = left_w
+        self._graph_box.height = top_h - 2
+        self._side_box.height = top_h - 2
+        graph = Panel(
+            self._graph_box,
+            title="SIGNAL STRENGTH / 4 HZ VISUAL STREAM",
+            theme=self.theme,
+        )
+        side = Panel(self._side_box, title=_CHANNELS[self._channel], theme=self.theme)
+        top = Row([graph, side], widths=[left_w, right_w], gap=1).render(
             Constraints(width=width)
         )
-        hint = Line.from_text(
-            "esc menu \u00b7 samples stream at "
-            f"{_DASHBOARD_FPS} Hz \u00b7 clock from phase",
-            self.theme.text.faint,
-        ).clip(_CLIP, width)
+        events = Panel(
+            FixedHeight(self._events, 3),
+            title="MISSION EVENTS / CAUSE AND EFFECT",
+            theme=self.theme,
+        ).render(Constraints(width=width))
         rows = [
             self._header(width),
-            divider[0] if len(divider) else Line(),
+            self._status(width),
+            Line(),
             *list(top)[:top_h],
             Line(),
-            *list(bottom)[:bottom_h],
-            hint,
+            *list(events)[:5],
+            self._hint(width),
         ]
-        rows = rows[:height]
-        if len(rows) < height:
-            rows.extend(Line() for _ in range(height - len(rows)))
-        return Surface.of(rows, width)
+        return Surface.of(pad_rows(rows, height), width)
 
     def _header(self, width: int) -> Line:
-        """Title, derived clock and tick count on one row."""
-        left = "motui dashboard"
-        right = f"{_clock(self._phase)}  tick {self._phase:04d}"
+        left = "DSN-07 / DEEP SPACE UPLINK"
+        seconds = self._time // 60
+        right = f"T+{seconds // 60:02d}:{seconds % 60:02d} · CH-{self._channel + 1:02d}"
         gap = max(1, width - len(left) - len(right) - 2)
-        line = Line(
+        return Line(
             (
                 Segment(" "),
                 Segment(left, self.theme.content.accent),
@@ -238,38 +244,19 @@ class DashboardScene(Scene):
                 Segment(right, self.theme.text.faint),
                 Segment(" "),
             )
-        )
-        return line.clip(_CLIP, width)
+        ).clip(_CLIP, width)
 
-    def __repr__(self) -> str:
-        return f"DashboardScene(phase={self._phase}, samples={len(self.samples)})"
+    def _status(self, width: int) -> Line:
+        style = self.theme.status.success
+        if self._stage in ("SOLAR WIND RISING", "REROUTING TRAFFIC"):
+            style = self.theme.status.warning
+        elif self._stage == "MANUAL INTERFERENCE":
+            style = self.theme.status.danger
+        paused = " · PAUSED" if self._paused else ""
+        return Line.from_text(f" ● {self._stage}{paused}", style).clip(_CLIP, width)
 
-
-def _clamp(value: float) -> float:
-    """Clamp a gauge into ``[0, 1]``."""
-    return min(1.0, max(0.0, value))
-
-
-def _sample(step: int) -> float:
-    """One deterministic sample: two sines and a cosine, no clock, no random."""
-    value = (
-        0.5
-        + 0.32 * math.sin(step / 6.0)
-        + 0.12 * math.sin(step / 2.7)
-        + 0.05 * math.cos(step / 1.7)
-    )
-    return _clamp(value)
-
-
-def _log_line(step: int) -> str:
-    """One event-log line for tick ``step``."""
-    return f"t{step:05d}  sample {_sample(step):.2f}"
-
-
-def _clock(phase: int) -> str:
-    """``mm:ss.t`` derived from the phase at 30 ticks a second."""
-    ticks = max(0, phase)
-    seconds, rest = divmod(ticks, _DASHBOARD_FPS)
-    minutes, seconds = divmod(seconds, 60)
-    tenths = rest * 10 // _DASHBOARD_FPS
-    return f"{minutes:02d}:{seconds:02d}.{tenths}"
+    def _hint(self, width: int) -> Line:
+        return Line.from_text(
+            "space pause · n/r interfere/recover · ←/→ relay · esc lab",
+            self.theme.text.faint,
+        ).clip(_CLIP, width)

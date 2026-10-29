@@ -18,8 +18,6 @@ from .shell import Showcase
 
 __all__ = ["main"]
 
-_THEME_LABEL = "Ink & Signal"
-
 
 def _nonneg(value: str) -> int:
     number = int(value)
@@ -72,7 +70,7 @@ def _interactive(scene: str) -> None:
     app = App(
         terminal=TerminalOptions(mouse=MouseMode.MOVE),
         throttle=1 / TICK_HZ,
-        title="motui showcase",
+        title="MOTUI / SIGNAL LAB",
     )
     showcase = Showcase(scene=scene, seed=None, status_line=True)
     showcase.on_quit = app.quit
@@ -88,7 +86,7 @@ def _interactive(scene: str) -> None:
         elapsed = now - since
         if elapsed >= 1.0:
             fps = round((count - frames) / elapsed)
-            showcase.status_note = f"{_THEME_LABEL} \u00b7 {fps} fps"
+            showcase.status_note = f"{fps} fps"
             since, frames = now, count
 
     app.fill(showcase)

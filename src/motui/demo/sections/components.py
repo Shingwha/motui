@@ -1,7 +1,7 @@
 """The components section: live widgets beside the code that draws them.
 
-One tab strip groups the playground into three pages -- ``inputs``, ``data``
-and ``overlays`` -- and every page splits in two: real controls on the left,
+One tab strip groups the console into ``console``, ``probes`` and ``actions``
+pages, and every page splits in two: real controls on the left,
 the highlighted Python that built them on the right.  The snippet is a live
 echo, not a picture: the ``Input`` line re-renders with the text actually
 typed, the ``RadioGroup`` and ``Slider`` lines re-render with the values
@@ -51,19 +51,17 @@ _CLIP = WrapMode.CLIP
 #: The emphasis merged onto the focused control's snippet lines.
 _HOT = Style(bold=True)
 
-#: A toast lives this many ticks, counted from the phase it was issued at.
-_TOAST_TICKS = 30
+#: Toasts remain readable for three seconds at the shell's 60 Hz.
+_TOAST_TICKS = 180
 
-#: The tab strip's pages, in tour order.
-_PAGES = ("inputs", "data", "overlays")
+_PAGES = ("console", "probes", "actions")
 
-#: The table's seed records: one crate per letter, five in all.
-_CRATES: tuple[tuple[str, str, str], ...] = (
-    ("apples", "12", "0.82"),
-    ("bergamot", "4", "0.31"),
-    ("cherries", "30", "0.95"),
-    ("damsons", "7", "0.58"),
-    ("elderberry", "18", "0.44"),
+_PROBES: tuple[tuple[str, str, str], ...] = (
+    ("andromeda", "42 ms", "0.99"),
+    ("borealis", "68 ms", "0.94"),
+    ("cygnus", "31 ms", "0.97"),
+    ("draco", "91 ms", "0.88"),
+    ("europa", "55 ms", "0.96"),
 )
 
 
@@ -93,21 +91,21 @@ class ComponentsScene(Scene):
 
         # -- the controls (one instance each, shared by every page) --------
         self.tabs = Tabs(list(_PAGES), theme=theme)
-        self.input = Input("Ada Lovelace", placeholder="type a name\u2026", theme=theme)
-        self.radio = RadioGroup(["compact", "cozy", "roomy"], index=1, theme=theme)
-        self.checkbox = Checkbox("ship notifications", theme=theme)
+        self.input = Input("DSN-07", placeholder="callsign\u2026", theme=theme)
+        self.radio = RadioGroup(["low", "mid", "high"], index=1, theme=theme)
+        self.checkbox = Checkbox("lock uplink", theme=theme)
         self.slider = Slider(6, maximum=10, theme=theme)
         self.table = Table(
-            ["crate", "qty", "ripe"],
-            [list(row) for row in _CRATES],
+            ["probe", "ping", "lock"],
+            [list(row) for row in _PROBES],
             theme=theme,
         )
-        self.save = Button("save to disk", theme=theme)
-        self.confirm = Button("confirm shipment\u2026", theme=theme)
+        self.save = Button("save preset", theme=theme)
+        self.confirm = Button("arm uplink\u2026", theme=theme)
         self.dialog = Dialog(
-            "ship the order?",
-            Text("ship 3 crates of apples east?", theme=theme),
-            [("ship it", "ok"), ("cancel", None)],
+            "arm the uplink?",
+            Text("route DSN-07 through relay-04?", theme=theme),
+            [("arm signal", "ok"), ("cancel", None)],
             theme=theme,
         )
 
@@ -137,11 +135,11 @@ class ComponentsScene(Scene):
         self._toast = None
         self._dialog_rect = (0, 0, 0, 0)
         self.tabs.select(0)
-        self.input.text = "Ada Lovelace"
+        self.input.text = "DSN-07"
         self.radio.index = 1
         self.checkbox.checked = False
         self.slider.value = 6
-        self.table.rows = [list(row) for row in _CRATES]
+        self.table.rows = [list(row) for row in _PROBES]
         self._set_focus(0)
         self._mount()
 
@@ -187,11 +185,11 @@ class ComponentsScene(Scene):
         """Point the left panel's column at the active page's controls."""
         if self._tab == 0:
             self._left_col.children = [
-                self._label("name"),
+                self._label("callsign"),
                 self.input,
-                self._label("size"),
+                self._label("band"),
                 self.radio,
-                self._label("options"),
+                self._label("link"),
                 self.checkbox,
                 self._label("gain"),
                 self.slider,
@@ -223,27 +221,27 @@ class ComponentsScene(Scene):
         """
         if self._tab == 0:
             return [
-                (f"name = Input({self.input.text!r})", 1),
-                ("size = RadioGroup(['compact', 'cozy', 'roomy'],", 2),
-                (f"                  index={self.radio.index})", 2),
-                ("ship = Checkbox('ship notifications',", 3),
+                (f"callsign = Input({self.input.text!r})", 1),
+                ("band = RadioGroup(['low', 'mid', 'high'],", 2),
+                (f"                 index={self.radio.index})", 2),
+                ("lock = Checkbox('lock uplink',", 3),
                 (f"          checked={self.checkbox.checked})", 3),
                 (f"gain = Slider({self.slider.value}, maximum=10)", 4),
             ]
         if self._tab == 1:
-            plain = ("crates = Table(['crate', 'qty', 'ripe'], rows)", 1)
+            plain = ("probes = Table(['probe', 'ping', 'lock'], rows)", 1)
             if self._sort_col < 0:
-                return [plain, ("# 5 records \u00b7 not sorted yet (s sorts)", 1)]
+                return [plain, ("# 5 live probes \u00b7 not sorted yet (s sorts)", 1)]
             column = self.table.headers[self._sort_col]
             return [
                 plain,
-                (f"crates.sort_by({self._sort_col})  # by {column} asc", 1),
+                (f"probes.sort_by({self._sort_col})  # by {column} asc", 1),
             ]
         return [
-            ("save = Button('save to disk')", 1),
+            ("save = Button('save preset')", 1),
             ("save.take()   # -> a toast", 1),
-            ("ask = Dialog('ship the order?', body,", 2),
-            ("             [('ship it', 'ok'), ('cancel', None)])", 2),
+            ("ask = Dialog('arm the uplink?', body,", 2),
+            ("             [('arm signal', 'ok'), ('cancel', None)])", 2),
             ("ask.take()     # -> a toast", 2),
         ]
 
@@ -292,8 +290,8 @@ class ComponentsScene(Scene):
         """The one-row title: the section's name and its one-line pitch."""
         return Line(
             (
-                Segment("Components", self.theme.content.accent),
-                Segment(" \u00b7 real widgets beside their code", self.theme.text.faint),
+                Segment("CONSOLE FOUNDRY", self.theme.content.accent),
+                Segment(" \u00b7 real controls beside their live source", self.theme.text.faint),
             )
         )
 
@@ -421,7 +419,7 @@ class ComponentsScene(Scene):
         if taken is None:
             return None
         if target is self.save:
-            self.toast("saved to disk")
+            self.toast("preset saved")
         elif target is self.confirm:
             self._modal = True
         return None
@@ -453,9 +451,9 @@ class ComponentsScene(Scene):
         """Close the modal and toast the dialog's answer."""
         self._modal = False
         if value == "ok":
-            self.toast("shipped 3 crates")
+            self.toast("uplink armed")
         else:
-            self.toast("shipment cancelled", "info")
+            self.toast("uplink remains safe", "info")
 
     def on_click(self, pos: Pos) -> str | None:
         if self._modal:
