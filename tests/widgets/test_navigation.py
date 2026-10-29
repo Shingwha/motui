@@ -57,16 +57,27 @@ def test_the_tabs_indicator_follows_the_selection():
     assert segments[3].text == "b" and segments[3].style.underline is True
 
 
-def test_an_unfocused_strip_lowers_the_indicator_hue_and_keeps_the_label():
+def test_the_strip_indicator_keeps_its_hue_and_gains_focus_emphasis():
     active = Style(fg="#abcdef")
     styles = Styles(content=replace(DEFAULT_THEME.content, accent=active))
+    focused = Tabs(["a", "b"], styles=styles)
     plain = Tabs(["a", "b"], styles=styles)
     plain.focused = False
-    focused = Tabs(["a", "b"], styles=styles)
     plain_style = plain.render(Constraints(width=20))[0].segments[1].style
     focused_style = focused.render(Constraints(width=20))[0].segments[1].style
-    assert plain_style != focused_style
+    # The active label keeps the accent hue either way; only the focus
+    # overlay joins it while the strip has focus.
+    assert plain_style == active.merge(INDICATOR)
+    assert focused_style == plain_style.merge(DEFAULT_THEME.controls.focus)
     assert plain.render(Constraints(width=20))[0].segments[1].text == "a"
+
+
+def test_a_disabled_tab_merges_the_disabled_overlay():
+    tabs = Tabs(["a", "b"], disabled_items={1})
+    style = tabs.render(Constraints(width=20))[0].segments[3].style
+    assert style == DEFAULT_THEME.text.faint.merge(
+        DEFAULT_THEME.controls.overlay(disabled=True)
+    )
 
 
 def test_a_disabled_tab_is_visible_but_not_selectable():

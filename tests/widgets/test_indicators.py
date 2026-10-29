@@ -99,11 +99,14 @@ def test_slider_activate_answers_availability_and_disabled_refuses():
     assert dead.render(Constraints(width=14))[0].segments[0].style.italic is True
 
 
-def test_slider_hover_and_focus_merge_their_bands():
+def test_slider_hover_and_focus_merge_the_control_overlay():
     theme = replace(
         DEFAULT_THEME,
-        surfaces=replace(DEFAULT_THEME.surfaces, hover=Style(underline=True)),
-        controls=replace(DEFAULT_THEME.controls, focus=Style(bold=True)),
+        controls=replace(
+            DEFAULT_THEME.controls,
+            hover=Style(underline=True),
+            focus=Style(bold=True),
+        ),
     )
     slider = Slider(2, theme=theme)
     plain = slider.render(Constraints(width=14))
@@ -113,6 +116,19 @@ def test_slider_hover_and_focus_merge_their_bands():
     assert slider.render(Constraints(width=14)) == plain
     slider.focused = True
     assert all(seg.style.bold for seg in slider.render(Constraints(width=14))[0].segments)
+
+
+def test_a_disabled_slider_merges_faint_and_the_disabled_overlay():
+    theme = replace(
+        DEFAULT_THEME,
+        text=replace(DEFAULT_THEME.text, faint=Style(italic=True)),
+        controls=replace(DEFAULT_THEME.controls, disabled=Style(dim=True)),
+    )
+    slider = Slider(4, disabled=True, theme=theme)
+    row = slider.render(Constraints(width=14))[0]
+    expected = Style(italic=True).merge(Style(dim=True))
+    assert row.segments[0].style == expected
+    assert all(seg.style.dim and seg.style.italic for seg in row.segments)
 
 
 def test_spinner_advances_through_its_frames_and_wraps():

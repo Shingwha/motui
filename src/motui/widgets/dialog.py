@@ -29,7 +29,7 @@ cells to the body component and button cells to the corresponding
 from __future__ import annotations
 
 from collections.abc import Sequence
-from dataclasses import dataclass, replace
+from dataclasses import dataclass
 
 from ..kernel.cell import Line, Segment, Surface
 from ..kernel.document import Component
@@ -42,7 +42,7 @@ from ..kernel.text import WrapMode, ellipsize_tail, visible_width
 from ..kernel.theme import Styles, Theme
 from ..widgets.base import _MISSING, CursorWidget
 from ..widgets.text import Text
-from .action import Button
+from .action import Button, ButtonKind
 from .textfield import Input
 
 __all__ = ["ButtonSpec", "Dialog", "confirm_dialog", "prompt_dialog"]
@@ -50,23 +50,21 @@ __all__ = ["ButtonSpec", "Dialog", "confirm_dialog", "prompt_dialog"]
 
 @dataclass(frozen=True)
 class ButtonSpec:
-    """One dialog button: a label, the value it returns, and its styles.
+    """One dialog button: a label, the value it returns, and its role.
 
     ``label`` is the button's text and ``value`` what
     :meth:`Dialog.take` answers when the button is taken.  ``styles``
     overrides whole role groups on the rendered
-    :class:`~motui.widgets.action.Button` (the migrated widget convention:
-    ``controls.base`` is the base band, ``surfaces.hover`` the hover band and
-    ``controls.focus`` the focus band); ``danger`` says the button is the
-    destructive one -- its base band defaults to the theme's ``status.danger``
-    when no ``styles`` is given, and a ``danger``
-    dialog will not focus it on open (D3).
+    :class:`~motui.widgets.action.Button`; ``kind`` is the button's
+    :class:`~motui.widgets.action.ButtonKind` role -- ``DANGER`` is the
+    destructive one, and a ``danger`` dialog will not focus it on open
+    (D3).
     """
 
     label: str
     value: object = None
     styles: Styles | None = None
-    danger: bool = False
+    kind: ButtonKind = ButtonKind.NEUTRAL
 
 
 class Dialog(CursorWidget):
@@ -81,7 +79,10 @@ class Dialog(CursorWidget):
     (``\u2502 body \u2502``), the button row is the buttons joined by single
     spaces and aligned ``"center"`` (the default) or ``"right"`` inside the
     same interior, and every box row is padded solid while ``shade`` is
-    ``True``.  ``border`` swaps the whole frame vocabulary (a
+    ``True``.  The interior cells -- pads, body, buttons and the shade
+    fill -- sit on ``surfaces.raised`` (the content styles merge on top),
+    while the border glyphs keep their border color.  ``border`` swaps the
+    whole frame vocabulary (a
     :class:`~motui.kernel.glyphs.Border`, ``glyphs.box`` by default),
     the border color defaults to ``borders.base`` -- ``status.danger`` while
     ``danger`` -- and the title to ``content.headings[1]`` (D5); both are
@@ -96,9 +97,9 @@ class Dialog(CursorWidget):
     border).  ``border`` and the border styles are accepted and unused: no
     frame is drawn, and no ground is invented in its place -- the dialog's
     own cells stay plain -- and the ``danger`` cue rides the dangerous
-    button's own ``status.danger`` band, which :meth:`_new_button` gives
-    every style-less danger spec.  ``frame`` is a plain mutable attribute
-    like ``shade``.
+    button's own ``surfaces.danger`` floor, which its
+    :class:`~motui.widgets.action.ButtonKind.DANGER` role supplies.  ``frame``
+    is a plain mutable attribute like ``shade``.
 
     ``index`` is the button cursor: assigning clamps into range (a
     buttonless dialog keeps ``0``) and drives the buttons' own ``focused``
@@ -238,17 +239,14 @@ class Dialog(CursorWidget):
     def _new_button(self, spec: ButtonSpec) -> Button:
         """The :class:`Button` one spec renders as (groups resolve in Button).
 
-        ``spec.styles`` is the override the button receives verbatim.  A
-        spec without one that is ``danger`` gets ``controls.base`` re-aimed
-        at this dialog's ``status.danger`` -- the old ``style`` default --
-        so the danger band matches the border cue and every other band keeps
-        its theme value.
+        ``spec.styles`` is the override the button receives verbatim and
+        ``spec.kind`` its role, so a dangerous button wears the
+        ``surfaces.danger`` floor from :func:`~motui.widgets.action.action_band`
+        without re-aiming any control token.
         """
-        styles = spec.styles
-        if styles is None and spec.danger:
-            theme = self._theme
-            styles = Styles(controls=replace(theme.controls, base=theme.status.danger))
-        return Button(spec.label, styles=styles, theme=self.theme)
+        return Button(
+            spec.label, kind=spec.kind, styles=spec.styles, theme=self.theme
+        )
 
     def _default_index(self) -> int:
         """The button the dialog opens focused on (D3).
@@ -259,7 +257,7 @@ class Dialog(CursorWidget):
         """
         if self.danger:
             for index in range(len(self._specs) - 1, -1, -1):
-                if not self._specs[index].danger:
+                if self._specs[index].kind is not ButtonKind.DANGER:
                     return index
         return 0
 
@@ -540,19 +538,35 @@ class Dialog(CursorWidget):
         solid rectangle); ``shade=False`` leaves the row ending right after
         its content plus the two pads, the closing pad travelling with it
         (the closing border, framed).  Borderless (``lead == 1``) the same
-        row loses the border cells and keeps the pads: two plain columns
-        where the framed row carries ``border_style``.
+        row loses the border cells and keeps the pads.
+
+        Every interior cell sits on ``surfaces.raised``: the pads, the
+        content and the shade fill merge the surface under their own styles,
+        while the border glyphs keep ``border_style`` untouched.
         """
+        raised = self.group("surfaces").raised
         fill = max(0, box - 2 * lead - content.width) if self.shade else 0
         if self.frame:
-            head = Segment(f"{self._border.left} ", border_style)
-            tail = Segment(f" {self._border.right}", border_style)
+            head = [
+                Segment(self._border.left, border_style),
+                Segment(" ", raised),
+            ]
+            tail = [
+                Segment(" ", raised),
+                Segment(self._border.right, border_style),
+            ]
         else:
-            head = tail = Segment(" ")
-        segments = [head, *content.segments]
+            head = tail = [Segment(" ", raised)]
+        segments = [
+            *head,
+            *(
+                segment.with_style(raised.merge(segment.style))
+                for segment in content.segments
+            ),
+        ]
         if fill:
-            segments.append(Segment(" " * fill))
-        segments.append(tail)
+            segments.append(Segment(" " * fill, raised))
+        segments.extend(tail)
         return Line(segments)
 
     def _button_row(
@@ -607,18 +621,23 @@ def confirm_dialog(
     Always the same shape -- an untitled box, a :class:`~motui.kernel.cell.Text`
     body, the confirm button first and the cancel second (D3: the main
     action on the left, the cancel on the right).  With ``danger`` the
-    **confirm** button takes the theme's ``error`` band, the cancel never
+    **confirm** button takes the ``surfaces.danger`` floor (its
+    :class:`~motui.widgets.action.ButtonKind.DANGER` role), the cancel never
     does, and the dialog opens focused on the cancel -- the last
     non-dangerous button -- so a stray return never lands the destructive
     action.  Both labels are text a host can rewrite; they default to the
     classic ``"Yes"``/``"No"`` pair.  ``frame=False`` forwards the dialog's
     own borderless mode: the message and the row, no box around them (the
-    danger band on the confirm button is then the whole cue).
+    danger floor on the confirm button is then the whole cue).
     """
     return Dialog(
         Text(message),
         buttons=[
-            ButtonSpec(confirm_text, True, danger=danger),
+            ButtonSpec(
+                confirm_text,
+                True,
+                kind=ButtonKind.DANGER if danger else ButtonKind.NEUTRAL,
+            ),
             ButtonSpec(cancel_text, False),
         ],
         danger=danger,

@@ -175,16 +175,15 @@ class Slider(Widget):
     space and the value's digits are the fixed part, the rest is track
     (a width too narrow for even the brackets truncates through ``fit``).
     ``on_hover`` marks the row (any other row answers "no row" and clears
-    the marking; a negative row clears it too), and ``render`` merges the
-    ``surfaces.hover`` band over the marked row.  The marking starts ``None``
+    the marking; a negative row clears it too).  The marking starts ``None``
     -- or, equivalently, unmarked -- so an un-hovered slider renders
     byte-for-byte what it always did.  ``focused`` is the focus flag the
-    focus tier sets: while it is
-    ``True`` every segment additionally merges ``controls.focus``, so a
-    focused slider is told apart from an unfocused one.  The bands are read
-    at render time from ``styles`` (when given) or the theme: filled
-    ``content.accent``, empty ``text.faint``, hover ``surfaces.hover``,
-    focus ``controls.focus`` and disabled ``text.faint``.
+    focus tier sets.  Hover, focus and disabled all merge the shared
+    ``controls.overlay`` over every segment (so focus is a visible
+    bold+underline+reverse band, and disabled is faint+dim); the bands are
+    read at render time from ``styles`` (when given) or the theme: filled
+    ``content.accent``, empty ``text.faint``, hover/focus/disabled
+    ``controls.overlay`` and disabled additionally ``text.faint``.
     """
 
     __slots__ = (
@@ -444,11 +443,13 @@ class Slider(Widget):
                 seg.with_style(seg.style.merge(disabled_style))
                 for seg in segments
             ]
-        elif self._marked or self.focused:
-            band = self.group("surfaces").hover if self._marked else NONE
-            if self.focused:
-                band = band.merge(self.group("controls").focus)
-            segments = [seg.with_style(seg.style.merge(band)) for seg in segments]
+        overlay = self.group("controls").overlay(
+            hovered=self._marked, focused=self.focused, disabled=self.disabled
+        )
+        if overlay != NONE:
+            segments = [
+                seg.with_style(seg.style.merge(overlay)) for seg in segments
+            ]
         rows = [Line(segments).clip(WrapMode.ELLIPSIS, width)]
         if c.max_height is not None:
             rows = rows[: c.max_height]

@@ -154,13 +154,22 @@ class TextStyles:
 
 @dataclass(frozen=True, slots=True, kw_only=True)
 class SurfaceStyles:
-    """Background surfaces, from the resting page to the selected row."""
+    """Background surfaces, from the resting page to the control floor.
+
+    ``control`` is the field/neutral-button floor, ``accent`` and
+    ``danger`` the solid button floors, and ``inactive`` the unfocused
+    cursor band (the ``rows.inactive`` surface as a plain floor).
+    """
 
     base: Style = NONE
     raised: Style = DARK_PALETTE.surface_raised
     hover: Style = DARK_PALETTE.surface_hover
     active: Style = DARK_PALETTE.surface_active
     selected: Style = DARK_PALETTE.surface_active
+    control: Style = DARK_PALETTE.surface_raised
+    accent: Style = Style(bg=Color("#53c8f0", ansi="bright_cyan"))
+    danger: Style = Style(bg=Color("#f2708a", ansi="bright_red"))
+    inactive: Style = DARK_PALETTE.surface_inactive
 
 
 @dataclass(frozen=True, slots=True, kw_only=True)
@@ -175,36 +184,37 @@ class BorderStyles:
 
 @dataclass(frozen=True, slots=True, kw_only=True)
 class ControlStyles:
-    """Interactive control bands."""
+    """Interactive control state overlays (no base, no band)."""
 
-    base: Style = DARK_PALETTE.accent
-    hover: Style = DARK_PALETTE.surface_hover
-    focus: Style = Style(underline=True)
-    active: Style = DARK_PALETTE.surface_active
-    disabled: Style = DARK_PALETTE.faint
+    hover: Style = Style(bold=True, underline=True)
+    focus: Style = Style(bold=True, underline=True, reverse=True)
+    active: Style = Style(reverse=True, underline=True)
+    disabled: Style = Style(dim=True)
 
-    def band(
+    def overlay(
         self,
         *,
         hovered: bool = False,
         focused: bool = False,
-        active: bool = False,
+        pressed: bool = False,
         disabled: bool = False,
     ) -> Style:
-        """The band a control paints, by precedence.
+        """The state overlay a control merges over its own base style.
 
-        ``disabled > active > focused > hovered > base`` -- the exact rule
-        the row and control families already apply, in one place.
+        ``disabled > pressed > focused > hovered > NONE`` -- the one
+        precedence every control shares.  The answer is a style to
+        :meth:`~motui.kernel.style.Style.merge` onto a base, never a whole
+        band: the base stays the component's own role token.
         """
         if disabled:
             return self.disabled
-        if active:
+        if pressed:
             return self.active
         if focused:
             return self.focus
         if hovered:
             return self.hover
-        return self.base
+        return NONE
 
 
 @dataclass(frozen=True, slots=True, kw_only=True)
@@ -403,6 +413,17 @@ class Theme:
                 hover=NONE,
                 active=NONE,
                 selected=NONE,
+                control=NONE,
+                accent=NONE,
+                danger=NONE,
+                inactive=NONE,
+            ),
+            controls=replace(
+                theme.controls,
+                hover=Style(underline=True),
+                focus=Style(bold=True, underline=True),
+                active=Style(reverse=True, underline=True),
+                disabled=Style(dim=True),
             ),
             rows=replace(
                 theme.rows,
@@ -462,6 +483,10 @@ class Theme:
                 hover=palette.surface_hover,
                 active=palette.surface_active,
                 selected=palette.surface_active,
+                control=palette.surface_raised,
+                accent=Style(bg=palette.accent.fg),
+                danger=Style(bg=palette.danger.fg),
+                inactive=palette.surface_inactive,
             ),
             borders=BorderStyles(
                 base=palette.line,
@@ -470,11 +495,10 @@ class Theme:
                 danger=palette.danger,
             ),
             controls=ControlStyles(
-                base=palette.accent,
-                hover=palette.surface_hover,
-                focus=Style(underline=True),
-                active=palette.surface_active,
-                disabled=palette.faint,
+                hover=Style(bold=True, underline=True),
+                focus=Style(bold=True, underline=True, reverse=True),
+                active=Style(reverse=True, underline=True),
+                disabled=Style(dim=True),
             ),
             rows=RowStyles(
                 base=NONE,

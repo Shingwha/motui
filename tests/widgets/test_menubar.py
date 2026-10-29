@@ -17,9 +17,23 @@ def test_menubar_renders_one_row_with_dividers_and_padding():
     assert len(rows) == 1
     assert rows[0].text == " File \u2502 Edit \u2502 View "
     assert rows[0].segments[1].text == "File"
-    assert rows[0].segments[1].style.underline is False
+    assert rows[0].segments[1].style.underline is True
     assert rows[0].segments[3].text == "Edit"
+    assert rows[0].segments[3].style.underline is False
     assert MenuBar([]).render(Constraints(width=40))[0].text == ""
+
+
+def test_menubar_focus_is_visible_on_the_active_label():
+    focused = MenuBar(["File", "Edit"])
+    unfocused = MenuBar(["File", "Edit"])
+    unfocused.focused = False
+    focused_style = focused.render(Constraints(width=40))[0].segments[1].style
+    unfocused_style = unfocused.render(Constraints(width=40))[0].segments[1].style
+    assert unfocused_style == DEFAULT_THEME.content.accent.merge(
+        Style(underline=True)
+    )
+    assert focused_style == unfocused_style.merge(DEFAULT_THEME.controls.focus)
+    assert focused_style != unfocused_style
 
 
 def test_menubar_answers_a_surface_and_honours_the_height_budget():
@@ -70,6 +84,14 @@ def test_a_disabled_label_is_visible_but_not_selectable():
     assert bar.select(1) is False
     assert bar.move(1) is True and bar.index == 2
     assert bar.on_action("activate") is True and bar.take() == "c"
+
+
+def test_a_disabled_label_merges_the_disabled_overlay():
+    bar = MenuBar(["a", "b"], disabled_items={1})
+    style = bar.render(Constraints(width=20))[0].segments[3].style
+    assert style == DEFAULT_THEME.text.faint.merge(
+        DEFAULT_THEME.controls.overlay(disabled=True)
+    )
 
 
 def test_a_disabled_bar_refuses_every_gesture():

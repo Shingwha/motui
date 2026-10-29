@@ -43,20 +43,29 @@ the block cursor still covers the cell under it.  Reveal/hide switching is
 the host's own -- it re-draws from ``text`` -- and deliberately not a
 component feature.
 
-Styles resolve at render time from the theme's role groups (``text.base``,
-``text.caret``, ``text.faint``, ``text.selection``, ``surfaces.hover`` and,
-for an :class:`Input`, ``content.accent``), with whole groups overridable
-through ``styles=Styles(...)``.
+Styles resolve at render time from the theme's role groups: every row sits
+on ``surfaces.control`` with the state ``controls.overlay`` (hover) or the
+read-only ``text.faint`` floor; the text uses ``text.base``, ``text.caret``,
+``text.faint`` and ``text.selection`` and, for an :class:`Input`,
+``content.accent`` for the prompt.  Whole groups are overridable through
+``styles=Styles(...)``.
 """
 
 from __future__ import annotations
 
 import re
 
-from ..kernel.events import Event, KeyEvent, MouseEvent, PasteEvent
-from ..kernel.glyphs import GLYPHS, Glyphs, seat
 from ..kernel.cell import Line, Segment, Surface
+from ..kernel.events import Event, KeyEvent, MouseEvent, PasteEvent
+from ..kernel.geom import Pos
+from ..kernel.glyphs import GLYPHS, Glyphs, seat
+from ..kernel.keymap import (
+    DEFAULT_EDITOR_KEYMAP,
+    DEFAULT_INPUT_KEYMAP,
+    Keymap,
+)
 from ..kernel.layout import Constraints
+from ..kernel.style import NONE, Style
 from ..kernel.text import (
     WrapMode,
     index_bounds_at_columns,
@@ -65,11 +74,6 @@ from ..kernel.text import (
 )
 from ..kernel.theme import Styles, Theme
 from ..widgets.base import Widget
-from ..kernel.keymap import (
-    DEFAULT_EDITOR_KEYMAP,
-    DEFAULT_INPUT_KEYMAP,
-    Keymap,
-)
 from .textbuf import TextBuffer, _VisualRow
 
 __all__ = ["Editor", "Input"]
@@ -575,10 +579,40 @@ class _TextField(Widget):
         """
         return width
 
+    def _field_floor(self) -> Style:
+        """The row floor: the control surface plus the field's state overlay.
+
+        Every rendered row is painted on ``surfaces.control``.  A
+        ``read_only`` field merges ``text.faint`` and the disabled overlay
+        (which wins over hover and dims the row); a hovered field merges the
+        hover overlay.  Focus adds nothing: the caret is the focus signal.
+        """
+        floor = self.group("surfaces").control
+        controls = self.group("controls")
+        if self.read_only:
+            return floor.merge(self.group("text").faint).merge(
+                controls.overlay(disabled=True)
+            )
+        if self.hover:
+            return floor.merge(controls.overlay(hovered=True))
+        return floor
+
+    @staticmethod
+    def _on_floor(line: Line, floor: Style) -> Line:
+        """``line`` with ``floor`` under every segment's own style.
+
+        The floor is the base: caret, selection, prompt and placeholder
+        styles merge on top, so their attributes and colours still win while
+        the whole row keeps the field's background.
+        """
+        if floor == NONE:
+            return line
+        return Line(seg.with_style(floor.merge(seg.style)) for seg in line.segments)
+
     def _rows_for(self, width: int) -> list[Line]:
         """The freshly built rows at ``width``: :meth:`render`'s miss path."""
         text_styles = self.group("text")
-        surface_styles = self.group("surfaces")
+        floor = self._field_floor()
         indent = self._indent()
         rows = self._buf.visual_rows(width, indent)
         cursor_index, cursor_column = self._buf.locate(rows)
@@ -618,15 +652,7 @@ class _TextField(Widget):
                     cursor_marked=marked,
                 )
             line = Line((prefix, *body)) if prefix is not None else Line(body)
-            if self.hover:
-                # The block-level hover: the whole row -- prompt and cursor
-                # cell included -- takes the theme's hover band on top of
-                # whatever each segment carries.
-                band = surface_styles.hover
-                line = Line(
-                    seg.with_style(seg.style.merge(band))
-                    for seg in line.segments
-                )
+            line = self._on_floor(line, floor)
             if line.width <= width:
                 # The buffer's geometry already fits (and keeps trailing
                 # spaces the word rule would drop), so the default is the row
@@ -879,6 +905,7 @@ class Input(_TextField):
         if self._wrap is not WrapMode.OVERFLOW:
             return super()._rows_for(width)
         text_styles = self.group("text")
+        floor = self._field_floor()
         indent = self._indent()
         prefix = self._row_prefix(0, indent)
         if indent >= width:
@@ -905,11 +932,7 @@ class Input(_TextField):
                 cursor_marked=marked,
             )
             line = Line((prefix, *body))
-        if self.hover:
-            # The block-level hover band covers the prompt and the cursor
-            # cell, the shared shell's rule for the row.
-            band = self.group("surfaces").hover
-            line = Line(seg.with_style(seg.style.merge(band)) for seg in line.segments)
+        line = self._on_floor(line, floor)
         return [line.clip(WrapMode.CLIP, width)]
 
     def _indent(self) -> int:
@@ -933,8 +956,9 @@ class Editor(_TextField):
     ``style.merge(caret_style)``, or, at a row end, by appending a
     reverse-video space -- skipped when the row is already full so no row
     ever exceeds ``width``.  The caret and the placeholder's faint style are
-    the theme's ``text.caret`` / ``text.faint``.  ``max_rows`` (``None`` = unlimited) caps the rendered rows
-    with a sliding window that keeps the cursor's visual row visible.
+    the theme's ``text.caret`` / ``text.faint``.  ``max_rows`` (``None`` =
+    unlimited) caps the rendered rows with a sliding window that keeps the
+    cursor's visual row visible.
     ``mask`` (``""`` = plain) replaces every rendered character with its own
     glyph while :attr:`~_TextField.text` stays plain -- the display-only
     secret field, set at construction.  ``hover`` is the pointer tier's
@@ -1145,7 +1169,7 @@ class Editor(_TextField):
         if self._wrap is not WrapMode.OVERFLOW:
             return super()._rows_for(width)
         text_styles = self.group("text")
-        surface_styles = self.group("surfaces")
+        floor = self._field_floor()
         rows = self._logical_rows()
         cursor_index, cursor_column = self._buf.row, self._buf.col
         start, count = self._window(rows, cursor_index)
@@ -1180,12 +1204,7 @@ class Editor(_TextField):
                     cursor_marked=marked,
                 )
             line = Line(body)
-            if self.hover:
-                # The block-level hover band covers the cursor cell too.
-                band = surface_styles.hover
-                line = Line(
-                    seg.with_style(seg.style.merge(band)) for seg in line.segments
-                )
+            line = self._on_floor(line, floor)
             out.append(line)
         return out
 

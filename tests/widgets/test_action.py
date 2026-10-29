@@ -10,27 +10,90 @@ from motui.kernel.glyphs import GLYPHS
 from motui.kernel.layout import Constraints
 from motui.kernel.style import Style
 from motui.kernel.theme import DEFAULT_THEME, Styles
-from motui.widgets import Button, Checkbox, Link, Option, Select, Table, Tabs, Tree, TreeNode
+from motui.widgets import (
+    Button,
+    ButtonKind,
+    Checkbox,
+    Link,
+    Option,
+    Select,
+    Table,
+    Tabs,
+    Tree,
+    TreeNode,
+)
+from motui.widgets.action import action_band
 from tests.testing import texts
 
 
-def test_button_renders_one_fitted_row_in_the_accent_band():
+def test_button_renders_one_fitted_row_on_the_control_floor():
     button = Button("Run")
     row = button.render(Constraints(width=20))[0]
     assert row.text == " Run "
-    assert row.segments[0].style == DEFAULT_THEME.content.accent
+    assert row.segments[0].style == DEFAULT_THEME.surfaces.control.merge(
+        DEFAULT_THEME.text.base
+    )
     assert button.render(Constraints(width=3))[0].text == " R\u2026"
 
 
-def test_button_hover_and_focus_merge_their_bands():
+@pytest.mark.parametrize(
+    "kind, expected",
+    [
+        (
+            ButtonKind.NEUTRAL,
+            DEFAULT_THEME.surfaces.control.merge(DEFAULT_THEME.text.base),
+        ),
+        (
+            ButtonKind.PRIMARY,
+            DEFAULT_THEME.surfaces.accent.merge(DEFAULT_THEME.text.inverse),
+        ),
+        (ButtonKind.GHOST, DEFAULT_THEME.content.accent),
+        (
+            ButtonKind.DANGER,
+            DEFAULT_THEME.surfaces.danger.merge(DEFAULT_THEME.text.inverse),
+        ),
+    ],
+)
+def test_the_four_button_kinds_paint_their_own_floors(kind, expected):
+    button = Button("Run", kind=kind)
+    assert button.render(Constraints(width=20))[0].segments[0].style == expected
+
+
+def test_button_accepts_a_string_kind_and_normalizes_it():
+    button = Button("Run", kind="primary")
+    assert button.kind is ButtonKind.PRIMARY
+    assert (
+        button.render(Constraints(width=20))[0].segments[0].style
+        == DEFAULT_THEME.surfaces.accent.merge(DEFAULT_THEME.text.inverse)
+    )
+    with pytest.raises(ValueError):
+        Button("Run", kind="bogus")
+
+
+def test_action_band_composes_the_floor_and_the_overlay():
+    theme = DEFAULT_THEME
+    assert action_band("ghost", theme) == theme.content.accent
+    assert action_band("ghost", theme, hovered=True) == theme.content.accent.merge(
+        theme.controls.hover
+    )
+    assert action_band("ghost", theme, focused=True) == theme.content.accent.merge(
+        theme.controls.focus
+    )
+    assert action_band("primary", theme, pressed=True) == (
+        theme.surfaces.accent.merge(theme.text.inverse).merge(theme.controls.active)
+    )
+
+
+def test_button_hover_and_focus_merge_the_control_overlay():
     button = Button("Run")
+    base = DEFAULT_THEME.surfaces.control.merge(DEFAULT_THEME.text.base)
     button.hover = True
     style = button.render(Constraints(width=20))[0].segments[0].style
-    assert style == DEFAULT_THEME.content.accent.merge(DEFAULT_THEME.surfaces.hover)
+    assert style == base.merge(DEFAULT_THEME.controls.hover)
     button.hover = False
     button.focused = True
     style = button.render(Constraints(width=20))[0].segments[0].style
-    assert style == DEFAULT_THEME.content.accent.merge(DEFAULT_THEME.controls.focus)
+    assert style == base.merge(DEFAULT_THEME.controls.focus)
     assert button.render(Constraints(width=20))[0].text == " Run "
 
 
@@ -43,7 +106,7 @@ def test_button_click_and_activate_land_in_the_one_shot_result():
     assert button.on_click(Pos(x=40, y=9)) is True and button.take() is True
 
 
-def test_a_disabled_button_refuses_its_doors_and_paints_the_disabled_band():
+def test_a_disabled_button_refuses_its_doors_and_paints_the_disabled_floor():
     button = Button(
         "Run",
         disabled=True,
@@ -51,20 +114,24 @@ def test_a_disabled_button_refuses_its_doors_and_paints_the_disabled_band():
     )
     assert button.on_click(Pos(x=0, y=0)) is False and button.on_action("activate") is False
     assert button.take() is None
-    assert button.render(Constraints(width=20))[0].segments[0].style == Style(italic=True)
+    expected = (
+        DEFAULT_THEME.surfaces.control.merge(Style(italic=True))
+        .merge(DEFAULT_THEME.controls.disabled)
+    )
+    assert button.render(Constraints(width=20))[0].segments[0].style == expected
 
 
 def test_explicit_styles_beat_the_theme_fields():
     theme = replace(
         DEFAULT_THEME,
-        controls=replace(DEFAULT_THEME.controls, base=Style(fg="#ff0000")),
-        surfaces=replace(DEFAULT_THEME.surfaces, hover=Style(bg="#00ff00")),
+        surfaces=replace(DEFAULT_THEME.surfaces, control=Style(fg="#ff0000")),
+        controls=replace(DEFAULT_THEME.controls, hover=Style(bg="#00ff00")),
     )
     button = Button(
         "x",
         styles=Styles(
-            controls=replace(theme.controls, base=Style(underline=True)),
-            surfaces=replace(theme.surfaces, hover=Style(italic=True)),
+            surfaces=replace(theme.surfaces, control=Style(underline=True)),
+            controls=replace(theme.controls, hover=Style(italic=True)),
         ),
         theme=theme,
     )
@@ -127,9 +194,53 @@ def test_link_focus_and_disabled_flags_shape_the_row():
     link.focused = True
     style = link.render(Constraints(width=20))[0].segments[0].style
     assert style == DEFAULT_THEME.content.link.merge(Style(bold=True))
+    link.focused = False
+    link.hover = True
+    style = link.render(Constraints(width=20))[0].segments[0].style
+    assert style == DEFAULT_THEME.content.link.merge(DEFAULT_THEME.controls.hover)
+    link.hover = False
     link.disabled = True
     assert link.on_action("activate") is False
-    assert link.render(Constraints(width=20))[0].segments[0].style == Style(italic=True)
+    assert link.render(Constraints(width=20))[0].segments[0].style == (
+        DEFAULT_THEME.content.link.merge(Style(italic=True)).merge(
+            DEFAULT_THEME.controls.disabled
+        )
+    )
+
+
+def test_checkbox_hover_focus_and_disabled_use_the_shared_overlay():
+    box = Checkbox("Bold")
+    forced = replace(
+        DEFAULT_THEME,
+        controls=replace(
+            DEFAULT_THEME.controls,
+            hover=Style(fg="#111111"),
+            focus=Style(fg="#222222"),
+            disabled=Style(fg="#333333"),
+        ),
+    )
+    box.theme = forced
+    box.hover = True
+    segments = box.render(Constraints(width=20))[0].segments
+    assert segments[0].style == DEFAULT_THEME.content.accent.merge(Style(fg="#111111"))
+    assert segments[1].style == DEFAULT_THEME.text.base.merge(Style(fg="#111111"))
+    box.hover = False
+    box.focused = True
+    segments = box.render(Constraints(width=20))[0].segments
+    assert segments[0].style == DEFAULT_THEME.content.accent.merge(Style(fg="#222222"))
+    box.focused = False
+    box.disabled = True
+    segments = box.render(Constraints(width=20))[0].segments
+    assert segments[0].style == (
+        DEFAULT_THEME.content.accent.merge(DEFAULT_THEME.text.faint).merge(
+            Style(fg="#333333")
+        )
+    )
+    assert segments[1].style == (
+        DEFAULT_THEME.text.base.merge(DEFAULT_THEME.text.faint).merge(
+            Style(fg="#333333")
+        )
+    )
 
 
 @pytest.mark.parametrize(

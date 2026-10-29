@@ -25,14 +25,13 @@ answers ``False`` like any cell outside the title.
 
 ``on_hover`` is the pointer tier's row marking -- the title row merges
 ``surfaces.hover`` while the pointer is on it; ``focused`` is the focus flag
-the focus tier sets, and a
-focused title row additionally merges ``controls.focus``.
-Both markings start off, so a plain collapsible renders
-byte-for-byte what it always did.  The title band is ``content.accent``;
-all three bands resolve at render time from ``styles`` (when given) or the
-theme, and the body keeps whatever
-styles its own construction resolved.  A disabled section refuses both
-flip doors and renders its title in ``text.faint``.
+the focus tier sets, and a focused title row additionally merges
+``controls.overlay(focused=True)``.  Both markings start off, so a plain
+collapsible renders byte-for-byte what it always did.  The title band is
+``content.accent``; a disabled section merges ``text.faint`` and the
+disabled overlay instead.  All bands resolve at render time from ``styles``
+(when given) or the theme, and the body keeps whatever styles its own
+construction resolved.
 """
 
 from __future__ import annotations
@@ -62,7 +61,7 @@ class Collapsible(ActionWidget):
     The title row renders ``"\u25be title"`` / ``"\u25b8 title"`` in
     ``content.accent``; the pointer's row marking
     (:meth:`on_hover`) merges ``surfaces.hover`` over it and
-    ``focused`` merges ``controls.focus``, so hover
+    ``focused`` merges ``controls.overlay(focused=True)``, so hover
     and focus are each plainly visible against the title.  ``render``
     answers the title row alone while closed, and the title plus the
     body's rows -- inset by the marker's width and ``fit`` to the painting
@@ -200,14 +199,15 @@ class Collapsible(ActionWidget):
         keep their natural width, so the painted bytes are unchanged.
         """
         width = c.width
+        style = self.group("content").accent
         if self.disabled:
-            style = self.group("text").faint
+            style = style.merge(self.group("text").faint).merge(
+                self.group("controls").overlay(disabled=True)
+            )
         else:
-            style = self.group("content").accent
             if self._marked:
                 style = style.merge(self.group("surfaces").hover)
-            if self.focused:
-                style = style.merge(self.group("controls").focus)
+            style = style.merge(self.group("controls").overlay(focused=self.focused))
         mark = seat(
             self.glyphs.fold_open if self.open else self.glyphs.fold_closed
         )

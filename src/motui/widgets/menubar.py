@@ -4,10 +4,11 @@
 top level: ``" File │ Edit │ View "``, the labels separated by ``" " + glyphs.vertical_rule + " "``,
 leading and trailing one-column padding, the whole
 row ``fit`` to the painting width.  Exactly one label is the bar's *active*
-label: it wears ``content.accent`` with **no
-underline** -- the colour is the whole indicator -- while every other label
+label: it wears ``content.accent`` with **an underline** and the
+``controls.overlay(focused=...)`` while the bar has focus -- the colour and
+the mark together are the indicator -- while every other label
 rests in ``text.faint``, a disabled label in
-``text.faint`` as well and every divider in
+``text.faint`` plus the disabled overlay, and every divider in
 ``text.muted`` (a separator is never accent).  The
 label under the pointer merges ``surfaces.hover`` over
 its own style; a disabled label keeps its disabled style (the stricter state
@@ -26,9 +27,9 @@ padding, every divider gap, a row other than the first and a truncating
 label's text pending, and :meth:`MenuBar.take` reads that value once
 and clears it.  An empty bar and a disabled bar (or a disabled active label)
 answer ``False`` and leave nothing pending.  ``focused`` is the focus flag
-the focus tier sets; the bar renders the same whether it is
-focused or not -- its active label is the selection, not a focus band -- and
-the flag touches the widget all the same.
+the focus tier sets: the active label merges ``controls.overlay(
+focused=...)`` on top of its accent+underline indicator, so a focused bar
+is visibly different from an unfocused one.
 
 :class:`ContextMenu` is :class:`~motui.widgets.choice.Select`'s desktop-menu
 preset: a vertical option list with the menu cursor, ``wrap=True`` (the
@@ -56,6 +57,9 @@ from .strip import Keymap, LabelStrip
 
 __all__ = ["ContextMenu", "MenuBar"]
 
+#: The active label's mark: the bar underlines it whatever the colors say.
+UNDERLINE = Style(underline=True)
+
 
 class MenuBar(LabelStrip):
     """A horizontal menu bar: one row, one active label, a clamped cursor.
@@ -70,8 +74,10 @@ class MenuBar(LabelStrip):
     by :meth:`move`; the ``disabled`` flag refuses every gesture.
 
     Styles resolve at render time from the theme (or a ``styles=`` group
-    override): ``content.accent`` paints the active label (never
-    underlined), ``text.faint`` the inactive and disabled ones,
+    override): ``content.accent`` paints the active label with the
+    underline mark and, while the bar is focused, the
+    ``controls.overlay(focused=...)`` emphasis; ``text.faint`` the inactive
+    labels, a disabled label ``text.faint`` plus the disabled overlay,
     ``surfaces.hover`` the label under the pointer and ``text.muted`` the
     dividers.
     ``glyphs.vertical_rule`` is the separator between labels, padded with one
@@ -157,13 +163,17 @@ class MenuBar(LabelStrip):
 
     def _style_of(self, index: int) -> Style:
         """The style one label renders with (the stricter state wins)."""
+        controls = self.group("controls")
         if index in self._disabled_items:
-            return self.group("text").faint
-        style = (
-            self.group("content").accent
-            if index == self.index
-            else self.group("text").faint
-        )
+            style = self.group("text").faint.merge(controls.overlay(disabled=True))
+        elif index == self.index:
+            style = (
+                self.group("content")
+                .accent.merge(UNDERLINE)
+                .merge(controls.overlay(focused=self.focused))
+            )
+        else:
+            style = self.group("text").faint
         if index == self._hover_index:
             style = style.merge(self.group("surfaces").hover)
         return style

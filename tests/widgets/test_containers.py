@@ -344,6 +344,20 @@ def test_the_collapsible_title_takes_hover_and_focus_bands():
     assert section.render(Constraints(width=20))[1] == plain[1]
 
 
+def test_a_disabled_collapsible_title_merges_faint_and_the_disabled_overlay():
+    faint = Style(fg="#abcdef")
+    section = Collapsible(
+        Text("body"),
+        title="options",
+        disabled=True,
+        styles=Styles(text=replace(DEFAULT_THEME.text, faint=faint)),
+    )
+    style = section.render(Constraints(width=20))[0].segments[0].style
+    assert style == DEFAULT_THEME.content.accent.merge(faint).merge(
+        DEFAULT_THEME.controls.overlay(disabled=True)
+    )
+
+
 def test_the_collapsible_child_at_maps_the_body_and_owns_the_title():
     section = Collapsible(Text("body one\nbody two"), title="options")
     section.render(Constraints(width=20))

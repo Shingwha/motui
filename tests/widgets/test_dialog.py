@@ -3,7 +3,15 @@
 from motui.kernel.cell import Surface
 from motui.kernel.geom import Pos
 from motui.kernel.layout import Constraints
-from motui.widgets import Button, ButtonSpec, Dialog, confirm_dialog, prompt_dialog
+from motui.kernel.theme import DEFAULT_THEME
+from motui.widgets import (
+    Button,
+    ButtonKind,
+    ButtonSpec,
+    Dialog,
+    confirm_dialog,
+    prompt_dialog,
+)
 from tests.testing import Rows, key, texts
 
 
@@ -101,6 +109,59 @@ def test_button_specs_supply_labels_values_and_the_focused_action():
     assert dialog.focused_button.label == "Go"
     assert dialog.on_key(key("enter")) is True
     assert dialog.take() == 7
+
+
+def test_button_spec_carries_a_kind_and_no_danger_flag():
+    spec = ButtonSpec("Delete", "delete", kind=ButtonKind.DANGER)
+    assert spec.kind is ButtonKind.DANGER
+    assert not hasattr(spec, "danger")
+    assert ButtonSpec("Go").kind is ButtonKind.NEUTRAL
+
+
+def test_a_danger_button_kind_paints_the_danger_floor():
+    dialog = Dialog(
+        Rows("body"),
+        buttons=[ButtonSpec("Delete", "delete", kind=ButtonKind.DANGER)],
+    )
+    button = dialog.children[1]
+    assert isinstance(button, Button)
+    assert button.kind is ButtonKind.DANGER
+    # The dialog focuses its default button; render the floor without the
+    # focus overlay so the kind mapping itself is asserted.
+    button.focused = False
+    style = button.render(Constraints(width=12))[0].segments[0].style
+    assert style == DEFAULT_THEME.surfaces.danger.merge(DEFAULT_THEME.text.inverse)
+
+
+def test_a_dangerous_dialog_skips_a_danger_kind_but_keeps_the_flag():
+    dialog = Dialog(
+        Rows("body"),
+        buttons=[
+            ButtonSpec("Delete", "delete", kind=ButtonKind.DANGER),
+            ButtonSpec("Cancel", None),
+        ],
+        danger=True,
+    )
+    assert dialog.danger is True
+    assert dialog.index == 1
+    assert dialog.focused_button.label == "Cancel"
+    plain = Dialog(
+        Rows("body"),
+        buttons=[
+            ButtonSpec("Delete", "delete", kind=ButtonKind.DANGER),
+            ButtonSpec("Cancel", None),
+        ],
+    )
+    assert plain.index == 0  # without the flag the first button opens
+
+
+def test_confirm_dialog_marks_its_confirm_button_danger_by_kind():
+    dialog = confirm_dialog("Delete?", danger=True)
+    body, confirm, cancel = dialog.children
+    assert body is dialog.body
+    assert confirm.kind is ButtonKind.DANGER
+    assert cancel.kind is ButtonKind.NEUTRAL
+    assert dialog.index == 1
 
 
 def test_prompt_dialog_carries_an_input_body_and_takes_ok():

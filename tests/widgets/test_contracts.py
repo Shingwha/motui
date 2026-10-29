@@ -70,7 +70,6 @@ def test_a_theme_assignment_repaints_the_next_render(build):
         DEFAULT_THEME,
         text=replace(DEFAULT_THEME.text, base=mark),
         content=replace(DEFAULT_THEME.content, accent=mark),
-        controls=replace(DEFAULT_THEME.controls, base=mark),
         rows=replace(DEFAULT_THEME.rows, inactive=mark),
     )
     widget.theme = other
