@@ -84,7 +84,10 @@ Component（只有 render）
 | W4c | `w2.1.2-w4c-text-form` | Text/Field/Form/Dialog/Content 迁移 | `text.py`, `markdown/component.py`, `textfield.py`, `form.py`, `dialog.py`, `collapsible.py`, `indicators.py`, `tests/widgets/test_text_widget.py`, `test_editing.py`, `test_form.py`, `test_dialog.py`, `test_containers.py`, `test_indicators.py`, `test_contract_text_form.py`(新), `tests/test_invariants.py`, `demo/sections/components.py`, `demo/sections/dashboard.py`, `demo/sections/gallery.py` | W4b 合并后 |
 | W5 | `w2.1.2-w5-styles` | surfaces/controls、ButtonKind、字段底板、焦点、flat | `kernel/theme.py`, `widgets/action.py`, `textfield.py`, `dialog.py`, `tabs.py`, `menubar.py`, `indicators.py`, `pixel_canvas.py`, `decor.py`, styles 相关测试、semantic goldens | W4b/W4c |
 | W6 | `w2.1.2-w6-demo` | splash 用 Stack/Align + 真按钮；components modal 用 Stack | `demo/sections/splash/`, `demo/sections/components.py`, `tests/demo/`, semantic goldens | W5 |
-| W7 | `w2.1.2-w7-docs` | docstring 减半、CONTRACT/WIDGETS/ARCHITECTURE、ADR、测试去重 | `docs/`, widget docstrings, `tests/` | W6 |
+| W7a | `w2.1.2-w7a-docstrings-widgets` | docstring 减半：widgets/pixel/testing（6312→≤3150） | `src/motui/widgets/**`, `pixel/**`, `testing/**` | W6 |
+| W7b | `w2.1.2-w7b-docstrings-kernel-app` | docstring 减半：app/kernel/terminal/demo（6692→≤3340） | `src/motui/app/**`, `kernel/**`, `terminal/**`, `demo/**`, root | W6（与 W7a 并行） |
+| W7c | `w2.1.2-w7c-docs` | CONTRACT/WIDGETS/ARCHITECTURE/README + ADR 027–030 | `docs/**`, `README.md` | W6（与 W7a/W7b 并行） |
+| W7d | `w2.1.2-w7d-test-trim` | 测试去重 1838→~1380 | `tests/**` | W6（与 W7a/W7b/W7c 并行） |
 | W8 | `w2.1.2-w8-release` | 版本、CHANGELOG、MIGRATION、release notes、API 快照、终验 | `pyproject.toml`, `src/motui/__init__.py`, `CHANGELOG.md`, `docs/MIGRATION.md`, `docs/releases/2.1.2.md`, `tools/api-2.1.txt`, `uv.lock`(如引用) | W7 |
 
 并行规则：W4b 与 W4c 共享 `demo/sections/components.py`（Table take 与
@@ -184,6 +187,9 @@ uv run python tools/framebench.py
 - [x] W4b（`2eb381f` 合并，`57efe5f` take 契约修正）
 - [x] W4c（`01266d2` 合并）
 - [x] W5（`fcc0108` 合并）
-- [ ] W6
-- [ ] W7
+- [x] W6（`c692c0b` 合并）
+- [ ] W7a docstrings widgets/pixel/testing
+- [ ] W7b docstrings app/kernel/terminal/demo
+- [ ] W7c docs/ADR/README
+- [ ] W7d test trim
 - [ ] W8
