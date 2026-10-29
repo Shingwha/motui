@@ -9,16 +9,15 @@ from dataclasses import replace
 
 import pytest
 
+from motui.kernel.cell import Surface
 from motui.kernel.geom import Pos
 from motui.kernel.keymap import DEFAULT_EDITOR_KEYMAP, DEFAULT_INPUT_KEYMAP
-from motui.kernel.cell import Surface
 from motui.kernel.layout import Constraints
 from motui.kernel.style import Style
 from motui.kernel.text import WrapMode
 from motui.kernel.theme import DEFAULT_THEME, Styles
 from motui.widgets import Editor, Input
 from motui.widgets.textbuf import TextBuffer
-
 from tests.testing import key, paste, texts
 
 FIELDS = [Input, Editor]

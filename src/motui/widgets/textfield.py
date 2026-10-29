@@ -55,9 +55,15 @@ from __future__ import annotations
 
 import re
 
-from ..kernel.events import Event, KeyEvent, MouseEvent, PasteEvent
-from ..kernel.glyphs import GLYPHS, Glyphs, seat
 from ..kernel.cell import Line, Segment, Surface
+from ..kernel.events import Event, KeyEvent, MouseEvent, PasteEvent
+from ..kernel.geom import Pos
+from ..kernel.glyphs import GLYPHS, Glyphs, seat
+from ..kernel.keymap import (
+    DEFAULT_EDITOR_KEYMAP,
+    DEFAULT_INPUT_KEYMAP,
+    Keymap,
+)
 from ..kernel.layout import Constraints
 from ..kernel.style import NONE, Style
 from ..kernel.text import (
@@ -68,11 +74,6 @@ from ..kernel.text import (
 )
 from ..kernel.theme import Styles, Theme
 from ..widgets.base import Widget
-from ..kernel.keymap import (
-    DEFAULT_EDITOR_KEYMAP,
-    DEFAULT_INPUT_KEYMAP,
-    Keymap,
-)
 from .textbuf import TextBuffer, _VisualRow
 
 __all__ = ["Editor", "Input"]
@@ -955,8 +956,9 @@ class Editor(_TextField):
     ``style.merge(caret_style)``, or, at a row end, by appending a
     reverse-video space -- skipped when the row is already full so no row
     ever exceeds ``width``.  The caret and the placeholder's faint style are
-    the theme's ``text.caret`` / ``text.faint``.  ``max_rows`` (``None`` = unlimited) caps the rendered rows
-    with a sliding window that keeps the cursor's visual row visible.
+    the theme's ``text.caret`` / ``text.faint``.  ``max_rows`` (``None`` =
+    unlimited) caps the rendered rows with a sliding window that keeps the
+    cursor's visual row visible.
     ``mask`` (``""`` = plain) replaces every rendered character with its own
     glyph while :attr:`~_TextField.text` stays plain -- the display-only
     secret field, set at construction.  ``hover`` is the pointer tier's
