@@ -35,7 +35,10 @@ UPLINK = {
     "station": "DSN-07",
     "sector": "N-42",
     # One measured line, wider than any pane -- scroll right to its tail:
-    "mission": "maintain the deep-space signal through solar wind, reroute packets across the relay mesh, and recover a clean lock",
+    "mission": (
+        "maintain the deep-space signal through solar wind, reroute packets "
+        "across the relay mesh, and recover a clean lock"
+    ),
     "relays": {"andromeda": 42, "borealis": 68, "cygnus": 31},
 }
 

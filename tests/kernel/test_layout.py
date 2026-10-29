@@ -301,9 +301,9 @@ def test_natural_height_sums_every_block():
 
 def test_streaming_content_recounts_the_body():
     doc = Document()
-    head = doc.add(Rows("a", "b", "c"))
+    doc.add(Rows("a", "b", "c"))
     mid = doc.add(Rows("m0", "m1"))
-    tail = doc.add(Rows("t0", "t1", "t2"))
+    doc.add(Rows("t0", "t1", "t2"))
     view = Viewport(doc)
     layout = view.layout(80, 4)
     assert layout.total_rows == 8

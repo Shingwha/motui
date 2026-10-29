@@ -4,13 +4,13 @@ from __future__ import annotations
 
 import pytest
 
-from motui.app import App, Command, CommandRegistry, FocusManager, CommandPalette
+from motui.app import App, Command, CommandPalette, CommandRegistry, FocusManager
 from motui.kernel.events import MouseEvent, PasteEvent
-from motui.widgets.text import Text
-from motui.widgets.choice import Option
-from motui.terminal import HeadlessScreen, TerminalOptions
-from tests.testing import ScriptedEvents, headless_tui, key
 from motui.kernel.layout import Constraints
+from motui.terminal import HeadlessScreen, TerminalOptions
+from motui.widgets.choice import Option
+from motui.widgets.text import Text
+from tests.testing import ScriptedEvents, headless_tui, key
 
 _MENU = [
     Option("/help", value="help", description="What this demo can do"),

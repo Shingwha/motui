@@ -11,12 +11,12 @@ from __future__ import annotations
 from collections import Counter
 from dataclasses import replace
 
-from ..kernel.glyphs import GLYPHS, Glyphs
 from ..kernel.cell import Line, Segment, Surface
+from ..kernel.glyphs import GLYPHS, Glyphs
 from ..kernel.layout import Constraints
 from ..kernel.style import NONE, Style
-from ..kernel.theme import Styles, Theme
 from ..kernel.text import WrapMode
+from ..kernel.theme import Styles, Theme
 from ..widgets.base import Widget
 
 __all__ = ["LCS_LIMIT", "Diff"]
@@ -239,11 +239,11 @@ class Diff(Widget):
         "_after",
         "_before",
         "_context",
+        "_glyphs",
         "_numbers",
         "_rendered_key",
         "_rendered_rows",
         "_rows",
-        "_glyphs",
         "wrap",
     )
 

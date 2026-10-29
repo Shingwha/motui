@@ -58,7 +58,7 @@ def test_style_is_frozen_hashable_and_compared_by_fields():
     assert style == Style(fg="red", bold=True)
     assert hash(style) == hash(Style(fg="red", bold=True))
     assert style != Style(fg="red")
-    with pytest.raises(Exception):
+    with pytest.raises(FrozenInstanceError):
         style.fg = "blue"  # type: ignore[misc]
 
 

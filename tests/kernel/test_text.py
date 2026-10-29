@@ -13,12 +13,8 @@ from dataclasses import replace
 
 from motui.kernel.cell import Line, Segment
 from motui.kernel.geom import Pos
-from motui.kernel.style import Style
-from motui.widgets.text import Text
-
-ACCENT = Style(fg="#58a6ff", bold=True)
-DIM = Style(dim=True)
 from motui.kernel.layout import Constraints
+from motui.kernel.style import Style
 from motui.kernel.text import (
     WrapMode,
     ellipsize_tail,
@@ -28,7 +24,11 @@ from motui.kernel.text import (
     wrap_text,
 )
 from motui.kernel.theme import DEFAULT_THEME
+from motui.widgets.text import Text
 from tests.testing import texts
+
+ACCENT = Style(fg="#58a6ff", bold=True)
+DIM = Style(dim=True)
 
 #: Inputs whose whole-string measure disagrees with a per-character sum:
 #: VS16-widened bases, a ZWJ family, combining marks, wide CJK and tabs.
@@ -266,7 +266,12 @@ def test_text_inline_spans_answer_a_click_once():
 
 def test_text_hover_merges_the_themed_band_over_the_span():
     band = Style(fg="#ff00ff", reverse=True)
-    field = SpanText(theme=replace(DEFAULT_THEME, surfaces=replace(DEFAULT_THEME.surfaces, hover=band)))
+    field = SpanText(
+        theme=replace(
+            DEFAULT_THEME,
+            surfaces=replace(DEFAULT_THEME.surfaces, hover=band),
+        )
+    )
     field.render(Constraints(width=40))
     assert field.on_hover(Pos(x=5, y=0)) is True
     hovered = field.render(Constraints(width=40))[0]

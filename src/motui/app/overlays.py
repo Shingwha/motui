@@ -10,20 +10,19 @@ from collections.abc import Sequence
 from dataclasses import dataclass, replace
 from typing import TYPE_CHECKING
 
+from ..kernel.cell import Line, overlay
 from ..kernel.document import Component
 from ..kernel.events import Event, KeyEvent, MouseEvent, PasteEvent
 from ..kernel.frame import Frame, Rect, splice_row
-from ..kernel.cell import Line, overlay
-from ..widgets.text import Text
+from ..kernel.layout import Constraints, ScreenLayout
 from ..kernel.style import Style
-from ..kernel.theme import DEFAULT_THEME, Theme
-from ..kernel.layout import ScreenLayout
-from ..kernel.layout import Constraints
 from ..kernel.text import WrapMode
+from ..kernel.theme import DEFAULT_THEME, Theme
+from ..widgets.text import Text
 
 if TYPE_CHECKING:
-    from .runtime import Runtime, Timer
     from .pointer import Pointer
+    from .runtime import Runtime, Timer
 
 __all__ = ["Stats", "Toasts", "Tooltip"]
 
@@ -59,7 +58,10 @@ def _stack(
         return []
     measured: list[tuple[_Toast, int, list[Line]]] = []
     for toast in toasts:
-        rendered = [row.clip(WrapMode.ELLIPSIS, ceiling) for row in toast.component.render(Constraints(width=ceiling))]
+        rendered = [
+            row.clip(WrapMode.ELLIPSIS, ceiling)
+            for row in toast.component.render(Constraints(width=ceiling))
+        ]
         # An empty component renders no rows, which measures to zero width.
         width = min(max((row.width for row in rendered), default=0), ceiling)
         if width <= 0:

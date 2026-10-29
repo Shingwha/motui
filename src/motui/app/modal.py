@@ -9,17 +9,16 @@ from __future__ import annotations
 from dataclasses import replace
 from typing import TYPE_CHECKING
 
+from ..kernel.cell import Line, overlay
 from ..kernel.events import Event, KeyEvent, MouseEvent, PasteEvent
 from ..kernel.frame import Rect, splice_row
 from ..kernel.geom import Pos
-from ..kernel.cell import Line, overlay
+from ..kernel.layout import Constraints, ScreenLayout
 from ..kernel.style import Style
+from ..kernel.text import WrapMode
 from ..kernel.theme import DEFAULT_THEME, Theme
-from ..kernel.layout import ScreenLayout
 from ..widgets.base import Widget
 from .focus import FocusManager
-from ..kernel.layout import Constraints
-from ..kernel.text import WrapMode
 
 if TYPE_CHECKING:
     from .runtime import Runtime
@@ -267,7 +266,10 @@ class Modal:
         rect = self._tui.frame.rect
         if rect is None or rect.width <= 0 or rect.height <= 0:
             return None
-        rows = [row.clip(WrapMode.ELLIPSIS, rect.width) for row in self._dialog.render(Constraints(width=rect.width))]
+        rows = [
+            row.clip(WrapMode.ELLIPSIS, rect.width)
+            for row in self._dialog.render(Constraints(width=rect.width))
+        ]
         height = min(len(rows), rect.height)
         width = min(max((row.width for row in rows), default=0), rect.width)
         if height <= 0 or width <= 0:

@@ -9,12 +9,12 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, NamedTuple
 
+from ..kernel.cell import Line, Segment
 from ..kernel.events import Event, MouseEvent
 from ..kernel.frame import Chrome, Pane, Rect
 from ..kernel.geom import Axis
 from ..kernel.glyphs import GLYPHS, Glyphs
-from ..kernel.cell import Line, Segment
-from ..kernel.layout import ScrollAxis, ScreenLayout
+from ..kernel.layout import ScreenLayout, ScrollAxis
 from ..kernel.style import Style
 from ..kernel.theme import DEFAULT_THEME, Theme
 from ..widgets.scroll import ScrollPanel
@@ -71,8 +71,8 @@ class Scrollbar:
     __slots__ = (
         "_axis",
         "_chrome",
-        "_grab",
         "_glyphs",
+        "_grab",
         "_handle",
         "_held",
         "_min_thumb",

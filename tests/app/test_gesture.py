@@ -148,7 +148,7 @@ def test_a_reflow_mid_drag_ends_the_drag_cleanly():
 
 
 def test_detach_drops_the_in_flight_drag():
-    tui, gesture, _, ends = drive(["alpha", "beta", "gamma"])
+    _tui, gesture, _, ends = drive(["alpha", "beta", "gamma"])
     gesture.handle(press(2, 0))
     gesture.handle(motion(4, 2, "left"))
     gesture.detach()

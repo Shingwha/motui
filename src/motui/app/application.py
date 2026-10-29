@@ -7,21 +7,21 @@ host hooks). ``auto=False`` mounts no policy."""
 from __future__ import annotations
 
 import asyncio
+import contextlib
 from collections.abc import Awaitable, Callable, Iterator
 from typing import Any
 
 from ..kernel.document import Component, Placement, Section, Sizing
 from ..kernel.events import Event, KeyEvent, MouseEvent, ResizeEvent
 from ..kernel.geom import Axis
-from ..terminal.screen import TerminalOptions
-from ..terminal.terminal import Terminal
 from ..kernel.selection import Selection
 from ..kernel.style import Style
 from ..kernel.theme import DEFAULT_THEME, Theme
+from ..terminal.screen import TerminalOptions
+from ..terminal.terminal import Terminal
 from ..widgets.base import Widget
 from .command_palette import CommandPalette
 from .commands import CommandRegistry
-from .runtime import Runtime, Timer, _stdin_isatty
 from .find import Find
 from .focus import FocusManager, focus_targets, iter_widgets
 from .gesture import SelectionGesture
@@ -29,6 +29,7 @@ from .modal import Modal
 from .overlays import Toasts, Tooltip
 from .pointer import Pointer
 from .router import DEFAULT_HANDLERS, Handler
+from .runtime import Runtime, Timer, _stdin_isatty
 from .workspace import Workspace
 
 __all__ = ["App"]
@@ -58,7 +59,7 @@ class App:
         throttle: float = 0.030,
         auto: bool = True,
         title: str = "",
-        on_selection: Callable[["Workspace", Selection], object] | None = None,
+        on_selection: Callable[[Workspace, Selection], object] | None = None,
         handlers: tuple[Handler, ...] | None = None,
     ) -> None:
         self._theme = DEFAULT_THEME if theme is None else theme
@@ -297,7 +298,7 @@ class App:
         """Run ``callback`` on ``key``, after the focused control declines it."""
         self._bindings[key] = callback
 
-    def focus(self, target: "str | Component") -> bool:
+    def focus(self, target: str | Component) -> bool:
         """Focus a block id or a component that is in the tree-derived ring."""
         if isinstance(target, str):
             target = self.workspace.get(target).widget
@@ -454,14 +455,11 @@ class App:
                 on_resize = getattr(widget, "on_resize", None)
                 if on_resize is not None:
                     on_resize(event)
-        for handler in self.handlers:
-            if handler(self, event):
-                return True
-        return False
+        return any(handler(self, event) for handler in self.handlers)
 
     # -- lifecycle ----------------------------------------------------------------
 
-    async def run_session(self, body: Callable[["App"], Awaitable[None]]) -> None:
+    async def run_session(self, body: Callable[[App], Awaitable[None]]) -> None:
         """Run ``body(app)`` inside the runtime's session bracket."""
         async def loop(_runtime: Runtime) -> None:
             await body(self)
@@ -490,10 +488,8 @@ class App:
     def run(self) -> None:
         """The synchronous entry: own an event loop around :meth:`run_async`; a
         Ctrl+C interrupt is a quit, not a crash."""
-        try:
+        with contextlib.suppress(KeyboardInterrupt):
             asyncio.run(self.run_async())
-        except KeyboardInterrupt:
-            pass
 
     def __repr__(self) -> str:
         return (

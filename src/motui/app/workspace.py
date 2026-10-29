@@ -6,6 +6,7 @@ then pane content, then host dispatch."""
 
 from __future__ import annotations
 
+import itertools
 from collections.abc import Callable
 from typing import TYPE_CHECKING
 
@@ -397,7 +398,7 @@ class Workspace:
         children = target.split(axis, weights=weights, min_size=min_size)
         if separator:
             edge = "right" if axis is Axis.X else "bottom"
-            for before, after in zip(children, children[1:]):
+            for before, after in itertools.pairwise(children):
                 before.add_chrome(Separator(self, before.id, after.id, edge).chrome)
         self._retile()
         self.refresh()

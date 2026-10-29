@@ -26,7 +26,12 @@ def test_every_event_type_is_an_event():
 
 def test_only_the_keyboard_is_a_key_event():
     assert isinstance(KeyEvent("a"), Event)
-    for event in (MouseEvent("left", 1, 2), PasteEvent("text"), ResizeEvent(80, 24), FocusEvent(True)):
+    for event in (
+        MouseEvent("left", 1, 2),
+        PasteEvent("text"),
+        ResizeEvent(80, 24),
+        FocusEvent(True),
+    ):
         assert isinstance(event, Event)
         assert not isinstance(event, KeyEvent)
 
@@ -61,7 +66,13 @@ def test_key_and_mouse_event_defaults():
 
 
 def test_events_carry_no_timestamp():
-    for event in (KeyEvent("a"), MouseEvent(), PasteEvent(""), ResizeEvent(0, 0), FocusEvent(False)):
+    for event in (
+        KeyEvent("a"),
+        MouseEvent(),
+        PasteEvent(""),
+        ResizeEvent(0, 0),
+        FocusEvent(False),
+    ):
         assert not hasattr(event, "time")
         assert not hasattr(event, "timestamp")
 

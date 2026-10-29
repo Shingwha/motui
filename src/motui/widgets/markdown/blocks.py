@@ -11,12 +11,12 @@ import re
 from typing import TYPE_CHECKING, Protocol
 
 from ...kernel.cell import Line, slice_line
+from ...kernel.layout import Constraints
 from ...kernel.text import WrapMode, _normalize_tabs, wrap_spans
 from ...kernel.theme import Theme
 from ..decor import Divider
-from .inline import inline_segments
 from ..syntax import Highlighter, RegexHighlighter, default_highlighter
-from ...kernel.layout import Constraints
+from .inline import inline_segments
 
 if TYPE_CHECKING:  # annotations only: rendering happens through a ctx
     from .context import RenderContext
@@ -152,7 +152,11 @@ class FenceRule:
         for row in engine.highlight(code, _fence_lang(lines[0])):
             out.extend(row.reflow(ctx.code_wrap, width))
         if closed:
-            out.append(Line.from_text(lines[-1].strip(), theme.text.muted).clip(WrapMode.ELLIPSIS, width))
+            out.append(
+                Line.from_text(lines[-1].strip(), theme.text.muted).clip(
+                    WrapMode.ELLIPSIS, width
+                )
+            )
         return out
 
 

@@ -4,8 +4,8 @@ the glyph pair."""
 from __future__ import annotations
 
 from motui.kernel.glyphs import GLYPHS
-from motui.widgets.mark import MarkSet, mark_prefix
 from motui.kernel.text import visible_width
+from motui.widgets.mark import MarkSet, mark_prefix
 
 
 def test_toggle_answers_the_state_after_the_flip():

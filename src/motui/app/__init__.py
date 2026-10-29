@@ -19,11 +19,11 @@ from .scrollbar import Scrollbar, ScrollbarStyles
 from .workspace import Workspace
 
 __all__ = [
+    "DEFAULT_HANDLERS",
     "App",
     "Command",
     "CommandPalette",
     "CommandRegistry",
-    "DEFAULT_HANDLERS",
     "Find",
     "FocusManager",
     "Handler",

@@ -32,8 +32,8 @@ from .tables import TableRule
 __all__ = [
     "BLOCK_RULES",
     "INLINE_RULES",
-    "BoldInlineRule",
     "BlockRule",
+    "BoldInlineRule",
     "CodeInlineRule",
     "FenceRule",
     "HeadingRule",

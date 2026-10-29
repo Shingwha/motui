@@ -119,7 +119,13 @@ def test_the_paint_marks_every_match_and_merges_hover_over_the_current_one():
     tui = headless_tui(40, 10)
     document(tui)
     tui.paint()
-    find = Find(tui, theme=replace(DEFAULT_THEME, surfaces=replace(DEFAULT_THEME.surfaces, hover=Style(bold=True))))
+    find = Find(
+        tui,
+        theme=replace(
+            DEFAULT_THEME,
+            surfaces=replace(DEFAULT_THEME.surfaces, hover=Style(bold=True)),
+        ),
+    )
     find.open()
     type_text(find, "fish")
     tui.paint()

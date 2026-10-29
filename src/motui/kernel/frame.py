@@ -256,7 +256,7 @@ class Pane:
     def add_chrome(self, chrome: Chrome) -> None:
         """Register ``chrome`` on the pane, inside earlier bands; the divider is
         negotiated outermost. Registration bumps the frame revision."""
-        self.chrome = self.chrome + (chrome,)
+        self.chrome = (*self.chrome, chrome)
         if self._frame is not None:
             self._frame._touch()
 
@@ -517,7 +517,12 @@ def _negotiate(
         else:  # "bottom"
             offset, bottom = bottom, bottom + take
         granted.append((chrome, take, offset))
-    inner = Rect(x=rect.x + left, y=rect.y + top, width=rect.width - left - right, height=rect.height - top - bottom)
+    inner = Rect(
+        x=rect.x + left,
+        y=rect.y + top,
+        width=rect.width - left - right,
+        height=rect.height - top - bottom,
+    )
     return inner, granted
 
 
