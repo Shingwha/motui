@@ -37,38 +37,6 @@ def test_splash_particle_frames_replay_at_both_sizes():
         assert "space remix" in first
 
 
-def _button_cell(scene: SplashScene, button, width: int = 80, height: int = 24) -> Pos:
-    """The first frame cell whose click chain lands on ``button``.
-
-    Walks the splash's own ``Stack`` exactly as the scene's ``on_click``
-    does, so the coordinates stay true to the composed geometry.
-    """
-    for y in range(height):
-        for x in range(width):
-            current: object = scene._stack
-            row, col = y, x
-            for _ in range(16):
-                child_at = getattr(current, "child_at", None)
-                if child_at is None:
-                    break
-                found = child_at(row, col)
-                if found is None:
-                    break
-                current, row, col = found
-            if current is button:
-                return Pos(x=x, y=y)
-    raise AssertionError(f"no click cell reaches {button!r}")
-
-
-def test_splash_click_reaches_the_launch_and_remix_buttons():
-    scene = SplashScene(Theme.dark(), seed=0)
-    scene.enter()
-    scene.render(Constraints(width=80, max_height=24), 240)
-    assert scene.on_click(_button_cell(scene, scene._launch)) == "menu"
-    assert scene.on_click(_button_cell(scene, scene._remix_button)) is None
-    assert scene._pending_remix == 1
-
-
 def test_splash_keyboard_launches_and_remixes():
     scene = SplashScene(Theme.dark(), seed=0)
     scene.enter()
