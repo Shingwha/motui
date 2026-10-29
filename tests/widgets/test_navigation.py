@@ -253,9 +253,9 @@ def test_the_navlist_keymap_moves_through_named_actions():
     assert nav.on_action("next") is True and nav.index == 2
     assert nav.on_action("next") is False  # clamped at the last item
     assert nav.on_action("prev") is True and nav.index == 1
-    assert nav.on_action("activate") is False
+    assert nav.on_action("activate") is True and nav.take() == "b"
     assert nav.on_action("nope") is False
-    assert nav.on_key(key("enter")) is False
+    assert nav.on_key(key("enter")) is False  # the focus layer owns enter
     assert not hasattr(NavList, "handle")
     assert nav.take() is None
 
@@ -284,7 +284,7 @@ def test_the_navlist_declares_its_capabilities():
         True,
         True,
         True,
-        False,
+        True,
     )
 
 
