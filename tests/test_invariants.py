@@ -210,3 +210,26 @@ def test_text_renders_under_constraints_with_a_height_budget():
     assert surface.width == 20
     assert surface.height <= 2
     assert all(row.width <= 20 for row in surface)
+
+
+def test_every_component_honours_the_height_budget():
+    """One budget matrix for the whole component surface.
+
+    Per-component files used to repeat the same ``max_height=0/1/2`` test.
+    A render under a budget answers at most that many rows, every row stays
+    inside the width, and the answer is idempotent.  ScrollPanel is excluded
+    because an explicit ``height`` deliberately wins over the constraint
+    budget (its own contract test owns that edge).
+    """
+    for name, factory in CASES.items():
+        if name == "ScrollPanel":
+            continue
+        for budget in (0, 1, 2):
+            component = factory()
+            surface = component.render(Constraints(width=20, max_height=budget))
+            assert len(surface) <= budget, f"{name}: {len(surface)} rows over {budget}"
+            assert all(row.width <= 20 for row in surface), f"{name}@{budget}"
+            assert component.render(
+                Constraints(width=20, max_height=budget)
+            ) == surface, f"{name}@{budget}: not idempotent"
+

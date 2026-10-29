@@ -10,8 +10,6 @@ from __future__ import annotations
 
 import importlib
 
-import pytest
-
 FACADES = (
     "motui",
     "motui.kernel",
@@ -23,14 +21,14 @@ FACADES = (
 )
 
 
-@pytest.mark.parametrize("path", FACADES)
-def test_each_facade_publishes_resolvable_public_names(path):
-    module = importlib.import_module(path)
-    names = module.__all__
-    assert names, path
-    assert names == list(dict.fromkeys(names)), f"{path}: duplicate name"
-    assert [name for name in names if name.startswith("_")] == [], path
-    assert [name for name in names if not hasattr(module, name)] == [], path
+def test_each_facade_publishes_resolvable_public_names():
+    for path in FACADES:
+        module = importlib.import_module(path)
+        names = module.__all__
+        assert names, path
+        assert names == list(dict.fromkeys(names)), f"{path}: duplicate name"
+        assert [name for name in names if name.startswith("_")] == [], path
+        assert [name for name in names if not hasattr(module, name)] == [], path
 
 
 def test_every_root_name_has_a_layer_home():

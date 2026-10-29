@@ -36,9 +36,8 @@ def test_button_renders_one_fitted_row_on_the_control_floor():
     assert button.render(Constraints(width=3))[0].text == " R\u2026"
 
 
-@pytest.mark.parametrize(
-    "kind, expected",
-    [
+def test_the_four_button_kinds_paint_their_own_floors():
+    for kind, expected in [
         (
             ButtonKind.NEUTRAL,
             DEFAULT_THEME.surfaces.control.merge(DEFAULT_THEME.text.base),
@@ -52,11 +51,9 @@ def test_button_renders_one_fitted_row_on_the_control_floor():
             ButtonKind.DANGER,
             DEFAULT_THEME.surfaces.danger.merge(DEFAULT_THEME.text.inverse),
         ),
-    ],
-)
-def test_the_four_button_kinds_paint_their_own_floors(kind, expected):
-    button = Button("Run", kind=kind)
-    assert button.render(Constraints(width=20))[0].segments[0].style == expected
+    ]:
+        button = Button("Run", kind=kind)
+        assert button.render(Constraints(width=20))[0].segments[0].style == expected
 
 
 def test_button_accepts_a_string_kind_and_normalizes_it():
@@ -243,33 +240,30 @@ def test_checkbox_hover_focus_and_disabled_use_the_shared_overlay():
     )
 
 
-@pytest.mark.parametrize(
-    "build, row, col",
-    [
-        (lambda theme: Select([Option("one"), Option("two"), Option("three")], theme=theme), 2, 0),
-        (lambda theme: Tabs(["one", "two"], theme=theme), 0, 8),
-        (lambda theme: Tree([TreeNode("a"), TreeNode("b")], theme=theme), 1, 0),
-        (lambda theme: Table([["a"], ["b"]], headers=["h"], theme=theme), 5, 0),
-    ],
-)
-def test_hover_at_marks_and_clears_one_row_across_components(build, row, col):
+def test_hover_at_marks_and_clears_one_row_across_components():
     hover = Style(underline=True)
     theme = replace(
         DEFAULT_THEME,
         surfaces=replace(DEFAULT_THEME.surfaces, hover=hover),
         rows=replace(DEFAULT_THEME.rows, hover=hover),
     )
-    component = build(theme)
-    plain = texts(component, 30)
-    assert component.on_hover(Pos(x=col, y=row)) is True
-    assert any(
-        seg.style.underline
-        for line in component.render(Constraints(width=30))
-        for seg in line.segments
-    )
-    assert component.on_hover(Pos(x=col, y=row)) is False
-    assert component.on_hover(None) is True
-    assert texts(component, 30) == plain
+    for build, row, col in [
+        (lambda theme: Select([Option("one"), Option("two"), Option("three")], theme=theme), 2, 0),
+        (lambda theme: Tabs(["one", "two"], theme=theme), 0, 8),
+        (lambda theme: Tree([TreeNode("a"), TreeNode("b")], theme=theme), 1, 0),
+        (lambda theme: Table([["a"], ["b"]], headers=["h"], theme=theme), 5, 0),
+    ]:
+        component = build(theme)
+        plain = texts(component, 30)
+        assert component.on_hover(Pos(x=col, y=row)) is True
+        assert any(
+            seg.style.underline
+            for line in component.render(Constraints(width=30))
+            for seg in line.segments
+        )
+        assert component.on_hover(Pos(x=col, y=row)) is False
+        assert component.on_hover(None) is True
+        assert texts(component, 30) == plain
 
 
 def test_the_action_hints_default_to_no_tooltip():
@@ -295,65 +289,3 @@ def test_the_action_primitives_render_into_clipped_surfaces():
     assert isinstance(link.render(Constraints(width=30)), Surface)
     assert link.render(Constraints(width=30)) == link.render(Constraints(width=30))
 
-
-def test_the_action_primitives_honour_the_height_budget():
-    for component in (Button("Run"), Checkbox("Bold"), Link("docs")):
-        assert list(component.render(Constraints(width=20, max_height=0))) == []
-        surface = component.render(Constraints(width=20, max_height=1))
-        assert isinstance(surface, Surface)
-        assert surface.height == 1
-        assert all(row.width <= 20 for row in surface)
-
-
-# -- the 2.0 hooks and capabilities -------------------------------------------
-
-
-def test_the_action_family_declares_focus_click_hover_and_activation():
-    for control in (Button("Run"), Checkbox("Bold"), Link("docs")):
-        assert control.focusable is True
-        assert control.clickable is True
-        assert control.hoverable is True
-        assert control.activatable is True
-
-
-def test_on_action_runs_activate_and_declines_unknown_names():
-    for control in (Button("Run"), Checkbox("Bold"), Link("docs")):
-        assert control.on_action("activate") is True
-        assert control.take() is True
-        assert control.take() is None
-        assert control.on_action("bogus") is False
-        assert control.take() is None
-
-
-def test_on_action_toggle_delegates_to_the_toggle_verb():
-    box = Checkbox("Bold")
-    assert box.on_action("toggle") is True
-    assert (box.checked, box.take()) == (True, True)
-    assert box.on_action("toggle") is True
-    assert (box.checked, box.take()) == (False, False)
-    # A button and a link have no toggle verb; the base answer declines.
-    assert Button("Run").on_action("toggle") is False
-    assert Link("docs").on_action("toggle") is False
-
-
-def test_on_click_is_the_positional_door_and_take_clears():
-    button = Button("Run")
-    assert button.on_click(Pos(y=9, x=40)) is True
-    assert button.take() is True
-    assert button.take() is None
-
-    # The 1.x cell spelling still lands the same operation.
-    assert button.on_click(Pos(x=0, y=0)) is True
-    assert button.take() is True
-    assert button.take() is None
-
-
-def test_disabled_controls_refuse_the_typed_hooks():
-    for control in (
-        Button("Run", disabled=True),
-        Checkbox("Bold", disabled=True),
-        Link("docs", disabled=True),
-    ):
-        assert control.on_click(Pos(y=0, x=0)) is False
-        assert control.on_action("activate") is False
-        assert control.take() is None

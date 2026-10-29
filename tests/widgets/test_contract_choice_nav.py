@@ -9,8 +9,6 @@ contract stays in the per-module test files.
 import inspect
 from dataclasses import replace
 
-import pytest
-
 from motui.kernel.geom import Pos
 from motui.kernel.layout import Constraints
 from motui.kernel.style import Style
@@ -53,54 +51,39 @@ def _positional_names(cls) -> list[str]:
     ]
 
 
-@pytest.mark.parametrize(
-    "cls, main",
-    [
-        (Tabs, "items"),
-        (MenuBar, "items"),
-        (NavList, "items"),
-        (List, "items"),
-        (Table, "rows"),
-        (Tree, "nodes"),
-        (Select, "options"),
-        (MultiSelect, "options"),
-        (RadioGroup, "options"),
-        (CheckboxGroup, "options"),
-        (Autocomplete, "options"),
-        (ComboBox, "options"),
-        (ContextMenu, "options"),
-    ],
-)
-def test_the_main_content_is_the_only_positional_parameter(cls, main):
-    assert _positional_names(cls) == [main]
-    assert main in inspect.signature(cls).parameters
+MAIN_CONTENT = [
+    (Tabs, "items"),
+    (MenuBar, "items"),
+    (NavList, "items"),
+    (List, "items"),
+    (Table, "rows"),
+    (Tree, "nodes"),
+    (Select, "options"),
+    (MultiSelect, "options"),
+    (RadioGroup, "options"),
+    (CheckboxGroup, "options"),
+    (Autocomplete, "options"),
+    (ComboBox, "options"),
+    (ContextMenu, "options"),
+]
+
+
+def test_the_main_content_is_the_only_positional_parameter():
+    for cls, main in MAIN_CONTENT:
+        assert _positional_names(cls) == [main], cls.__name__
+        assert main in inspect.signature(cls).parameters
 
 
 def test_tree_node_keeps_its_two_positional_values():
     assert _positional_names(TreeNode) == ["label", "children"]
 
 
-@pytest.mark.parametrize(
-    "cls",
-    [
-        Tabs,
-        MenuBar,
-        NavList,
-        List,
-        Table,
-        Tree,
-        Select,
-        MultiSelect,
-        RadioGroup,
-        CheckboxGroup,
-        Autocomplete,
-        ComboBox,
-        ContextMenu,
-    ],
-)
-def test_the_skin_and_glyph_tail_is_keyword_only(cls):
-    names = _keyword_names(cls)
-    assert names.index("glyphs") < names.index("theme") < names.index("styles")
+def test_the_skin_and_glyph_tail_is_keyword_only():
+    for cls, _ in MAIN_CONTENT:
+        names = _keyword_names(cls)
+        assert names.index("glyphs") < names.index("theme") < names.index("styles"), (
+            cls.__name__
+        )
 
 
 def test_the_choice_and_navigation_capabilities():
@@ -125,23 +108,20 @@ def test_the_choice_and_navigation_capabilities():
         assert widget.activatable is True
 
 
-@pytest.mark.parametrize(
-    "build, expected",
-    [
+def test_select_moves_and_selected_reads_the_entry():
+    for build, expected in [
         (lambda: Tabs(["a", "b"]), "b"),
         (lambda: MenuBar(["a", "b"]), "b"),
         (lambda: NavList(["a", "b"]), "b"),
         (lambda: List(["a", "b"]), "b"),
         (lambda: Table([["a"], ["b"]], headers=["h"]), ["b"]),
         (lambda: Select(THREE), THREE[1]),
-    ],
-)
-def test_select_moves_and_selected_reads_the_entry(build, expected):
-    widget = build()
-    assert widget.index == 0
-    assert widget.select(1) is True
-    assert widget.index == 1
-    assert widget.selected == expected
+    ]:
+        widget = build()
+        assert widget.index == 0
+        assert widget.select(1) is True
+        assert widget.index == 1
+        assert widget.selected == expected
 
 
 def test_an_empty_collection_reads_index_zero_and_no_selection():
@@ -159,6 +139,7 @@ def test_an_empty_collection_reads_index_zero_and_no_selection():
         assert widget.selected is None
         assert widget.move(1) is False
         assert widget.select(0) is False
+    assert list(Select([]).render(Constraints(width=20))) == []
 
 
 def test_a_disabled_row_refuses_selection_and_moves_step_over_it():

@@ -4,15 +4,12 @@ from dataclasses import replace
 
 import pytest
 
-from motui.kernel.cell import Surface
 from motui.kernel.glyphs import GLYPHS
 from motui.kernel.layout import Constraints
 from motui.kernel.style import Style
 from motui.kernel.theme import DEFAULT_THEME, Styles
 from motui.widgets import Notice, ShortcutBar, StatusLine
-from motui.widgets.text import Text
-
-from tests.testing import key, texts
+from tests.testing import texts
 
 
 def test_status_line_puts_the_left_at_the_start_and_the_right_near_the_end():
@@ -51,18 +48,15 @@ def test_shortcut_bar_renders_key_label_pairs_with_a_separator():
     assert texts(ShortcutBar([]), 20) == [""]
 
 
-@pytest.mark.parametrize(
-    "level, expected",
-    [
+def test_a_notice_leads_with_its_level_glyph():
+    for level, expected in [
         ("info", "i hello"),
         ("success", "\u2713 hello"),
         ("warn", "! hello"),
         ("error", "\u00d7 hello"),
         ("odd", "i hello"),
-    ],
-)
-def test_a_notice_leads_with_its_level_glyph(level, expected):
-    assert texts(Notice("hello", level=level), 30) == [expected]
+    ]:
+        assert texts(Notice("hello", level=level), 30) == [expected], level
 
 
 def test_a_leveled_notice_prefix_carries_the_level_style():
@@ -77,60 +71,3 @@ def test_a_leveled_notice_prefix_carries_the_level_style():
 def test_a_narrow_notice_truncates_instead_of_wrapping():
     row = Notice("a long warning", level="warn").render(Constraints(width=8))[0]
     assert row.width == 8 and row.text.endswith("\u2026")
-
-
-# -- the 2.0 render contract -------------------------------------------------
-
-
-def test_text_answers_a_surface_for_both_render_spellings():
-    component = Text("alpha beta gamma")
-    legacy = component.render(Constraints(width=5))
-    modern = component.render(Constraints(width=5))
-    assert isinstance(legacy, Surface) and isinstance(modern, Surface)
-    assert legacy == modern
-    assert [row.text for row in modern] == ["alpha", "beta", "gamma"]
-    assert all(row.width <= 5 for row in modern)
-    assert modern.width == 5
-
-
-def test_text_honours_the_height_budget():
-    component = Text("one\ntwo\nthree")
-    surface = component.render(Constraints(width=10, max_height=2))
-    assert [row.text for row in surface] == ["one", "two"]
-    assert surface.height == 2
-    assert [row.text for row in component.render(Constraints(width=10))] == ["one", "two", "three"]
-
-
-@pytest.mark.parametrize(
-    "component",
-    [
-        StatusLine(left=["l"], right=["r"]),
-        ShortcutBar([("k", "v")]),
-        Notice("n"),
-    ],
-)
-def test_the_row_furniture_honours_the_height_budget(component):
-    surface = component.render(Constraints(width=20))
-    assert isinstance(surface, Surface)
-    assert surface.width == 20 and surface.height == 1
-    assert all(row.width <= 20 for row in surface)
-    truncated = component.render(Constraints(width=20, max_height=0))
-    assert isinstance(truncated, Surface) and truncated.height == 0
-
-
-def test_the_row_furniture_is_pure_display():
-    for widget in (
-        StatusLine(left=["l"]),
-        ShortcutBar([("k", "v")]),
-        Notice("n"),
-    ):
-        assert (widget.focusable, widget.clickable, widget.hoverable, widget.activatable) == (
-            False,
-            False,
-            False,
-            False,
-        )
-        assert widget.keymap == {}
-        assert widget.take() is None
-        assert widget.on_key(key("down")) is False
-        assert widget.on_key(key("down")) is False

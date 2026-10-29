@@ -8,24 +8,13 @@ components still resolve explicit style > theme token > DEFAULT_THEME.
 
 from __future__ import annotations
 
-from dataclasses import FrozenInstanceError, replace
-
-import pytest
+from dataclasses import replace
 
 from motui import DEFAULT_THEME, Button, Input, List, Markdown, Theme
 from motui.kernel.layout import Constraints
 from motui.kernel.style import NONE, Color, Style
 from motui.kernel.theme import DARK_PALETTE, Styles
 from motui.widgets import Divider
-
-
-def test_default_theme_is_the_shipped_frozen_value():
-    assert Theme() == DEFAULT_THEME
-    assert hash(Theme()) == hash(DEFAULT_THEME)
-    with pytest.raises(FrozenInstanceError):
-        DEFAULT_THEME.content = Theme().content  # type: ignore[misc]
-    with pytest.raises(FrozenInstanceError):
-        DEFAULT_THEME.text = Theme().text  # type: ignore[misc]
 
 
 def test_default_theme_ships_the_dark_values():
@@ -80,17 +69,6 @@ def test_structural_tables_derive_from_the_theme_colors():
     assert custom.content.headings[0] == Style(fg="#555555", underline=True)
     assert custom.status.warning == Style(fg="#999999")
     assert custom.status.danger == DEFAULT_THEME.status.danger
-
-
-def test_replace_builds_a_variant_without_mutating_the_default():
-    theme = replace(
-        DEFAULT_THEME,
-        content=replace(DEFAULT_THEME.content, accent=Style(fg="#ff0000")),
-    )
-    assert theme.content.accent == Style(fg="#ff0000")
-    assert theme.borders.base == DEFAULT_THEME.borders.base
-    assert theme != DEFAULT_THEME
-    assert DEFAULT_THEME.content.accent == Theme().content.accent
 
 
 def test_theme_group_prefers_the_styles_override_and_falls_back_whole():

@@ -4,7 +4,6 @@ from dataclasses import replace
 
 import pytest
 
-from motui.kernel.cell import Surface
 from motui.kernel.geom import Pos
 from motui.kernel.glyphs import GLYPHS
 from motui.kernel.layout import Constraints
@@ -19,30 +18,21 @@ THREE = [Option("one"), Option("two"), Option("three")]
 # -- Select: the cursor -------------------------------------------------------
 
 
-@pytest.mark.parametrize(
-    "start, delta, index",
-    [(0, 1, 1), (2, 1, 0), (0, -1, 2)],
-)
-def test_move_wraps_around_the_ends_by_default(start, delta, index):
-    select = Select(THREE)
-    select.index = start
-    assert select.move(delta) is True
-    assert select.index == index and select.selected == THREE[index]
+def test_move_wraps_around_the_ends_by_default():
+    cases = [(0, 1, 1), (2, 1, 0), (0, -1, 2)]
+    for start, delta, index in cases:
+        select = Select(THREE)
+        select.index = start
+        assert select.move(delta) is True
+        assert select.index == index and select.selected == THREE[index]
 
 
-@pytest.mark.parametrize("start, delta, index, moved", [(0, 5, 2, True), (0, -1, 0, False)])
-def test_a_non_wrapping_select_clamps_at_the_ends(start, delta, index, moved):
-    select = Select(THREE, wrap=False)
-    select.index = start
-    assert select.move(delta) is moved
-    assert select.index == index
-
-
-def test_an_empty_list_has_no_selection_and_cannot_move():
-    empty = Select([])
-    assert empty.selected is None
-    assert empty.move(1) is False
-    assert list(empty.render(Constraints(width=20))) == []
+def test_a_non_wrapping_select_clamps_at_the_ends():
+    for start, delta, index, moved in [(0, 5, 2, True), (0, -1, 0, False)]:
+        select = Select(THREE, wrap=False)
+        select.index = start
+        assert select.move(delta) is moved
+        assert select.index == index
 
 
 def test_assigning_the_index_clamps_into_the_rows():
@@ -154,15 +144,12 @@ def test_an_unfocused_menu_wears_the_inactive_band():
     assert rows[1].segments[1].style.fg is None
 
 
-@pytest.mark.parametrize(
-    "row, index, hit",
-    [(1, 0, True), (0, 1, False), (3, 1, False), (-1, 1, False)],
-)
-def test_click_places_the_cursor_on_the_option_under_the_row(row, index, hit):
-    select = Select([Option("one"), Option("two")], title="pick")
-    select.index = 1
-    assert select.on_click(Pos(x=0, y=row)) is hit
-    assert select.index == index
+def test_click_places_the_cursor_on_the_option_under_the_row():
+    for row, index, hit in [(1, 0, True), (0, 1, False), (3, 1, False), (-1, 1, False)]:
+        select = Select([Option("one"), Option("two")], title="pick")
+        select.index = 1
+        assert select.on_click(Pos(x=0, y=row)) is hit
+        assert select.index == index
 
 
 def test_click_ignores_the_column_and_maps_through_the_window():
@@ -177,35 +164,6 @@ def test_click_ignores_the_column_and_maps_through_the_window():
     assert menu.on_click(Pos(x=0, y=2)) is True and menu.index == 5
     menu.index = 5
     assert menu.on_click(Pos(x=0, y=3)) is False and menu.index == 5
-
-
-def test_activate_leaves_the_cursor_option_pending_once():
-    menu = Select(THREE)
-    menu.index = 1
-    assert menu.on_action("activate") is True
-    assert menu.take() == "two"
-    assert menu.take() is None
-
-
-def test_an_empty_menu_activates_to_nothing():
-    empty = Select([])
-    assert empty.on_action("activate") is False
-    assert empty.take() is None
-
-
-def test_moving_the_cursor_clears_a_pending_pick():
-    menu = Select(THREE)
-    assert menu.on_action("activate") is True
-    assert menu.move(1) is True
-    assert menu.take() is None
-
-
-def test_a_move_or_a_click_does_not_write_a_pick():
-    menu = Select(THREE)
-    assert menu.take() is None
-    assert menu.move(1) is True and menu.take() is None
-    assert menu.on_click(Pos(x=0, y=2)) is True and menu.take() is None
-    assert menu.on_action("activate") is True and menu.take() == "three"
 
 
 def test_a_disabled_select_refuses_every_gesture_but_still_renders():
@@ -342,10 +300,10 @@ def test_a_multi_select_keeps_the_mark_column_before_the_label():
     assert menu.move(1) is True and menu.take() is None
 
 
-@pytest.mark.parametrize("group", [RadioGroup, CheckboxGroup])
-def test_the_form_groups_refuse_option_descriptions(group):
-    with pytest.raises(ValueError, match="description"):
-        group([Option("one", description="explained")])
+def test_the_form_groups_refuse_option_descriptions():
+    for group in (RadioGroup, CheckboxGroup):
+        with pytest.raises(ValueError, match="description"):
+            group([Option("one", description="explained")])
 
 
 def test_the_custom_glyph_pairs_pad_to_the_wider_member():
@@ -366,23 +324,6 @@ def test_the_custom_glyph_pairs_pad_to_the_wider_member():
         ["a", "b"], glyphs=replace(GLYPHS, radio_off="", radio_on=">")
     )
     assert texts(group, 20) == ["> a", "  b"]
-
-
-# -- the 2.0 render contract -------------------------------------------------
-
-
-def test_select_answers_a_surface_and_honours_the_height_budget():
-    menu = Select(THREE)
-    surface = menu.render(Constraints(width=20, max_height=2))
-    assert isinstance(surface, Surface)
-    assert [row.text for row in surface] == ["\u2192 one", "  two"]
-    assert surface.width == 20 and surface.height == 2
-    # The 1.x int spelling still answers the natural window.
-    assert [row.text for row in menu.render(Constraints(width=20))] == [
-        "\u2192 one",
-        "  two",
-        "  three",
-    ]
 
 
 # -- the 2.0 keymap and action surface ----------------------------------------
@@ -410,16 +351,6 @@ def test_a_non_wrapping_choice_action_reports_an_edge_as_unhandled():
     assert menu.on_action("next") is True and menu.index == 1
 
 
-def test_an_instance_keymap_rebind_is_private_to_the_instance():
-    menu = Select(THREE)
-    other = Select(THREE)
-    menu.keymap["j"] = "next"
-    assert "j" not in Select.keymap
-    assert "j" not in other.keymap
-    assert menu.on_key(key("j", "j")) is True and menu.index == 1
-    assert other.on_key(key("j", "j")) is False and other.index == 0
-
-
 def test_the_typed_hooks_forward_to_click_and_hover():
     menu = Select([Option("one"), Option("two")], title="pick")
     assert menu.on_click(Pos(y=1, x=3)) is True and menu.index == 0
@@ -427,25 +358,3 @@ def test_the_typed_hooks_forward_to_click_and_hover():
     assert menu.on_hover(Pos(y=1, x=0)) is False
     assert menu.on_hover(None) is True
     assert menu.on_click(Pos(y=0, x=0)) is False  # the title row
-
-
-def test_a_multi_select_binds_activate_to_its_toggle():
-    menu = MultiSelect(THREE)
-    assert menu.on_action("activate") is True
-    assert menu.take() == ["one"]
-    assert menu.on_action("activate") is True
-    assert menu.take() is None
-
-
-def test_the_choice_family_declares_its_capabilities():
-    for widget in (
-        Select(THREE),
-        MultiSelect(THREE),
-        RadioGroup(["a"]),
-        CheckboxGroup(["a"]),
-    ):
-        assert widget.focusable is True
-        assert widget.clickable is True
-        assert widget.hoverable is True
-        assert widget.activatable is True
-        assert "up" in widget.keymap

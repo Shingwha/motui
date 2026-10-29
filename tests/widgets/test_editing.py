@@ -9,7 +9,6 @@ from dataclasses import replace
 
 import pytest
 
-from motui.kernel.cell import Surface
 from motui.kernel.geom import Pos
 from motui.kernel.keymap import DEFAULT_EDITOR_KEYMAP, DEFAULT_INPUT_KEYMAP
 from motui.kernel.layout import Constraints
@@ -43,27 +42,27 @@ def flat(field) -> int:
 # -- routing -----------------------------------------------------------------
 
 
-@pytest.mark.parametrize("make", FIELDS)
-def test_printables_insert_at_the_cursor(make):
-    field = make()
-    assert field.on_key(key("a", "a")) is True
-    assert field.on_key(key("space", " ")) is True
-    assert field.text == "a " and field.cursor == (0, 2)
+def test_printables_insert_at_the_cursor():
+    for make in FIELDS:
+        field = make()
+        assert field.on_key(key("a", "a")) is True
+        assert field.on_key(key("space", " ")) is True
+        assert field.text == "a " and field.cursor == (0, 2)
 
 
-@pytest.mark.parametrize("make, consumed, expected", [(Input, False, ""), (Editor, True, "\n")])
-def test_enter_is_the_editors_newline_and_the_inputs_submit_gesture(make, consumed, expected):
-    field = make()
-    assert field.on_key(key("enter")) is consumed
-    assert field.text == expected
+def test_enter_is_the_editors_newline_and_the_inputs_submit_gesture():
+    for make, consumed, expected in [(Input, False, ""), (Editor, True, "\n")]:
+        field = make()
+        assert field.on_key(key("enter")) is consumed
+        assert field.text == expected
 
 
-@pytest.mark.parametrize("name", ["escape", "page_up"])
-def test_unbound_keys_are_declined_and_change_nothing(name):
-    field = Input("ab")
-    park(field, 2)
-    assert field.on_key(key(name)) is False
-    assert field.text == "ab" and flat(field) == 2
+def test_unbound_keys_are_declined_and_change_nothing():
+    for name in ["escape", "page_up"]:
+        field = Input("ab")
+        park(field, 2)
+        assert field.on_key(key(name)) is False
+        assert field.text == "ab" and flat(field) == 2
 
 
 def test_a_custom_keymap_rebinds_and_drops_a_key():
@@ -72,20 +71,6 @@ def test_a_custom_keymap_rebinds_and_drops_a_key():
     editor = Editor("ab", keymap={"c-j": "newline"})
     park(editor, 2)
     assert editor.on_key(key("c-j")) is True and editor.text == "ab\n"
-
-
-def test_input_folds_every_newline_run_of_a_paste_into_one_space():
-    field = Input()
-    assert field.on_paste(paste("a\r\n\r\nb\nc")) is True
-    assert field.text == "a b c" and field.cursor == (0, 5)
-    assert texts(field, 30) == ["\u276f a b c "]
-
-
-def test_editor_keeps_the_newlines_of_a_paste():
-    editor = Editor()
-    assert editor.on_paste(paste("a\r\nb\nc")) is True
-    assert editor.text == "a\r\nb\nc"
-    assert len(editor.render(Constraints(width=10))) == 3
 
 
 def test_an_explicit_insert_keeps_newlines_even_in_an_input():
@@ -295,30 +280,27 @@ def test_the_selection_outranks_the_cursor_on_a_shared_cell():
 # -- rendering ---------------------------------------------------------------
 
 
-@pytest.mark.parametrize(
-    "make, width, text, expected",
-    [
+def test_render_rows():
+    for make, width, text, expected in [
         (Input, 10, "ab", ["\u276f ab"]),
         (Input, 6, "a\nbb\nccc", ["\u276f a bb"]),
         (Editor, 4, "abcdefgh", ["abcd", "efgh"]),
-    ],
-)
-def test_render_rows(make, width, text, expected):
-    assert texts(make(text), width) == expected
+    ]:
+        assert texts(make(text), width) == expected, (make, width)
 
 
-@pytest.mark.parametrize("make, expected", [(Input, "\u276f  "), (Editor, " ")])
-def test_an_empty_focused_field_renders_the_cursor_cell(make, expected):
-    assert texts(make(), 10) == [expected]
+def test_an_empty_focused_field_renders_the_cursor_cell():
+    for make, expected in [(Input, "\u276f  "), (Editor, " ")]:
+        assert texts(make(), 10) == [expected]
 
 
-@pytest.mark.parametrize("make, expected", [(Input, "\u276f hint"), (Editor, "hint")])
-def test_the_placeholder_is_dim_and_carries_no_cursor_cell(make, expected):
-    theme = replace(DEFAULT_THEME, text=replace(DEFAULT_THEME.text, faint=INJECTED))
-    row = make(placeholder="hint", theme=theme).render(Constraints(width=10))[0]
-    assert row.text == expected
-    assert row.segments[-1].style == DEFAULT_THEME.surfaces.control.merge(INJECTED)
-    assert all(seg.style.reverse is False for seg in row.segments)
+def test_the_placeholder_is_dim_and_carries_no_cursor_cell():
+    for make, expected in [(Input, "\u276f hint"), (Editor, "hint")]:
+        theme = replace(DEFAULT_THEME, text=replace(DEFAULT_THEME.text, faint=INJECTED))
+        row = make(placeholder="hint", theme=theme).render(Constraints(width=10))[0]
+        assert row.text == expected
+        assert row.segments[-1].style == DEFAULT_THEME.surfaces.control.merge(INJECTED)
+        assert all(seg.style.reverse is False for seg in row.segments)
 
 
 @pytest.mark.parametrize("make, expected", [(Input, "\u276f abc")])
@@ -379,17 +361,14 @@ def test_max_rows_windows_the_rows_around_the_cursor():
     assert texts(windowed, 20) == ["line7", "line8", "line9 "]
 
 
-@pytest.mark.parametrize(
-    "make, width, text, cursor, cell",
-    [
+def test_cursor_position_reports_the_block_cursor_cell():
+    for make, width, text, cursor, cell in [
         (Input, 6, "abcdefgh", 5, (0, 5)),
         (Editor, 4, "abcdefgh", 5, (1, 1)),
-    ],
-)
-def test_cursor_position_reports_the_block_cursor_cell(make, width, text, cursor, cell):
-    field = make(text)
-    park(field, cursor)
-    assert field.cursor_position(width) == cell
+    ]:
+        field = make(text)
+        park(field, cursor)
+        assert field.cursor_position(width) == cell, (make, width)
 
 
 def test_a_theme_assignment_repaints_the_memoized_rows():
@@ -484,15 +463,15 @@ def test_editor_click_maps_a_windowed_row_back_to_its_buffer_row():
     assert editor.on_click(Pos(x=0, y=3)) is False and editor.cursor == (5, 2)
 
 
-@pytest.mark.parametrize("make", FIELDS)
-def test_read_only_declines_routed_events_until_the_host_clears_the_flag(make):
-    field = make("keep", read_only=True)
-    assert field.on_key(key("x", "x")) is False
-    assert field.on_paste(paste("paste")) is False
-    assert field.text == "keep"
-    field.read_only = False
-    park(field, len(field.text))
-    assert field.on_key(key("x", "x")) is True and field.text == "keepx"
+def test_read_only_declines_routed_events_until_the_host_clears_the_flag():
+    for make in FIELDS:
+        field = make("keep", read_only=True)
+        assert field.on_key(key("x", "x")) is False
+        assert field.on_paste(paste("paste")) is False
+        assert field.text == "keep"
+        field.read_only = False
+        park(field, len(field.text))
+        assert field.on_key(key("x", "x")) is True and field.text == "keepx"
 
 
 def test_the_text_setter_replaces_the_buffer_and_clears_history():
@@ -506,54 +485,25 @@ def test_the_text_setter_replaces_the_buffer_and_clears_history():
 # -- the value cache ---------------------------------------------------------
 
 
-def test_value_reads_between_writes_share_one_string():
+def test_value_is_one_cached_string_across_writes_undo_and_set_text():
     buffer = TextBuffer("ab\ncd", keymap=DEFAULT_EDITOR_KEYMAP)
     value = buffer.value
     assert value == "ab\ncd"
     assert buffer.value is value
 
-
-def test_an_edit_updates_value_once_and_caches_again():
-    buffer = TextBuffer("ab\ncd", keymap=DEFAULT_EDITOR_KEYMAP)
-    assert buffer.value is buffer.value
     buffer.end()
     buffer.insert("x")
     assert buffer.value == "abx\ncd"
     assert buffer.value is buffer.value
+    assert buffer.undo() is True and buffer.value == "ab\ncd"
+    assert buffer.redo() is True and buffer.value == "abx\ncd"
 
-
-def test_undo_and_redo_keep_value_true():
-    buffer = TextBuffer("ab", keymap=DEFAULT_EDITOR_KEYMAP)
-    assert buffer.value == "ab"
-    buffer.end()
-    buffer.insert("c")
-    assert buffer.value == "abc"
-    assert buffer.undo() is True and buffer.value == "ab"
-    assert buffer.redo() is True and buffer.value == "abc"
-
-
-def test_set_text_rejoins_the_replacement():
-    buffer = TextBuffer("ab", keymap=DEFAULT_EDITOR_KEYMAP)
-    assert buffer.value == "ab"
     buffer.set_text("x\ny")
     assert buffer.value == "x\ny"
     assert buffer.value is buffer.value
 
 
 # -- the 2.0 render contract -------------------------------------------------
-
-
-def test_the_text_fields_take_constraints_and_honour_the_height_budget():
-    field = Input("hello")
-    assert isinstance(field.render(Constraints(width=20)), Surface)
-    assert field.render(Constraints(width=20)) == field.render(Constraints(width=20))
-    assert list(field.render(Constraints(width=20, max_height=0))) == []
-    assert field.render(Constraints(width=20, max_height=1)).height == 1
-
-    editor = Editor("a\nb\nc")
-    assert isinstance(editor.render(Constraints(width=20)), Surface)
-    assert editor.render(Constraints(width=20)) == editor.render(Constraints(width=20))
-    assert editor.render(Constraints(width=20, max_height=2)).height == 2
 
 
 def test_a_truncated_field_keeps_the_buffer_wrap_geometry():
@@ -672,14 +622,14 @@ def test_input_defaults_to_the_overflow_single_line_guard():
 # -- single-line overflow: the W2.5b default ---------------------------------
 
 
-@pytest.mark.parametrize("width", [20, 40])
-def test_a_long_input_stays_one_row(width):
-    field = Input("x" * 200)
-    assert field.render(Constraints(width=width)).height == 1
-    park(field, 200)
-    surface = field.render(Constraints(width=width))
-    assert surface.height == 1
-    assert all(len(row.text) <= width for row in surface)
+def test_a_long_input_stays_one_row():
+    for width in [20, 40]:
+        field = Input("x" * 200)
+        assert field.render(Constraints(width=width)).height == 1
+        park(field, 200)
+        surface = field.render(Constraints(width=width))
+        assert surface.height == 1
+        assert all(len(row.text) <= width for row in surface)
 
 
 def test_the_input_cursor_at_the_end_stays_visible():
@@ -763,34 +713,16 @@ def test_an_input_can_opt_back_into_the_shared_wrap_guard():
 # -- the 2.0 typed hooks ------------------------------------------------------
 
 
-@pytest.mark.parametrize("make", FIELDS)
-def test_the_fields_declare_focus_click_and_hover(make):
-    field = make()
-
-    assert field.focusable is True
-    assert field.clickable is True
-    assert field.hoverable is True
-    assert field.activatable is False
-
-
-@pytest.mark.parametrize("make", FIELDS)
-def test_on_key_routes_the_editing_keys(make):
-    field = make()
-
-    assert field.on_key(key("a", "a")) is True
-    assert field.text == "a"
-    # ``enter`` is the host's on an Input; an Editor inserts a newline.
-    assert field.on_key(key("enter")) is isinstance(field, Editor)
-
-
 def test_on_paste_folds_newlines_in_an_input_and_keeps_them_in_an_editor():
     field = Input()
     assert field.on_paste(paste("a\r\n\r\nb\nc")) is True
-    assert field.text == "a b c"
+    assert field.text == "a b c" and field.cursor == (0, 5)
+    assert texts(field, 30) == ["\u276f a b c "]
 
     editor = Editor()
     assert editor.on_paste(paste("a\r\nb\nc")) is True
     assert editor.text == "a\r\nb\nc"
+    assert len(editor.render(Constraints(width=10))) == 3
 
     # The 1.x handle keeps the same folding policy.
     legacy = Input()
@@ -798,21 +730,18 @@ def test_on_paste_folds_newlines_in_an_input_and_keeps_them_in_an_editor():
     assert legacy.text == "a b"
 
 
-@pytest.mark.parametrize(
-    "name, before, after",
-    [
+def test_on_action_runs_a_bound_keymap_action():
+    for name, before, after in [
         ("move_right", 0, 1),
         ("move_left", 1, 0),
         ("end", 0, 3),
         ("home", 3, 0),
-    ],
-)
-def test_on_action_runs_a_bound_keymap_action(name, before, after):
-    field = Input("abc")
-    park(field, before)
+    ]:
+        field = Input("abc")
+        park(field, before)
 
-    assert field.on_action(name) is True
-    assert field.cursor == (0, after)
+        assert field.on_action(name) is True
+        assert field.cursor == (0, after)
 
 
 def test_on_action_declines_unbound_names_and_activation():
@@ -826,15 +755,6 @@ def test_on_action_declines_unbound_names_and_activation():
     assert field.text == ""
 
 
-def test_an_instance_keymap_rebind_does_not_write_the_default_table():
-    field = Input()
-
-    assert field.keymap is not DEFAULT_INPUT_KEYMAP
-    field.keymap["c-j"] = "clear"
-    assert "c-j" not in DEFAULT_INPUT_KEYMAP
-    assert field.on_key(key("c-j")) is True and field.text == ""
-
-
 def test_a_constructor_keymap_is_copied_too():
     custom = {"c-j": "clear"}
     field = Input(keymap=custom)
@@ -842,3 +762,8 @@ def test_a_constructor_keymap_is_copied_too():
     field.keymap["x"] = "newline"
     assert "x" not in custom
     assert field.on_key(key("c-j")) is True and field.text == ""
+
+    rebuilt = Input()
+    rebuilt.keymap["c-j"] = "clear"
+    assert rebuilt.keymap is not DEFAULT_INPUT_KEYMAP
+    assert "c-j" not in DEFAULT_INPUT_KEYMAP

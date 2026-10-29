@@ -2,7 +2,6 @@
 
 from dataclasses import replace
 
-from motui.kernel.cell import Surface
 from motui.kernel.geom import Pos
 from motui.kernel.layout import Constraints
 from motui.kernel.style import Style
@@ -34,17 +33,6 @@ def test_menubar_focus_is_visible_on_the_active_label():
     )
     assert focused_style == unfocused_style.merge(DEFAULT_THEME.controls.focus)
     assert focused_style != unfocused_style
-
-
-def test_menubar_answers_a_surface_and_honours_the_height_budget():
-    bar = MenuBar(["File", "Edit"])
-    surface = bar.render(Constraints(width=40, max_height=1))
-    assert isinstance(surface, Surface)
-    assert [row.text for row in surface] == [" File \u2502 Edit "]
-    assert surface.width == 40 and surface.height == 1
-    # A zero height budget paints no row; the width still feeds the hits.
-    assert bar.render(Constraints(width=40, max_height=0)).height == 0
-    assert bar.on_click(Pos(x=1, y=0)) is True and bar.index == 0
 
 
 def test_an_over_wide_bar_truncates_and_the_cut_label_carries_no_span():
@@ -161,16 +149,6 @@ def test_the_menubar_keymap_steps_and_activates_through_named_actions():
     assert MenuBar.keymap["down"] == "next"
 
 
-def test_an_instance_menubar_keymap_rebind_is_private_to_the_instance():
-    bar = MenuBar(["a", "b"])
-    other = MenuBar(["a", "b"])
-    bar.keymap["j"] = "next"
-    assert "j" not in MenuBar.keymap
-    assert "j" not in other.keymap
-    assert bar.on_key(key("j", "j")) is True and bar.index == 1
-    assert other.on_key(key("j", "j")) is False and other.index == 0
-
-
 def test_the_menubar_typed_hooks_forward_to_click_and_hover():
     bar = MenuBar(["File", "Edit"])
     bar.render(Constraints(width=40))
@@ -178,16 +156,6 @@ def test_the_menubar_typed_hooks_forward_to_click_and_hover():
     assert bar.on_hover(Pos(y=0, x=8)) is True
     assert bar.on_hover(Pos(y=0, x=8)) is False
     assert bar.on_hover(None) is True
-
-
-def test_the_menubar_declares_its_capabilities():
-    bar = MenuBar(["a"])
-    assert (bar.focusable, bar.clickable, bar.hoverable, bar.activatable) == (
-        True,
-        True,
-        True,
-        True,
-    )
 
 
 def test_the_context_menu_inherits_the_choice_keymap():

@@ -13,10 +13,10 @@ from motui.kernel.text import WrapMode
 # -- the content door -------------------------------------------------------
 
 
-@pytest.mark.parametrize("char", ["\x00", "\x1b", "\x7f", "\x9b", "\x0a"])
-def test_cell_deletes_control_characters(char: str) -> None:
-    assert Cell(char=char).char == ""
-    assert Cell(char=f"a{char}b").char == "ab"
+def test_cell_deletes_control_characters() -> None:
+    for char in ["\x00", "\x1b", "\x7f", "\x9b", "\x0a"]:
+        assert Cell(char=char).char == ""
+        assert Cell(char=f"a{char}b").char == "ab"
 
 
 def test_cell_normalizes_a_tab_to_one_space() -> None:
@@ -51,9 +51,8 @@ def test_segment_deletes_control_characters() -> None:
     assert Segment("x", link="\x01").link is None
 
 
-@pytest.mark.parametrize(
-    ("text", "width"),
-    [
+def test_segment_width() -> None:
+    for text, width in [
         ("", 0),
         ("a", 1),
         ("abc", 3),
@@ -63,10 +62,8 @@ def test_segment_deletes_control_characters() -> None:
         ("\u0301", 0),  # combining mark with no base
         ("a\u0301", 1),  # combining mark merges into its base
         ("👨\u200d👩\u200d👧\u200d👦", 2),  # one ZWJ family cell
-    ],
-)
-def test_segment_width(text: str, width: int) -> None:
-    assert Segment(text).width == width
+    ]:
+        assert Segment(text).width == width, text
 
 
 def test_segment_payloads_do_not_add_width() -> None:
@@ -113,9 +110,8 @@ def test_line_value_semantics() -> None:
     assert "ab" in repr(a)
 
 
-@pytest.mark.parametrize(
-    ("text", "width", "expected"),
-    [
+def test_line_clip() -> None:
+    for text, width, expected in [
         ("abcdef", 0, ""),
         ("abcdef", 1, "a"),
         ("abcdef", 3, "abc"),
@@ -127,12 +123,10 @@ def test_line_value_semantics() -> None:
         ("a中", 3, "a中"),
         ("😀x", 1, ""),
         ("😀x", 2, "😀"),
-    ],
-)
-def test_line_clip(text: str, width: int, expected: str) -> None:
-    clipped = Line.from_text(text).clip(WrapMode.CLIP, width)
-    assert clipped.text == expected
-    assert clipped.width <= width
+    ]:
+        clipped = Line.from_text(text).clip(WrapMode.CLIP, width)
+        assert clipped.text == expected, (text, width)
+        assert clipped.width <= width
 
 
 def test_line_clip_keeps_styles_and_payloads() -> None:

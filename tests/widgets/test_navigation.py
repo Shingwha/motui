@@ -2,9 +2,6 @@
 
 from dataclasses import replace
 
-import pytest
-
-from motui.kernel.cell import Surface
 from motui.kernel.geom import Pos
 from motui.kernel.glyphs import GLYPHS
 from motui.kernel.layout import Constraints
@@ -29,14 +26,11 @@ def test_tabs_render_one_row_with_the_active_label_marked():
     assert rows[0].segments[3].style.underline is False
 
 
-@pytest.mark.parametrize(
-    "start, delta, active, changed",
-    [(0, 1, 1, True), (2, -9, 0, True)],
-)
-def test_tabs_move_clamps_without_wrapping(start, delta, active, changed):
-    tabs = Tabs(["a", "b", "c"], index=start)
-    assert tabs.move(delta) is changed
-    assert tabs.index == active
+def test_tabs_move_clamps_without_wrapping():
+    for start, delta, active, changed in [(0, 1, 1, True), (2, -9, 0, True)]:
+        tabs = Tabs(["a", "b", "c"], index=start)
+        assert tabs.move(delta) is changed
+        assert tabs.index == active
     assert Tabs(["a", "b"], index=7).index == 1
     assert Tabs([]).move(1) is False
 
@@ -125,17 +119,6 @@ def test_an_empty_strip_renders_one_empty_row_and_misses_every_cell():
     assert texts(empty, 40) == [""]
     assert empty.on_click(Pos(x=0, y=0)) is False
     assert empty.index == 0
-
-
-def test_tabs_answers_a_surface_and_honours_the_height_budget():
-    tabs = Tabs(["a", "b"])
-    surface = tabs.render(Constraints(width=20, max_height=1))
-    assert isinstance(surface, Surface)
-    assert [row.text for row in surface] == [" a \u2502 b "]
-    assert surface.width == 20 and surface.height == 1
-    # A zero height budget paints no row; the width still feeds the hits.
-    assert tabs.render(Constraints(width=20, max_height=0)).height == 0
-    assert tabs.on_click(Pos(x=1, y=0)) is True and tabs.index == 0
 
 
 # -- NavList ------------------------------------------------------------------
@@ -236,16 +219,6 @@ def test_an_empty_navlist_renders_zero_rows():
     assert nav.move(1) is False
 
 
-def test_navlist_answers_a_surface_and_honours_the_height_budget():
-    nav = NavList(["a", "b", "c"])
-    surface = nav.render(Constraints(width=20, max_height=2))
-    assert isinstance(surface, Surface)
-    assert [row.text for row in surface] == ["\u258c a", "  b"]
-    assert surface.width == 20 and surface.height == 2
-    # The 1.x int spelling still answers the whole rail.
-    assert [row.text for row in nav.render(Constraints(width=20))] == ["\u258c a", "  b", "  c"]
-
-
 def test_a_disabled_navlist_refuses_every_gesture_but_still_renders():
     nav = NavList(["a", "b"], disabled=True)
     assert nav.select(0) is False and nav.move(1) is False
@@ -271,32 +244,12 @@ def test_the_navlist_keymap_moves_through_named_actions():
     assert nav.take() is None
 
 
-def test_an_instance_navlist_keymap_rebind_is_private_to_the_instance():
-    nav = NavList(["a", "b", "c"])
-    other = NavList(["a", "b", "c"])
-    nav.keymap["j"] = "next"
-    assert "j" not in NavList.keymap
-    assert "j" not in other.keymap
-    assert nav.on_key(key("j", "j")) is True and nav.index == 1
-    assert other.on_key(key("j", "j")) is False and other.index == 0
-
-
 def test_the_navlist_typed_hooks_forward_to_click_and_hover():
     nav = NavList(["a", "b", "c"])
     assert nav.on_click(Pos(y=2, x=9)) is True and nav.index == 2
     assert nav.on_hover(Pos(y=2, x=0)) is True
     assert nav.on_hover(Pos(y=2, x=0)) is False
     assert nav.on_hover(None) is True
-
-
-def test_the_navlist_declares_its_capabilities():
-    nav = NavList(["a"])
-    assert (nav.focusable, nav.clickable, nav.hoverable, nav.activatable) == (
-        True,
-        True,
-        True,
-        True,
-    )
 
 
 # -- the tab strip's 2.0 keymap and action surface ----------------------------
@@ -317,16 +270,6 @@ def test_the_tabs_keymap_steps_through_named_actions():
     assert tabs.take() is None
 
 
-def test_an_instance_tabs_keymap_rebind_is_private_to_the_instance():
-    tabs = Tabs(["a", "b", "c"])
-    other = Tabs(["a", "b", "c"])
-    tabs.keymap["j"] = "next"
-    assert "j" not in Tabs.keymap
-    assert "j" not in other.keymap
-    assert tabs.on_key(key("j", "j")) is True and tabs.index == 1
-    assert other.on_key(key("j", "j")) is False and other.index == 0
-
-
 def test_the_tabs_typed_hooks_forward_to_click_and_hover():
     tabs = Tabs(["a", "b", "c"])
     tabs.render(Constraints(width=20))
@@ -334,20 +277,3 @@ def test_the_tabs_typed_hooks_forward_to_click_and_hover():
     assert tabs.on_hover(Pos(y=0, x=5)) is True
     assert tabs.on_hover(Pos(y=0, x=5)) is False
     assert tabs.on_hover(None) is True
-
-
-def test_the_tabs_declares_its_capabilities():
-    tabs = Tabs(["a"])
-    assert (tabs.focusable, tabs.clickable, tabs.hoverable, tabs.activatable) == (
-        True,
-        True,
-        True,
-        True,
-    )
-
-
-def test_the_strip_has_no_second_cursor_implementation():
-    from motui.widgets import strip as strip_module
-
-    assert "ClampedCursor" not in dir(strip_module)
-    assert strip_module.__all__ == ["Keymap", "LabelStrip"]

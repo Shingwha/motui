@@ -4,16 +4,58 @@ from __future__ import annotations
 
 from dataclasses import replace
 
-import pytest
-
 from motui.kernel.geom import Pos
 from motui.kernel.layout import Constraints
 from motui.kernel.style import Style
 from motui.kernel.theme import DEFAULT_THEME
-from motui.widgets import Button, Checkbox, ComboBox, Form, Link, List, Option, Select
+from motui.widgets import (
+    Align,
+    Autocomplete,
+    Button,
+    Canvas,
+    Checkbox,
+    CheckboxGroup,
+    Collapsible,
+    Column,
+    ComboBox,
+    ContextMenu,
+    Dialog,
+    Diff,
+    Divider,
+    Editor,
+    Form,
+    Input,
+    Link,
+    List,
+    Markdown,
+    MenuBar,
+    MultiSelect,
+    NavList,
+    Notice,
+    Option,
+    Padding,
+    Panel,
+    ProgressBar,
+    RadioGroup,
+    Row,
+    ScrollPanel,
+    Select,
+    ShortcutBar,
+    Slider,
+    Spacer,
+    Spinner,
+    Stack,
+    StatusLine,
+    Table,
+    Tabs,
+    Text,
+    Tree,
+    TreeNode,
+)
 from motui.widgets.base import (
     CURSOR_KEYMAP,
     ActionWidget,
+    Container,
     CursorWidget,
     Keymap,
     ResultWidget,
@@ -33,47 +75,35 @@ def _pick_combo(combo: ComboBox) -> bool:
     return combo.on_key(key("enter"))
 
 
-@pytest.mark.parametrize(
-    ("build", "activate", "expected"),
-    [
+def test_take_reads_the_result_once():
+    for build, activate, expected in [
         (lambda: Select(THREE), lambda widget: widget.on_action("activate"), "one"),
         (lambda: List(["a"]), lambda widget: widget.on_action("activate"), "a"),
         (lambda: Form([]), lambda widget: widget.on_action("activate"), {}),
         (lambda: ComboBox(OPTIONS), _pick_combo, "autocomplete"),
-    ],
-    ids=["select", "list", "form", "combobox"],
-)
-def test_take_reads_the_result_once(build, activate, expected):
-    widget = build()
-    assert widget.take() is None
-    assert activate(widget) is True
-    assert widget.take() == expected
-    assert widget.take() is None
-    assert activate(widget) is True
-    assert widget.take() == expected
+    ]:
+        widget = build()
+        assert widget.take() is None
+        assert activate(widget) is True
+        assert widget.take() == expected
+        assert widget.take() is None
+        assert activate(widget) is True
+        assert widget.take() == expected
 
 
-@pytest.mark.parametrize(
-    "build",
-    [
-        lambda: Button("Run"),
-        lambda: Checkbox("Bold"),
-        lambda: Select(THREE),
-    ],
-    ids=["button", "checkbox", "select"],
-)
-def test_a_theme_assignment_repaints_the_next_render(build):
-    widget = build()
-    plain = widget.render(Constraints(width=20))
-    mark = Style(underline=True)
-    other = replace(
-        DEFAULT_THEME,
-        text=replace(DEFAULT_THEME.text, base=mark),
-        content=replace(DEFAULT_THEME.content, accent=mark),
-        rows=replace(DEFAULT_THEME.rows, inactive=mark),
-    )
-    widget.theme = other
-    assert widget.render(Constraints(width=20)) != plain
+def test_a_theme_assignment_repaints_the_next_render():
+    for build in [lambda: Button("Run"), lambda: Checkbox("Bold"), lambda: Select(THREE)]:
+        widget = build()
+        plain = widget.render(Constraints(width=20))
+        mark = Style(underline=True)
+        other = replace(
+            DEFAULT_THEME,
+            text=replace(DEFAULT_THEME.text, base=mark),
+            content=replace(DEFAULT_THEME.content, accent=mark),
+            rows=replace(DEFAULT_THEME.rows, inactive=mark),
+        )
+        widget.theme = other
+        assert widget.render(Constraints(width=20)) != plain
 
 
 # -- ResultWidget: one pending slot, read once -----------------------------
@@ -94,15 +124,14 @@ def test_result_widget_take_reads_the_value_once_and_clears():
     assert probe.take() is None
 
 
-@pytest.mark.parametrize("value", [False, 0, "", None])
-def test_result_widget_keeps_legal_false_zero_empty_and_none_pending(value):
-    probe = _ResultProbe()
-
-    probe._emit(value)
-    assert probe.take() == value
-    assert probe.take() is None
-    # ``take`` consumed the pending slot, legal None included.
-    assert probe._clear_result() is False
+def test_result_widget_keeps_legal_false_zero_empty_and_none_pending():
+    for value in [False, 0, "", None]:
+        probe = _ResultProbe()
+        probe._emit(value)
+        assert probe.take() == value
+        assert probe.take() is None
+        # ``take`` consumed the pending slot, legal None included.
+        assert probe._clear_result() is False
 
 
 def test_result_widget_emit_none_is_distinct_from_no_pending():
@@ -179,22 +208,18 @@ def test_action_widget_on_click_runs_activate():
     assert probe.take() == "activated"
 
 
-@pytest.mark.parametrize(
-    "build",
-    [
+def test_a_disabled_action_widget_refuses_every_door():
+    for build in [
         lambda: Button("x", disabled=True),
         lambda: Checkbox("x", disabled=True),
         lambda: Link("x", disabled=True),
-    ],
-    ids=["button", "checkbox", "link"],
-)
-def test_a_disabled_action_widget_refuses_every_door(build):
-    control = build()
+    ]:
+        control = build()
 
-    assert control.on_action("activate") is False
-    assert control.on_action("toggle") is False
-    assert control.on_click(Pos()) is False
-    assert control.take() is None
+        assert control.on_action("activate") is False
+        assert control.on_action("toggle") is False
+        assert control.on_click(Pos()) is False
+        assert control.take() is None
 
 
 def test_action_widget_defaults_to_no_hint_and_enabled():
@@ -323,3 +348,79 @@ def test_keymap_is_reexported_from_strip():
     from motui.widgets.strip import Keymap as StripKeymap
 
     assert StripKeymap is BaseKeymap
+
+
+# -- Capability flags: one table for every public component ----------------
+#
+# Per-family files used to repeat one ``focusable/clickable/hoverable/
+# activatable`` test each.  The table below is the single source: a
+# component's flags are part of its public contract, not a render detail.
+
+CAPABILITIES = {
+    # Action family: all four doors.
+    "Button": (lambda: Button("x"), (True, True, True, True)),
+    "Checkbox": (lambda: Checkbox("x"), (True, True, True, True)),
+    "Link": (lambda: Link("x"), (True, True, True, True)),
+    # Text fields: focus and pointer, no activation verb.
+    "Input": (lambda: Input(), (True, True, True, False)),
+    "Editor": (lambda: Editor(), (True, True, True, False)),
+    # Choice, navigation and data families: cursor + result.
+    "Select": (lambda: Select(THREE), (True, True, True, True)),
+    "MultiSelect": (lambda: MultiSelect(THREE), (True, True, True, True)),
+    "RadioGroup": (lambda: RadioGroup(["a"]), (True, True, True, True)),
+    "CheckboxGroup": (lambda: CheckboxGroup(["a"]), (True, True, True, True)),
+    "List": (lambda: List(["a"]), (True, True, True, True)),
+    "Table": (lambda: Table([["a"]], headers=["h"]), (True, True, True, True)),
+    "Tree": (lambda: Tree([TreeNode("a")]), (True, True, True, True)),
+    "Tabs": (lambda: Tabs(["a"]), (True, True, True, True)),
+    "MenuBar": (lambda: MenuBar(["a"]), (True, True, True, True)),
+    "NavList": (lambda: NavList(["a"]), (True, True, True, True)),
+    "Autocomplete": (lambda: Autocomplete([Option("a")]), (True, True, True, True)),
+    "ContextMenu": (lambda: ContextMenu([Option("a")]), (True, True, True, True)),
+    # The combo is pointer-driven but has no activation verb of its own.
+    "ComboBox": (lambda: ComboBox([Option("a")]), (True, True, False, True)),
+    # Indicators: only the slider is interactive.
+    "Slider": (lambda: Slider(1), (True, True, True, True)),
+    "ProgressBar": (lambda: ProgressBar(0.5), (False, False, False, False)),
+    "Spinner": (lambda: Spinner("x"), (False, False, False, False)),
+    # Plain text is a pointer target for its spans, not a focus target.
+    "Text": (lambda: Text("hi"), (False, True, True, False)),
+    "Markdown": (lambda: Markdown("# x"), (False, True, True, False)),
+    # Scrollable and foldable: focus + click, no hover/activation.
+    "ScrollPanel": (
+        lambda: ScrollPanel(Text("x"), height=2),
+        (True, True, False, False),
+    ),
+    "Collapsible": (lambda: Collapsible(Text("x")), (True, True, True, True)),
+    # Display-only furniture and containers.
+    "StatusLine": (lambda: StatusLine(left=["a"]), (False, False, False, False)),
+    "ShortcutBar": (lambda: ShortcutBar([("a", "b")]), (False, False, False, False)),
+    "Notice": (lambda: Notice("x"), (False, False, False, False)),
+    "Divider": (lambda: Divider(), (False, False, False, False)),
+    "Spacer": (lambda: Spacer(1), (False, False, False, False)),
+    "Canvas": (lambda: Canvas(width=2, height=2), (False, False, False, False)),
+    "Diff": (lambda: Diff("a", "b"), (False, False, False, False)),
+    "Align": (lambda: Align(Text("x")), (False, False, False, False)),
+    "Stack": (lambda: Stack([Text("x")]), (False, False, False, False)),
+    "Row": (lambda: Row([Text("x")]), (False, False, False, False)),
+    "Column": (lambda: Column([Text("x")]), (False, False, False, False)),
+    "Panel": (lambda: Panel(Text("x")), (False, False, False, False)),
+    "Padding": (lambda: Padding(Text("x")), (False, False, False, False)),
+    "Dialog": (lambda: Dialog(Text("x")), (False, False, False, False)),
+    "Form": (lambda: Form([]), (False, False, False, False)),
+    "Widget": (lambda: Widget(), (False, False, False, False)),
+    "Container": (lambda: Container(), (False, False, False, False)),
+}
+
+
+def test_capability_flags_are_one_table_for_every_component():
+    for name, (build, expected) in CAPABILITIES.items():
+        widget = build()
+        actual = (
+            widget.focusable,
+            widget.clickable,
+            widget.hoverable,
+            widget.activatable,
+        )
+        assert actual == expected, f"{name}: {actual} != {expected}"
+

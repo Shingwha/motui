@@ -44,9 +44,8 @@ def _keyword_names(cls) -> list[str]:
     ]
 
 
-@pytest.mark.parametrize(
-    "cls, main",
-    [
+def test_the_main_content_is_the_only_positional_parameter():
+    for cls, main in [
         (Text, "text"),
         (Input, "text"),
         (Editor, "text"),
@@ -55,10 +54,8 @@ def _keyword_names(cls) -> list[str]:
         (Collapsible, "body"),
         (ProgressBar, "value"),
         (Slider, "value"),
-    ],
-)
-def test_the_main_content_is_the_only_positional_parameter(cls, main):
-    assert _positional_names(cls) == [main]
+    ]:
+        assert _positional_names(cls) == [main], cls.__name__
 
 
 def test_the_keyword_tail_follows_the_shared_order():
@@ -158,6 +155,8 @@ def test_form_selected_is_the_field_and_index_moves_the_focus():
     assert form.selected.name == "b"
     assert form.move(1) is False
     assert form.focus("a") is True and first.focused is True
+    assert form.move(1) is True and form.index == 1
+    assert form.move(-1) is True and form.index == 0
     assert form.focus("missing") is False and form.index == 0
     assert form.index == 0 and form.selected.name == "a"
 
@@ -225,6 +224,7 @@ def test_button_spec_kind_is_the_fourth_field_and_drives_the_danger_rule():
         ButtonKind.DANGER,
     )
     assert not hasattr(spec, "danger")
+    assert ButtonSpec("Go").kind is ButtonKind.NEUTRAL
     dialog = Dialog(
         Rows("body"),
         buttons=[ButtonSpec("Cancel", None), spec],
@@ -263,5 +263,7 @@ def test_slider_activation_answers_availability_and_keeps_no_result():
     assert slider.activate() is True
     assert slider.take() is None
     assert slider.on_action("activate") is True and slider.value == 4
+    assert slider.on_action("next") is True and slider.value == 5
+    assert slider.on_action("unknown") is False
     assert slider.take() is None
     assert Slider(4, disabled=True).activate() is False

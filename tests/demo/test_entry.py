@@ -4,8 +4,6 @@ from __future__ import annotations
 
 import sys
 
-import pytest
-
 from motui.demo import SCENES, main, render_scene, scene_output
 from motui.demo.version import DEMO_BAND
 
@@ -53,9 +51,8 @@ def test_splash_entry_modes(capsys):
         assert "Snake" not in out
 
 
-@pytest.mark.parametrize(
-    ("args", "needles"),
-    [
+def test_headless_scenes_replay(capsys):
+    for args, needles in [
         (
             ["--scene", "dashboard", "--frames", "400", "--headless"],
             ["DEEP SPACE UPLINK", "REROUTING TRAFFIC", "MISSION EVENTS"],
@@ -68,14 +65,11 @@ def test_splash_entry_modes(capsys):
             ["--scene", "themes", "--headless"],
             ["SKIN LAB", "GLOBAL THEME", "signal"],
         ),
-    ],
-    ids=["dashboard", "gallery", "themes"],
-)
-def test_headless_scenes_replay(capsys, args, needles):
-    assert main(args) == 0
-    out = capsys.readouterr().out
-    for needle in needles:
-        assert needle in out, (needle, args)
+    ]:
+        assert main(args) == 0
+        out = capsys.readouterr().out
+        for needle in needles:
+            assert needle in out, (needle, args)
 
 
 def test_unknown_scene_is_a_usage_error(capsys):

@@ -480,13 +480,13 @@ def test_space_activates_a_focused_button_and_toggles_a_checkbox():
     assert (box.checked, box.take()) == (True, True)
 
 
-@pytest.mark.parametrize("build", [lambda: Input(""), lambda: Editor("")])
-def test_a_text_field_consumes_space_before_the_activation_fallback(build):
-    field = build()
-    manager = FocusManager([field])
-    manager.focus_next()
-    assert manager.handle(KeyEvent("space", " ")) is True
-    assert field.text == " "
+def test_a_text_field_consumes_space_before_the_activation_fallback():
+    for build in (lambda: Input(""), lambda: Editor("")):
+        field = build()
+        manager = FocusManager([field])
+        manager.focus_next()
+        assert manager.handle(KeyEvent("space", " ")) is True
+        assert field.text == " "
 
 
 def test_space_is_not_consumed_for_a_non_activatable_target():
