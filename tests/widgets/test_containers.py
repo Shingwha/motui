@@ -305,14 +305,14 @@ def test_a_panel_maps_only_its_content_cells_to_the_child():
 
 
 def test_a_collapsible_folds_its_body_away_and_back():
-    section = Collapsible("options", Text("body one\nbody two"))
+    section = Collapsible(Text("body one\nbody two"), title="options")
     assert texts(section, 20) == ["\u25be options", "  body one", "  body two"]
     section.open = False
     assert texts(section, 20) == ["\u25b8 options"]
 
 
 def test_click_and_activate_flip_the_section_and_leave_the_state_pending():
-    section = Collapsible("options", Text("body"))
+    section = Collapsible(Text("body"), title="options")
     assert section.on_action("activate") is True
     assert (section.open, section.take()) == (False, False)
     assert section.on_click(Pos(x=40, y=0)) is True
@@ -325,8 +325,8 @@ def test_the_collapsible_title_takes_hover_and_focus_bands():
     hover = Style(italic=True)
     focus = Style(underline=True)
     section = Collapsible(
-        "options",
         Text("body"),
+        title="options",
         styles=Styles(
             content=replace(DEFAULT_THEME.content, accent=title),
             surfaces=replace(DEFAULT_THEME.surfaces, hover=hover),
@@ -345,7 +345,7 @@ def test_the_collapsible_title_takes_hover_and_focus_bands():
 
 
 def test_the_collapsible_child_at_maps_the_body_and_owns_the_title():
-    section = Collapsible("options", Text("body one\nbody two"))
+    section = Collapsible(Text("body one\nbody two"), title="options")
     section.render(Constraints(width=20))
     assert section.child_at(0, 3) is None
     assert section.child_at(1, 3) == (section.body, 0, 1)
@@ -354,9 +354,11 @@ def test_the_collapsible_child_at_maps_the_body_and_owns_the_title():
 
 
 def test_a_disabled_collapsible_refuses_both_doors_and_nested_content_fits():
-    section = Collapsible("options", Text("body"), disabled=True)
+    section = Collapsible(Text("body"), title="options", disabled=True)
     assert section.on_action("activate") is False and section.on_click(Pos(x=0, y=0)) is False
-    nested = Collapsible("outer", Collapsible("inner", Text("a long body line to wrap")))
+    nested = Collapsible(
+        Collapsible(Text("a long body line to wrap"), title="inner"), title="outer"
+    )
     assert all(row.width <= 12 for row in nested.render(Constraints(width=12)))
 
 
@@ -404,7 +406,7 @@ def test_a_divider_takes_constraints_and_honours_the_height_budget():
 
 
 def test_a_collapsible_takes_constraints_and_honours_the_height_budget():
-    section = Collapsible("options", Text("body one\nbody two"))
+    section = Collapsible(Text("body one\nbody two"), title="options")
     assert isinstance(section.render(Constraints(width=20)), Surface)
     assert section.render(Constraints(width=20)) == section.render(Constraints(width=20))
     surface = section.render(Constraints(width=20, max_height=2))
@@ -485,7 +487,7 @@ def test_the_tree_visits_a_shared_child_once():
 
 def test_a_collapsible_adopts_its_body_and_answers_the_toggle_action():
     body = Text("body")
-    section = Collapsible("options", body)
+    section = Collapsible(body, title="options")
 
     assert section.children == [body] and body.parent is section
     assert list(section.walk()) == [section, body]

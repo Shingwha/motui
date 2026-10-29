@@ -107,7 +107,7 @@ CASES = {
     ),
     "CheckboxGroup": lambda: CheckboxGroup(["one", _WIDE]),
     "Collapsible": lambda: Collapsible(
-        "foldable", Text(_WIDE), glyphs=replace(GLYPHS, fold_open="+", fold_closed="-")
+        Text(_WIDE), title="foldable", glyphs=replace(GLYPHS, fold_open="+", fold_closed="-")
     ),
     "Column": lambda: Column([Text("a"), Text("b")], gap=1),
     "ComboBox": lambda: ComboBox([Option("alpha"), Option("beta")]),
