@@ -35,15 +35,31 @@ from .cursor import Cursor
 from .mark import MarkSet
 
 __all__ = [
+    "CURSOR_KEYMAP",
     "ActionWidget",
     "Container",
     "Cursor",
+    "CursorWidget",
     "HasResult",
     "Keymap",
     "MarkSet",
     "ResultWidget",
     "Widget",
 ]
+
+#: The unified cursor key table: the arrows, the edges and the page keys.
+#: A cursor family declares ``keymap = Keymap({**CURSOR_KEYMAP, ...})`` on
+#: its own class, so every data view routes the same action names.
+CURSOR_KEYMAP: dict[str, str] = {
+    "up": "prev",
+    "left": "prev",
+    "down": "next",
+    "right": "next",
+    "home": "first",
+    "end": "last",
+    "page_up": "page_prev",
+    "page_down": "page_next",
+}
 
 #: The "nothing pending" marker of :class:`ResultWidget`.  A sentinel -- not
 #: ``None`` -- so a legal ``None`` result (a cancelled dialog) stays
@@ -434,6 +450,169 @@ class ActionWidget(ResultWidget):
 
     def on_action(self, name: str) -> bool:
         """Run ``activate``/``toggle``; unknown names decline."""
+        if name == "activate":
+            return self.activate()
+        if name == "toggle":
+            return self.toggle()
+        return False
+
+
+class CursorWidget(ResultWidget):
+    """A result widget that walks one cursor over its entries.
+
+    The shared half of every data view and menu: a :class:`Cursor` value
+    (``_cursor``) over the entries a subclass reports, the read-only
+    :attr:`index` / :attr:`selected` pair, and the ``select`` / ``move`` /
+    ``home`` / ``end`` verbs.  Subclasses supply the entry hooks -- count,
+    item at a visible row, disabled rows, wrap policy and page size -- and
+    implement :meth:`activate` / :meth:`toggle` when they have one; the
+    cursor arithmetic itself never repeats.
+
+    **Clearing.**  Moving the cursor is a state change, not a pick: every
+    cursor verb clears a pending result first (:meth:`_clear_result`), so a
+    value emitted before the move can never be read as the result of the
+    row the host moved to.  Only :meth:`activate` / :meth:`toggle` write a
+    result.
+
+    **Staleness.**  The hooks are re-read at the start of every verb and on
+    each read of :attr:`index` / :attr:`selected` (:meth:`_sync_cursor`):
+    the count, the disabled set and the wrap policy are refreshed, and an
+    index the reported entries no longer answer is clamped.  An empty entry
+    set always reports ``index == 0`` and ``selected is None``.
+    """
+
+    __slots__ = ("_cursor",)
+
+    #: The cursor family's default table; a subclass merges its own keys in.
+    keymap = Keymap(CURSOR_KEYMAP)
+
+    def __init__(
+        self, theme: Theme | None = None, styles: Styles | None = None
+    ) -> None:
+        super().__init__(theme, styles)
+        object.__setattr__(self, "_cursor", Cursor(0))
+
+    # -- entry hooks: subclasses implement these ---------------------------
+
+    def _entry_count(self) -> int:
+        """The number of entries the cursor walks; the base has none."""
+        return 0
+
+    def _entry_at(self, index: int) -> object | None:
+        """The item at visible row ``index``; the base has none."""
+        return None
+
+    def _cursor_disabled(self) -> Iterable[int]:
+        """The visible rows a move steps over and ``select`` refuses."""
+        return ()
+
+    def _cursor_wraps(self) -> bool:
+        """Whether the cursor wraps at the ends; data views clamp."""
+        return False
+
+    def _page_size(self, size: int) -> int:
+        """The step ``page_prev`` / ``page_next`` take over ``size`` entries.
+
+        ``size`` is the entry count; a view with a smaller visible window
+        overrides this to cap the page to its rows.
+        """
+        return size
+
+    # -- state ------------------------------------------------------------
+
+    @property
+    def index(self) -> int:
+        """The cursor position, clamped into the current entries (0 if empty)."""
+        self._sync_cursor()
+        return self._cursor.index
+
+    @property
+    def selected(self) -> object | None:
+        """The item under the cursor, or ``None`` for an empty set."""
+        self._sync_cursor()
+        if self._cursor.count <= 0:
+            return None
+        return self._entry_at(self._cursor.index)
+
+    def _sync_cursor(self) -> None:
+        """Refresh the cursor's count, disabled set and wrap policy, clamp."""
+        cursor = self._cursor
+        cursor.count = max(0, self._entry_count())
+        cursor.disabled = frozenset(self._cursor_disabled())
+        cursor.wrap = self._cursor_wraps()
+        cursor.index = cursor.clamp(cursor.index)
+
+    # -- verbs ------------------------------------------------------------
+
+    def select(self, index: int) -> bool:
+        """Place the cursor on ``index`` (clamped); ``False`` when unchanged.
+
+        A disabled row refuses the selection outright, and an empty entry
+        set always declines.
+        """
+        self._clear_result()
+        self._sync_cursor()
+        changed = self._cursor.select(index)
+        if changed:
+            self.touch()
+        return changed
+
+    def move(self, delta: int) -> bool:
+        """Move the cursor ``delta`` enabled rows; ``False`` when unchanged."""
+        self._clear_result()
+        self._sync_cursor()
+        changed = self._cursor.move(delta)
+        if changed:
+            self.touch()
+        return changed
+
+    def home(self) -> bool:
+        """Jump to the first enabled row; ``False`` when unchanged."""
+        self._clear_result()
+        self._sync_cursor()
+        changed = self._cursor.home()
+        if changed:
+            self.touch()
+        return changed
+
+    def end(self) -> bool:
+        """Jump to the last enabled row; ``False`` when unchanged."""
+        self._clear_result()
+        self._sync_cursor()
+        changed = self._cursor.end()
+        if changed:
+            self.touch()
+        return changed
+
+    def activate(self) -> bool:
+        """Run the main operation; the base has none and declines."""
+        return False
+
+    def toggle(self) -> bool:
+        """Flip a boolean or marked state; the base has none and declines."""
+        return False
+
+    def on_action(self, name: str) -> bool:
+        """Route the nine action names; unknown names decline.
+
+        ``prev``/``next`` move one row, ``first``/``last`` jump to the
+        enabled edges, ``page_prev``/``page_next`` step by
+        :meth:`_page_size`, and ``activate``/``toggle`` delegate to their
+        verbs.  ``open``/``close`` have no state on the base and decline, as
+        does every other name, so the router keeps routing the key.
+        """
+        if name == "prev":
+            return self.move(-1)
+        if name == "next":
+            return self.move(1)
+        if name == "first":
+            return self.home()
+        if name == "last":
+            return self.end()
+        if name == "page_prev":
+            return self.move(-self._page_size(self._entry_count()))
+        if name == "page_next":
+            return self.move(self._page_size(self._entry_count()))
         if name == "activate":
             return self.activate()
         if name == "toggle":
