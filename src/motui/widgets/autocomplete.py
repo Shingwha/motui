@@ -16,11 +16,11 @@ is its consumer).
 
 from __future__ import annotations
 
-from typing import Sequence
+from collections.abc import Sequence
 
+from ..kernel.cell import Surface
 from ..kernel.events import KeyEvent
 from ..kernel.glyphs import GLYPHS, Glyphs
-from ..kernel.cell import Surface
 from ..kernel.layout import Constraints
 from ..kernel.theme import Styles, Theme
 from .choice import Option, Select
@@ -86,7 +86,6 @@ class Autocomplete(Select):
         pending result is cleared, so a re-filter never leaks an earlier
         pick.
         """
-        self._pending = None
         self._hover_row = None
         self.query = query
         if not query:

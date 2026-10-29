@@ -415,8 +415,8 @@ def table_open_workload(frames: int) -> float:
     """
     tui = _headless_runtime(180, 45)
     table = Table(
-        [f"col {c}" for c in range(6)],
         [[f"cell {r}.{c}" for c in range(6)] for r in range(240)],
+        headers=[f"col {c}" for c in range(6)],
     )
     tui.workspace.add(table)
     tui.paint()  # the cold paint: it builds the grid and fills the memory

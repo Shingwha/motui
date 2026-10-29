@@ -161,8 +161,7 @@ class LayoutScene(Scene):
             self._code, bar=True, axis="both", theme=theme
         )
         self._table = Table(
-            list(_WIDE_HEADERS),
-            [list(row) for row in _WIDE_ROWS],
+            [list(row) for row in _WIDE_ROWS], headers=list(_WIDE_HEADERS),
             cell_wrap=WrapMode.OVERFLOW,
             theme=theme,
         )

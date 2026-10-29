@@ -4,7 +4,6 @@ from motui.kernel.cell import Surface
 from motui.kernel.geom import Pos
 from motui.kernel.layout import Constraints
 from motui.widgets import ComboBox, Option
-
 from tests.testing import key, paste, press
 
 OPTIONS = [
@@ -21,7 +20,7 @@ def drop_texts(combo: ComboBox) -> list[str]:
 
 def test_a_field_change_re_filters_the_list():
     combo = ComboBox(OPTIONS)
-    assert combo.input.text == "" and not combo.is_open
+    assert combo.input.text == "" and not combo.open
     assert combo.on_key(key("A", "A")) is True
     assert combo.on_key(key("u", "u")) is True
     assert combo.input.text == "Au"
@@ -30,29 +29,29 @@ def test_a_field_change_re_filters_the_list():
 
 def test_the_dropdown_uses_the_smaller_window_budget():
     combo = ComboBox(OPTIONS, max_rows=8, max_drop_rows=2)
-    combo.open()
-    assert combo.is_open
+    combo.open = True
+    assert combo.open
     assert len(drop_texts(combo)) == 3  # two rows plus the counter
-    combo.close()
+    combo.open = False
     assert len(drop_texts(combo)) == 4
 
 
 def test_enter_takes_the_value_and_writes_the_label_into_the_field():
     combo = ComboBox(OPTIONS, text="Dia")
-    combo.open()
+    combo.open = True
     assert combo.list.selected.label == "Dialog"
     assert combo.on_key(key("enter")) is True
     assert combo.take() == "dialog"
     assert combo.take() is None
     assert combo.input.text == "Dialog"
-    assert not combo.is_open
+    assert not combo.open
 
 
 def test_escape_closes_with_nothing_pending():
     combo = ComboBox(OPTIONS)
-    combo.open()
+    combo.open = True
     assert combo.on_key(key("escape")) is True
-    assert combo.take() is None and not combo.is_open
+    assert combo.take() is None and not combo.open
 
 
 def test_the_consumption_boundary_follows_the_open_state():
@@ -62,18 +61,18 @@ def test_the_consumption_boundary_follows_the_open_state():
     assert combo.on_paste(paste("Table")) is True
     assert combo.input.text == "Table"
     combo.input.clear()
-    combo.open()
+    combo.open = True
     assert combo.on_key(key("down")) is True and combo.list.index == 1
     assert combo.on_key(key("up")) is True and combo.list.index == 0
     assert combo.on_key(key("enter")) is True and combo.take() == "autocomplete"
-    assert not combo.is_open
+    assert not combo.open
 
 
 def test_a_paste_while_open_reaches_the_field_and_keeps_the_dropdown():
     combo = ComboBox(OPTIONS)
-    combo.open()
+    combo.open = True
     assert combo.on_paste(paste("Dialog")) is True
-    assert combo.input.text == "Dialog" and combo.is_open
+    assert combo.input.text == "Dialog" and combo.open
     assert combo.take() is None
 
 
@@ -103,11 +102,11 @@ def test_focus_and_click_delegate_to_the_field():
 
 def test_enter_with_no_match_closes_and_leaves_nothing_pending():
     combo = ComboBox(OPTIONS)
-    combo.open()
+    combo.open = True
     for char in "zzz":
         assert combo.on_key(key(char, char)) is True
     assert combo.on_key(key("enter")) is True
-    assert combo.take() is None and not combo.is_open
+    assert combo.take() is None and not combo.open
 
 
 # -- the 2.0 render contract -------------------------------------------------
@@ -155,15 +154,20 @@ def test_on_click_docks_the_field_caret():
     assert combo.input.cursor == (0, 1)
 
 
-def test_on_action_activates_the_open_dropdown_only():
+def test_on_action_opens_a_closed_dropdown_and_takes_the_open_one():
     combo = ComboBox(OPTIONS)
 
-    assert combo.on_action("activate") is False
-    combo.open()
+    assert combo.on_action("activate") is True and combo.open is True
     assert combo.on_action("activate") is True
     assert combo.take() == "autocomplete"
-    assert combo.is_open is False and combo.input.text == "Autocomplete"
+    assert combo.open is False and combo.input.text == "Autocomplete"
 
     # Other names are editing actions and belong to the field.
     assert combo.on_action("move_left") is True
     assert combo.input.cursor == (0, 11)
+
+
+def test_toggle_flips_the_open_state():
+    combo = ComboBox(OPTIONS)
+    assert combo.toggle() is True and combo.open is True
+    assert combo.toggle() is True and combo.open is False

@@ -57,20 +57,19 @@ class GalleryScene(Scene):
                         TreeNode("gallery"),
                         TreeNode("inspector"),
                     ],
-                    expanded=True,
+                    open=True,
                 ),
-                TreeNode("workspace", [TreeNode("runtime")], expanded=True),
+                TreeNode("workspace", [TreeNode("runtime")], open=True),
             ],
             theme=theme,
         )
         self.table = Table(
-            ["widget", "role"],
             [
                 ["Tree", "fold"],
                 ["Table", "grid"],
                 ["Slider", "value"],
                 ["Input", "type"],
-            ],
+            ], headers=["widget", "role"],
             theme=theme,
         )
         self.table.index = 1

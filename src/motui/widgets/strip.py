@@ -14,19 +14,18 @@ hover marking.  Nothing here is re-exported from :mod:`motui.widgets`.
 
 from __future__ import annotations
 
-from collections.abc import Sequence
+from collections.abc import Iterable, Sequence
 
 from ..kernel.cell import Line, Surface
 from ..kernel.geom import Pos
 from ..kernel.layout import Constraints
 from ..kernel.text import visible_width
-from ..widgets.base import Keymap, Widget
-from ..widgets.cursor import Cursor
+from ..widgets.base import CursorWidget, Keymap
 
 __all__ = ["Keymap", "LabelStrip"]
 
 
-class LabelStrip(Widget):
+class LabelStrip(CursorWidget):
     """The one-row label strip shared by ``Tabs`` and ``MenuBar``.
 
     The class is a skeleton, not a component: subclasses provide
@@ -55,7 +54,6 @@ class LabelStrip(Widget):
     __slots__ = (
         "_disabled_items",
         "_hover_index",
-        "_index",
         "_last_width",
         "_spans",
         "disabled",
@@ -63,8 +61,8 @@ class LabelStrip(Widget):
     )
 
     #: A strip takes the keyboard through its subclass keymap, clicks on its
-    #: labels and the pointer's marking; it has no activation verb (selecting
-    #: is not activating).
+    #: labels and the pointer's marking; a subclass with an activation verb
+    #: publishes ``activatable = True`` itself.
     focusable = True
     clickable = True
     hoverable = True
@@ -78,59 +76,27 @@ class LabelStrip(Widget):
         """The label sequence every cursor verb measures; subclasses implement."""
         raise NotImplementedError
 
-    @property
-    def index(self) -> int:
-        """The selected index, always inside the entry range.
+    # -- the cursor hooks -------------------------------------------------------
 
-        Read-only: :meth:`select` and :meth:`move` are the moving doors.
-        """
-        return self._index
+    def _entry_count(self) -> int:
+        """The number of labels the cursor walks."""
+        return len(self._entries)
 
-    def _cursor(self) -> Cursor:
-        """The cursor value over the entries and the disabled set."""
-        return Cursor(
-            len(self._entries),
-            index=self._index,
-            disabled=self._disabled_items,
-        )
+    def _entry_at(self, index: int) -> object | None:
+        """The label at visible row ``index`` (side-effect free)."""
+        return self._entries[index]
 
-    def select(self, index: int) -> bool:
-        """Select ``index``, clamped into range; True when it changed.
+    def _cursor_disabled(self) -> Iterable[int]:
+        """The labels a move steps over and ``select`` refuses."""
+        return self._disabled_items
 
-        A ``disabled`` index is refused outright -- ``False``, nothing
-        moved -- a disabled control refuses every selection, and an empty
-        sequence answers ``False`` always.
-        """
-        if self.disabled or not self._entries:
-            return False
-        cursor = self._cursor()
-        changed = cursor.select(index)
-        self._index = cursor.index
-        if changed:
-            self.touch()
-        return changed
+    def _cursor_wraps(self) -> bool:
+        """A strip clamps at its ends; it never wraps."""
+        return False
 
-    def move(self, delta: int) -> bool:
-        """Move the selection ``delta`` labels, clamped and never wrapping.
-
-        Disabled indices are **stepped over**: a positive step from index 1
-        with 2 disabled lands on 3, and a step whose direction holds no
-        enabled index left stays where it was (``False``).  A disabled
-        control moves nowhere.  The answer is whether the selection changed.
-        """
-        if self.disabled or not self._entries or delta == 0:
-            return False
-        before = self._index
-        cursor = self._cursor()
-        cursor.move(delta)
-        # A stale cursor (a host replaced the entries in place) is clamped
-        # like any other request, and the clamping itself is a move.
-        cursor.index = cursor.clamp(cursor.index)
-        moved = cursor.index != before
-        self._index = cursor.index
-        if moved:
-            self.touch()
-        return moved
+    def _cursor_enabled(self) -> bool:
+        """The whole-strip disabled switch gates every cursor verb."""
+        return not self.disabled
 
     def on_click(self, pos: Pos) -> bool:
         """Select the label cell ``(pos.y, pos.x)`` covers; True on a hit.

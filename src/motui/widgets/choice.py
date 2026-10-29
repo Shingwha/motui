@@ -44,9 +44,6 @@ class and no second copy of the cursor/window arithmetic:
 * ``wrap`` -- a menu cycles its ends (``True``, the default), a data view
   clamps (``False``);
 * ``glyphs.cursor`` -- the cursor row's leading glyph;
-* ``commit`` -- a form control (``True``) leaves the row it landed on
-  pending as it moves or is clicked; a menu (``False``, the default) only
-  writes on :meth:`Select.on_action`;
 * ``window`` -- ``max_rows`` means a top-stick window (``False``, the
   default) or a centred one (``True``, the data view's policy).
 
@@ -75,20 +72,18 @@ rather than silently dropped text.
 
 from __future__ import annotations
 
-from collections.abc import Iterable
+from collections.abc import Iterable, Sequence
 from dataclasses import dataclass
-from typing import Sequence
 
-from ..widgets.cursor import Cursor
-from ..kernel.events import KeyEvent
-from ..kernel.glyphs import GLYPHS, Glyphs, pair_seat, seat, seat_width
 from ..kernel.cell import Line, Segment, Surface, rest
+from ..kernel.geom import Pos
+from ..kernel.glyphs import GLYPHS, Glyphs, pair_seat, seat, seat_width
 from ..kernel.layout import Constraints
-from ..widgets.mark import MarkSet
 from ..kernel.style import Style
 from ..kernel.text import visible_width
 from ..kernel.theme import Styles, Theme
-from ..widgets.base import Widget
+from ..widgets.base import CURSOR_KEYMAP, CursorWidget
+from ..widgets.mark import MarkSet
 from .strip import Keymap
 
 __all__ = ["CheckboxGroup", "MultiSelect", "Option", "RadioGroup", "Select"]
@@ -138,7 +133,7 @@ def _reject_descriptions(labels: Sequence[str | Option], group: str) -> None:
             )
 
 
-class Select(Widget):
+class Select(CursorWidget):
     """A vertical :class:`Option` list with a cursor, a window and a counter.
 
     ``index`` is the cursor's row: reading it is always a row of the current
@@ -155,20 +150,18 @@ class Select(Widget):
     centres the cursor instead, the data view's policy.  Both are
     :class:`~motui.widgets.cursor.Cursor`'s arithmetic.  ``wrap`` makes
     :meth:`move` step from the last row to the first (and back) instead of
-    stopping at the ends.  ``glyphs.cursor`` leads the cursor row; the other rows
-    are indented by its seat width (``0`` when it is ``""`` -- no dangling
-    separator).  A counter row ``(i/n)`` (the cursor's
-    1-based row over the row count) is rendered only while the window
-    actually scrolls, so short lists stay clean.
+    stopping at the ends.  ``glyphs.cursor`` leads the cursor row; the other
+    rows are indented by its seat width (``0`` when it is ``""`` -- no
+    dangling separator).  A counter row ``(i/n)`` (the cursor's 1-based row
+    over the row count) is rendered only while the window actually scrolls,
+    so short lists stay clean.
 
-    Activation (:meth:`on_action("activate")`) is the list's activation: it leaves the option under
-    the cursor pending and answers whether there was one to take.  The host
-    reads it once through :meth:`take`, which clears it; :meth:`move`
-    and :meth:`~motui.widgets.autocomplete.Autocomplete.set_query` clear the
-    pending value, so a stale pick never survives the next keystroke.
-    ``commit=True`` leaves the row the cursor landed on pending as it moves
-    or is clicked (the cursor *is* the choice).  The multiple-selection
-    variant is :class:`MultiSelect`; a plain ``Select`` is single-choice.
+    Activation (:meth:`activate`, also reached through ``on_action``) leaves
+    the option under the cursor pending and answers whether there was one to
+    take.  The host reads it once through :meth:`take`, which clears it;
+    every cursor verb clears the pending value, so a stale pick never
+    survives the next keystroke.  The multiple-selection variant is
+    :class:`MultiSelect`; a plain ``Select`` is single-choice.
 
     ``select(index)`` places the cursor on an enabled row and answers
     whether it moved; ``home()``/``end()`` are its two edges, skipping
@@ -202,10 +195,6 @@ class Select(Widget):
 
     __slots__ = (
         "_hover_row",
-        "_index",
-        "_keymap",
-        "_pending",
-        "commit",
         "disabled",
         "disabled_items",
         "glyphs",
@@ -225,16 +214,8 @@ class Select(Widget):
     hoverable = True
     activatable = True
 
-    #: The default key table (a per-instance copy backs ``self.keymap``).
-    keymap = Keymap(
-        {
-            "up": "prev",
-            "down": "next",
-            "left": "prev",
-            "right": "next",
-            "enter": "activate",
-        }
-    )
+    #: The family's cursor table (a per-instance copy backs ``self.keymap``).
+    keymap = Keymap(CURSOR_KEYMAP)
 
     def __init__(
         self,
@@ -243,25 +224,20 @@ class Select(Widget):
         title: str = "",
         max_rows: int | None = 8,
         wrap: bool = True,
-        glyphs: Glyphs = GLYPHS,
-        commit: bool = False,
         window: bool = False,
+        glyphs: Glyphs = GLYPHS,
         disabled: bool = False,
         disabled_items: Iterable[int] = (),
         theme: Theme | None = None,
         styles: Styles | None = None,
     ) -> None:
         super().__init__(theme, styles)
-        # The instance's own key table: rebinding one entry never reaches
-        # the class default (see :class:`~motui.widgets.strip.Keymap`).
-        self._keymap = dict(type(self).keymap)
         self.options = list(options)
         self.title = title
         self.max_rows = max_rows
         self.wrap = wrap
-        self.glyphs = glyphs
-        self.commit = commit
         self.window = window
+        self.glyphs = glyphs
         #: The whole control refuses every cursor gesture when disabled.
         self.disabled = disabled
         #: The data rows that cannot be landed on (a frozen set: assign a
@@ -273,111 +249,38 @@ class Select(Widget):
         #: The pointer tier's flag; the row-level emphasis lives in
         #: ``_hover_row`` (:meth:`on_hover`).
         self.hover = False
-        # The cursor starts on the first row; ``_index`` is written directly
-        # because the setter reads ``_rows()``, which a subclass may not have
-        # armed yet at this point.
-        self._index = 0
         # The option row the pointer is on (its data-row index), or ``None``;
         # written by ``on_hover``, read by ``render``.  ``None`` renders
         # byte-for-byte what the list always did.
         self._hover_row: int | None = None
-        #: The pending one-shot result: written by ``activate`` and, under
-        #: the ``commit`` knob, by every move/click that landed on a row;
-        #: read once by :meth:`take` (a :class:`MultiSelect` keeps the
-        #: marked values themselves rather than a pending pick).
-        self._pending: Option | list[object] | None = None
 
-    # -- the cursor -------------------------------------------------------------
+    # -- the cursor hooks -------------------------------------------------------
 
-    @property
-    def index(self) -> int:
-        """The cursor's row of :meth:`_rows` (``0`` for an empty list)."""
-        return self._index
+    def _entry_count(self) -> int:
+        """The rows the cursor walks (the current matches for Autocomplete)."""
+        return len(self._rows())
 
-    @index.setter
-    def index(self, value: int) -> None:
-        self._index = self._cursor().clamp(value)
-        self.touch()
+    def _entry_at(self, index: int) -> object | None:
+        """The option at visible row ``index`` (side-effect free)."""
+        return self._rows()[index]
 
-    def _cursor(self) -> Cursor:
-        """The cursor value of the rows the cursor walks.
+    def _cursor_disabled(self) -> Iterable[int]:
+        """The data rows a move steps over and ``select`` refuses."""
+        return self.disabled_items
 
-        ``max_rows`` caps the window and ``window`` picks its policy, so the
-        arithmetic of the top-stick menu window, the centred data-view
-        window and the disabled-aware stepping is
-        :class:`~motui.widgets.cursor.Cursor`'s rather than a loop here.
-        """
-        return Cursor(
-            len(self._rows()),
-            index=self._index,
-            disabled=self.disabled_items,
-            wrap=self.wrap,
-        )
+    def _cursor_wraps(self) -> bool:
+        """``wrap=True`` cycles the ends; the data-view presets clamp."""
+        return self.wrap
 
-    def select(self, index: int) -> bool:
-        """Place the cursor on the row ``index`` (clamped); ``True`` when it moved.
+    def _cursor_enabled(self) -> bool:
+        """The whole-control disabled switch gates every cursor verb."""
+        return not self.disabled
 
-        A disabled row is refused, like every other cursor gesture; an empty
-        list has nothing to select.  Under ``commit=True`` the landed row is
-        left pending (the cursor is the choice).
-        """
-        if self.disabled:
-            return False
-        cursor = self._cursor()
-        moved = cursor.select(index)
-        self._index = cursor.index
-        if moved:
-            self.touch()
-        if moved and self.commit and not self._multi:
-            self._commit()
-        return moved
-
-    def home(self) -> bool:
-        """Place the cursor on the first enabled row; ``True`` when it moved."""
-        return self._edge("home")
-
-    def end(self) -> bool:
-        """Place the cursor on the last enabled row; ``True`` when it moved."""
-        return self._edge("end")
-
-    def _edge(self, which: str) -> bool:
-        """Jump to ``which`` edge through the cursor, committing on a move."""
-        if self.disabled:
-            return False
-        cursor = self._cursor()
-        moved = cursor.home() if which == "home" else cursor.end()
-        if moved:
-            self._index = cursor.index
-            self.touch()
-            if self.commit and not self._multi:
-                self._commit()
-        return moved
-
-    def move(self, delta: int) -> bool:
-        """Move the cursor ``delta`` enabled rows; ``True`` when it moved.
-
-        Wrapping (the default) steps off the last row onto the first, and off
-        the first onto the last; ``wrap=False`` clamps at the ends instead.
-        An empty list, a disabled control, or a direction with no enabled
-        landing moves nowhere.  What the step leaves pending follows the
-        knobs: a menu clears its pending pick (a stale activation never
-        survives the next keystroke), a ``commit=True`` form control leaves
-        the row it landed on, and a :class:`MultiSelect` leaves the result
-        to the marks.
-        """
-        if self.disabled or delta == 0:
-            return False
-        cursor = self._cursor()
-        moved = cursor.move(delta)
-        if not moved:
-            return False
-        self._index = cursor.index
-        self.touch()
-        if not (self.commit or self._multi):
-            self._pending = None
-        if self.commit and not self._multi:
-            self._commit()
-        return True
+    def _page_size(self, size: int) -> int:
+        """A page is the visible window (the whole list when uncapped)."""
+        if self.max_rows is None or self.max_rows <= 0:
+            return size
+        return min(size, self.max_rows)
 
     def on_click(self, pos: Pos) -> bool:
         """Place the cursor on the rendered row ``pos.y``; ``True`` on a hit.
@@ -387,21 +290,16 @@ class Select(Widget):
         (when there is one) is row 0, the window's rows follow, and the
         counter row (when there is one) is never an option.  ``pos.x`` is
         ignored: every list row owns the whole width, so the column never
-        narrows a hit.  A hit lands the cursor and, for a ``commit=True``
-        form control, leaves the row pending (the click is the choice, even
-        on the row the cursor already sat on); a :class:`MultiSelect` leaves
-        the result to the marks.  A disabled row (or a disabled control)
-        refuses the hit.
+        narrows a hit.  A hit lands the cursor (a state change, never a
+        pick); a :class:`MultiSelect` leaves the result to the marks.  A
+        disabled row (or a disabled control) refuses the hit.
         """
         if self.disabled:
             return False
         target = self._option_at(pos.y)
         if target is None or self._is_disabled(target):
             return False
-        self._index = target
-        self.touch()
-        if self.commit and not self._multi:
-            self._commit()
+        self.select(target)
         return True
 
     def on_hover(self, pos: Pos | None) -> bool:
@@ -424,79 +322,30 @@ class Select(Widget):
             self.touch()
         return changed
 
-    @property
-    def selected(self) -> Option | None:
-        """The option under the cursor, or ``None`` for an empty list."""
-        return self._selected_option()
+    # -- the verbs ---------------------------------------------------------------
 
-    def _selected_option(self) -> Option | None:
-        """The option under the cursor (the private twin of :attr:`selected`).
+    def activate(self) -> bool:
+        """Take the row under the cursor (or flip it on a multi-selection).
 
-        A variant re-aims the public ``selected`` at what its rows carry
-        (:class:`RadioGroup` answers the selected label), so the editing
-        paths -- :meth:`on_action`, :meth:`_commit`, :meth:`toggle` -- read
-        the option itself through here and never the variant's public view.
+        A disabled control, an empty list and a disabled row answer
+        ``False`` and leave nothing pending.  A real pick writes the
+        variant's chosen value through the shared result slot; a
+        :class:`MultiSelect` activation *is* its mark toggle, whose result
+        is the marked-values list.
         """
-        rows = self._rows()
-        if not rows:
-            return None
-        return rows[self._index]
+        if not self._cursor_enabled():
+            return False
+        if self._multi:
+            return self.toggle()
+        selected = self.selected
+        if selected is None or self._is_disabled(self.index):
+            return False
+        self._emit(self._chosen_of(selected))
+        return True
 
-    def take(self) -> object | None:
-        """Read the pending result once and clear it (the ``take`` door)."""
-        value = self._pending
-        self._pending = None
-        return value
-
-    def on_action(self, name: str) -> bool:
-        """Run one named cursor action; ``False`` for an unknown name.
-
-        ``prev`` / ``next`` step one row through :meth:`move` (wrapping or
-        clamping by ``wrap``), ``first`` / ``last`` take the edges through
-        :meth:`home` / :meth:`end`, and ``activate`` runs the list's own
-        :meth:`on_action` (a multi-selection's toggle).  The movement names
-        answer the verb's result -- an edge with nowhere to go answers
-        ``False``, the rule the old focus router used for these rows.
-        ``toggle`` is bound only on a :class:`MultiSelect`; an unknown name
-        answers ``False`` without touching the list.
-        """
-        if name == "prev":
-            return self.move(-1)
-        if name == "next":
-            return self.move(1)
-        if name == "first":
-            return self.home()
-        if name == "last":
-            return self.end()
-        if name == "activate":
-            if self.disabled:
-                return False
-            if self._multi:
-                return self.toggle()
-            selected = self._selected_option()
-            if selected is None or self._is_disabled(self._index):
-                self._pending = None
-                return False
-            self._pending = self._chosen_of(selected)
-            return True
-        if name == "toggle":
-            return self.toggle() if self._multi else False
+    def toggle(self) -> bool:
+        """Flip the cursor row's mark; a plain single-choice list cannot."""
         return False
-
-    def on_key(self, event: KeyEvent) -> bool:
-        """Route a key through :attr:`keymap` to :meth:`on_action`.
-
-        The default table binds the arrows and ``enter``; a key no entry
-        names is declined so the host keeps it.  Everything the action
-        verbs refuse -- an empty list, an edge, a disabled row -- answers
-        ``False``, the 1.x focus router's result for these rows.
-        """
-        if not isinstance(event, KeyEvent):
-            return False
-        action = self.keymap.get(event.key)
-        if action is None:
-            return False
-        return self.on_action(action)
 
     def _is_disabled(self, index: int) -> bool:
         """Whether the data row ``index`` is disabled (whole control or per item)."""
@@ -526,13 +375,14 @@ class Select(Widget):
     def _visible_range(self) -> tuple[int, int]:
         """The ``[start, stop)`` slice of rows rendered, at most ``max_rows``.
 
-        :meth:`_cursor` answers it: the window hangs at the top while the
+        The shared cursor answers it: the window hangs at the top while the
         cursor sits inside the first ``max_rows`` rows, then scrolls one row
         per step with the cursor as its last row -- and a ``window=True``
         list centres the cursor instead.  Either way the selected row is
         always on screen.
         """
-        cursor = self._cursor()
+        self._sync_cursor()
+        cursor = self._cursor
         size = cursor.count if self.max_rows is None else self.max_rows
         return cursor.window(size, anchor="center" if self.window else "top")
 
@@ -555,18 +405,8 @@ class Select(Widget):
         return self.glyphs.check_on, self.glyphs.check_off
 
     def _chosen_of(self, option: Option) -> object:
-        """What a chosen row leaves pending: the :class:`Option` itself.
-
-        The seam :meth:`_commit` and :meth:`on_action` write through: a menu
-        carries the whole option, and a variant that speaks values narrows it
-        (:class:`RadioGroup`).
-        """
-        return option
-
-    def _commit(self) -> None:
-        """Leave the row under the cursor pending (the ``commit`` knob)."""
-        selected = self._selected_option()
-        self._pending = None if selected is None else self._chosen_of(selected)
+        """What a chosen row leaves pending: the option's value (label if none)."""
+        return _option_value(option)
 
     def _description_column(self) -> int:
         """The column every description starts at (0 when none is set).
@@ -642,7 +482,7 @@ class Select(Widget):
         cap = self.max_rows
         if cap is None or cap <= 0 or count <= cap:
             return ""
-        return f"({self._index + 1}/{count})"
+        return f"({self.index + 1}/{count})"
 
     def render(self, c: Constraints) -> Surface:
         """The window's rows, the title and the counter, each on its band.
@@ -662,6 +502,7 @@ class Select(Widget):
         text = self.group("text")
         rows = self._rows()
         start, stop = self._visible_range()
+        cursor_index = self._cursor.index
         column = self._description_column()
         out: list[Line] = []
         if self.title:
@@ -673,7 +514,7 @@ class Select(Widget):
                 )
             )
         for i in range(start, stop):
-            current = i == self._index
+            current = i == cursor_index
             hovered = i == self._hover_row
             out.append(
                 rest(
@@ -709,27 +550,30 @@ class Select(Widget):
         )
 
     def __repr__(self) -> str:
-        return f"Select({self.options!r}, index={self._index})"
+        return f"Select({self.options!r}, index={self.index})"
 
 
 class MultiSelect(Select):
     """A :class:`Select` whose rows carry marks and whose result is the marked set.
 
-    The multiple-selection variant of the menu family (D1): ``commit`` and a
-    single pending pick are a single-choice notion, so this variant replaces
-    them with :attr:`marked` -- the data-row indices the ``check_on`` /
-    ``check_off`` seats report -- and :meth:`toggle`, the one gesture that
-    flips the cursor row's mark.  An :meth:`~Select.on_action` is the same
-    gesture, and the pending result is recomputed from the marks in row
-    order (``None`` while nothing is marked), so a host reads the whole
-    selection the way the rows show it.  Rendering, the cursor, the window,
-    the description column and the pointer's row mark are the base's.
+    The multiple-selection variant of the menu family (D1): this variant
+    replaces the single pending pick with :attr:`marked` -- the data-row
+    indices the ``check_on`` / ``check_off`` seats report -- and
+    :meth:`toggle`, the one gesture that flips the cursor row's mark.  An
+    activation is that same gesture, and the pending result is recomputed
+    from the marks in row order (nothing pending while nothing is marked),
+    so a host reads the whole selection the way the rows show it.
+    Rendering, the cursor, the window, the description column and the
+    pointer's row mark are the base's.
     """
 
     __slots__ = ("marked",)
 
     #: This list is a multiple selection.
     _multi = True
+
+    #: The family table plus the marking key.
+    keymap = Keymap({**CURSOR_KEYMAP, "space": "toggle"})
 
     def __init__(
         self,
@@ -768,11 +612,11 @@ class MultiSelect(Select):
         An empty list answers ``False`` and changes nothing.  A disabled
         control or cursor row refuses.
         """
-        if self.disabled or self._selected_option() is None:
+        if not self._cursor_enabled():
             return False
-        if self._is_disabled(self._index):
+        if self.selected is None or self._is_disabled(self.index):
             return False
-        self.marked.toggle(self._index)
+        self.marked.toggle(self.index)
         self._sync_result()
         self.touch()
         return True
@@ -780,31 +624,31 @@ class MultiSelect(Select):
     def _sync_result(self) -> None:
         """Recompute the pending result from the marks: their values, in row order.
 
-        The variant's invariant -- the pending value *is* the marks, ``None``
-        while none is set.  The values are the payloads (an option's label
-        when its payload is ``None``), in data-row order, so a host reads the
-        whole selection the way the rows show it.
+        The variant's invariant -- the pending value *is* the marks, nothing
+        pending while none is set.  The values are the payloads (an option's
+        label when its payload is ``None``), in data-row order, so a host
+        reads the whole selection the way the rows show it.  An empty
+        selection clears the slot instead of emitting ``None``: "no marks"
+        must read as no result, not as a legal ``None`` payload.
         """
         values = [
             _option_value(option)
             for index, option in enumerate(self._rows())
             if index in self.marked
         ]
-        self._pending = values or None
+        if values:
+            self._emit(values)
+        else:
+            self._clear_result()
 
     def __repr__(self) -> str:
-        return f"MultiSelect({self.options!r}, index={self._index})"
+        return f"MultiSelect({self.options!r}, index={self.index})"
 
 
 class _FormGroup:
     """The form groups' shared half: label rows and the form band rule."""
 
     __slots__ = ()
-
-    @property
-    def labels(self) -> list[str]:
-        """The display labels, in row order (a fresh list per read)."""
-        return [option.label for option in self.options]
 
     def _band(self, current: bool, hovered: bool, disabled: bool = False) -> Style:
         """The form band rule: the hover band wins, then the focused selection's."""
@@ -820,37 +664,36 @@ class RadioGroup(_FormGroup, Select):
     """The single-choice group: one ``(•)`` marker on one row.
 
     A :class:`Select` preset -- ``wrap=False`` (a step clamps, it never
-    cycles), ``commit=True`` (the cursor *is* the selection: a step, a click
-    and an activation all leave the new pick pending) and the ``(•)``
-    marker -- with two traits of its own: the rows lead with ``(•) `` on the
-    selected row and ``( ) `` on every other (not with the menu's arrow and
-    indent), and the selected row's band is the form rule -- unfocused it
-    rests on the ground as it is (a group does not dim its pick), focused it
-    carries the theme's ``rows.active`` underneath its accent label.
+    cycles) and the ``(•)`` marker -- with two traits of its own: the rows
+    lead with ``(•) `` on the selected row and ``( ) `` on every other (not
+    with the menu's arrow and indent), and the selected row's band is the
+    form rule -- unfocused it rests on the ground as it is (a group does not
+    dim its pick), focused it carries the theme's ``rows.active`` underneath
+    its accent label.
 
-    ``labels`` takes plain strings (the label is the value) or
+    ``options`` takes plain strings (the label is the value) or
     :class:`Option` entries (a label with its own payload), the same option
-    vocabulary the menu family speaks; the pending result is the selected
-    entry's value -- its label when a plain string was given or the option
-    carries no payload.  A non-empty ``Option.description`` is a
-    construction error: the group renders labels only.  ``glyphs.radio_off``
-    and ``glyphs.radio_on`` are the row's own pair: the row renders their
-    seats through
+    vocabulary the menu family speaks; :attr:`selected` answers the selected
+    :class:`Option` and :meth:`activate` leaves its value pending -- the
+    label when a plain string was given or the option carries no payload.
+    A non-empty ``Option.description`` is a construction error: the group
+    renders labels only.  ``glyphs.radio_off`` and ``glyphs.radio_on`` are
+    the row's own pair: the row renders their seats through
     :func:`~motui.kernel.glyphs.pair_seat`, padded to the wider member, so
     both states share one column; ``""`` disables a glyph and its seat.
-    Rows step with :meth:`~Select.move` like a data view -- **clamped** at
-    the ends, never wrapping -- and ``on_hover`` is the pointer tier's row
-    marking (the marked row rests on ``rows.hover``, whatever row
-    it is on), resolved the same way :meth:`~Select.click` resolves a cell,
-    so the two can never disagree.  ``disabled``/``disabled_items`` work like
-    the base's.
+    Rows step with :meth:`~motui.widgets.base.CursorWidget.move` like a data
+    view -- **clamped** at the ends, never wrapping -- and ``on_hover`` is
+    the pointer tier's row marking (the marked row rests on ``rows.hover``,
+    whatever row it is on), resolved the same way ``on_click`` resolves a
+    cell, so the two can never disagree.  ``disabled``/``disabled_items``
+    work like the base's.
     """
 
     __slots__ = ()
 
     def __init__(
         self,
-        labels: Sequence[str | Option],
+        options: Sequence[str | Option],
         *,
         index: int = 0,
         glyphs: Glyphs = GLYPHS,
@@ -859,13 +702,12 @@ class RadioGroup(_FormGroup, Select):
         theme: Theme | None = None,
         styles: Styles | None = None,
     ) -> None:
-        _reject_descriptions(labels, "RadioGroup")
+        _reject_descriptions(options, "RadioGroup")
         super().__init__(
-            _options(labels),
+            _options(options),
             max_rows=None,
             wrap=False,
             glyphs=glyphs,
-            commit=True,
             disabled=disabled,
             disabled_items=disabled_items,
             theme=theme,
@@ -873,16 +715,11 @@ class RadioGroup(_FormGroup, Select):
         )
         # The old constructor default: a form group starts unfocused.
         self.focused = False
-        # The setter reads ``options``, which is armed by now.
-        self.index = index
-
-    # -- the selection ---------------------------------------------------------
-
-    @property
-    def selected(self) -> str | None:
-        """The label of the selected row, or ``None`` for an empty group."""
-        option = super().selected
-        return None if option is None else option.label
+        # The constructor's explicit index is clamped **without** the
+        # disabled refusal or the pending clear: it is initial state, not a
+        # cursor verb.
+        self._sync_cursor()
+        self._cursor.index = self._cursor.clamp(index)
 
     def _chosen_of(self, option: Option) -> object:
         """The value a chosen row carries: the payload, or the label itself."""
@@ -925,7 +762,8 @@ class RadioGroup(_FormGroup, Select):
         )
 
     def __repr__(self) -> str:
-        return f"RadioGroup({self.labels!r}, index={self._index}, focused={self.focused})"
+        labels = [option.label for option in self.options]
+        return f"RadioGroup({labels!r}, index={self.index}, focused={self.focused})"
 
 
 class CheckboxGroup(_FormGroup, MultiSelect):
@@ -941,9 +779,9 @@ class CheckboxGroup(_FormGroup, MultiSelect):
     ``"  [ ] label"`` elsewhere: the menu's marker seat, then the mark column
     (:func:`~motui.kernel.glyphs.pair_seat`), then the label.
 
-    ``labels`` takes plain strings (the label is the value) or
+    ``options`` takes plain strings (the label is the value) or
     :class:`Option` entries, like :class:`RadioGroup`; the pending result is
-    the marked rows' values in row order -- ``None`` while nothing is
+    the marked rows' values in row order -- nothing pending while nothing is
     marked.  A non-empty ``Option.description`` is a construction error: the
     group renders labels only.  ``glyphs.check_on`` / ``check_off`` are the
     row's marked/unmarked pair: the column is the pair's wider seat, so both
@@ -959,7 +797,7 @@ class CheckboxGroup(_FormGroup, MultiSelect):
 
     def __init__(
         self,
-        labels: Sequence[str | Option],
+        options: Sequence[str | Option],
         *,
         marked: Iterable[int] = (),
         index: int = 0,
@@ -969,9 +807,9 @@ class CheckboxGroup(_FormGroup, MultiSelect):
         theme: Theme | None = None,
         styles: Styles | None = None,
     ) -> None:
-        _reject_descriptions(labels, "CheckboxGroup")
+        _reject_descriptions(options, "CheckboxGroup")
         super().__init__(
-            _options(labels),
+            _options(options),
             max_rows=None,
             wrap=False,
             marked=marked,
@@ -983,8 +821,11 @@ class CheckboxGroup(_FormGroup, MultiSelect):
         )
         # The old constructor default: a form group starts unfocused.
         self.focused = False
-        # The setter reads ``options``, which is armed by now.
-        self.index = index
+        # The constructor's explicit index is clamped **without** the
+        # disabled refusal or the pending clear: it is initial state, not a
+        # cursor verb, and the marked result is already installed above.
+        self._sync_cursor()
+        self._cursor.index = self._cursor.clamp(index)
 
     def on_click(self, pos: Pos) -> bool:
         """Move the cursor onto a row and flip its mark; ``True`` on a hit.
@@ -1000,10 +841,8 @@ class CheckboxGroup(_FormGroup, MultiSelect):
         target = self._option_at(pos.y)
         if target is None or self._is_disabled(target):
             return False
-        self._index = target
-        self.marked.toggle(self._index)
-        self._sync_result()
-        self.touch()
+        self.select(target)
+        self.toggle()
         return True
 
     def _row(
@@ -1045,4 +884,5 @@ class CheckboxGroup(_FormGroup, MultiSelect):
         return Line(tuple(segments))
 
     def __repr__(self) -> str:
-        return f"CheckboxGroup({self.labels!r}, index={self._index})"
+        labels = [option.label for option in self.options]
+        return f"CheckboxGroup({labels!r}, index={self.index})"

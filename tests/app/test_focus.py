@@ -542,7 +542,7 @@ def test_a_click_through_a_container_lands_on_the_leaf_target():
     assert manager.click(hit(padded, row=1, col=2)) is True
     assert manager.focused is menu
     assert manager.click(hit(padded, row=1, col=2)) is True
-    assert menu.take() == Option("one")
+    assert menu.take() == "one"
 
 
 def test_the_arrows_call_move_with_the_signed_delta():

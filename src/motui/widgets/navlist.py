@@ -17,7 +17,8 @@ item at that *item* position -- ``(0, "FOUNDATIONS")`` above the first
 item, ``(3, "COMPONENTS")`` above the fourth -- so a long rail reads as a
 few named sections instead of one flat ladder.  A group row is chrome, not
 an item: its seat is left blank (``bar_space``, the bar column never
-moves) and its ``label`` renders verbatim in ``text.muted`` (the caller spells the case -- the demo passes it uppercase --
+moves) and its ``label`` renders verbatim in ``text.muted`` (the caller
+spells the case -- the demo passes it uppercase --
 the component never rewrites a label).  Group rows are **unselectable and
 unclickable**, they never take the hover band, and ``index`` /
 ``select`` / ``move`` keep counting **items** only -- a group row is
@@ -65,8 +66,7 @@ and :meth:`move` steps over them (clamped, never wrapping) exactly as
 hover is the pointer's echo, not a selection.
 
 The rail binds its own arrow keys through :attr:`keymap` (a host may
-rebind them on the instance); ``handle`` is the 1.x alias of :meth:`on_key`
-and stays until W3b3.  An empty
+rebind them on the instance).  An empty
 ``glyphs.rail`` turns the indicator off and collapses its seat: the bar
 column is the glyph's own width (``visible_width``, so a wide bar takes its
 columns) and ``bar_space`` -- the separator after that column -- defaults to
@@ -88,23 +88,22 @@ docstring says so, as the clickable charter demands) and
 
 from __future__ import annotations
 
-from typing import Iterable, Sequence
+from collections.abc import Iterable, Sequence
 
-from ..widgets.cursor import Cursor
-from ..kernel.events import KeyEvent
-from ..kernel.glyphs import GLYPHS, Glyphs, seat_width
 from ..kernel.cell import Line, Segment, Surface, rest
+from ..kernel.geom import Pos
+from ..kernel.glyphs import GLYPHS, Glyphs, seat_width
 from ..kernel.layout import Constraints
 from ..kernel.style import Style
 from ..kernel.text import visible_width
 from ..kernel.theme import Styles, Theme
-from ..widgets.base import Widget
+from ..widgets.base import CURSOR_KEYMAP, CursorWidget
 from .strip import Keymap
 
 __all__ = ["NavList"]
 
 
-class NavList(Widget):
+class NavList(CursorWidget):
     """A vertical navigation list: a bar indicator, a clamped selection.
 
     ``items`` is a list of labels, one row each; ``index`` is the selected
@@ -114,7 +113,8 @@ class NavList(Widget):
     request, the verbs are what refuse) and on every later
     :meth:`select`/:meth:`move`.  ``disabled_items`` is an iterable of indices
     that render but refuse :meth:`on_click`/:meth:`select` and are stepped
-    over by :meth:`move`; the ``disabled`` flag refuses every gesture.  ``groups`` lays group title rows between the
+    over by :meth:`move`; the ``disabled`` flag refuses every gesture.
+    ``groups`` lays group title rows between the
     items (see the module docstring): they render but refuse every verb,
     and ``index`` stays an **item** index.
 
@@ -138,30 +138,21 @@ class NavList(Widget):
         "_disabled_items",
         "_groups",
         "_hover_index",
-        "_index",
-        "_keymap",
         "_separator",
         "disabled",
         "glyphs",
         "items",
     )
 
-    #: The rail owns the keyboard, clicks and the pointer's row; it has no
-    #: activation verb (a navigation row is a destination, not a command).
+    #: The rail owns the keyboard, clicks, the pointer's row and activation.
     focusable = True
     clickable = True
     hoverable = True
-    activatable = False
+    activatable = True
 
-    #: The default key table (a per-instance copy backs ``self.keymap``).
-    keymap = Keymap(
-        {
-            "up": "prev",
-            "down": "next",
-            "left": "prev",
-            "right": "next",
-        }
-    )
+    #: The cursor family's default table (a per-instance copy backs
+    #: ``self.keymap``).
+    keymap = Keymap(CURSOR_KEYMAP)
 
     def __init__(
         self,
@@ -177,9 +168,6 @@ class NavList(Widget):
         styles: Styles | None = None,
     ) -> None:
         super().__init__(theme, styles)
-        # The instance's own key table: rebinding one entry never reaches
-        # the class default (see :class:`~motui.widgets.strip.Keymap`).
-        self._keymap = dict(type(self).keymap)
         self.items = list(items)
         self.glyphs = glyphs
         bar = glyphs.rail
@@ -206,7 +194,6 @@ class NavList(Widget):
         self.hover = False
         #: The whole rail refuses every selection gesture when disabled.
         self.disabled = disabled
-        self._index = 0
         # The item row the pointer is on, or ``None``; written by
         # ``on_hover``, read by ``render``.  ``None`` renders byte-for-byte
         # what the list always did, and a group row never marks.
@@ -226,10 +213,11 @@ class NavList(Widget):
         )
         # Styles resolve at render time from the theme (or ``styles=``);
         # only the derived gutter is latched here.
-        if self.items:
-            # Clamped like every later request; the disabled rule belongs to
-            # the verbs, not to this explicit constructor value.
-            self._index = Cursor(len(self.items)).clamp(index)
+        # The constructor's explicit index is clamped **without** the
+        # disabled refusal: an explicit request an item rule will refuse is
+        # kept, exactly as the verbs have always behaved.
+        self._sync_cursor()
+        self._cursor.index = self._cursor.clamp(index)
 
     def _band(self, current: bool, hovered: bool, disabled: bool = False) -> Style:
         """The surface one rail row rests on: the theme's row roles.
@@ -248,91 +236,44 @@ class NavList(Widget):
             return rows.active
         return rows.base
 
-    # -- the keyboard -----------------------------------------------------------
+    # -- the cursor hooks -------------------------------------------------------
 
-    def on_action(self, name: str) -> bool:
-        """Run one named rail action; ``False`` for an unknown name.
+    def _entry_count(self) -> int:
+        """The item rows the cursor walks (group rows are chrome)."""
+        return len(self.items)
 
-        ``prev`` / ``next`` step the selection one item through
-        :meth:`move` and answer its result -- an edge with nowhere to go
-        answers ``False``, the old focus router's rule.  The rail binds no
-        activation action: a navigation row selects, it does not activate.
-        """
-        if name == "prev":
-            return self.move(-1)
-        if name == "next":
-            return self.move(1)
+    def _entry_at(self, index: int) -> object | None:
+        """The label at item row ``index`` (side-effect free)."""
+        return self.items[index]
+
+    def _cursor_disabled(self) -> Iterable[int]:
+        """The item rows a move steps over and ``select`` refuses."""
+        return self._disabled_items
+
+    def _cursor_wraps(self) -> bool:
+        """The rail clamps at its ends; it never wraps."""
         return False
 
-    def on_key(self, event: KeyEvent) -> bool:
-        """Route a key through :attr:`keymap` to :meth:`on_action`.
+    def _cursor_enabled(self) -> bool:
+        """The whole-rail disabled switch gates every cursor verb."""
+        return not self.disabled
 
-        The default table binds the four arrows; a key no entry names is
-        declined so the host keeps it.  A disabled rail answers ``False``.
-        """
-        if self.disabled or not isinstance(event, KeyEvent):
-            return False
-        action = self.keymap.get(event.key)
-        if action is None:
-            return False
-        return self.on_action(action)
+    # -- the activation verb ----------------------------------------------------
 
-    # -- the cursor -------------------------------------------------------------
+    def activate(self) -> bool:
+        """Leave the active item pending; ``False`` on no pick.
 
-    @property
-    def index(self) -> int:
-        """The selected item, always inside the item range.
-
-        Read-only: :meth:`select` and :meth:`move` are the moving doors.
-        Group rows are chrome and never enter this index.
-        """
-        return self._index
-
-    def _cursor(self) -> Cursor:
-        """The cursor value over the items and the disabled set."""
-        return Cursor(
-            len(self.items),
-            index=self._index,
-            disabled=self._disabled_items,
-        )
-
-    def select(self, index: int) -> bool:
-        """Select ``index``, clamped into range; True when it changed.
-
-        A ``disabled`` index is refused outright -- ``False``, nothing
-        moved -- a disabled rail refuses every selection, and an empty rail
-        answers ``False`` always.
+        A disabled rail, an empty rail and a disabled active item answer
+        ``False`` and leave nothing pending.  A real pick writes the label
+        through the shared result slot (read once by ``take``).
         """
         if self.disabled or not self.items:
             return False
-        cursor = self._cursor()
-        changed = cursor.select(index)
-        self._index = cursor.index
-        if changed:
-            self.touch()
-        return changed
-
-    def move(self, delta: int) -> bool:
-        """Move the selection ``delta`` items, clamped and never wrapping.
-
-        Disabled items are **stepped over**: a positive step from index 1
-        with 2 disabled lands on 3, and a step whose direction holds no
-        enabled item left stays where it was (``False``).  A disabled rail
-        moves nowhere.  The answer is whether the selection changed.
-        """
-        if self.disabled or not self.items or delta == 0:
+        index = self.index
+        if index in self._disabled_items:
             return False
-        before = self._index
-        cursor = self._cursor()
-        cursor.move(delta)
-        # A stale cursor (a host replaced the items in place) is clamped
-        # like any other request, and the clamping itself is a move.
-        cursor.index = cursor.clamp(cursor.index)
-        moved = cursor.index != before
-        self._index = cursor.index
-        if moved:
-            self.touch()
-        return moved
+        self._emit(self.items[index])
+        return True
 
     @property
     def bar_space(self) -> str:
@@ -403,6 +344,7 @@ class NavList(Widget):
         """
         if not self.items:
             return Surface.clipped([], c.width)
+        cursor_index = self.index
         # The roles resolve once per render; the focus rule drops the active
         # bar from accent to muted -- the label is never dimmed (D3).
         text = self.group("text")
@@ -427,13 +369,13 @@ class NavList(Widget):
             index = payload
             if index in self._disabled_items:
                 label_style, bar_style = text.faint, text.muted
-            elif index == self._index:
+            elif index == cursor_index:
                 label_style, bar_style = active_label, bar_active
             else:
                 label_style, bar_style = text.faint, text.muted
             seat = (
                 self.glyphs.rail
-                if index == self._index and self.glyphs.rail
+                if index == cursor_index and self.glyphs.rail
                 else self._bar_seat
             )
             rows.append(
@@ -445,7 +387,7 @@ class NavList(Widget):
                         ),
                     )),
                     c.width,
-                    self._band(index == self._index, index == self._hover_index),
+                    self._band(index == cursor_index, index == self._hover_index),
                 )
             )
         if c.max_height is not None:
@@ -482,4 +424,4 @@ class NavList(Widget):
         return None
 
     def __repr__(self) -> str:
-        return f"NavList({self.items!r}, index={self._index})"
+        return f"NavList({self.items!r}, index={self.index})"

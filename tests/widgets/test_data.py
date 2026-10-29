@@ -4,17 +4,15 @@ from dataclasses import replace
 
 import pytest
 
-from motui.kernel.glyphs import GLYPHS
 from motui.kernel.cell import Segment, Surface
 from motui.kernel.geom import Pos
+from motui.kernel.glyphs import GLYPHS
 from motui.kernel.layout import Constraints
 from motui.kernel.style import Style
 from motui.kernel.text import WrapMode
 from motui.kernel.theme import DEFAULT_THEME, Styles
-from motui.widgets import List, Table, TreeNode, Tree
-
+from motui.widgets import List, Table, Tree, TreeNode
 from tests.testing import key, many, paste, texts
-
 
 # -- List ---------------------------------------------------------------------
 
@@ -86,7 +84,8 @@ def test_click_maps_rendered_rows_and_refuses_the_counter_rows():
     assert lst.on_click(Pos(x=0, y=len(rows) - 1)) is False
     assert lst.on_click(Pos(x=0, y=len(rows))) is False
     assert lst.on_click(Pos(x=99, y=2)) is True
-    assert lst.index == 49 and lst.take() == "r49"
+    assert lst.index == 49 and lst.take() is None
+    assert lst.on_action("activate") is True and lst.take() == "r49"
 
 
 def test_the_prefix_jump_scans_from_the_top_case_insensitively():
@@ -104,8 +103,9 @@ def test_handle_consumes_its_own_keys_and_declines_the_hosts():
     assert lst.on_key(key("up")) is True and lst.index == 0
     assert lst.on_key(key("end")) is True and lst.index == 2
     assert lst.on_key(key("home")) is True and lst.index == 0
-    for event in (key("enter"), key("tab"), key("c-n"), key("space", " ")):
+    for event in (key("enter"), key("tab"), key("c-n")):
         assert lst.on_key(event) is False
+    assert lst.on_key(key("space", " ")) is True  # the mark gesture
     assert lst.on_paste(paste("text")) is False
 
 
@@ -115,8 +115,7 @@ def test_the_list_keymap_routes_its_keys_through_named_actions():
     assert lst.on_action("prev") is True and lst.index == 0
     assert lst.on_action("last") is True and lst.index == 2
     assert lst.on_action("first") is True and lst.index == 0
-    # A movement action is consumed even at an edge, the old handle's rule.
-    assert lst.on_action("prev") is True and lst.index == 0
+    assert lst.on_action("prev") is False  # clamped at the first item
     assert lst.on_action("activate") is True and lst.take() == "a"
     assert lst.on_action("toggle") is True and list(lst.marked) == [0]
     assert lst.on_action("nope") is False and list(lst.marked) == [0]
@@ -141,7 +140,7 @@ def test_the_typed_hooks_forward_to_the_1x_click_and_hover_verbs():
     lst = List(many(100), window=4)
     lst.index = 50
     assert lst.on_click(Pos(y=2, x=99)) is True
-    assert lst.index == 49 and lst.take() == "r49"
+    assert lst.index == 49 and lst.take() is None
     assert lst.on_hover(Pos(y=2, x=0)) is True
     assert lst.on_hover(Pos(y=2, x=0)) is False
     assert lst.on_hover(None) is True
@@ -204,6 +203,8 @@ def test_disabled_items_are_visible_but_skipped_and_refused():
     assert lst.move(1) is True and lst.index == 3
     assert lst.move(1) is False
     lst.index = 1
+    assert lst.index == 3  # a disabled row refuses the assignment too
+    lst.disabled_items = frozenset({1, 2, 3})
     assert lst.on_action("activate") is False and lst.take() is None
     assert lst.toggle() is False
     assert lst.on_click(Pos(x=0, y=1)) is False
@@ -236,7 +237,9 @@ def test_list_answers_a_surface_and_honours_the_height_budget():
 
 
 def test_the_grid_keeps_one_width_and_rules_between_rows():
-    rows = Table(["A"], [["1"], ["2"], ["3"]], cell_wrap=WrapMode.ELLIPSIS).render(Constraints(width=9))
+    rows = Table(
+        [["1"], ["2"], ["3"]], headers=["A"], cell_wrap=WrapMode.ELLIPSIS
+    ).render(Constraints(width=9))
     assert [row.text for row in rows] == [
         "\u250c\u2500\u2500\u2500\u2510",
         "\u2502 A \u2502",
@@ -252,7 +255,9 @@ def test_the_grid_keeps_one_width_and_rules_between_rows():
 
 
 def test_an_over_wide_grid_shrinks_and_ellipsizes():
-    rows = Table(["A", "B"], [["xxxxxxxxxx", "y"]], cell_wrap=WrapMode.ELLIPSIS).render(Constraints(width=12))
+    rows = Table(
+        [["xxxxxxxxxx", "y"]], headers=["A", "B"], cell_wrap=WrapMode.ELLIPSIS
+    ).render(Constraints(width=12))
     assert [row.text for row in rows] == [
         "\u250c\u2500\u2500\u2500\u2500\u2500\u2500\u252c\u2500\u2500\u2500\u2510",
         "\u2502 A    \u2502 B \u2502",
@@ -264,7 +269,7 @@ def test_an_over_wide_grid_shrinks_and_ellipsizes():
 
 def test_cell_wrap_selects_how_an_over_wide_cell_fits():
     def render(mode: WrapMode) -> list[str]:
-        table = Table(["A", "B"], [["xxxxxxxxxx", "y"]], cell_wrap=mode)
+        table = Table([["xxxxxxxxxx", "y"]], headers=["A", "B"], cell_wrap=mode)
         return [row.text for row in table.render(Constraints(width=16))]
 
     ellipsis = render(WrapMode.ELLIPSIS)
@@ -283,13 +288,13 @@ def test_cell_wrap_selects_how_an_over_wide_cell_fits():
 def test_cell_wrap_char_breaks_between_cells_not_words():
     word = [
         row.text
-        for row in Table(["n"], [["aaa bbb"]], cell_wrap=WrapMode.WORD).render(
+        for row in Table([["aaa bbb"]], headers=["n"], cell_wrap=WrapMode.WORD).render(
             Constraints(width=9)
         )
     ]
     char = [
         row.text
-        for row in Table(["n"], [["aaa bbb"]], cell_wrap=WrapMode.CHAR).render(
+        for row in Table([["aaa bbb"]], headers=["n"], cell_wrap=WrapMode.CHAR).render(
             Constraints(width=9)
         )
     ]
@@ -299,7 +304,7 @@ def test_cell_wrap_char_breaks_between_cells_not_words():
 
 def test_cell_wrap_overflow_keeps_the_natural_grid_width():
     cell = "x" * 200
-    table = Table(["A"], [[cell]], cell_wrap=WrapMode.OVERFLOW)
+    table = Table([[cell]], headers=["A"], cell_wrap=WrapMode.OVERFLOW)
     surface = table.render(Constraints(width=80))
     assert surface.width == 204  # one rule + two pads + 200 + one rule
     assert surface.height == 5
@@ -310,13 +315,13 @@ def test_cell_wrap_overflow_keeps_the_natural_grid_width():
     assert [line.width for line in table.header_lines(80)] == [204]
     # The default modes still answer the constrained width.
     for mode in (WrapMode.WORD, WrapMode.ELLIPSIS):
-        narrow = Table(["A"], [[cell]], cell_wrap=mode).render(Constraints(width=80))
+        narrow = Table([[cell]], headers=["A"], cell_wrap=mode).render(Constraints(width=80))
         assert narrow.width == 80
         assert all(row.width <= 80 for row in narrow)
 
 
 def test_cell_wrap_overflow_honours_set_widths_pins():
-    table = Table(["A"], [["x" * 200]], cell_wrap=WrapMode.OVERFLOW)
+    table = Table([["x" * 200]], headers=["A"], cell_wrap=WrapMode.OVERFLOW)
     table.set_widths([12])
     surface = table.render(Constraints(width=80))
     assert surface.width == 80  # 12 + two pads + two rules is still narrow
@@ -326,15 +331,20 @@ def test_cell_wrap_overflow_honours_set_widths_pins():
 
 def test_cell_wrap_is_part_of_the_render_answer():
     headers, rows = ["A"], [["the quick brown fox"]]
-    plain = Table(headers, rows, cell_wrap=WrapMode.WORD)
-    clipped = Table(headers, rows, cell_wrap=WrapMode.ELLIPSIS)
+    plain = Table(rows, headers=headers, cell_wrap=WrapMode.WORD)
+    clipped = Table(rows, headers=headers, cell_wrap=WrapMode.ELLIPSIS)
     assert [row.text for row in plain.render(Constraints(width=12))] != [
         row.text for row in clipped.render(Constraints(width=12))
     ]
 
 
 def test_a_long_cell_wraps_instead_of_ellipsizing():
-    rows = [row.text for row in Table(["note"], [["the quick brown fox jumps"]]).render(Constraints(width=16))]
+    rows = [
+        row.text
+        for row in Table(
+            [["the quick brown fox jumps"]], headers=["note"]
+        ).render(Constraints(width=16))
+    ]
     assert rows[3:6] == [
         "\u2502 the quick    \u2502",
         "\u2502 brown fox    \u2502",
@@ -344,7 +354,7 @@ def test_a_long_cell_wraps_instead_of_ellipsizing():
 
 
 def test_the_second_visual_line_maps_onto_its_record_for_click_and_hover():
-    table = Table(["A"], [["one two three four"]])
+    table = Table([["one two three four"]], headers=["A"])
     table.render(Constraints(width=12))
     assert table.on_click(Pos(x=0, y=4)) is True and table.index == 0
     assert table.on_hover(Pos(x=0, y=4)) is True
@@ -357,7 +367,7 @@ def test_wrapping_keeps_segment_styles_links_and_actions():
         Segment("alpha ", Style(bold=True)),
         Segment("beta gamma", Style(italic=True), link="https://example.test"),
     ]
-    rows = Table(["A"], [[cell]]).render(Constraints(width=12))
+    rows = Table([[cell]], headers=["A"]).render(Constraints(width=12))
     runs = [seg for row in rows[3:6] for seg in row.segments if seg.text.strip()]
     assert any(seg.text.startswith("alpha") and seg.style.bold for seg in runs)
     linked = [seg for seg in runs if seg.link == "https://example.test"]
@@ -368,8 +378,7 @@ def test_wrapping_keeps_segment_styles_links_and_actions():
 def test_a_wrapped_record_bands_every_visual_line_and_marks_only_the_first():
     band = Style(reverse=True)
     table = Table(
-        ["A"],
-        [["one two three four"]],
+        [["one two three four"]], headers=["A"],
         styles=Styles(rows=replace(DEFAULT_THEME.rows, active=band)),
     )
     table.index = 0
@@ -385,13 +394,13 @@ def test_a_wrapped_record_bands_every_visual_line_and_marks_only_the_first():
 
 @pytest.mark.parametrize("width", [0])
 def test_a_degenerate_width_keeps_the_frame_structure(width):
-    rows = Table(["A", "B"], [["1", "2"]]).render(Constraints(width=width))
+    rows = Table([["1", "2"]], headers=["A", "B"]).render(Constraints(width=width))
     assert len(rows) == 5
     assert all(row.width <= width for row in rows)
 
 
 def test_columns_are_measured_by_visible_width():
-    rows = Table(["\u540d\u524d"], [["\u65e5\u672c"]]).render(Constraints(width=10))
+    rows = Table([["\u65e5\u672c"]], headers=["\u540d\u524d"]).render(Constraints(width=10))
     assert rows[3].text == "\u2502 \u65e5\u672c \u2502"
     assert len({row.width for row in rows}) == 1
 
@@ -399,8 +408,7 @@ def test_columns_are_measured_by_visible_width():
 def test_the_column_and_border_styles_reach_their_cells():
     injected = Style(underline=True)
     rows = Table(
-        ["A", "B"],
-        [[("1", injected), "x"]],
+        [[("1", injected), "x"]], headers=["A", "B"],
         styles=Styles(
             text=replace(DEFAULT_THEME.text, base=Style(bold=True)),
             borders=replace(DEFAULT_THEME.borders, grid=Style(italic=True)),
@@ -424,15 +432,16 @@ def test_the_column_and_border_styles_reach_their_cells():
     ],
 )
 def test_alignments_pad_inside_the_column_budget(aligns, header, data):
-    rows = Table(["l", "c", "r"], [["a", "bb", "cccc"]], aligns=aligns).render(Constraints(width=20))
+    rows = Table(
+        [["a", "bb", "cccc"]], headers=["l", "c", "r"], aligns=aligns
+    ).render(Constraints(width=20))
     assert rows[1].text == header and rows[3].text == data
 
 
 def test_the_cursor_bands_the_data_cells_of_its_row_only():
     band = Style(reverse=True)
     table = Table(
-        ["A", "B"],
-        [["1", "x"], ["2", "y"]],
+        [["1", "x"], ["2", "y"]], headers=["A", "B"],
         styles=Styles(rows=replace(DEFAULT_THEME.rows, active=band)),
     )
     table.index = 1
@@ -441,37 +450,37 @@ def test_the_cursor_bands_the_data_cells_of_its_row_only():
     assert not any(seg.style.reverse for seg in rows[3].segments)
     assert not any(seg.style.reverse for seg in rows[1].segments)
     assert [row.text for row in rows] == [
-        row.text for row in Table(["A", "B"], [["1", "x"], ["2", "y"]]).render(Constraints(width=12))
+        row.text
+        for row in Table([["1", "x"], ["2", "y"]], headers=["A", "B"]).render(
+            Constraints(width=12)
+        )
     ]
 
 
-def test_index_clamps_and_none_clears_the_cursor():
-    table = Table(["A"], [["1"], ["2"], ["3"]])
-    assert table.index is None
+def test_index_is_an_int_and_the_fresh_cursor_reads_the_first_row():
+    table = Table([["1"], ["2"], ["3"]], headers=["A"])
+    assert table.index == 0 and table.selected == ["1"]
     table.index = 99
     assert table.index == 2 and table.selected == ["3"]
     table.index = -5
-    assert table.index == 0
-    table.index = None
-    assert table.index is None and table.selected is None
-    empty = Table(["A"], [])
+    assert table.index == 0 and table.selected == ["1"]
+    empty = Table([], headers=["A"])
     empty.index = 0
-    assert empty.index is None and empty.selected is None
+    assert empty.index == 0 and empty.selected is None
 
 
-def test_move_clamps_and_the_first_step_lands_on_the_edge_it_leaves():
-    table = Table(["A"], [["1"], ["2"], ["3"]])
-    assert table.move(1) is True and table.index == 0
+def test_move_clamps_from_the_fresh_first_row():
+    table = Table([["1"], ["2"], ["3"]], headers=["A"])
+    assert table.move(1) is True and table.index == 1
+    assert table.move(-1) is True and table.index == 0
     assert table.move(-1) is False
     assert table.move(2) is True and table.index == 2
     assert table.move(1) is False
-    up = Table(["A"], [["1"], ["2"], ["3"]])
-    assert up.move(-1) is True and up.index == 2
-    assert Table(["A"], []).move(1) is False
+    assert Table([], headers=["A"]).move(1) is False
 
 
 def test_click_maps_rendered_data_rows_and_misses_the_frame():
-    table = Table(["A"], [["1"], ["2"], ["3"]])
+    table = Table([["1"], ["2"], ["3"]], headers=["A"])
     rendered = table.render(Constraints(width=9))
     assert table.on_click(Pos(x=0, y=3)) is True and table.index == 0
     assert table.on_click(Pos(x=99, y=5)) is True and table.index == 1
@@ -482,16 +491,16 @@ def test_click_maps_rendered_data_rows_and_misses_the_frame():
     assert len(rendered) == 9
 
 
-def test_activate_takes_the_row_index_once():
-    table = Table(["A"], [["1"], ["2"]])
+def test_activate_takes_the_row_object_once():
+    table = Table([["1"], ["2"]], headers=["A"])
     assert table.on_action("activate") is False and table.take() is None
     table.index = 1
-    assert table.on_action("activate") is True and table.take() == 1
+    assert table.on_action("activate") is True and table.take() == ["2"]
     assert table.take() is None
 
 
 def test_a_step_or_a_landing_click_clears_a_pending_result():
-    table = Table(["A"], [["1"], ["2"]])
+    table = Table([["1"], ["2"]], headers=["A"])
     table.index = 1
     assert table.on_action("activate") is True
     assert table.move(0) is False and table.take() is None
@@ -500,22 +509,27 @@ def test_a_step_or_a_landing_click_clears_a_pending_result():
 
 
 def test_sort_by_orders_on_the_rendered_text_and_is_stable():
-    table = Table(["state", "note"], [["b", "2"], ["a", "1"], ["b", "0"]])
+    table = Table([["b", "2"], ["a", "1"], ["b", "0"]], headers=["state", "note"])
     assert table.sort_by(0) is True
     assert [row.text for row in table.render(Constraints(width=16))] == [
-        row.text for row in Table(["state", "note"], [["a", "1"], ["b", "2"], ["b", "0"]]).render(Constraints(width=16))
+        row.text
+        for row in Table(
+            [["a", "1"], ["b", "2"], ["b", "0"]], headers=["state", "note"]
+        ).render(Constraints(width=16))
     ]
     assert table.sort_by(0) is False
     assert table.sort_by(0, reverse=True) is True
     assert [row.text for row in table.render(Constraints(width=16))] == [
         row.text
-        for row in Table(["state", "note"], [["b", "2"], ["b", "0"], ["a", "1"]]).render(Constraints(width=16))
+        for row in Table(
+            [["b", "2"], ["b", "0"], ["a", "1"]], headers=["state", "note"]
+        ).render(Constraints(width=16))
     ]
-    assert Table(["A"], []).sort_by(0) is False
+    assert Table([], headers=["A"]).sort_by(0) is False
 
 
 def test_sort_by_keeps_the_cursor_and_marks_on_their_records():
-    table = Table(["k"], [["c"], ["a"], ["b"]])
+    table = Table([["c"], ["a"], ["b"]], headers=["k"])
     table.index = 0
     assert table.toggle() is True
     assert table.sort_by(0) is True
@@ -525,7 +539,7 @@ def test_sort_by_keeps_the_cursor_and_marks_on_their_records():
 
 
 def test_set_widths_pins_budgets_and_the_render_clamps_them():
-    table = Table(["A", "B"], [["xx", "yyyyyyyy"]], cell_wrap=WrapMode.ELLIPSIS)
+    table = Table([["xx", "yyyyyyyy"]], headers=["A", "B"], cell_wrap=WrapMode.ELLIPSIS)
     natural = [row.text for row in table.render(Constraints(width=30))]
     table.set_widths([6, 2])
     pinned = [row.text for row in table.render(Constraints(width=30))]
@@ -541,14 +555,14 @@ def test_set_widths_pins_budgets_and_the_render_clamps_them():
 
 @pytest.mark.parametrize("width", [12])
 def test_header_line_is_the_grids_own_header_row(width):
-    table = Table(["state", "note"], [["ok", "fine"]], aligns=["left", "right"])
+    table = Table([["ok", "fine"]], headers=["state", "note"], aligns=["left", "right"])
     line = table.header_line(width)
     assert line is not None and line == table.render(Constraints(width=width))[1]
-    assert Table([], [["x"]]).header_line(20) is None
+    assert Table([["x"]], headers=[]).header_line(20) is None
 
 
 def test_the_mark_column_rides_the_first_cell_of_every_data_row():
-    table = Table(["name", "value"], [["alpha", "1"], ["beta", "2"]])
+    table = Table([["alpha", "1"], ["beta", "2"]], headers=["name", "value"])
     plain = [row.text for row in table.render(Constraints(width=40))]
     table.index = 1
     assert table.toggle() is True and list(table.marked) == [1]
@@ -561,19 +575,20 @@ def test_the_mark_column_rides_the_first_cell_of_every_data_row():
 
 
 def test_disabled_rows_and_tables_refuse_their_gestures():
-    table = Table(["A"], [["0"], ["1"], ["2"], ["3"]], disabled_items=(1, 2))
-    assert table.move(1) is True and table.index == 0
+    table = Table([["0"], ["1"], ["2"], ["3"]], headers=["A"], disabled_items=(1, 2))
     assert table.move(1) is True and table.index == 3
-    table.index = 1
-    assert table.on_action("activate") is False and table.toggle() is False
+    assert table.move(1) is False
+    table.disabled_items = frozenset({1, 2, 3})
+    assert table.on_action("activate") is False and table.take() is None
+    assert table.toggle() is False
     assert table.on_click(Pos(x=0, y=5)) is False
-    assert table.on_click(Pos(x=0, y=9)) is True and table.index == 3
-    dead = Table(["A"], [["1"]], disabled=True)
+    assert table.on_click(Pos(x=0, y=3)) is True and table.index == 0
+    dead = Table([["1"]], headers=["A"], disabled=True)
     assert dead.move(1) is False and dead.on_click(Pos(x=0, y=3)) is False
 
 
 def test_table_answers_a_surface_and_honours_the_height_budget():
-    table = Table(["A"], [["1"], ["2"], ["3"]], cell_wrap=WrapMode.ELLIPSIS)
+    table = Table([["1"], ["2"], ["3"]], headers=["A"], cell_wrap=WrapMode.ELLIPSIS)
     surface = table.render(Constraints(width=9, max_height=5))
     assert isinstance(surface, Surface)
     assert [row.text for row in surface] == [
@@ -593,31 +608,31 @@ def test_table_answers_a_surface_and_honours_the_height_budget():
 
 
 def test_the_table_keymap_routes_its_keys_through_named_actions():
-    table = Table(["A"], [["0"], ["1"], ["2"]])
-    assert table.on_key(key("down")) is True and table.index == 0
+    table = Table([["0"], ["1"], ["2"]], headers=["A"])
     assert table.on_key(key("down")) is True and table.index == 1
     assert table.on_key(key("up")) is True and table.index == 0
     assert table.on_key(key("up")) is False  # clamped at the first data row
-    assert table.on_key(key("end")) is False  # unbound: home/end stay the host's
-    assert table.on_key(key("enter")) is True and table.take() == 0
-    assert table.on_action("toggle") is True and list(table.marked) == [0]
+    assert table.on_key(key("end")) is True and table.index == 2
+    assert table.on_key(key("enter")) is False  # the focus layer owns enter
+    assert table.on_action("activate") is True and table.take() == ["2"]
+    assert table.on_action("toggle") is True and list(table.marked) == [2]
     assert table.on_action("nope") is False
     assert not hasattr(Table, "handle")
-    assert Table.keymap["down"] == "next" and Table.keymap["enter"] == "activate"
+    assert Table.keymap["down"] == "next" and Table.keymap["space"] == "toggle"
 
 
 def test_an_instance_table_keymap_rebind_is_private_to_the_instance():
-    table = Table(["A"], [["0"], ["1"]])
-    other = Table(["A"], [["0"], ["1"]])
+    table = Table([["0"], ["1"]], headers=["A"])
+    other = Table([["0"], ["1"]], headers=["A"])
     table.keymap["j"] = "next"
     assert "j" not in Table.keymap
     assert "j" not in other.keymap
-    assert table.on_key(key("j", "j")) is True and table.index == 0
-    assert other.on_key(key("j", "j")) is False and other.index is None
+    assert table.on_key(key("j", "j")) is True and table.index == 1
+    assert other.on_key(key("j", "j")) is False and other.index == 0
 
 
 def test_the_table_typed_hooks_forward_to_click_and_hover():
-    table = Table(["A"], [["0"], ["1"]])
+    table = Table([["0"], ["1"]], headers=["A"])
     table.render(Constraints(width=9))
     assert table.on_click(Pos(y=5, x=99)) is True and table.index == 1
     assert table.on_hover(Pos(y=5, x=0)) is True
@@ -627,16 +642,17 @@ def test_the_table_typed_hooks_forward_to_click_and_hover():
 
 
 def test_take_reads_the_table_result_once():
-    table = Table(["A"], [["0"]])
+    table = Table([["0"]], headers=["A"])
     table.index = 0
     assert table.take() is None
-    assert table.on_action("activate") is True and table.take() == 0
+    assert table.on_action("activate") is True and table.take() == ["0"]
     table.on_action("activate")
-    assert table.take() == 0
+    assert table.take() == ["0"]
+    assert table.take() is None
 
 
 def test_the_table_declares_its_capabilities():
-    table = Table(["A"], [["0"]])
+    table = Table([["0"]], headers=["A"])
     assert (table.focusable, table.clickable, table.hoverable, table.activatable) == (
         True,
         True,
@@ -662,7 +678,7 @@ def sample() -> TreeNode:
 def test_a_collapsed_root_renders_one_row():
     tree = Tree([sample()])
     assert texts(tree, 30) == ["\u25b8 src"]
-    assert tree.selected is tree.root_nodes[0]
+    assert tree.selected is tree.nodes[0]
 
 
 def test_activate_expands_and_collapses_the_visible_rows():
@@ -721,14 +737,14 @@ def test_a_leaf_and_an_empty_tree_decline_activation():
 def test_collapsing_re_clamps_the_cursor_into_the_new_rows():
     tree = Tree([sample()])
     tree.on_action("activate")
-    lib = tree.root_nodes[0].children[1]
-    lib.expanded = True
+    lib = tree.nodes[0].children[1]
+    lib.open = True
     tree.move(2)
     assert tree.on_action("activate") is True and tree.selected is lib
     assert len(tree.render(Constraints(width=30))) == 3
-    lib.expanded = True
+    lib.open = True
     tree.move(4)
-    lib.expanded = False
+    lib.open = False
     assert tree.selected is lib
 
 
@@ -751,22 +767,22 @@ def test_filter_prunes_to_the_matches_and_keeps_ancestors_open():
     assert tree.filter(None) is False
 
 
-def test_filter_never_rewrites_the_users_expansion_flags():
+def test_filter_never_rewrites_the_users_open_flags():
     tree = Tree([sample()])
-    src = tree.root_nodes[0]
-    src.children[1].expanded = True
+    src = tree.nodes[0]
+    src.children[1].open = True
     before = texts(tree, 30)
     assert tree.filter("a.py") is True
-    assert src.expanded is False and src.children[1].expanded is True
+    assert src.open is False and src.children[1].open is True
     assert tree.filter(None) is True
     assert texts(tree, 30) == before
 
 
 def test_jump_steps_to_the_next_visible_label_and_wraps():
     tree = Tree([sample()])
-    src = tree.root_nodes[0]
-    src.expanded = True
-    src.children[1].expanded = True
+    src = tree.nodes[0]
+    src.open = True
+    src.children[1].open = True
     src.children[1].children[1].label = "Beta"
     assert tree.jump("b") is True and tree.selected.label == "Beta"
     assert tree.jump("s") is True and tree.selected.label == "src"
@@ -827,12 +843,13 @@ def test_tree_answers_a_surface_and_honours_the_height_budget():
 
 def test_the_tree_keymap_folds_and_moves_through_named_actions():
     tree = Tree([sample()])
-    assert tree.on_key(key("enter")) is True
+    assert tree.on_key(key("enter")) is False  # the focus layer owns enter
+    assert tree.on_key(key("right")) is True
     assert texts(tree, 30)[0] == "\u25be src"
-    assert tree.on_action("collapse") is True
+    assert tree.on_key(key("left")) is True
     assert texts(tree, 30) == ["\u25b8 src"]
-    assert tree.on_action("collapse") is False
-    assert tree.on_action("expand") is True
+    assert tree.on_action("close") is False
+    assert tree.on_action("open") is True
     assert tree.on_action("next") is True and tree.selected.label == "app.py"
     assert tree.on_action("prev") is True and tree.selected.label == "src"
     assert tree.on_action("prev") is False  # clamped at the first visible row

@@ -8,7 +8,6 @@ from motui.kernel.layout import Constraints
 from motui.kernel.style import Style
 from motui.kernel.theme import DEFAULT_THEME
 from motui.widgets import ContextMenu, MenuBar, Option, Select
-
 from tests.testing import key, texts
 
 
@@ -82,7 +81,10 @@ def test_a_disabled_bar_refuses_every_gesture():
 
 
 def test_hover_at_marks_one_label_and_clears_back():
-    theme = replace(DEFAULT_THEME, surfaces=replace(DEFAULT_THEME.surfaces, hover=Style(underline=True)))
+    theme = replace(
+        DEFAULT_THEME,
+        surfaces=replace(DEFAULT_THEME.surfaces, hover=Style(underline=True)),
+    )
     bar = MenuBar(["File", "Edit"], theme=theme)
     plain = bar.render(Constraints(width=40))
     assert bar.on_hover(Pos(x=8, y=0)) is True
@@ -106,18 +108,17 @@ def test_activate_leaves_the_active_label_pending_once():
 def test_context_menu_is_the_wrap_and_activate_select_preset():
     menu = ContextMenu([Option("Open"), Option("Save", "save")])
     assert isinstance(menu, Select)
-    assert menu.commit is False and menu.wrap is True and menu.window is False
+    assert menu.wrap is True and menu.window is False
     assert menu.select(1) is True
-    assert menu.on_action("activate") is True and menu.take() == Option("Save", "save")
+    assert menu.on_action("activate") is True and menu.take() == "save"
     assert menu.take() is None
 
 
-def test_context_menu_renders_its_title_and_refuses_disabled_items():
+def test_context_menu_renders_its_title_and_moves_over_its_rows():
     menu = ContextMenu([Option("Open"), Option("Quit")], title="File")
     assert texts(menu, 20) == ["File", "\u2192 Open", "  Quit"]
-    disabled = ContextMenu([Option("Open"), Option("Quit")], disabled_items={1})
-    assert disabled.select(1) is False
-    assert disabled.on_action("activate") is True and disabled.take() == Option("Open")
+    assert menu.select(1) is True
+    assert menu.on_action("activate") is True and menu.take() == "Quit"
 
 
 # -- the 2.0 keymap and action surface ----------------------------------------
@@ -127,14 +128,15 @@ def test_the_menubar_keymap_steps_and_activates_through_named_actions():
     bar = MenuBar(["a", "b"])
     assert bar.on_key(key("right")) is True and bar.index == 1
     assert bar.on_key(key("left")) is True and bar.index == 0
-    assert bar.on_key(key("enter")) is True and bar.take() == "a"
+    assert bar.on_key(key("enter")) is False  # the focus layer owns enter
+    assert bar.on_action("activate") is True and bar.take() == "a"
     assert bar.on_action("prev") is False  # clamped at the first label
     assert bar.on_action("next") is True and bar.index == 1
     assert bar.on_action("activate") is True and bar.take() == "b"
     assert bar.take() is None
     assert bar.on_action("nope") is False
     assert not hasattr(MenuBar, "handle")
-    assert MenuBar.keymap["enter"] == "activate"
+    assert MenuBar.keymap["down"] == "next"
 
 
 def test_an_instance_menubar_keymap_rebind_is_private_to_the_instance():
@@ -169,4 +171,4 @@ def test_the_menubar_declares_its_capabilities():
 def test_the_context_menu_inherits_the_choice_keymap():
     menu = ContextMenu([Option("Open"), Option("Quit")])
     assert menu.on_key(key("down")) is True and menu.index == 1
-    assert menu.on_action("activate") is True and menu.take() == Option("Quit")
+    assert menu.on_action("activate") is True and menu.take() == "Quit"

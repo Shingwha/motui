@@ -36,10 +36,10 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
+from ..kernel.cell import Surface
 from ..kernel.events import Event, KeyEvent, PasteEvent
 from ..kernel.geom import Pos
 from ..kernel.glyphs import GLYPHS, Glyphs
-from ..kernel.cell import Surface
 from ..kernel.layout import Constraints
 from ..kernel.theme import Theme
 from ..widgets.autocomplete import Autocomplete
@@ -144,8 +144,7 @@ class _CommandPalettePanel:
             return True
         if event.key == "enter":
             self.list.on_action("activate")
-            option = self.list.take()
-            self._pending = None if option is None else option.value
+            self._pending = self.list.take()
             return True
         if event.key == "escape":
             self._pending = None

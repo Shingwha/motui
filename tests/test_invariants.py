@@ -161,12 +161,12 @@ CASES = {
     "Stack": lambda: Stack([Text("back"), Align(Text("front"))]),
     "StatusLine": lambda: StatusLine(left=("ready",), right=("60 fps",)),
     "Table": lambda: Table(
-        ["name", "value"], [["alpha", "1"]], grid=Border.ascii()
+        [["alpha", "1"]], headers=["name", "value"], grid=Border.ascii()
     ),
     "Tabs": lambda: Tabs(["one", "two", "three"], glyphs=replace(GLYPHS, vertical_rule="|")),
     "Text": lambda: Text(_WIDE),
     "Tree": lambda: Tree(
-        [TreeNode("root", [TreeNode("child")], expanded=True)],
+        [TreeNode("root", [TreeNode("child")], open=True)],
         glyphs=replace(GLYPHS, fold_open="+", fold_closed="-"),
     ),
     "Widget": lambda: _WidgetProbe(),

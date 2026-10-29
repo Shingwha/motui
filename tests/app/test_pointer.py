@@ -2,15 +2,14 @@
 
 from __future__ import annotations
 
-from motui.app import Runtime, Workspace
-from motui.app import FocusManager, Pointer, SelectionGesture
-from motui.terminal import HeadlessScreen, Terminal, TerminalOptions
+from motui.app import FocusManager, Pointer, Runtime, SelectionGesture, Workspace
+from motui.kernel.cell import Line, Surface
 from motui.kernel.events import MouseEvent
 from motui.kernel.geom import Pos
-from motui.kernel.cell import Line, Surface
 from motui.kernel.layout import Constraints
-from motui.widgets import Padding
+from motui.terminal import HeadlessScreen, Terminal, TerminalOptions
 from motui.testing import Harness
+from motui.widgets import Padding
 from tests.testing import ScriptedEvents, motion, press, release
 
 
@@ -144,7 +143,7 @@ def test_a_mounted_ring_runs_its_click_policy_on_the_leaf():
     assert ring.focused is menu
     pointer.handle(press(3, 1))
     assert pointer.handle(release(3, 1)) is True
-    assert menu.take() == Option("one")
+    assert menu.take() == "one"
 
 
 def test_clear_drops_the_hover_the_position_and_the_pending_click():
