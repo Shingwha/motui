@@ -1,11 +1,12 @@
 """Strip internals: the keymap seam and the one-row label strip.
 
-The module is private to the widget package.  :class:`Keymap` is the
-class-level key table every migrated view declares: reading it on the class
-answers the family's default table, reading it on an instance answers that
-instance's own copy, so ``lst.keymap["j"] = "next"`` rebinds one widget and
-never writes through to the class.  :class:`LabelStrip` is the one-row
-rendering skeleton behind :class:`~motui.widgets.tabs.Tabs` and
+The module is private to the widget package.  :class:`Keymap` lives in
+:mod:`motui.widgets.base` now and is re-exported here for the views that
+still import it from this module: reading it on the class answers the
+family's default table, reading it on an instance answers that instance's
+own copy, so ``lst.keymap["j"] = "next"`` rebinds one widget and never
+writes through to the class.  :class:`LabelStrip` is the one-row rendering
+skeleton behind :class:`~motui.widgets.tabs.Tabs` and
 :class:`~motui.widgets.menubar.MenuBar` -- the clamped selection over a
 label sequence, the span table of the last render, the hit walk and the
 hover marking.  Nothing here is re-exported from :mod:`motui.widgets`.
@@ -13,51 +14,16 @@ hover marking.  Nothing here is re-exported from :mod:`motui.widgets`.
 
 from __future__ import annotations
 
-from collections.abc import Mapping
-from typing import Sequence
+from collections.abc import Sequence
 
-from ..widgets.cursor import Cursor
 from ..kernel.cell import Line, Surface
+from ..kernel.geom import Pos
 from ..kernel.layout import Constraints
 from ..kernel.text import visible_width
-from ..widgets.base import Widget
+from ..widgets.base import Keymap, Widget
+from ..widgets.cursor import Cursor
 
 __all__ = ["Keymap", "LabelStrip"]
-
-
-class Keymap:
-    """A class-level key table every instance shadows with its own copy.
-
-    The class body spells the family default once::
-
-        class List(Widget):
-            __slots__ = ("_keymap", ...)
-            keymap = Keymap({"up": "prev", "down": "next"})
-
-    ``List.keymap`` answers that default table.  ``lst.keymap`` answers the
-    instance's own copy, created from the class table in ``__init__`` (each
-    migrated view writes ``self._keymap = dict(type(self).keymap)``), so a
-    host's rebind -- ``lst.keymap["j"] = "next"`` -- only touches that one
-    widget.  Assigning a whole mapping to an instance replaces its copy; the
-    class table is never mutated by an instance operation.
-    """
-
-    __slots__ = ("table",)
-
-    def __init__(self, table: Mapping[str, str]) -> None:
-        self.table = dict(table)
-
-    def __get__(
-        self, instance: object | None, owner: type | None = None
-    ) -> dict[str, str]:
-        """The class default on the class, the instance copy on an instance."""
-        if instance is None:
-            return self.table
-        return instance._keymap  # type: ignore[attr-defined]
-
-    def __set__(self, instance: object, value: Mapping[str, str]) -> None:
-        """Replace one instance's copy (the class table is untouched)."""
-        instance._keymap = dict(value)  # type: ignore[attr-defined]
 
 
 class LabelStrip(Widget):
@@ -90,7 +56,6 @@ class LabelStrip(Widget):
         "_disabled_items",
         "_hover_index",
         "_index",
-        "_keymap",
         "_last_width",
         "_spans",
         "disabled",
@@ -107,9 +72,6 @@ class LabelStrip(Widget):
 
     def __init__(self, theme=None, styles=None) -> None:
         super().__init__(theme, styles)
-        # The instance's own key table: rebinding one entry never reaches
-        # the class default (see :class:`Keymap`).
-        self._keymap = dict(type(self).keymap)
 
     @property
     def _entries(self) -> Sequence[str]:

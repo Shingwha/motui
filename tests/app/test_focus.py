@@ -2,20 +2,32 @@
 
 from __future__ import annotations
 
+from typing import ClassVar
+
 import pytest
 
 from motui.app import FocusManager
 from motui.app.focus import focus_targets
 from motui.kernel import Constraints, Document, Pane, Rect, Section, Surface, Viewport
+from motui.kernel.cell import Line
 from motui.kernel.document import Placement, descend_chain
 from motui.kernel.events import KeyEvent
 from motui.kernel.geom import Pos
 from motui.kernel.hit import Hit
-from motui.kernel.cell import Line
 from motui.kernel.text import WrapMode
 from motui.testing import headless_tui
-from motui.widgets import Button, Field as FormField, Form, Input, Padding, Row
-from motui.kernel.layout import Constraints
+from motui.widgets import (
+    Button,
+    Checkbox,
+    Editor,
+    Form,
+    Input,
+    Padding,
+    Row,
+)
+from motui.widgets import (
+    Field as FormField,
+)
 
 
 class Plain:
@@ -72,7 +84,7 @@ class SoftField(Plain):
 class Keyed(Plain):
     """A target with a key table and both typed hooks."""
 
-    keymap = {"j": "next", "k": "prev"}
+    keymap: ClassVar[dict[str, str]] = {"j": "next", "k": "prev"}
 
     def __init__(self) -> None:
         super().__init__()
@@ -455,6 +467,34 @@ def test_enter_activates_an_activable_target():
     assert pick.activatable is True
     assert manager.handle(KeyEvent("enter")) is True
     assert pick.activations == 1
+
+
+def test_space_activates_a_focused_button_and_toggles_a_checkbox():
+    button, box = Button("go"), Checkbox("lock")
+    manager = FocusManager([button, box], wrap=False)
+    manager.focus_next()
+    assert manager.handle(KeyEvent("space", " ")) is True
+    assert button.take() is True
+    manager.focus_next()
+    assert manager.handle(KeyEvent("space", " ")) is True
+    assert (box.checked, box.take()) == (True, True)
+
+
+@pytest.mark.parametrize("build", [lambda: Input(""), lambda: Editor("")])
+def test_a_text_field_consumes_space_before_the_activation_fallback(build):
+    field = build()
+    manager = FocusManager([field])
+    manager.focus_next()
+    assert manager.handle(KeyEvent("space", " ")) is True
+    assert field.text == " "
+
+
+def test_space_is_not_consumed_for_a_non_activatable_target():
+    keyed = Keyed()
+    manager = FocusManager([keyed])
+    manager.focus_next()
+    assert manager.handle(KeyEvent("space", " ")) is False
+    assert keyed.keys == ["space"]
 
 
 def test_every_other_event_is_left_to_the_host():

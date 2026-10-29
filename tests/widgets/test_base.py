@@ -4,7 +4,16 @@ from __future__ import annotations
 
 from motui.kernel.events import KeyEvent, MouseEvent, PasteEvent, ResizeEvent
 from motui.kernel.geom import Pos
-from motui.widgets.base import Container, Cursor, HasResult, MarkSet, Widget
+from motui.widgets.base import (
+    CURSOR_KEYMAP,
+    Container,
+    Cursor,
+    CursorWidget,
+    HasResult,
+    MarkSet,
+    ResultWidget,
+    Widget,
+)
 from motui.widgets.cursor import Cursor as DirectCursor
 from motui.widgets.mark import MarkSet as DirectMarkSet
 
@@ -370,6 +379,163 @@ def test_container_is_a_widget_whose_child_at_declines_by_default():
     assert isinstance(container, Widget)
     assert container.child_at(0, 0) is None
     assert container.child_at(7, 11) is None
+
+
+# -- CursorWidget: one cursor over the reported entries --------------------
+
+
+class _CursorProbe(CursorWidget):
+    """A CursorWidget over a mutable entry list, for the base contract."""
+
+    __slots__ = ("disabled_rows", "entries", "log", "page_rows", "wrap_rows")
+
+    def __init__(self, entries=(), *, disabled=(), wrap=False, page=None) -> None:
+        super().__init__()
+        self.entries = list(entries)
+        self.disabled_rows = tuple(disabled)
+        self.wrap_rows = wrap
+        self.page_rows = page
+        self.log: list[str] = []
+
+    def _entry_count(self) -> int:
+        return len(self.entries)
+
+    def _entry_at(self, index: int) -> object | None:
+        if 0 <= index < len(self.entries):
+            return self.entries[index]
+        return None
+
+    def _cursor_disabled(self):
+        return self.disabled_rows
+
+    def _cursor_wraps(self) -> bool:
+        return self.wrap_rows
+
+    def _page_size(self, size: int) -> int:
+        return size if self.page_rows is None else self.page_rows
+
+    def activate(self) -> bool:
+        self.log.append("activate")
+        return True
+
+    def toggle(self) -> bool:
+        self.log.append("toggle")
+        return True
+
+
+def test_cursor_widget_reports_an_empty_set_as_index_zero_and_no_selection():
+    probe = _CursorProbe()
+
+    assert probe.index == 0
+    assert probe.selected is None
+    assert probe.select(0) is False
+    assert probe.move(1) is False
+    assert probe.home() is False
+    assert probe.end() is False
+    assert probe.on_action("next") is False
+    assert probe.on_action("page_next") is False
+
+
+def test_cursor_widget_clamps_selection_and_follows_a_shrunk_entry_set():
+    probe = _CursorProbe(["a", "b", "c"])
+
+    assert probe.select(99) is True and probe.index == 2
+    assert probe.select(-5) is True and probe.index == 0
+    assert probe.select(0) is False
+    assert probe.selected == "a"
+
+    probe.entries = ["only"]
+    # Reading the state re-syncs and clamps a stale cursor.
+    assert probe.index == 0
+    assert probe.selected == "only"
+
+
+def test_cursor_widget_steps_over_disabled_rows_and_refuses_them():
+    probe = _CursorProbe(["a", "b", "c", "d"], disabled=(1,))
+
+    assert probe.move(1) is True and probe.index == 2
+    assert probe.select(1) is False and probe.index == 2
+    assert probe.home() is True and probe.index == 0
+    assert probe.end() is True and probe.index == 3
+
+
+def test_cursor_widget_wraps_or_clamps_by_the_reported_policy():
+    wrapping = _CursorProbe(["a", "b", "c"], wrap=True)
+    assert wrapping.move(-1) is True and wrapping.index == 2
+    assert wrapping.move(1) is True and wrapping.index == 0
+
+    clamping = _CursorProbe(["a", "b", "c"])
+    assert clamping.move(-1) is False and clamping.index == 0
+    assert clamping.end() is True and clamping.index == 2
+    assert clamping.move(1) is False and clamping.index == 2
+
+
+def test_cursor_widget_selected_is_the_entry_object():
+    first, second = object(), object()
+    probe = _CursorProbe([first, second])
+
+    assert probe.selected is first
+    assert probe.select(1) is True
+    assert probe.selected is second
+
+
+def test_cursor_widget_moves_clear_a_pending_result():
+    probe = _CursorProbe(["a", "b", "c"])
+
+    for verb, answer in (
+        (lambda: probe.move(1), True),
+        (lambda: probe.select(2), True),
+        (lambda: probe.home(), True),
+        (lambda: probe.end(), True),
+        (lambda: probe.move(1), False),
+    ):
+        probe._emit("stale")
+        assert verb() is answer
+        assert probe.take() is None
+
+
+def test_cursor_widget_routes_the_nine_action_names():
+    probe = _CursorProbe(["a", "b", "c", "d", "e"])
+
+    assert probe.on_action("next") is True and probe.index == 1
+    assert probe.on_action("prev") is True and probe.index == 0
+    assert probe.on_action("last") is True and probe.index == 4
+    assert probe.on_action("first") is True and probe.index == 0
+    assert probe.on_action("page_next") is True and probe.index == 4
+    assert probe.on_action("page_prev") is True and probe.index == 0
+    assert probe.on_action("activate") is True
+    assert probe.on_action("toggle") is True
+    assert probe.log == ["activate", "toggle"]
+    assert probe.on_action("open") is False
+    assert probe.on_action("close") is False
+    assert probe.on_action("bogus") is False
+
+
+def test_cursor_widget_page_step_uses_the_override():
+    probe = _CursorProbe(["a", "b", "c", "d", "e"], page=2)
+
+    assert probe.on_action("page_next") is True and probe.index == 2
+    assert probe.on_action("page_next") is True and probe.index == 4
+    assert probe.on_action("page_prev") is True and probe.index == 2
+
+
+def test_cursor_widget_declares_the_unified_cursor_keymap():
+    probe = _CursorProbe(["a", "b"])
+
+    assert CursorWidget.keymap == CURSOR_KEYMAP
+    assert probe.keymap == CURSOR_KEYMAP
+    probe.keymap["j"] = "next"
+    assert probe.keymap["j"] == "next"
+    assert CursorWidget.keymap == CURSOR_KEYMAP
+    assert "j" not in CursorWidget.keymap
+
+
+def test_cursor_widget_is_a_result_widget_and_the_bases_decline_verbs():
+    probe = CursorWidget()
+    assert isinstance(probe, ResultWidget) and isinstance(probe, Widget)
+    assert probe.activate() is False
+    assert probe.toggle() is False
+    assert probe.take() is None
 
 
 # -- re-exports -------------------------------------------------------------

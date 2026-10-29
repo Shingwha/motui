@@ -12,7 +12,8 @@ The target tuple is the mounted tree's focus ring: the App re-derives it
 with :func:`focus_targets` and hands it over through
 :meth:`FocusManager.sync` before every focus verb, so mounting or removing
 a block needs no registration bookkeeping.  The constructor still takes an
-explicit tuple, which is what a trap and a modal use.  A target is a node of the explicit widget tree -- ``focusable``, or a
+explicit tuple, which is what a trap and a modal use.  A target is a node of
+the explicit widget tree -- ``focusable``, or a
 ``focus_scope`` container (a ``Form`` routes its fields itself, so the ring
 stops at it).  A target without a ``focused`` attribute is a pure routing
 target (a plain ``Component`` handed to a trap); it is focused by identity
@@ -49,7 +50,7 @@ if TYPE_CHECKING:
 __all__ = ["FocusManager"]
 
 
-def _document_roots(workspace: "Workspace") -> Iterator[Component]:
+def _document_roots(workspace: Workspace) -> Iterator[Component]:
     """Every block root of every pane and dock, in paint order.
 
     The focus ring is derived from what is mounted, so it must see the
@@ -64,7 +65,7 @@ def _document_roots(workspace: "Workspace") -> Iterator[Component]:
             yield section.widget
 
 
-def iter_widgets(workspace: "Workspace") -> Iterator[Component]:
+def iter_widgets(workspace: Workspace) -> Iterator[Component]:
     """Every mounted node once, depth first, in frame order.
 
     The flat tree walk ``App`` uses for broadcasts (a resize reaches every
@@ -82,7 +83,7 @@ def iter_widgets(workspace: "Workspace") -> Iterator[Component]:
             yield node
 
 
-def focus_targets(workspace: "Workspace") -> tuple[Component, ...]:
+def focus_targets(workspace: Workspace) -> tuple[Component, ...]:
     """The focus ring: the mounted tree's preorder ``focusable``/scope nodes.
 
     A ``focus_scope`` node (a ``Form`` or a ``ComboBox`` routes its own
@@ -141,9 +142,11 @@ class FocusManager:
        :attr:`keymap <motui.widgets.base.Widget.keymap>` first: a bound
        action runs through ``on_action(name)``;
     3. an unconsumed key goes to ``on_key(event)``;
-    4. an unconsumed ``enter`` on an ``activatable`` target runs
-       ``on_action("activate")`` -- the 1.x activation fallback, now opt-in
-       through the capability flag instead of a hard-coded key table;
+    4. an unconsumed ``enter`` or ``space`` on an ``activatable`` target
+       runs ``on_action("activate")`` -- the 1.x activation fallback, now
+       opt-in through the capability flag instead of a hard-coded key table
+       (a text field consumes its own space first, so typing never
+       activates);
     5. a :class:`~motui.kernel.events.PasteEvent` goes to ``on_paste`` and a
        :class:`~motui.kernel.events.MouseEvent` to ``on_mouse``;
     6. everything else -> ``False`` (the host keeps routing its own keys:
@@ -298,10 +301,10 @@ class FocusManager:
 
         The routing table is in the class docstring, in order: an empty
         focus declines; a key reads the target's keymap through
-        ``on_action``, then ``on_key``, then the ``enter`` activation
-        fallback for an ``activatable`` target; a paste and a mouse report
-        go to their typed hooks; everything else declines, so the host
-        keeps routing the events it owns.
+        ``on_action``, then ``on_key``, then the ``enter``/``space``
+        activation fallback for an ``activatable`` target; a paste and a
+        mouse report go to their typed hooks; everything else declines, so
+        the host keeps routing the events it owns.
         """
         target = self._focused
         if target is None:
@@ -314,7 +317,7 @@ class FocusManager:
                     return True
             if self._hook(target, "on_key", event):
                 return True
-            if event.key == "enter" and bool(
+            if event.key in ("enter", "space") and bool(
                 getattr(target, "activatable", False)
             ):
                 return self._activate(target)
