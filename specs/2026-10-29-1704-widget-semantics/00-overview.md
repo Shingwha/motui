@@ -80,14 +80,15 @@ Component（只有 render）
 | W2 | 同 W1 分支 | `Stack` / `Align` + 命中策略 | `widgets/layout.py`, `widgets/__init__.py`, `tests/widgets/test_containers.py` | W1 |
 | W3 | `w2.1.2-w3-drawing` | `Drawing` 基类、Canvas/PixelCanvas 生命周期、palette 派生 | `widgets/drawing.py`(新), `canvas.py`, `pixel_canvas.py`, `pixel/palette.py`, `tests/widgets/test_canvas.py`, `test_pixel_canvas.py`, `tests/pixel/test_palette.py`, `tests/test_invariants.py`, `demo/sections/motion/scene.py`, `demo/sections/splash/scene.py`, `demo/sections/terminal.py` | W0 |
 | W4a | `w2.1.2-w4a-foundation` | `ResultWidget`/`ActionWidget`/`CursorWidget`/`Keymap` 描述符、focus space | `widgets/base.py`, `widgets/strip.py`, `widgets/action.py`, `app/focus.py`, `tests/widgets/test_base.py`, `test_action.py`, `test_contracts.py`, `tests/app/test_focus.py` | W1–W3 合并后 |
-| W4b | `w2.1.2-w4b-choice-nav` | Choice/Navigation 迁移 | `choice.py`, `autocomplete.py`, `combobox.py`, `menubar.py`, `list.py`, `table.py`, `tree.py`, `tabs.py`, `navlist.py`, `tests/widgets/test_choice.py`, `test_autocomplete.py`, `test_combobox.py`, `test_menubar.py`, `test_navigation.py`, `test_data.py`, `test_contract_choice_nav.py`(新) | W4a |
-| W4c | `w2.1.2-w4c-text-form` | Text/Field/Form/Dialog/Content 迁移 | `text.py`, `textfield.py`, `form.py`, `dialog.py`, `collapsible.py`, `decor.py`, `indicators.py`, `tests/widgets/test_text_widget.py`, `test_editing.py`, `test_form.py`, `test_dialog.py`, `test_containers.py`, `test_indicators.py`, `test_contract_text_form.py`(新) | W4a（可与 W4b 并行） |
+| W4b | `w2.1.2-w4b-choice-nav` | Choice/Navigation 迁移 | `choice.py`, `autocomplete.py`, `combobox.py`, `menubar.py`, `list.py`, `table.py`, `tree.py`, `tabs.py`, `navlist.py`, `strip.py`, `tests/widgets/test_choice.py`, `test_autocomplete.py`, `test_combobox.py`, `test_menubar.py`, `test_navigation.py`, `test_data.py`, `test_contract_choice_nav.py`(新), `tests/test_invariants.py`, `demo/sections/components.py`, `demo/sections/gallery.py` | W4a |
+| W4c | `w2.1.2-w4c-text-form` | Text/Field/Form/Dialog/Content 迁移 | `text.py`, `markdown/component.py`, `textfield.py`, `form.py`, `dialog.py`, `collapsible.py`, `indicators.py`, `tests/widgets/test_text_widget.py`, `test_editing.py`, `test_form.py`, `test_dialog.py`, `test_containers.py`, `test_indicators.py`, `test_contract_text_form.py`(新), `tests/test_invariants.py`, `demo/sections/components.py`, `demo/sections/dashboard.py`, `demo/sections/gallery.py` | W4b 合并后 |
 | W5 | `w2.1.2-w5-styles` | surfaces/controls、ButtonKind、字段底板、焦点、flat | `kernel/theme.py`, `widgets/action.py`, `textfield.py`, `dialog.py`, `tabs.py`, `menubar.py`, `indicators.py`, `pixel_canvas.py`, `decor.py`, styles 相关测试、semantic goldens | W4b/W4c |
 | W6 | `w2.1.2-w6-demo` | splash 用 Stack/Align + 真按钮；components modal 用 Stack | `demo/sections/splash/`, `demo/sections/components.py`, `tests/demo/`, semantic goldens | W5 |
 | W7 | `w2.1.2-w7-docs` | docstring 减半、CONTRACT/WIDGETS/ARCHITECTURE、ADR、测试去重 | `docs/`, widget docstrings, `tests/` | W6 |
 | W8 | `w2.1.2-w8-release` | 版本、CHANGELOG、MIGRATION、release notes、API 快照、终验 | `pyproject.toml`, `src/motui/__init__.py`, `CHANGELOG.md`, `docs/MIGRATION.md`, `docs/releases/2.1.2.md`, `tools/api-2.1.txt`, `uv.lock`(如引用) | W7 |
 
-并行规则：W4b 与 W4c 可并行，因为写入范围文件级不相交；两波都不写
+并行规则：W4b 与 W4c 共享 `demo/sections/components.py`（Table take 与
+RadioGroup/Dialog 构造），因此**串行**执行：W4b 合并后再派 W4c。两波都不写
 `tests/widgets/test_contracts.py`（W4a 独占）。W5 必须等 W4b/W4c 合并后再动，
 避免样式与构造在同一文件反复冲突。
 

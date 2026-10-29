@@ -57,7 +57,7 @@ class CursorWidget(ResultWidget):
 公开面：
 
 ```python
-index: int                       # 只读；空集合为 0
+index: int                       # 可读写；赋值委托 select()；空集合为 0
 selected: object | None          # 只读；_entry_at(index)
 def select(self, index: int) -> bool
 def move(self, delta: int) -> bool
@@ -65,7 +65,13 @@ def home(self) -> bool
 def end(self) -> bool
 def activate(self) -> bool       # 子类实现；基类 False
 def toggle(self) -> bool         # 子类实现；基类 False
+def on_key(self, event) -> bool  # 通用 keymap → on_action 路由
 ```
+
+迁移期补充（W4a 合并后）：`CursorWidget` 增加 `_cursor_enabled()` 钩子
+（整控件 disabled 策略），`index` setter 委托 `select()`，通用 `on_key`
+按 `keymap` 路由。这样 W4b/W4c 不再改基类，宿主既有的 `index =` 赋值也
+继续工作。
 
 `Cursor`（`widgets/cursor.py`）仍是内部算术；`CursorWidget` 持有一个
 `Cursor` 实例并在 `select`/`move`/`home`/`end` 后写回组件状态。
@@ -183,6 +189,8 @@ open / close`。规则：
 - `on_action("prev")` 返回 `move(-1)` 的结果（不再是“按键被消费就 True”）。
 - 状态变化动词（`select`/`move`/`home`/`end`/`open`/`close` 及光标点击）
   清 pending；只有 `activate`/`toggle` 写 pending。
+- `Select` 删除 `commit` 参数：移动/点击不再写 pending（Form 的值提取读
+  `selected`，不依赖 `take`）。`window` 保留（top-stick vs center）。
 - `page_prev`/`page_next` 的步长由 `_page_size` 决定；不支持的组件返回
   `False`。
 
