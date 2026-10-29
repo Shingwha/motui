@@ -1,9 +1,9 @@
 # Architecture decision records
 
-The 23 decisions accepted for motui 2.0, in numeric order. Each record has
-the same five sections: Context, Decision, Why, Consequences and
-Alternatives. A record is history: it explains why the tree looks the way
-it does, including decisions that remove a 1.x name. The current API is
+The 27 decisions accepted for motui 2.0 through 2.1.2, in numeric order.
+Each record has the same five sections: Context, Decision, Why, Consequences
+and Alternatives. A record is history: it explains why the tree looks the
+way it does, including decisions that remove a 1.x name. The current API is
 what [CONTRACT](../CONTRACT.md) and [WIDGETS](../WIDGETS.md) describe.
 
 | ADR | Title | Status |
@@ -34,3 +34,7 @@ what [CONTRACT](../CONTRACT.md) and [WIDGETS](../WIDGETS.md) describe.
 | [024](ADR-024.md) | Pixel is a medium, not kernel core | Accepted |
 | [025](ADR-025.md) | Scene entry is the one reset door | Accepted |
 | [026](ADR-026.md) | Tests pin contracts, not implementation | Accepted |
+| [027](ADR-027.md) | Composition is transparent overlay | Accepted (2.1.2) |
+| [028](ADR-028.md) | Drawing sizes explicitly and renders purely | Accepted (2.1.2) |
+| [029](ADR-029.md) | State, verbs and results are one vocabulary | Accepted (2.1.2) |
+| [030](ADR-030.md) | Control styling is shared roles plus overlays | Accepted (2.1.2) |
