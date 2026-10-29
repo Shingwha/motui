@@ -11,8 +11,17 @@ from ....kernel.geom import Pos
 from ....kernel.layout import Constraints
 from ....kernel.text import WrapMode
 from ....pixel import PixelPalette
-from ....widgets import PixelCanvas
-from ...common import center
+from ....widgets import (
+    Align,
+    Button,
+    ButtonKind,
+    Column,
+    PixelCanvas,
+    Row,
+    Spacer,
+    Stack,
+)
+from ...common import LinesView, center
 from ...palettes import style_rgb
 from ...scene import Scene
 from ...version import DEMO_VERSION
@@ -55,6 +64,27 @@ class SplashScene(Scene):
         self._muted = style_rgb(theme.text.muted, (138, 168, 181))
         self._faint = style_rgb(theme.text.faint, (82, 108, 124))
         self._canvas = PixelCanvas(palette=self._palette("deep", "deep", 0, 1.0))
+        self._launch = Button("launch", kind=ButtonKind.PRIMARY, theme=theme)
+        self._remix_button = Button("remix", kind=ButtonKind.GHOST, theme=theme)
+        self._overlay_lines = LinesView(theme)
+        buttons = Row(
+            [self._launch, self._remix_button],
+            widths=[len(" launch "), len(" remix ")],
+            gap=2,
+        )
+        self._overlay = Column(
+            [
+                self._overlay_lines,
+                Spacer(1),
+                Align(buttons, horizontal="center"),
+            ]
+        )
+        self._stack = Stack(
+            [
+                Align(self._canvas, horizontal="center", vertical="middle"),
+                Align(self._overlay, horizontal="center", vertical="middle"),
+            ]
+        )
 
     def enter(self) -> None:
         super().enter()
@@ -193,19 +223,12 @@ class SplashScene(Scene):
         self._canvas.palette = self._palette(effects[0], previous[0], phase, weight)
         paint_background(self._canvas, effects, previous, phase, local, sx, sy)
         paint_wordmark(self._canvas, phase, sx, sy, effects[0], previous[0], act)
-        pad = max(0, (width - canvas_w) // 2)
-        prefix = Line((Segment(" " * pad),)) if pad else Line()
-        mark = [
-            prefix + row
-            for row in self._canvas.render(Constraints(width=canvas_w, max_height=canvas_h))
-        ]
         tagline = "GIVE THE TERMINAL A PULSE" if phase >= 90 else "ASSEMBLING THE SIGNAL"
         effect_line = self.style_name(phase)
         if self._pending_remix:
             effect_line = "REMIX QUEUED / NEXT CONTINUOUS TRANSITION"
-        content = [
+        self._overlay_lines.lines = [
             self._header(width, phase),
-            *mark,
             Line(),
             *center(width, [Line.from_text(tagline, self.theme.text.muted)]),
             Line(),
@@ -221,12 +244,16 @@ class SplashScene(Scene):
                 ],
             ),
         ]
-        top = max(0, (height - len(content)) // 2)
-        rows = [Line() for _ in range(top)] + content
-        return Surface.of(rows[:height], width)
+        return self._stack.render(Constraints(width=width, max_height=height))
 
     def on_key(self, event: KeyEvent) -> str | None:
+        if event.key == "enter":
+            self._launch.activate()
+            self._launch.take()
+            return "menu"
         if event.key == "space":
+            self._remix_button.activate()
+            self._remix_button.take()
             self.remix()
             return None
         if event.key == "q":
@@ -234,4 +261,23 @@ class SplashScene(Scene):
         return "menu"
 
     def on_click(self, pos: Pos) -> str | None:
+        current: object = self._stack
+        row, col = pos.y, pos.x
+        for _ in range(16):
+            child_at = getattr(current, "child_at", None)
+            if child_at is None:
+                break
+            found = child_at(row, col)
+            if found is None:
+                break
+            current, row, col = found
+        if current is self._launch:
+            self._launch.activate()
+            self._launch.take()
+            return "menu"
+        if current is self._remix_button:
+            self._remix_button.activate()
+            self._remix_button.take()
+            self.remix()
+            return None
         return "menu"

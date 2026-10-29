@@ -413,7 +413,27 @@ class Line:
         whole base glyph.  A top row with no visible cell -- ``Line()`` or
         one made only of transparent cells -- returns ``base`` itself (padded
         when the top row is wider), so an empty overlay layer costs nothing.
+        A row made only of plain unstyled spaces is recognised at segment
+        level before any cell decomposition, so opaque padding rows never
+        pay for :func:`_line_cells`.  When both rows are narrow (every glyph
+        one column wide) the composition walks the segments directly,
+        without materializing a cell per column.
         """
+        if self.width == 0:
+            return base
+        for seg in self._segments:
+            if (
+                seg.link is not None
+                or seg.action is not None
+                or seg.style != NONE
+                or seg.text.strip(" ")
+            ):
+                break
+        else:
+            return base if base.width >= self.width else base.pad(self.width)
+        narrow = _paint_narrow(self, base)
+        if narrow is not None:
+            return narrow
         top_cells = _line_cells(self)
         if not any(not _transparent(cell) for cell in top_cells):
             return base if base.width >= self.width else base.pad(self.width)
@@ -556,6 +576,169 @@ class _CellRun:
     action: str | None = None
 
 
+def _narrow_widths(line: Line) -> bool:
+    """Whether every glyph in ``line`` occupies exactly one column."""
+    return all(not seg.text or seg.width == len(seg.text) for seg in line.segments)
+
+
+def _paint_narrow(top: Line, base: Line) -> Line | None:
+    """Compose two narrow rows run by run, or ``None`` if not narrow.
+
+    With every glyph one column wide the general cell pump is unnecessary:
+    a column is one character on both layers, so the walk slices segment
+    text by column spans and accumulates output runs.  A transparent top
+    cell (plain unstyled space) lets the base character through; every other
+    top cell wins with ``base_style.merge(top_style)``.  The answer is
+    value-equal to :func:`_paint_cells` for narrow input; wide clusters,
+    combining marks or zero-width text send the caller back to the
+    cluster-aware pump.
+    """
+    if not _narrow_widths(top) or not _narrow_widths(base):
+        return None
+    base_width = base.width
+    total = max(top.width, base_width)
+    #: Opaque top spans ``(start, end, text, style, link, action)``; the
+    #: transparent gaps between them never enter the list.
+    spans: list[tuple[int, int, str, Style, str | None, str | None]] = []
+    column = 0
+    for seg in top.segments:
+        text = seg.text
+        if not text:
+            continue
+        if seg.style != NONE or seg.link is not None or seg.action is not None:
+            spans.append(
+                (column, column + len(text), text, seg.style, seg.link, seg.action)
+            )
+        else:
+            start = None
+            for index, char in enumerate(text):
+                if char != " ":
+                    if start is None:
+                        start = index
+                elif start is not None:
+                    spans.append(
+                        (
+                            column + start,
+                            column + index,
+                            text[start:index],
+                            NONE,
+                            None,
+                            None,
+                        )
+                    )
+                    start = None
+            if start is not None:
+                spans.append(
+                    (column + start, column + len(text), text[start:], NONE, None, None)
+                )
+        column += len(text)
+    #: Base runs ``(start, end, text, style, link, action)``, contiguous.
+    #: Base runs ``(start, end, segment)``, contiguous.
+    runs: list[tuple[int, int, Segment]] = []
+    column = 0
+    for seg in base.segments:
+        text = seg.text
+        if not text:
+            continue
+        runs.append((column, column + len(text), seg))
+        column += len(text)
+    #: Output runs accumulated as text parts, fused on append and built once.
+    pieces: list[tuple[list[str], Style, str | None, str | None]] = []
+
+    def push_segment(seg: Segment) -> None:
+        """Append ``seg``'s text, fusing with the previous run when it matches."""
+        if not seg.text:
+            return
+        if (
+            pieces
+            and pieces[-1][1] == seg.style
+            and pieces[-1][2] == seg.link
+            and pieces[-1][3] == seg.action
+        ):
+            pieces[-1][0].append(seg.text)
+        else:
+            pieces.append(([seg.text], seg.style, seg.link, seg.action))
+
+    def push(
+        text: str, style: Style, link: str | None, action: str | None
+    ) -> None:
+        """Append one fresh run."""
+        if not text:
+            return
+        if (
+            pieces
+            and pieces[-1][1] == style
+            and pieces[-1][2] == link
+            and pieces[-1][3] == action
+        ):
+            pieces[-1][0].append(text)
+        else:
+            pieces.append(([text], style, link, action))
+
+    index = 0
+
+    def emit_base(start: int, end: int) -> None:
+        """Emit the untouched base characters in ``[start, end)``."""
+        nonlocal index
+        while start < end:
+            while index < len(runs) and runs[index][1] <= start:
+                index += 1
+            if index >= len(runs):
+                push(" " * (end - start), NONE, None, None)
+                return
+            run_start, run_end, seg = runs[index]
+            take = min(end, run_end)
+            if start == run_start and take == run_end:
+                push_segment(seg)
+            else:
+                push(
+                    seg.text[start - run_start : take - run_start],
+                    seg.style,
+                    seg.link,
+                    seg.action,
+                )
+            start = take
+
+    cursor = 0
+    for start, end, text, style, link, action in spans:
+        if start > cursor:
+            stop = min(start, base_width)
+            if cursor < stop:
+                emit_base(cursor, stop)
+                cursor = stop
+            if cursor < start:
+                push(" " * (start - cursor), NONE, None, None)
+        low = start
+        while low < end:
+            if low >= base_width:
+                push(text[low - start :], style, link, action)
+                break
+            while index < len(runs) and runs[index][1] <= low:
+                index += 1
+            if index >= len(runs):
+                push(text[low - start :], style, link, action)
+                break
+            _run_start, run_end, base_seg = runs[index]
+            take = min(end, run_end)
+            push(
+                text[low - start : take - start],
+                base_seg.style.merge(style),
+                link,
+                action,
+            )
+            low = take
+        cursor = end
+    if cursor < base_width:
+        emit_base(cursor, base_width)
+    covered = max(cursor, base_width)
+    if total > covered:
+        push(" " * (total - covered), NONE, None, None)
+    return Line(
+        Segment("".join(parts), style, link=link, action=action)
+        for parts, style, link, action in pieces
+    )
+
+
 def _line_cells(line: Line) -> list[_CellRun]:
     """``line`` decomposed into one :class:`_CellRun` per printing cell.
 
@@ -570,6 +753,13 @@ def _line_cells(line: Line) -> list[_CellRun]:
     for seg in line.segments:
         text = seg.text
         if not text:
+            continue
+        if text.isascii():
+            # ASCII has no combining marks and no wide clusters: one cell per
+            # character, measured without the general cluster scanner.
+            cells.extend(
+                _CellRun(char, 1, seg.style, seg.link, seg.action) for char in text
+            )
             continue
         first = len(cells)
         pos = 0
