@@ -66,3 +66,15 @@ unchanged; scene-render 10.80 p50 / 12.86 p95, scene-paint 12.03 / 14.92, replay
 - Kernel fast paths: `kernel/cell.py:395` overlay, `:579` `_narrow_widths`, `:584`
   `_paint_narrow`, `:742` `_line_cells`; `widgets/layout.py:216` Column, `:435` Align.
 - Tests: `tests/demo/test_scenes.py:65` splash buttons. Previous: `handoff/W5-deepseek-v4.1-flash.md`.
+
+## D. Lead follow-up (post-merge)
+
+The splash's two vertically centred Stack layers put the text and the
+launch/remix buttons on top of the pixel wordmark (reported as a broken main
+screen). `1a0ba50` restored the pre-W6 sequential layout in
+`splash/scene.py` and removed the splash button tests; the `Stack`/`Align`
+composition and its overlay fast paths remain used by the components modal.
+The splash golden was re-recorded for the restored layout and the 2.1.2
+version string. The W6 order's "splash uses Stack" goal is therefore
+**superseded**: the sequential column is the correct splash shape; Stack is
+for genuine overlays such as the modal.

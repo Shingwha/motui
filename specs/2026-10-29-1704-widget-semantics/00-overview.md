@@ -83,7 +83,7 @@ Component（只有 render）
 | W4b | `w2.1.2-w4b-choice-nav` | Choice/Navigation 迁移 | `choice.py`, `autocomplete.py`, `combobox.py`, `menubar.py`, `list.py`, `table.py`, `tree.py`, `tabs.py`, `navlist.py`, `strip.py`, `tests/widgets/test_choice.py`, `test_autocomplete.py`, `test_combobox.py`, `test_menubar.py`, `test_navigation.py`, `test_data.py`, `test_contract_choice_nav.py`(新), `tests/test_invariants.py`, `demo/sections/components.py`, `demo/sections/gallery.py` | W4a |
 | W4c | `w2.1.2-w4c-text-form` | Text/Field/Form/Dialog/Content 迁移 | `text.py`, `markdown/component.py`, `textfield.py`, `form.py`, `dialog.py`, `collapsible.py`, `indicators.py`, `tests/widgets/test_text_widget.py`, `test_editing.py`, `test_form.py`, `test_dialog.py`, `test_containers.py`, `test_indicators.py`, `test_contract_text_form.py`(新), `tests/test_invariants.py`, `demo/sections/components.py`, `demo/sections/dashboard.py`, `demo/sections/gallery.py` | W4b 合并后 |
 | W5 | `w2.1.2-w5-styles` | surfaces/controls、ButtonKind、字段底板、焦点、flat | `kernel/theme.py`, `widgets/action.py`, `textfield.py`, `dialog.py`, `tabs.py`, `menubar.py`, `indicators.py`, `pixel_canvas.py`, `decor.py`, styles 相关测试、semantic goldens | W4b/W4c |
-| W6 | `w2.1.2-w6-demo` | splash 用 Stack/Align + 真按钮；components modal 用 Stack | `demo/sections/splash/`, `demo/sections/components.py`, `tests/demo/`, semantic goldens | W5 |
+| W6 | `w2.1.2-w6-demo` | components modal 用 Stack；splash 保留顺序布局（Stack 叠字标导致重叠，已回退） | `demo/sections/splash/`, `demo/sections/components.py`, `tests/demo/`, semantic goldens | W5 |
 | W7a | `w2.1.2-w7a-docstrings-widgets` | docstring 减半：widgets/pixel/testing（6312→≤3150） | `src/motui/widgets/**`, `pixel/**`, `testing/**` | W6 |
 | W7b | `w2.1.2-w7b-docstrings-kernel-app` | docstring 减半：app/kernel/terminal/demo（6692→≤3340） | `src/motui/app/**`, `kernel/**`, `terminal/**`, `demo/**`, root | W6（与 W7a 并行） |
 | W7c | `w2.1.2-w7c-docs` | CONTRACT/WIDGETS/ARCHITECTURE/README + ADR 027–030 | `docs/**`, `README.md` | W6（与 W7a/W7b 并行） |
@@ -187,7 +187,7 @@ uv run python tools/framebench.py
 - [x] W4b（`2eb381f` 合并，`57efe5f` take 契约修正）
 - [x] W4c（`01266d2` 合并）
 - [x] W5（`fcc0108` 合并）
-- [x] W6（`c692c0b` 合并）
+- [x] W6（`c692c0b` 合并；`1a0ba50` 回退 splash 的 Stack 叠层，恢复顺序布局）
 - [x] W7a docstrings widgets/pixel/testing（6312→2183）
 - [x] W7b docstrings app/kernel/terminal/demo（6692→1604）
 - [x] W7c docs/ADR/README

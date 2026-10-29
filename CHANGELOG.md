@@ -87,10 +87,9 @@ removed, with no compatibility shims. The full table is in
 ### Performance
 
 - `Line.overlay` gained segment-level transparency and narrow-glyph fast
-  paths (about 19x on the splash overlay); `Align`/`Column` skip redundant
-  row clipping. The splash's Stack composition renders in 10.7 ms p50 on a
-  machine where the pre-2.1.2 splash already measured 8.7 ms and
-  `pixel-quantize` was 2.4x its recorded baseline.
+  paths (about 19x on a full-frame overlay); `Align`/`Column` skip redundant
+  row clipping. The splash keeps its sequential layout at the previous
+  frame cost; the composed modal is the Stack workload.
 
 ## [2.1.0] — 2026-10-28
 
