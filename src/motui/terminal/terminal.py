@@ -1,14 +1,7 @@
 """The terminal adapter: one screen, one input source, one capability answer.
 
-A :class:`Terminal` is the configured endpoint a runtime talks to.  It owns
-the :class:`~motui.terminal.screen.Screen` (constructed from the
-:class:`~motui.terminal.screen.TerminalOptions` switches or handed in whole),
-brackets the full-screen session, reads the next event from the attached
-source, and answers the screen's size, liveness, encoding and color
-capability.  It deliberately owns **no policy**: it never dispatches an
-event, moves focus, scrolls or paints, so a host or a
-:class:`~motui.app.driver.TUI` can wrap it without changing behaviour.
-"""
+It owns no policy: it never dispatches an event, moves focus, scrolls or
+paints."""
 
 from __future__ import annotations
 
@@ -32,14 +25,8 @@ _DEFAULT_OPTIONS = TerminalOptions()
 
 @dataclass(frozen=True, slots=True, kw_only=True)
 class Capability:
-    """What the attached screen can render, sampled on demand.
-
-    ``color_mode`` is the screen's declared palette capability (the painter
-    reads the same value), ``size`` the current ``(columns, rows)``, ``live``
-    whether bytes reach a real terminal, and ``encoding`` the stream's text
-    encoding when it declares one.  A capability is a value, not a handle:
-    ask :attr:`Terminal.capability` again after a resize to re-sample it.
-    """
+    """What the attached screen can render, sampled on demand; a value, not a
+    handle, so ask again after a resize."""
 
     color_mode: ColorMode
     size: tuple[int, int]
@@ -50,21 +37,8 @@ class Capability:
 class Terminal:
     """A configured screen plus the event source and clipboard over it.
 
-    ``options`` is one :class:`~motui.terminal.screen.TerminalOptions`; a
-    ``screen=`` argument wins over ``options.screen``, which in turn wins
-    over constructing a :class:`~motui.terminal.screen.TerminalScreen` from
-    the options (its mouse switch mapped through
-    :func:`~motui.terminal.screen.mouse_switches`).  ``options.input`` is the
-    source :meth:`read_event` reads; :meth:`attach` replaces it when a host
-    attaches its own (a raw terminal source opened for the session), and
-    ``None`` reports EOF.
-
-    :meth:`enter` and :meth:`leave` forward to the screen verbatim -- the
-    screen owns the byte order and the non-live silence -- while
-    :meth:`read_event` is a pure read with no exit or EOF policy beyond
-    returning ``None``.  The session bracket and the read cancellation stay
-    the caller's (the driver's) job.
-    """
+    ``screen=`` wins over ``options.screen``, which wins over building a
+    TerminalScreen; :meth:`attach` replaces the input source."""
 
     def __init__(
         self,
@@ -149,14 +123,8 @@ class Terminal:
         self._screen.refresh_size()
 
     def close(self) -> None:
-        """Release the input source (best effort) and the screen.
-
-        ``EventSource`` only promises ``read``; a source that also offers
-        ``close`` is closed here, and the input is detached either way.  The
-        screen's own ``close`` flushes a stream it does not own.  A caller
-        that keeps the source (the driver does, for a caller-supplied one)
-        never calls this.
-        """
+        """Release the input source (best effort) and the screen; a caller that
+        keeps the source never calls this."""
         source, self._input = self._input, None
         close = getattr(source, "close", None)
         if close is not None:

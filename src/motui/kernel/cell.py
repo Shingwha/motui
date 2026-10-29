@@ -1,33 +1,8 @@
 """Cells, styled runs, rows and surfaces -- the 2.0 row model.
 
-A :class:`Cell` is the write face: one character with its style and its two
-inline payloads.  A :class:`Segment` is the same run in its run-length form,
-which is what a :class:`Line` holds; a :class:`Surface` is a block of lines
-at one content width.  All four are immutable values.
-
-Construction is the content door.  A control character (C0, DEL, C1) inside
-content would drive the terminal instead of painting cells, so ``Cell`` and
-``Segment`` delete those characters and normalize a tab to one space -- the
-same rule the 1.x row model applied.  The kernel never builds terminal bytes;
-SGR rendering lives in :func:`motui.terminal.render.styled_line`.
-
-A :class:`Line` is exactly one visual row: an ordered tuple of styled
-:class:`Segment` values.  :func:`wrap_line` shares
-:func:`motui.kernel.text.wrap_spans` with :func:`motui.kernel.text.wrap_text`,
-so both wrap with the same break rule.  All width logic comes from
-:func:`motui.kernel.text.visible_width` -- directly, or through
-:func:`motui.kernel.text.fit_text` for per-segment truncation and
-:func:`motui.kernel.text.index_pair_at_columns` for the column-space cut,
-whose scanner lives beside the measure it shares its cluster rules with;
-nothing here re-measures text.
-
-Two module-level segment utilities round the model out: :func:`fuse`
-coalesces runs that share a style, and :func:`overlay` applies one base style
-underneath a segment list following the colored-vs-attribute rule.  Both
-carry the segments' inline payloads (``link`` / ``action``) along, as every
-rebuild in this module does -- a payload survives a cut, a re-style or a
-coalesce.
-"""
+All four are immutable values. Construction is the content door: control
+characters are deleted and tabs become one space, so content can never
+drive the terminal."""
 
 from __future__ import annotations
 
@@ -75,26 +50,8 @@ _CONTROL_RE = re.compile(r"[\x00-\x08\x0a-\x1f\x7f-\x9f]")
 
 
 def _cells_only(text: str) -> str:
-    """The Segment door: ``text`` as display cells, never terminal commands.
-
-    Content and instructions part here, at the one point every rendered run
-    passes through: a control character (C0, DEL, C1) arriving inside content
-    would drive the terminal instead of painting cells -- dropping mouse
-    tracking, writing the clipboard, retitling the window -- so the door
-    deletes it.  Every escape byte the toolkit emits is constructed in
-    :mod:`motui.terminal.ansi`; this door is what keeps that constitution true
-    for the content channel.  A tab is not deleted but normalized to one
-    space -- the repo's only tab rule (:func:`motui.kernel.text._normalize_tabs`,
-    ``TAB_WIDTH == 1``), applied here so a segment built directly, off the
-    wrap path, follows it too.
-
-    The transform preserves width and therefore layout: ``visible_width``
-    counts every deleted character as zero columns, and a tab counts one
-    column -- exactly what the space replacing it occupies.  Clean text (no
-    tab, no control character -- nearly every segment) comes back as the
-    very same string, zero allocations: one membership test and one
-    regex scan, both C-speed.  The transform is idempotent.
-    """
+    """Delete control characters and normalize tabs: content must never carry
+    terminal commands. Width is preserved."""
     if "\t" in text:
         text = text.replace("\t", " ")  # the repo's tab rule: one tab, one space
     if _CONTROL_RE.search(text) is None:
@@ -106,12 +63,8 @@ def _cells_only(text: str) -> str:
 class Cell:
     """One display cell: a character, a style and the inline payloads.
 
-    ``char`` and the two payloads pass through the content door at
-    construction; ``link`` and ``action`` are metadata, so neither
-    contributes width.  A control-only ``char`` becomes the empty string
-    rather than raising: the door's contract is to delete, and an empty cell
-    paints nothing.
-    """
+    ``char`` and both payloads pass the content door; ``link``/``action`` are
+    metadata and carry no width."""
 
     char: str = " "
     style: Style = Style()
@@ -128,30 +81,11 @@ class Cell:
 
 @dataclass(frozen=True, slots=True)
 class Segment:
-    """A styled run of text.  Segments are frozen and hashable.
+    """A styled run of text: frozen and hashable.
 
-    **Cells only.**  Construction is the one door between content and
-    terminal commands: ``text`` -- and ``link``, whose bytes reach the
-    terminal inside the OSC 8 pair -- pass through :func:`_cells_only` in
-    ``__post_init__``, so control characters are deleted and a tab becomes
-    one space before anything is measured or painted.  A run of text can
-    therefore never carry an escape sequence into the byte stream; only
-    :mod:`motui.terminal.ansi` builds escapes.  The transform preserves width
-    (deleted characters occupy no columns, a tab counts one column like the
-    space that replaces it), so layout and the rendering of clean text are
-    untouched, and it is idempotent: a rebuild through :meth:`with_style`
-    passes the door again and changes nothing.
-
-    The two payload slots beside ``text``/``style`` are the row model's only
-    inline addresses (the kernel constitution): ``link`` is an url the
-    terminal should treat as a real hyperlink -- :func:`motui.terminal.render.styled_line`
-    wraps the segment's text in the OSC 8 pair -- and ``action`` is the name the
-    *application* gives to a click on that run (``"open:<url>"``, a task
-    list's ``"todo:3"``, ...), which :func:`action_at` hands back for the
-    column a click landed on.  ``link`` participates in equality (a changed
-    link must repaint the row); ``action`` does not (it never reaches a
-    byte, so it must not make two visibly equal rows compare different).
-    """
+    ``text`` and ``link`` pass the content door, so a run never carries an escape
+    sequence. ``link`` participates in equality; ``action`` does not, because it
+    never reaches a byte."""
 
     text: str
     style: Style = Style()
@@ -167,16 +101,8 @@ class Segment:
     _width: int = field(init=False, compare=False, repr=False, default=-1)
 
     def __post_init__(self) -> None:
-        """The content door: ``text``, ``link`` and ``action`` are cells only.
-
-        Runs before any measurement, so the lazy ``_width`` cache and every
-        width a reader sees are computed from the sanitized run -- the door
-        and the measure can never disagree.  A link that sanitizes to the
-        empty string becomes ``None``: an empty OSC 8 target has no meaning,
-        and plain text is what it would paint anyway.  ``action`` passes the
-        same door as :class:`Cell`'s payload, so a control character can
-        never ride an action name into a host's dispatch.
-        """
+        """The content door: sanitize ``text``, ``link`` and ``action`` before any
+        measurement."""
         object.__setattr__(self, "text", _cells_only(self.text))
         if self.link is not None:
             object.__setattr__(self, "link", _cells_only(self.link) or None)
@@ -185,19 +111,13 @@ class Segment:
 
     @property
     def width(self) -> int:
-        """Display width in columns, via :func:`motui.kernel.text.visible_width`."""
+        """Display width in columns, cached after the first measure."""
         if self._width < 0:
             object.__setattr__(self, "_width", visible_width(self.text))
         return self._width
 
     def with_style(self, style: Style) -> Segment:
-        """A copy of this run in ``style``: text and payloads ride along.
-
-        The one rebuild a restyling site uses (a selection highlight, a
-        hover band, a fill underneath), so the ``link``/``action`` a run
-        carries survive it -- and, with them, the OSC 8 pairing a later
-        repaint emits and the span :func:`action_at` resolves.
-        """
+        """A copy of this run in ``style``; text, link and action ride along."""
         return Segment(self.text, style, link=self.link, action=self.action)
 
 
@@ -239,7 +159,7 @@ class Line:
 
     @property
     def text(self) -> str:
-        """Plain-text view (styles dropped)."""
+        """Plain-text view (styles dropped), cached."""
         cached = self._text
         if cached is None:
             cached = "".join(seg.text for seg in self._segments)
@@ -248,8 +168,7 @@ class Line:
 
     @property
     def width(self) -> int:
-        """Display width in columns, via :class:`Segment.width` (which measures
-        through :func:`motui.kernel.text.visible_width`)."""
+        """Display width in columns, cached."""
         cached = self._width
         if cached is None:
             cached = sum(seg.width for seg in self._segments)
@@ -259,16 +178,8 @@ class Line:
     # -- sizing ------------------------------------------------------------
 
     def _fit(self, width: int) -> Line:
-        """Truncate *this* row to ``width`` columns, marking the cut with ``…``.
-
-        The private trim behind ``WrapMode.ELLIPSIS``; components reach it
-        through :meth:`clip` / :meth:`reflow`.  Over-wide lines lose their
-        tail; the marker takes one column and inherits the style of the last
-        kept segment -- fused onto that segment when something survived, a
-        plain unstyled marker when nothing did.  ``width <= 0`` yields an
-        empty line, and a line that already fits is returned unchanged (the
-        same object).
-        """
+        """Truncate to ``width`` columns, marking the cut with ``…``; the marker
+        inherits the last kept segment's style and payloads."""
         if width <= 0:
             return Line()
         if self.width <= width:
@@ -308,28 +219,8 @@ class Line:
         return Line(kept)
 
     def fill(self, width: int, style: Style = NONE) -> Line:
-        """Grow *this* row to ``width`` columns, ``style`` laid underneath.
-
-        The sizing family's growing member -- ``clip(WrapMode.ELLIPSIS,
-        width)`` trims, ``fill`` extends, ``filled`` builds a blank row from
-        scratch.  It is where
-        the removed ``pad_to`` was absorbed: the ``NONE`` fast path is
-        byte-identical to what ``pad_to`` answered.
-
-        ``style`` is the band *underneath* the content (the Rich
-        ``Padding(style=...)`` rule, ``ref/industry.md`` §2): every content
-        segment comes back through :meth:`Segment.with_style` as
-        ``style.merge(seg.style)`` -- ``style`` is the base, the segment's
-        own colors win where it has them -- and a gap becomes one
-        ``Segment(" " * gap, style)``.  ``fill`` never truncates;
-        ``clip(WrapMode.ELLIPSIS, w)`` is the trim, so the canonical band
-        pipeline is ``row.clip(WrapMode.ELLIPSIS, w).fill(w, band)``.
-
-        The ``NONE`` fast path (``style == NONE``; ``NONE`` is ``Style()``,
-        so ``==`` catches both the constant and any equal style): no gap
-        returns the row itself, a gap appends one plain unstyled space
-        segment.  ``width <= 0`` yields an empty line.
-        """
+        """Grow this row to ``width`` columns with ``style`` underneath; a segment's
+        own colors win over the base. The ``NONE`` fast path returns ``self``."""
         if width <= 0:
             return Line()
         if style == NONE:
@@ -345,14 +236,7 @@ class Line:
 
     @classmethod
     def filled(cls, width: int, style: Style = NONE) -> Line:
-        """A fresh row of ``width`` spaces in one segment: the band primitive.
-
-        The blank-row constructor a component that renders solid
-        background rows builds on, and what the kernel's chrome strips fill
-        with: one segment, ``style``, exactly ``width`` columns.  A row that
-        already exists and needs filling is :meth:`fill` instead.
-        ``width <= 0`` yields an empty line.
-        """
+        """A fresh row of ``width`` spaces in one segment, in ``style``."""
         if width <= 0:
             return cls()
         return cls((Segment(" " * width, style),))
@@ -365,18 +249,8 @@ class Line:
         return Line(self._segments + other._segments)
 
     def merge_span(self, start: int, end: int, style: Style) -> Line:
-        """``style`` merged over the cells ``[start, end)``: a new row.
-
-        The inline-hover post-transform: a component keeps a hover-free base
-        row and, while the pointer sits on a span, renders the base with the
-        span's segments restyled -- each segment the column range intersects
-        (display columns, the :attr:`Segment.width` walk, left-closed and
-        right-open as :func:`action_at` reports it) comes back through
-        :meth:`Segment.with_style`, so its ``link``/``action`` ride along;
-        every other segment is the very same object.  A range that meets no
-        non-empty segment answers ``self`` -- the row already renders
-        byte-for-byte as asked, and the caller's cache keeps one value.
-        """
+        """Merge ``style`` over the segments intersecting columns ``[start, end)``;
+        payloads ride along and a miss returns ``self``."""
         if start >= end:
             return self
         segments: list[Segment] = []
@@ -395,30 +269,9 @@ class Line:
     def overlay(self, base: Line) -> Line:
         """Paint this row on top of ``base``, one cell at a time.
 
-        The 2.0 composition primitive: ``self`` is the top layer and
-        ``base`` the bottom.  A **transparent** cell -- a plain unstyled
-        space carrying neither a link nor an action -- keeps the cell under
-        it; every other cell replaces the base cell, its style merged as
-        ``base_style.merge(top_style)`` (the underlying color shows through,
-        the top layer's attributes win) and its ``link``/``action`` taken
-        from the top.  The answer is as wide as the wider row; the short
-        side is treated as blank, so a top cell past the base's end simply
-        starts from ``Style()``.
-
-        Wide characters are composed as whole clusters, never as columns: a
-        non-transparent top cell overlapping any part of a double-wide base
-        glyph replaces the **entire** glyph, and a cluster that straddles
-        the top cell's span leaves blank cells (in the erased glyph's style)
-        instead of a dangling continuation.  Transparent cells preserve the
-        whole base glyph.  A top row with no visible cell -- ``Line()`` or
-        one made only of transparent cells -- returns ``base`` itself (padded
-        when the top row is wider), so an empty overlay layer costs nothing.
-        A row made only of plain unstyled spaces is recognised at segment
-        level before any cell decomposition, so opaque padding rows never
-        pay for :func:`_line_cells`.  When both rows are narrow (every glyph
-        one column wide) the composition walks the segments directly,
-        without materializing a cell per column.
-        """
+        A plain unstyled space with no payload is transparent; every other cell wins
+        with ``base_style.merge(top_style)``. Wide glyphs are replaced as whole
+        clusters, never halved."""
         if self.width == 0:
             return base
         for seg in self._segments:
@@ -442,24 +295,8 @@ class Line:
     # -- the 2.0 width vocabulary -----------------------------------------
 
     def reflow(self, mode: WrapMode, width: int) -> list[Line]:
-        """Lay *this* row out in ``width`` columns under ``mode``.
-
-        The one entry for every width response in the toolkit:
-
-        - ``WORD``: word-aware wrap (:func:`wrap_line`), each row closed
-          with :meth:`_fit` so a cluster measuring wider than ``width``
-          still cannot overflow it;
-        - ``CHAR``: hard character wrap (:func:`_wrap_chars`), same closing
-          trim;
-        - ``ELLIPSIS``: one row, tail cut and marked with ``…``;
-        - ``CLIP``: one row, hard cut at the width (no marker);
-        - ``OVERFLOW``: the row itself, even when wider than ``width`` --
-          the container owns the clipping.
-
-        An empty row (or ``width <= 0``) yields ``[Line()]`` for every mode
-        except ``OVERFLOW``.  Styles and inline payloads survive every row
-        the wrap emits, and an unknown mode raises ``ValueError``.
-        """
+        """Lay this row out in ``width`` columns under ``mode``: WORD/CHAR wrap,
+        ELLIPSIS cuts with ``…``, CLIP cuts hard, OVERFLOW returns the row."""
         if mode is WrapMode.WORD:
             return [row._fit(width) for row in wrap_line(self, width)]
         if mode is WrapMode.CHAR:
@@ -473,25 +310,12 @@ class Line:
         raise ValueError(f"unknown wrap mode: {mode!r}")
 
     def clip(self, mode: WrapMode, width: int) -> Line:
-        """The single-row form of :meth:`reflow`: its first row.
-
-        ``WORD`` / ``CHAR`` answer the first wrapped row; the other modes
-        are single-row by definition.  Use this when the caller wants one
-        row (a header, a label, a status line) and :meth:`reflow` when it
-        wants the whole block.
-        """
+        """The single-row form of :meth:`reflow`: its first row."""
         return self.reflow(mode, width)[0]
 
     def _cut_width(self, width: int) -> Line:
-        """A prefix of this row no wider than ``width`` columns -- hard cut.
-
-        The private hard cut behind :meth:`Surface.of` /
-        :meth:`Surface.clipped` (the surface invariant guard);
-        ``clip(WrapMode.CLIP, width)`` is the public spelling.  A cut never
-        splits a cell: a double-width character that would straddle the
-        edge is dropped, leaving the line narrower than the limit.  Styling
-        and inline payloads ride along on the kept runs.
-        """
+        """A hard prefix no wider than ``width`` columns; a wide glyph that would
+        straddle the edge is dropped."""
         if width < 0:
             raise ValueError(f"clip width must not be negative, got {width}")
         if self.width <= width:
@@ -514,11 +338,7 @@ class Line:
         return Line(kept)
 
     def pad(self, width: int) -> Line:
-        """This row widened with spaces to ``width`` columns.
-
-        Padding never truncates; a row already at least ``width`` wide is
-        returned unchanged.
-        """
+        """This row widened with spaces to ``width`` columns; never truncates."""
         if width < 0:
             raise ValueError(f"pad width must not be negative, got {width}")
         missing = width - self.width
@@ -541,12 +361,8 @@ class Line:
 
 
 def _fit_prefix(text: str, width: int) -> str:
-    """The longest prefix of ``text`` measuring at most ``width`` columns.
-
-    Zero-width continuations (marks, joiners) stay attached to the cell they
-    continue: the measurement is taken over the growing prefix, so a prefix
-    never splits a cluster the way a per-character sum would.
-    """
+    """The longest prefix measuring at most ``width`` columns; zero-width
+    continuations stay attached."""
     if width <= 0:
         return ""
     taken = ""
@@ -561,13 +377,8 @@ def _fit_prefix(text: str, width: int) -> str:
 
 @dataclass(frozen=True, slots=True)
 class _CellRun:
-    """One printing cell of a line: a whole grapheme cluster and its width.
-
-    The overlay walk works in cells, not segments, so a wide glyph is one
-    unit that is replaced or preserved whole.  Zero-width text is folded into
-    the neighbouring cluster's ``text``: it paints nothing, so carrying it
-    along is enough for a rebuild to preserve it.
-    """
+    """One printing cell of a line: a whole grapheme cluster and its width;
+    zero-width text is folded into its neighbour."""
 
     text: str
     width: int
@@ -582,17 +393,8 @@ def _narrow_widths(line: Line) -> bool:
 
 
 def _paint_narrow(top: Line, base: Line) -> Line | None:
-    """Compose two narrow rows run by run, or ``None`` if not narrow.
-
-    With every glyph one column wide the general cell pump is unnecessary:
-    a column is one character on both layers, so the walk slices segment
-    text by column spans and accumulates output runs.  A transparent top
-    cell (plain unstyled space) lets the base character through; every other
-    top cell wins with ``base_style.merge(top_style)``.  The answer is
-    value-equal to :func:`_paint_cells` for narrow input; wide clusters,
-    combining marks or zero-width text send the caller back to the
-    cluster-aware pump.
-    """
+    """Compose two all-narrow rows run by run (the fast path); ``None`` sends wide
+    input to the cluster pump."""
     if not _narrow_widths(top) or not _narrow_widths(base):
         return None
     base_width = base.width
@@ -646,7 +448,6 @@ def _paint_narrow(top: Line, base: Line) -> Line | None:
     pieces: list[tuple[list[str], Style, str | None, str | None]] = []
 
     def push_segment(seg: Segment) -> None:
-        """Append ``seg``'s text, fusing with the previous run when it matches."""
         if not seg.text:
             return
         if (
@@ -662,7 +463,6 @@ def _paint_narrow(top: Line, base: Line) -> Line | None:
     def push(
         text: str, style: Style, link: str | None, action: str | None
     ) -> None:
-        """Append one fresh run."""
         if not text:
             return
         if (
@@ -678,7 +478,6 @@ def _paint_narrow(top: Line, base: Line) -> Line | None:
     index = 0
 
     def emit_base(start: int, end: int) -> None:
-        """Emit the untouched base characters in ``[start, end)``."""
         nonlocal index
         while start < end:
             while index < len(runs) and runs[index][1] <= start:
@@ -740,15 +539,8 @@ def _paint_narrow(top: Line, base: Line) -> Line | None:
 
 
 def _line_cells(line: Line) -> list[_CellRun]:
-    """``line`` decomposed into one :class:`_CellRun` per printing cell.
-
-    Segments are split through the kernel's one cluster scanner
-    (:func:`motui.kernel.text._cell_spans`), so the boundaries the overlay
-    composes on are the boundaries the measure and the cut already use.  A
-    run's style and payloads come from its segment; zero-width characters
-    between clusters ride on the preceding cluster of the same segment.  A
-    segment holding only non-printing characters contributes no cell.
-    """
+    """Decompose ``line`` into one :class:`_CellRun` per printing cell, using the
+    kernel's one cluster scanner."""
     cells: list[_CellRun] = []
     for seg in line.segments:
         text = seg.text
@@ -801,11 +593,8 @@ def _line_cells(line: Line) -> list[_CellRun]:
 
 
 def _transparent(cell: _CellRun) -> bool:
-    """Whether ``cell`` lets the layer below show through.
-
-    The exact rule from the composition contract: a plain space with the
-    default style and no inline payloads.
-    """
+    """Whether ``cell`` lets the layer below show through: an unstyled space with
+    no payloads."""
     return (
         cell.text == " "
         and cell.style == Style()
@@ -815,17 +604,8 @@ def _transparent(cell: _CellRun) -> bool:
 
 
 def _paint_cells(top: list[_CellRun], base: list[_CellRun]) -> Line:
-    """Compose top cells over base cells into a fresh row.
-
-    Columns are addressed through ``base_slots`` (one base cell index per
-    column).  A non-transparent top cell picks the base style under its
-    first column, removes every base cell it touches -- wide glyphs whole --
-    and keeps its own glyph and payloads.  Leftover columns of an erased
-    wide glyph become one-column blanks in that glyph's style, so no
-    continuation is ever left dangling and an underlying band stays
-    continuous.  The output is fused back into runs by equal style and
-    payload, which keeps an untouched row equal to its input.
-    """
+    """Compose top cells over base cells; an erased wide glyph leaves one-column
+    blanks in its style, so no continuation is ever left dangling."""
     starts: list[int] = []
     slots: list[int] = []
     for index, cell in enumerate(base):
@@ -889,32 +669,15 @@ def _paint_cells(top: list[_CellRun], base: list[_CellRun]) -> Line:
 
 
 def rest(row: Line, width: int, band: Style) -> Line:
-    """One row on its band: trim then fill at the trimmed row's width.
-
-    The band rests under the row's own segments (the Rich
-    ``Padding(style=...)`` rule); the ``NONE`` fast path leaves a resting
-    row byte-for-byte unchanged.  The row widgets share this one lay-down
-    beside the public :meth:`Line.clip` / :meth:`Line.fill` pair -- the
-    trim is :meth:`Line._fit`, the same truncation ``clip(ELLIPSIS, w)``
-    performs.
-    """
+    """Trim the row to ``width`` and lay ``band`` underneath; the ``NONE`` fast
+    path leaves a resting row unchanged."""
     fitted = row._fit(width)
     return fitted if band == NONE else fitted.fill(fitted.width, band)
 
 
 def action_at(line: Line, col: int) -> tuple[str, int, int] | None:
-    """The inline action under column ``col``: ``(action, start, end)`` or ``None``.
-
-    Walks ``line``'s segments accumulating display width -- the same
-    :class:`Segment` measure every other reader uses, so a wide cluster owns
-    both of its columns and the answer never disagrees with what was painted
-    -- and answers the payload of the segment ``col`` falls in, with that
-    segment's column interval, **left-closed and right-open** (``[start,
-    end)``, exactly the cells a click span owns).  ``None`` for a column
-    before the line, at or past its end, or inside a segment that carries no
-    action: the caller keeps its own policy, this is the lookup only.  Pure:
-    no state, no cache, no side effect.
-    """
+    """The inline action under column ``col`` as ``(action, start, end)`` or
+    ``None``; intervals are left-closed, right-open."""
     if col < 0:
         return None
     pos = 0
@@ -927,17 +690,8 @@ def action_at(line: Line, col: int) -> tuple[str, int, int] | None:
 
 
 def slice_line(line: Line, start: int, end: int) -> Line:
-    """The sub-line covering ``line.text[start:end]``, keeping per-segment styles.
-
-    Offsets are character offsets into ``line.text`` (the concatenation of the
-    segments, so a slice may start or end mid-segment); tabs inside a kept
-    slice become single spaces (the module's documented tab rule) so widths
-    stay consistent.  An empty range yields an empty line.  A segment's
-    payloads (``link`` / ``action``) ride along, so a wrapped link is still a
-    link on the row it landed on.  This is the cut
-    :func:`wrap_line` wraps through, promoted from a private helper so the
-    column-space cut below can share it instead of re-walking segments.
-    """
+    """The sub-line covering ``line.text[start:end]``, keeping styles; payloads
+    ride along and tabs inside the slice become spaces."""
     if start >= end:
         return Line()
     out: list[Segment] = []
@@ -962,20 +716,8 @@ def slice_line(line: Line, start: int, end: int) -> Line:
 
 
 def cut_line(line: Line, start: int, end: int) -> Line:
-    """The sub-line covering display columns ``[start, end)``.
-
-    The column-space counterpart of :func:`slice_line`: offsets are terminal
-    columns measured with :func:`motui.kernel.text.visible_width`, not
-    character counts.  The range clamps into the line's width -- a selection
-    column past a short row simply reaches the row's end -- and a boundary
-    landing inside a multi-column cluster snaps **down** to that cluster's
-    start through :func:`motui.kernel.text.index_pair_at_columns`, which runs
-    the same cluster rules the measure does: the floor rule that has always
-    held for a plain wide character is finally true for every cluster, so a
-    cut never halves one.  A cut at (or past) the end, or an empty range,
-    yields an empty line.  Per-segment styles survive exactly as they do in
-    :func:`slice_line`, which does the cutting.
-    """
+    """The sub-line covering display columns ``[start, end)``; boundaries snap
+    down to the cluster start, so a cluster is never halved."""
     if start >= end:
         return Line()
     text = line.text
@@ -983,14 +725,8 @@ def cut_line(line: Line, start: int, end: int) -> Line:
 
 
 def wrap_line(line: Line, width: int) -> list[Line]:
-    """Word-aware wrap of ``line`` into rows of at most ``width`` columns.
-
-    Same break rule as :func:`motui.kernel.text.wrap_text`: spaces preferred,
-    over-long words and CJK runs hard-broken, wide characters owning a row of
-    their own when ``width`` is smaller than the character.  Styles survive
-    across breaks; whitespace at a break is dropped.  An empty line (or
-    ``width <= 0``) wraps to ``[Line()]``.
-    """
+    """Word-aware wrap into rows of at most ``width`` columns, sharing the break
+    rule with :func:`motui.kernel.text.wrap_text`."""
     if width <= 0:
         return [Line()]
     text = line.text
@@ -1001,15 +737,7 @@ def wrap_line(line: Line, width: int) -> list[Line]:
 
 
 def _wrap_chars(line: Line, width: int) -> list[Line]:
-    """Hard character wrap of ``line`` into rows of ``width`` columns.
-
-    Walks the line's printing cells (:func:`motui.kernel.text._cell_spans`)
-    and starts a new row before any cell that would overflow, so a grapheme
-    cluster never straddles a break.  A cluster wider than ``width`` owns its
-    row and the caller's closing :meth:`Line._fit` trims it with the marker.
-    Styles and inline payloads survive through :func:`slice_line`; an empty
-    line (or ``width <= 0``) yields ``[Line()]``.
-    """
+    """Hard character wrap; a cluster never straddles a break."""
     if width <= 0:
         return [Line()]
     if line.width <= width:
@@ -1029,15 +757,8 @@ def _wrap_chars(line: Line, width: int) -> list[Line]:
 
 
 def fuse(segments: Iterable[Segment]) -> list[Segment]:
-    """Coalesce adjacent runs sharing a style into single segments.
-
-    Only *adjacent* segments with equal styles **and equal payloads** merge,
-    and they merge in order; a segment with a style -- or a link/action -- of
-    its own keeps it.  Two differently-linked runs must not fuse into one:
-    the merged run would answer a click and open a hyperlink for the wrong
-    half.  Empty segments stay (a zero-width run paints nothing at all, so
-    dropping it is the caller's choice).  One segment in, one segment out.
-    """
+    """Coalesce adjacent runs with equal styles and payloads; differently linked
+    runs must not merge into one link span."""
     out: list[Segment] = []
     for seg in segments:
         if (
@@ -1058,14 +779,8 @@ def fuse(segments: Iterable[Segment]) -> list[Segment]:
 
 
 def overlay(base: Style, segments: Iterable[Segment]) -> list[Segment]:
-    """Apply ``base`` underneath ``segments``: the colored-vs-attribute rule.
-
-    A segment that carries a color of its own (``fg`` or ``bg`` set) keeps
-    that style absolute; an attribute-only segment (bold, italic, underline,
-    ...) is merged onto ``base``, so a band painted underneath still shows
-    through the emphasis.  Payloads (``link`` / ``action``) ride along
-    unchanged.  One segment in, one segment out.
-    """
+    """Apply ``base`` underneath attribute-only segments; a segment with its own
+    color keeps that style absolute. Payloads ride along."""
     return [
         seg.with_style(
             seg.style
@@ -1079,17 +794,9 @@ def overlay(base: Style, segments: Iterable[Segment]) -> list[Segment]:
 class Surface:
     """A block of rows at one content width.
 
-    Direct construction is not the contract (fields are not a constructor
-    argument): :meth:`of` and :meth:`clipped` are the builders that guarantee
-    every row is at most ``width`` cells wide; :meth:`of` pads short rows and
-    :meth:`clipped` leaves them short.  :attr:`rows` is still exposed for
-    readers, as a tuple.
-
-    The value is also a read-only sequence of rows (``len``, indexing,
-    iteration), so a caller written against the 1.x ``list[Line]`` return can
-    keep walking a render result without materializing it.  It is **not** a
-    mutable list: ``rows`` is a tuple and the value is frozen.
-    """
+    Builders :meth:`of` and :meth:`clipped` enforce ``line.width <= width``;
+    direct construction is not the contract. Reads as an immutable sequence of
+    rows."""
 
     width: int = 0
     rows: tuple[Line, ...] = ()
@@ -1105,15 +812,8 @@ class Surface:
         return len(self.rows)
 
     def overlay(self, base: Surface) -> Surface:
-        """Paint this surface on top of ``base``, row by row.
-
-        The block form of :meth:`Line.overlay`: the result spans the wider
-        and taller of the two blocks, a missing row counts as an empty one,
-        and each row is composed by the row method.  The answer is
-        normalized through :meth:`Surface.of`, so every row is at most --
-        and, by that builder's contract, exactly -- ``max(width)`` columns
-        and neither input is modified.  ``self`` is the top layer.
-        """
+        """Paint this surface over ``base`` row by row; normalized through
+        :meth:`of`, so every row is exactly the wider width. ``self`` is the top."""
         width = max(self.width, base.width)
         height = max(self.height, base.height)
         rows = [
@@ -1154,14 +854,8 @@ class Surface:
 
     @classmethod
     def of(cls, rows: Sequence[Line], width: int, *, pad: bool = True) -> Surface:
-        """A surface of ``rows`` normalized to at most ``width`` columns.
-
-        An overwide row is clipped at a cell boundary, so the surface invariant
-        ``line.width <= width`` holds for every row it hands back.  With
-        ``pad`` (the default, the component contract) a short row is also
-        grown to exactly ``width`` columns; with ``pad=False`` the row keeps
-        its natural width.  :meth:`clipped` is the named ``pad=False`` form.
-        """
+        """A surface of ``rows`` with every row at most ``width`` columns; ``pad``
+        grows short rows to exactly ``width``, ``pad=False`` keeps them short."""
         if width < 0:
             raise ValueError(f"surface width must not be negative, got {width}")
         if pad:
@@ -1172,11 +866,7 @@ class Surface:
 
     @classmethod
     def clipped(cls, rows: Sequence[Line], width: int) -> Surface:
-        """A surface of ``rows`` clipped to ``width``; short rows stay short.
-
-        The builder migrating components return through this wave: clipping
-        enforces the row invariant without the padding that would change the
-        bytes the painter writes (the 1.x render output was unpadded too).
-        """
+        """A surface of ``rows`` clipped to ``width``; short rows stay short (no
+        padding)."""
         return cls.of(rows, width, pad=False)
 

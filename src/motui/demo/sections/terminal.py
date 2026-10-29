@@ -1,25 +1,7 @@
 """The terminal section: keys, mouse and paint, dissected.
 
-One frame reports what the pipe under every widget actually does, and
-every number on it is a value, never a probe:
-
-* the frame's own cell budget -- the ``Constraints`` this very render
-  answered, so resizing the pane moves the number;
-* the synchronized-update pair (DECSET 2026) the painter brackets every
-  non-empty frame with, shown as literal text;
-* the color-capability ladder drawn as swatch bars: the sixteen base
-  colors, the xterm 256-color palette's gray ramp plus a cube slice, and
-  a 24-bit gradient -- what each SGR mode can name;
-* the marker ladder: the same staircase plotted with the ``cell``,
-  ``half`` and ``braille`` markers.  The octant step is reported as
-  *not probed* -- the pixel core ships half and braille, and this
-  section invents no probe of its own;
-* a live event feed driven by clicks or the keyboard probe: arrows move the
-  probe and enter/space emits an event at its cell.
-
-The ms/frame figure is the 60 Hz budget, not a measurement. Nothing here
-reads the clock, environment or screen: two replays paint one frame.
-"""
+One frame reports the cell budget, the sync pair, the color and marker
+ladders and a live event feed. Every number is a constant, not a probe."""
 
 from __future__ import annotations
 
@@ -94,14 +76,9 @@ def _gradient() -> tuple[str, ...]:
 
 
 class TerminalScene(Scene):
-    """The terminal report: the pipe under every widget, on one frame.
-
-    A 2x2 grid of panels -- session facts and the mouse feed above the
-    color bars and the marker ladder -- under a one-row heading, with the
-    key hint last.  The only mutable state is the click feed; everything
-    else is a pure function of the constraints and the phase, so a
-    headless replay lands byte for byte.
-    """
+    """The terminal report: a 2x2 panel grid whose only mutable state is the
+    click feed; ``enter`` clears it. Everything else is a pure function of
+    the constraints."""
 
     name = "terminal"
 
@@ -230,7 +207,6 @@ class TerminalScene(Scene):
         ]
 
     def _refresh_feed(self) -> None:
-        """The keyboard and mouse event feed, then reports or the empty state."""
         lines = [
             Line(
                 (

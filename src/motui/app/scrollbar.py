@@ -1,49 +1,8 @@
-"""scrollbar: the pane chrome -- the Scrollbar.
+"""The pane chrome: the Scrollbar.
 
-This module is the pane-chrome tier, the peer of
-:mod:`motui.app.overlays` and the driver: it imports the core and the
-driver's value types, and nothing below it imports it.  Everything here is
-*policy* -- what a scrollbar looks like, how far its thumb travels, what a
-click on its track means -- over mechanisms the kernel owns: the pane's
-chrome budget (:meth:`~motui.kernel.frame.Pane.add_chrome`), the scroll
-state a layout carries (:attr:`~motui.kernel.layout.ScreenLayout.offset` /
-``total_rows``), and the pump's ``every`` handles.
-
-:class:`Scrollbar` is the reference chrome (D2): one budgeted column at its
-pane's right edge whose thumb maps the pane's ``offset`` over its
-``total_rows`` -- or, with ``axis=Axis.X``, one budgeted row on the pane's
-bottom edge mapping a ``ScrollPanel``'s horizontal offset over its
-``total_columns`` and ``viewport_width``.  The column/row is the pane's, but the strip is the pane's
-**window**: the bar is a ``body``-scoped chrome
-(:attr:`~motui.kernel.frame.Chrome.scope`), so it covers exactly the rows the
-viewport scrolls and the rows a pane pins -- a header, a composer, a status
-bar -- carry the column empty and pass their presses through.  Every
-number the bar draws and every gesture it routes therefore describes one
-rectangle: the window whose state it maps.  Constructing one registers the
-chrome; ``detach()`` unregisters it.  The bar renders from the pane's last
-layout alone -- it never reads live viewport attributes -- and it routes
-its own input, so a host dispatches through it.
-
-The split's divider is **not** here: :class:`motui.kernel.frame.Separator`
-is the kernel's own chrome renderer, registered by ``Runtime.split`` without a
-driver-to-tier import edge.
-
-**The dispatch order** is the one rule every module of this tier writes out:
-a host routes an event through the chrome first, then the overlays, then
-the content gestures, then its own dispatch.  It is geometric here -- the
-bar's strip is derived from the frame's rectangles, while the frame's
-ownership table resolves its cells as content, so the bar must see the
-event before any hit test runs, or a press would anchor a selection under
-the strip.  One fact of the order lives here: the bar never consumes a
-wheel report (the App routes wheel notches to the nearest ``Scrollable``
-before the chrome tier), so :meth:`Scrollbar.handle` leaves every wheel
-to the host's own routing.
-
-The seam this module reads rather than owns is documented where it lives:
-the driver's **frame** -- the tiling, its focus and each pane's last layout
--- and the driver's **pump**, through the ``every`` handle the
-track-repeat ticker rides.
-"""
+A budgeted strip whose thumb maps the pane's scroll state; the strip is
+the pane's scrolling window (body-scoped chrome), so pinned rows keep the
+column empty. Dispatch order: chrome before gestures."""
 
 from __future__ import annotations
 
@@ -68,28 +27,16 @@ __all__ = ["Scrollbar", "ScrollbarStyles"]
 
 @dataclass(frozen=True, slots=True)
 class ScrollbarStyles:
-    """The explicit style overrides for a :class:`Scrollbar`.
-
-    ``track`` is the strip's empty cells and ``thumb`` the mapped span; a
-    ``None`` field falls through to the theme's
-    ``chrome.scrollbar``/``chrome.scrollbar_thumb`` (and then to
-    :data:`~motui.kernel.theme.DEFAULT_THEME`).  One value holds the pair:
-    an override is a value, not two independently optional knobs.
-    """
+    """Explicit track/thumb style overrides; a ``None`` field falls through to
+    the theme."""
 
     track: Style | None = None
     thumb: Style | None = None
 
 
 class _Thumb(NamedTuple):
-    """One thumb's geometry over one laid-out strip.
-
-    ``pos`` is the thumb's first strip row and ``length`` its rows;
-    ``track`` is the span the thumb may travel (the strip's height minus
-    its own length, at least one) and ``scroll`` the document rows the
-    window may move (``total_rows`` minus the window rows, at least one) --
-    the two ends of the mapping ``pos = round(offset * track / scroll)``.
-    """
+    """One thumb's geometry over one strip: position, length, travel and scroll
+    range."""
 
     pos: int
     length: int
@@ -98,23 +45,8 @@ class _Thumb(NamedTuple):
 
 
 def _thumb_of(layout: ScreenLayout, height: int, min_thumb: int) -> _Thumb | None:
-    """The thumb a laid-out pane maps onto a strip ``height`` rows tall.
-
-    A :class:`~motui.kernel.layout.ScrollAxis` is built from the layout --
-    its ``offset``, its ``total_rows`` and its window rows -- and
-    :meth:`~motui.kernel.layout.ScrollAxis.thumb` answers the position and
-    length; this wrapper only re-derives the two spans the drag mapping
-    needs from the same numbers (``track`` is what the thumb leaves it,
-    ``scroll`` the document rows the window may move).  The arithmetic is
-    the kernel's one formula, never a copy held here, so the pane bar and
-    the scroll view's bar cannot drift apart.
-
-    ``None`` when there is no thumb to map: the document fits the window
-    (``total <= window`` -- an empty document, or one shorter than the
-    window, included) or ``min_thumb=0`` shaved the thumb away entirely.
-    A strip with no thumb paints its plain track, which reads as "nothing
-    to scroll here".
-    """
+    """The thumb a laid-out pane maps onto a ``height``-row strip, or ``None``
+    when nothing scrolls; the kernel's one thumb formula."""
     axis = ScrollAxis(
         offset=layout.offset,
         content=layout.total_rows,
@@ -132,71 +64,9 @@ def _thumb_of(layout: ScreenLayout, height: int, min_thumb: int) -> _Thumb | Non
 class Scrollbar:
     """A right-edge scrollbar chrome: a budgeted strip that maps the scroll.
 
-    ``tui`` is the driver whose frame the bar registers on and whose pump
-    the track-repeat rides.  ``pane`` names the pane the bar belongs to --
-    a pane id, or ``None`` (the default) for the frame's first pane, the
-    one the driver's document lives in -- and an id the frame does not hold
-    raises ``ValueError`` at
-    construction.  ``axis`` picks the strip: ``Axis.Y`` (the default) is the
-    right-edge body bar over the pane's window, exactly as it always was;
-    ``Axis.X`` is a one-row bar on the pane's bottom edge whose offset,
-    content and viewport are the horizontal scroll state of ``target`` --
-    the :class:`~motui.widgets.scroll.ScrollPanel` it maps.  An explicit
-    ``target`` wins; otherwise the pane's document must hold exactly one
-    ``ScrollPanel``, and a missing or ambiguous one raises ``ValueError``.
-    The horizontal bar only paints this wave; its gestures arrive with W4.
-    ``size`` is the column (or row, for ``Axis.X``) budget the bar asks its
-    pane
-    for; the kernel clips a budget that would squeeze the pane's viewport
-    out, and a bar clipped to nothing routes nothing.  ``min_thumb`` is
-    the shortest thumb the geometry may shave a long document down to.
-    ``styles`` is one :class:`ScrollbarStyles` value holding the two
-    explicit style overrides; each ``None`` field falls through to ``theme``
-    and then :data:`DEFAULT_THEME <motui.kernel.theme.DEFAULT_THEME>` -- so
-    ``ScrollbarStyles(track=...)`` restyles one half and leaves the other to
-    the theme.  ``theme`` supplies both when ``styles`` is omitted.
-    ``glyphs`` supplies every glyph: the strip paints ``glyphs.bar_empty``
-    over the track and ``glyphs.bar_full`` over the thumb, so a host picks
-    its own pair by passing a replaced :class:`~motui.kernel.glyphs.Glyphs`
-    (``replace(GLYPHS, bar_empty=".", bar_full="#")``).  An empty glyph
-    paints the cell's budget empty -- the closest semantics to ``size=0``
-    for a glyph the strip cannot draw.
-    ``scroll_tick`` is the period a held track click repeats its page at.
-
-    Constructing the bar registers it on the pane (the budget is
-    negotiated at the next composition, and the pane's viewport re-wraps
-    at the reduced width -- content is never hidden under chrome);
-    ``detach()`` unregisters it and cancels the ticker.
-
-    **The strip is the window.**  The bar registers its chrome body-scoped,
-    so :meth:`~motui.kernel.frame.Pane.band` clips the granted column to the
-    pane's scrolling window: the thumb's length, its travel, the row a drag
-    is measured from and the cells a press may claim are all the window's,
-    and the pane's fixed regions -- pinned rows above or below the window --
-    keep the column empty and route no press.  A pane whose fixed regions
-    fill it has no window, and a bar on it paints nothing and consumes
-    nothing.  This is why the bar needs no geometry of its own: it paints
-    ``length`` cells, and ``length`` is what it owns.
-
-    The bar's strip is painted by the chrome budget as one row per strip
-    cell, each exactly ``size`` columns wide (the empty glyphs over the
-    track, the full glyph over the thumb's rows), from the pane's own layout and
-    the strip's length alone -- the pure function the
-    :class:`~motui.kernel.frame.Chrome` protocol asks for, and one whose
-    strip is remembered under the very state it reads, so a frame that
-    repaints without moving the window re-uses it (see :meth:`_paint`).
-
-    **The gesture** (``handle``, the consume-a-key contract) is the bar's
-    own, resolved geometrically (module docstring): a left press in the
-    strip is consumed.  On the thumb it is a grab-and-drag -- the motion
-    maps the thumb's centre row to the offset through the geometry's own
-    scale, anchored at the grab so the thumb never jumps (see
-    :meth:`_drag` for the arithmetic).  On the track it pages one viewport
-    page toward the pointer's side and repeats on a ``tui.every`` ticker
-    while the button is held -- the selection gesture's autoscroll
-    pattern, standing down on release, on the pointer leaving the strip,
-    on detach, and at the document end.  Every other event passes through.
-    """
+    ``axis=Axis.X`` maps a ScrollPanel's horizontal state on the bottom edge.
+    The strip is the window, so a press test and the painted cells describe one
+    rectangle. Constructing registers the chrome; ``detach`` unregisters it."""
 
     __slots__ = (
         "_axis",
@@ -282,13 +152,7 @@ class Scrollbar:
 
     @staticmethod
     def _find_target(pane: Pane) -> ScrollPanel:
-        """The pane document's unique ScrollPanel, for an implicit axis-X target.
-
-        Only the document's own sections are walked: a ScrollPanel buried
-        inside another component's render is not addressable by the bar.
-        ``ValueError`` when there is none -- or more than one, which has no
-        unique answer.
-        """
+        """The pane document's unique ScrollPanel, for an implicit axis-X target."""
         found = [
             block.widget
             for block in pane.document.blocks()
@@ -310,28 +174,9 @@ class Scrollbar:
     # -- the event contract --------------------------------------------------------
 
     def handle(self, event: Event) -> bool:
-        """Advance the bar with ``event``; ``True`` when the bar consumed it.
-
-        The consume-a-key contract
-        (:meth:`~motui.widgets.textfield.Input.handle` /
-        :meth:`~motui.widgets.textfield.Editor.handle` /
-        :meth:`~motui.app.gesture.SelectionGesture.handle`), and the
-        dispatch position it implies -- chrome before gestures before the
-        host's own dispatch -- is written out in the module docstring.
-        The bar consumes the left button over its strip: a press there
-        grabs the thumb or pages the track, and the motion and release
-        that follow that press are the bar's, wherever the pointer then
-        travels.  Everything else passes through untouched -- every key,
-        every paste, every non-left button, every wheel report (the App
-        routes the wheel) and every report outside the strip.  A detached bar's strip is no chrome of the pane's any more,
-        so nothing under the pointer resolves as the bar's and every event
-        passes through.
-
-        The horizontal bar (``axis=Axis.X``) is display-only this wave: it
-        paints the target's x state and declines every event, so its pane's
-        keys, wheel and presses keep their normal route until the W4
-        gestures land.
-        """
+        """Advance the bar with ``event``; ``True`` when consumed. The bar owns the
+        left press on its strip and the motion/release that follow; every wheel
+        report stays the host's."""
         if self._axis is Axis.X:
             return False  # display-only this wave: never swallow an event
         if not isinstance(event, MouseEvent):
@@ -357,28 +202,15 @@ class Scrollbar:
     # -- lifecycle ---------------------------------------------------------------
 
     def detach(self) -> None:
-        """Unregister the chrome and cancel the ticker (the timer-handle convention).
-
-        The stored selection of a gesture is not ours to clear; the strip
-        is: the pane gives the bar's column back to its viewport, which
-        re-wraps at the full width on the next composition, and nothing
-        paints a track again until a bar registers afresh.  Detaching is
-        idempotent, and the pane's registry is the identity that makes it
-        so: the membership test comes first because
-        :meth:`~motui.kernel.frame.Pane.remove_chrome` raises on a miss,
-        and a pane that left the frame took the registration with it.
-        """
+        """Unregister the chrome and cancel the ticker; idempotent."""
         self._release()  # drops the in-flight drag and the held-track ticker
         pane = self._pane()
         if pane is not None and self._chrome in pane.chrome:
             pane.remove_chrome(self._chrome)
 
     def set_theme(self, theme: Theme) -> None:
-        """Repaint the strip on ``theme`` (the App's re-skin road).
-
-        The strip memo is keyed by the resolved styles, so dropping it is
-        the whole change; the chrome registration rides untouched.
-        """
+        """Repaint the strip on ``theme``; the memo is keyed by the resolved styles,
+        so dropping it is the whole change."""
         self._theme = theme
         self._strip_cache = None
         self._tui.refresh()
@@ -386,30 +218,8 @@ class Scrollbar:
     # -- the paint ---------------------------------------------------------------
 
     def _paint(self, layout: ScreenLayout, length: int) -> list[Line]:
-        """The strip: a track of ``track``, ``thumb`` over the thumb.
-
-        ``length`` is the strip's length along the band's other axis -- the
-        window's height for this right-edge body band, so every row handed
-        back is a row of the window -- and the geometry is read off the
-        pane's layout through :func:`_thumb_of`.  Each row is exactly
-        ``size`` columns wide; a budget clipped by the kernel is cut by the
-        compositor's splice, so the bar never paints past its grant.  An
-        empty glyph paints an empty row answer for its ``size`` budget --
-        the column stays reserved (the pane's re-wrap does not move), the
-        closest semantics to ``size=0`` for a glyph there is nothing to
-        draw with.
-
-        The strip is a pure function of what it reads -- the layout's
-        offset, total rows and window, the strip's length, the bar's own
-        size, shortest thumb, **the two glyphs** and **resolved** styles --
-        so it is remembered under exactly those: a frame that comes back
-        with the same layout hands the strip back instead of rebuilding it,
-        while any scroll, retile, re-skin or re-glyphed bar is a different
-        key and paints afresh.  The gesture's ``refresh()`` calls need no
-        signal of their own here: the state they move (the pane's offset) is
-        the state this key carries.  A fresh list comes back every call, as
-        it always has -- a caller owns the rows it is handed.
-        """
+        """The strip: track and thumb rows, memoized on everything it reads --
+        layout state, length, size, glyphs and resolved styles."""
         if length <= 0:
             return []
         track_style, thumb_style = self._resolve_track(), self._resolve_thumb()
@@ -441,19 +251,8 @@ class Scrollbar:
         return list(strip)
 
     def _paint_horizontal(self, layout: ScreenLayout, length: int) -> list[Line]:
-        """The bottom strip: one row of ``length`` cells, track and thumb.
-
-        ``length`` is the pane's width -- a top/bottom band's extent along
-        the other axis -- so the strip spans the pane exactly.  The geometry
-        is the target's own last render: its ``x_offset``,
-        ``total_columns`` and ``viewport_width`` go through the *same*
-        :meth:`~motui.kernel.layout.ScrollAxis.thumb` formula as the
-        vertical bar (there is one thumb formula in the toolkit).  With no
-        thumb -- the content fits the viewport, or the view has not rendered
-        yet -- every cell is the plain track, which reads as "nothing to
-        scroll here".  The cells are one row, so the kernel's band splice
-        paints them over the pane's bottom row.
-        """
+        """The bottom strip: one row of track and thumb from the target's own x
+        state, through the same thumb formula."""
         target = self._target
         if length <= 0 or target is None:
             return []
@@ -471,7 +270,7 @@ class Scrollbar:
         return [Line(cells)]
 
     def _resolve_track(self) -> Style:
-        """The track's style: ``styles.track`` > theme > DEFAULT (charter)."""
+        """The track's style: ``styles.track`` > theme > DEFAULT."""
         if self._styles is not None and self._styles.track is not None:
             return self._styles.track
         theme = self._theme if self._theme is not None else DEFAULT_THEME
@@ -491,20 +290,8 @@ class Scrollbar:
         return self._tui.frame.pane(self._pane_id)
 
     def _strip(self) -> Rect | None:
-        """The bar's strip as a rectangle of the screen, ``None`` when none.
-
-        The band the kernel granted the bar's own chrome
-        (:meth:`~motui.kernel.frame.Pane.band`) -- the very cells the
-        compositor paints the strip into, so routing and painting are one
-        derivation and can never disagree about the column, whatever else
-        the pane stacked on that edge (the split's separator stacks
-        outermost, one column outside the bar).  The grant is already the
-        band clipped to the pane's window -- the chrome is body-scoped -- so
-        the strip's rows are the window's rows and nothing else.  ``None``
-        also when the pane left the frame, when the grant was clipped away,
-        and before the pane has been laid out at all -- a bar the pane could
-        never host routes nothing.
-        """
+        """The band the kernel granted the bar's chrome -- the same derivation the
+        compositor paints, so routing and painting can never disagree."""
         pane = self._pane()
         if pane is None:
             return None
@@ -518,12 +305,7 @@ class Scrollbar:
         )
 
     def _geometry(self) -> _Thumb | None:
-        """The thumb over the pane's last laid-out strip, ``None`` without one.
-
-        Read off the composed layout (``frame.pane_layout``) -- the same
-        pure state the bar paints from, so a gesture and a paint that read
-        in the same instant agree by construction.
-        """
+        """The thumb over the pane's last laid-out strip, ``None`` without one."""
         layout = self._tui.frame.pane_layout(self._pane_id)
         strip = self._strip()
         if layout is None or strip is None:
@@ -533,15 +315,8 @@ class Scrollbar:
     # -- the gesture ---------------------------------------------------------------
 
     def _press(self, y: int) -> None:
-        """Grab the thumb under the pointer, or page the track it missed.
-
-        A press inside the thumb records the grab -- the strip row it
-        landed on and the offset the pane held -- and the motions that
-        follow drag from there.  A press on the track pages one viewport
-        page toward the pointer's side (the thumb's midpoint divides the
-        two sides; an unthumbed strip divides at its own) and arms the
-        ticker, which repeats the page while the button is held.
-        """
+        """Grab the thumb under the pointer, or page the track and arm the repeat
+        ticker."""
         self._cancel_repeat()
         strip = self._strip()
         if strip is None:
@@ -564,15 +339,7 @@ class Scrollbar:
         self._handle = self._tui.every(self._scroll_tick, self._tick)
 
     def _motion(self, x: int, y: int) -> None:
-        """Drag the grabbed thumb, or stand a held track page down.
-
-        Called only while the bar holds the button.  A drag maps the
-        pointer's strip row through the geometry whatever column the
-        pointer is at -- a scrollbar drag follows the pointer past its own
-        strip, clamped at the document's ends by the offset itself.  A
-        held track page stands down the moment the pointer leaves the
-        strip: the page it repeats was aimed at the side the press landed.
-        """
+        """Drag the grabbed thumb, or stand a held track page down on edge-exit."""
         strip = self._strip()
         if strip is None:
             self._cancel_repeat()
@@ -584,28 +351,8 @@ class Scrollbar:
             self._cancel_repeat()  # edge-exit
 
     def _drag(self, row: int) -> None:
-        """Scroll the pane so the grabbed thumb point rides at strip ``row``.
-
-        The mapping, anchored at the grab.  The geometry paints
-        ``pos = round(offset * track / scroll)``, so one strip row is
-        ``scroll / track`` document rows; a pointer that has moved ``d``
-        strip rows since the grab therefore moves the window
-        ``round(d * scroll / track)`` document rows from the offset the
-        grab was taken at::
-
-            target = grab_offset + round((row - grab_row) * scroll / track)
-
-        clamped to the document's ``[0, scroll]`` span.  The anchor --
-        rather than re-projecting the pointer through the rounded forward
-        map -- is what keeps the thumb from jumping on grab: several
-        offsets share one thumb row (``round``), and the anchor resolves
-        that ambiguity at the cell the user pressed.  The thumb's centre
-        row, ``pos + length // 2``, is the forward map's reference for
-        the offset, so a grab taken at the centre is this mapping run
-        forwards with no correction.  ``grab_offset`` is the pane's live
-        offset at the press, which keeps the drag exact even when several
-        motions land inside one painted frame.
-        """
+        """Scroll so the grabbed thumb point rides at ``row``, anchored at the grab
+        so the thumb never jumps."""
         grab = self._grab
         thumb = self._geometry()
         pane = self._pane()
@@ -629,14 +376,7 @@ class Scrollbar:
         self._cancel_repeat()
 
     def _page(self, side: int) -> None:
-        """Scroll one viewport page toward ``side`` (``1`` down, ``-1`` up).
-
-        A page is the window's own height, read off the composed layout so
-        it is the window as it was last laid out.  The bar scrolls its own
-        pane's viewport -- not the focused pane's, since a bar on an
-        unfocused pane still scrolls its own content -- and invalidates
-        the frame so the pump repaints.
-        """
+        """Scroll one window page toward ``side`` on this bar's own pane."""
         layout = self._tui.frame.pane_layout(self._pane_id)
         pane = self._pane()
         if layout is None or pane is None:
@@ -651,13 +391,7 @@ class Scrollbar:
         self._tui.refresh()
 
     def _tick(self) -> None:
-        """One held-track tick (pump callback): page again, or stand down.
-
-        The tick stands down at the document end the way the selection
-        gesture's edge ticker does -- a page that could not move the
-        window freezes the content under the held pointer, so repeating it
-        would burn the pump for nothing.
-        """
+        """One held-track tick: page again, or stand down at the document end."""
         if self._repeat == 0:
             self._cancel_repeat()
             return

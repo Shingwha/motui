@@ -1,17 +1,7 @@
 """SGR and OSC 8 rendering: the row model's byte path for a terminal.
 
-The kernel's :class:`~motui.kernel.cell.Line` is a pure value and builds no
-terminal bytes.  This module is the one boundary where a row becomes bytes:
-``styled_line(line, mode)`` renders the row for a terminal capability, with
-the same RESET discipline and OSC 8 pairing the 1.x ``Line.styled`` always
-had.  The answer depends on the terminal's capability, so the module-level
-cache is keyed on ``(line, mode)`` -- a row and the mode are both values, and
-a line is immutable.
-
-The truecolor path is byte-for-byte the old cached rendering (each segment's
-own cached ``Style.prefix()``); a downgraded mode resolves each prefix
-through :func:`~motui.kernel.style.sgr_prefix` instead.
-"""
+This is the one boundary where a Line becomes bytes; the cache is keyed
+on ``(line, mode)`` because both are values."""
 
 from __future__ import annotations
 
@@ -25,15 +15,7 @@ __all__ = ["styled_line"]
 
 
 def _segment_bytes(seg: Segment, prefix: str) -> str:
-    """One segment's rendered bytes: its style prefix, its text and its link.
-
-    A segment with a ``link`` has its text wrapped in the OSC 8 pair --
-    ``prefix open text close`` -- so the terminal paints a real hyperlink
-    over exactly the run the segment owns; the pair sits inside the SGR
-    prefix's scope and is closed before the next segment's RESET, never
-    leaking the link over a neighbour.  A segment without one renders
-    ``prefix + text``, byte-for-byte what it always did.
-    """
+    """One segment's bytes: its style prefix, its text and its OSC 8 link pair."""
     if seg.link is None:
         return prefix + seg.text
     return prefix + hyperlink_open(seg.link) + seg.text + hyperlink_close()
@@ -53,16 +35,6 @@ def _styled_line(line: Line, mode: ColorMode) -> str:
 
 
 def styled_line(line: Line, mode: ColorMode = "truecolor") -> str:
-    """SGR-escaped rendering of ``line`` for a terminal of capability ``mode``.
-
-    Every segment after the first non-empty one is preceded by a RESET,
-    because SGR is a state machine and a prefix only *adds* attributes; a
-    zero-width segment paints nothing and opens no reset; a trailing RESET
-    closes the row.  A segment carrying a ``link`` wraps its own text in the
-    OSC 8 pair, which is closed inside the segment so no hyperlink crosses a
-    boundary.  ``"truecolor"`` resolves each segment through its own cached
-    ``Style.prefix()``; the downgraded modes go through
-    :func:`~motui.kernel.style.sgr_prefix`, and the answer is cached per
-    ``(line, mode)`` because a line is a value.
-    """
+    """SGR-escaped rendering of ``line`` for capability ``mode``: a RESET
+    between segments and OSC 8 pairs closed inside their own segment."""
     return _styled_line(line, mode)

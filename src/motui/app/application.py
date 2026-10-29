@@ -1,68 +1,8 @@
-"""App: the default orchestration over the low-level :class:`Runtime`.
+"""App: the default orchestration over the low-level Runtime.
 
-:class:`Runtime` reads events and owns the document, the frame and the pump;
-it deliberately runs no interaction policy.  :class:`App` is that policy
-assembled from the controllers this package ships -- :class:`FocusManager`,
-:class:`Pointer`, :class:`SelectionGesture`, :class:`Toasts`,
-:class:`Tooltip`, :class:`Find`, :class:`Modal` and
-:class:`CommandPalette` -- and dispatched in one documented order.  A host
-that wants a different order, or no default policy at all, passes
-``auto=False`` and drives the ``runtime`` itself (the ``Runtime`` API is
-unchanged and still public).
-
-**The dispatch order** (:meth:`App.dispatch`, first claim wins):
-
-1. the open :class:`~motui.app.command_palette.CommandPalette`;
-2. the open :class:`~motui.app.modal.Modal` layers, newest first;
-3. the open :class:`~motui.app.find.Find`;
-4. :class:`~motui.app.overlays.Toasts`;
-5. the controllers added with :meth:`App.mount`, in mount order, when the
-   mount is dispatching (the demo's pane ``Scrollbar``);
-6. the wheel: a horizontal notch goes to the nearest
-   :class:`~motui.kernel.layout.ScrollableX` in ``hit.chain`` (one
-   column); a vertical notch to the nearest
-   :class:`~motui.kernel.layout.Scrollable` in ``hit.chain``, otherwise
-   the hit pane, otherwise the focused pane's viewport (a
-   :class:`~motui.app.gesture.SelectionGesture` mid-drag claims its own
-   wheel first, so its head co-extends);
-7. the mouse: a drag in flight (or a press that starts one), then the
-   selection gesture, the pointer tier, then a press focuses the pane
-   under it;
-8. the focused control through :class:`FocusManager`;
-9. the page keys: the focused :class:`~motui.kernel.layout.Scrollable`, else
-   the focused pane's viewport;
-10. the keys bound with :meth:`App.bind`, then ``tab``/``s-tab`` cycling;
-11. the host hooks ``on_key``/``on_mouse``/``on_event``.
-
-The controller tiers are the existing ones, not re-implementations: the
-App only composes them and owns the order.  ``auto=False`` mounts none of
-them (``focus``/``toast``/``open_modal`` then report the missing layer).
-
-**Theme propagation.**  :attr:`App.theme` is the application theme:
-constructing the App gives it to the runtime, and :meth:`App.add` assigns it
-to every :class:`~motui.widgets.base.Widget` in the mounted subtree whose
-``theme`` is still ``None`` (an explicit ``theme=`` stays a local
-override).  The subtree is the widget's explicit :meth:`Widget.walk`, so
-the theme pass and the focus ring read the same tree.  Re-assigning
-:attr:`App.theme` walks the mounted components again and also calls
-``set_theme(value)`` on the app-owned overlays (toasts, tooltip, palette,
-find) and on every controller added with :meth:`App.mount`.
-
-**Mounted controllers.**  :meth:`App.mount` adds a host controller (a pane
-``Scrollbar``, a dev overlay) to the App's controller tier.  A dispatching
-mount is called in the documented order and consumes the event when its
-``handle`` answers ``True``; ``dispatch=False`` mounts a controller the App
-only themes and keeps (the host feeds it itself -- the demo's counting
-``Stats``).  :meth:`App.unmount` removes it without detaching: the
-controller's lifecycle stays the host's.
-
-**Focus.**  The ring is derived from the tree, never registered: every
-mounted pane and dock contributes its document roots in paint order, and a
-preorder walk keeps the nodes that are ``focusable`` (or a
-``focus_scope``, whose subtree the ring stops at).  Mounting and removing
-a block re-derives the ring, so a removed target can never keep the
-focus.  :meth:`App.focus` addresses one target by block id or component.
-"""
+Composes the shipped controllers and owns the dispatch order (palette,
+modals, find, toasts, mounts, wheel, mouse, focus, page keys, bindings,
+host hooks). ``auto=False`` mounts no policy."""
 
 from __future__ import annotations
 
@@ -94,12 +34,8 @@ from .workspace import Workspace
 __all__ = ["App"]
 
 def _nodes(component: Component) -> Iterator[Component]:
-    """Every node of ``component``'s explicit tree, depth first.
-
-    A component without ``walk`` is its own one-node tree.  The explicit
-    tree is the only source: an attribute that merely looks like a child
-    (a ``ScrollPanel.child``) is not guessed at.
-    """
+    """Every node of ``component``'s explicit tree, depth first; a component
+    without ``walk`` is its own one-node tree."""
     walk = getattr(component, "walk", None)
     if callable(walk):
         yield from walk()
@@ -108,26 +44,11 @@ def _nodes(component: Component) -> Iterator[Component]:
 
 
 class App:
-    """The high-level application: runtime + the default interaction policy.
+    """The high-level application: runtime plus the default interaction policy.
 
-    ``theme`` is the application theme (``DEFAULT_THEME`` when omitted) --
-    handed to the runtime's chrome and assigned to mounted widgets that did
-    not take an explicit one.  ``terminal=`` is the one configuration door:
-    a :class:`~motui.terminal.screen.TerminalOptions` from which the App
-    builds one :class:`~motui.terminal.terminal.Terminal` and hands it to
-    the runtime; with none given the defaults build a live terminal screen.
-    ``title`` is set through the runtime's OSC 2 surface when non-empty.
-    ``auto=True`` mounts the default controllers; ``auto=False`` mounts
-    none, leaving :attr:`runtime`/``workspace`` and the caller's own loop
-    (the ``Runtime`` is still fully usable).  ``throttle`` is the pump's
-    flush interval.  ``on_selection`` replaces the selection gesture's
-    ``on_end`` (the default is
-    :func:`~motui.app.gesture.copy_on_select`).  ``handlers`` is the host's
-    ordered handler chain (:data:`~motui.app.router.DEFAULT_HANDLERS` when
-    ``None`` and ``auto=True``); ``auto=False`` builds none, and a tuple
-    passed explicitly is used as given.  A handler is
-    ``handler(app, event) -> bool``: first claim wins.
-    """
+    ``theme`` propagates to mounted widgets that took none. ``auto=True``
+    mounts the default controllers; ``auto=False`` leaves the runtime and the
+    caller's own loop."""
 
     def __init__(
         self,
@@ -260,17 +181,9 @@ class App:
         return tuple(controller for controller, _dispatch in self._controllers)
 
     def mount(self, controller: object, *, dispatch: bool = True) -> None:
-        """Register ``controller`` in the App's controller tier.
-
-        A dispatching controller (the default) sees every event after the
-        toasts and before the wheel/mouse tiers; ``handle(event)`` returning
-        ``True`` consumes it.  ``dispatch=False`` mounts a controller the
-        App only themes and keeps: the host feeds it itself (a counting
-        overlay whose ``True`` is a repaint cue, not a claim).  Mounting the
-        same object twice keeps one entry.  The controller's own lifecycle
-        (attaching, detaching) stays the host's -- :meth:`unmount` only
-        removes the registration.
-        """
+        """Register ``controller`` in the App's controller tier; a dispatching one
+        sees events after the toasts. ``dispatch=False`` mounts one the App only
+        themes and keeps -- the host feeds it itself."""
         for index, (known, _dispatch) in enumerate(self._controllers):
             if known is controller:
                 self._controllers[index] = (known, dispatch)
@@ -278,12 +191,8 @@ class App:
         self._controllers.append((controller, dispatch))
 
     def unmount(self, controller: object) -> bool:
-        """Remove ``controller`` from the controller tier; ``True`` when held.
-
-        Only the registration is dropped: the controller is not detached
-        and keeps whatever it registered on the frame (the host decides the
-        lifecycle, the :meth:`mount` contract).
-        """
+        """Remove ``controller`` from the tier; only the registration is dropped,
+        never the controller's own lifecycle."""
         for index, (known, _dispatch) in enumerate(self._controllers):
             if known is controller:
                 del self._controllers[index]
@@ -301,16 +210,8 @@ class App:
         sizing: Sizing = Sizing.NATURAL,
         pane: Any = None,
     ) -> Section:
-        """Mount ``component``; answer its section.
-
-        The component's subtree takes the App theme where no explicit one
-        is set, and its interactive widgets join the focus ring (when the
-        default controllers are mounted).  With no ``pane=`` the block lands
-        in the main (primary) document, never the focused pane.  The section
-        carries :meth:`~motui.app.runtime.Runtime.add`'s id -- unique across
-        the frame -- and the mounted component.
-        ``placement``/``sizing`` are the document's own spellings.
-        """
+        """Mount ``component``; its subtree takes the App theme and joins the focus
+        ring. With no ``pane`` the block lands in the primary document."""
         section = self.workspace.add(
             component,
             id=id,
@@ -322,15 +223,8 @@ class App:
         return section
 
     def fill(self, component: Component, *, pane: Any = None) -> Section:
-        """Fill a pane with ``component``; answer the ``FILL`` section.
-
-        The fill replaces the pane's document (a fill is the pane's whole
-        content), so this goes through
-        :meth:`~motui.app.workspace.Workspace.fill` rather than :meth:`add`.
-        The component still takes the App theme
-        and joins the focus ring exactly as an added one does: the two
-        mounting paths share :meth:`_mount`.
-        """
+        """Fill a pane with ``component``; the component takes the theme and joins
+        the focus ring exactly as an added one does."""
         section = self.workspace.fill(component, pane=pane)
         self._mount(component)
         return section
@@ -353,14 +247,8 @@ class App:
         return self.workspace.get(id)
 
     def remove(self, section: Section) -> Section:
-        """Unmount ``section``; answer the section it held.
-
-        The focus ring drops every widget in its subtree first, so a
-        removed target can never keep holding the focus.  Removal is
-        addressed by the ``Section`` value :meth:`add` answers, not by a
-        bare id: the section carries the component whose theme/focus entry
-        must be forgotten.
-        """
+        """Unmount ``section``; the focus ring drops its subtree first, so a
+        removed target can never keep the focus."""
         if not isinstance(section, Section):
             raise TypeError(f"App.remove() takes a Section, got {type(section).__name__}")
         section = self.workspace.remove(section.id)
@@ -383,12 +271,7 @@ class App:
         *,
         catch_up: str = "skip",
     ) -> Timer:
-        """Call ``fn`` every ``period`` seconds; answer the cancellable timer.
-
-        The :meth:`Runtime.every <motui.app.runtime.Runtime.every>` schedule:
-        the first run lands one period from now and every run adds exactly
-        one period.  ``catch_up`` is ``"skip"`` or ``"coalesce"``.
-        """
+        """Call ``fn`` every ``period`` seconds; answer the cancellable timer."""
         return self.runtime.every(period, fn, catch_up=catch_up)
 
     def animation(self, hz: float, draw: Callable[[], object]) -> Timer:
@@ -404,18 +287,14 @@ class App:
         self.runtime.paint_now()
 
     def walk(self) -> Iterator[Component]:
-        """Every mounted node once, depth first, in frame order.
-
-        The tree the App itself derives the focus ring and the resize
-        broadcast from: every pane and dock document root, each walked
-        explicitly (``Widget.walk``), shared nodes yielded once.
-        """
+        """Every mounted node once, depth first, in frame order -- the tree's own
+        explicit walk, shared nodes yielded once."""
         yield from iter_widgets(self.workspace)
 
     # -- focus ------------------------------------------------------------------
 
     def bind(self, key: str, callback: Callable[[], object]) -> None:
-        """Run ``callback`` on ``key`` (after the focused control declines it)."""
+        """Run ``callback`` on ``key``, after the focused control declines it."""
         self._bindings[key] = callback
 
     def focus(self, target: "str | Component") -> bool:
@@ -460,11 +339,8 @@ class App:
         separator: bool = True,
         pane: Any = None,
     ) -> tuple[Any, ...]:
-        """Split a pane (the workspace's own ``split``).
-
-        ``axis`` is :class:`~motui.kernel.geom.Axis` (``X`` divides the
-        width, ``Y`` the height) and ``weights`` the children's shares.
-        """
+        """Split a pane (the workspace's own ``split``); ``weights`` are the
+        children's shares."""
         return self.workspace.split(
             axis,
             weights=weights,
@@ -480,10 +356,7 @@ class App:
         placement: Placement = Placement.BOTTOM,
         size: int | None = None,
     ) -> Any:
-        """Dock ``component`` (the workspace's own ``dock``); theme it first.
-
-        ``placement`` is ``TOP`` or ``BOTTOM``; ``FLOW`` raises.
-        """
+        """Dock ``component`` (the workspace's own ``dock``); theme it first."""
         for current in _nodes(component):
             if isinstance(current, Widget) and current.theme is None:
                 current.theme = self._theme
@@ -494,12 +367,7 @@ class App:
         self,
         placement: Placement = Placement.BOTTOM,
     ) -> Any:
-        """Release the dock named by ``placement`` and forget its component.
-
-        The workspace's :meth:`~motui.app.workspace.Workspace.undock` plus
-        the App-side bookkeeping: the docked component's subtree leaves the
-        focus ring and the theme walk with it.
-        """
+        """Release the dock at ``placement`` and forget its component's subtree."""
         pane = self.workspace.undock(placement)
         if pane is not None:
             for block in pane.document.blocks():
@@ -528,13 +396,8 @@ class App:
         commands: CommandRegistry,
         **kwargs: Any,
     ) -> CommandPalette:
-        """Open the lazily created command palette over ``commands``.
-
-        ``commands`` is a :class:`~motui.app.commands.CommandRegistry`; its
-        :meth:`~motui.app.commands.CommandRegistry.options` view is what the
-        palette renders.  Any other type raises ``TypeError`` -- the palette
-        speaks one command model, not a bare list of options.
-        """
+        """Open the lazily created palette over ``commands``; any other type raises
+        ``TypeError``."""
         if not isinstance(commands, CommandRegistry):
             raise TypeError(
                 "App.open_palette() takes a CommandRegistry, got "
@@ -583,17 +446,9 @@ class App:
     # -- dispatch ---------------------------------------------------------------
 
     def dispatch(self, event: Event) -> bool:
-        """Route one event through the handler chain; ``True`` when consumed.
-
-        The chain is :attr:`handlers` -- by default
-        :data:`~motui.app.router.DEFAULT_HANDLERS`, in the class
-        docstring's order, first claim wins.  A
-        :class:`~motui.kernel.events.ResizeEvent` first reaches every
-        mounted widget's ``on_resize`` (the whole tree, a focus scope's
-        subtree included) and then keeps travelling: the broadcast informs,
-        it never consumes.  A host that passes its own ``handlers`` gets
-        exactly those tiers; ``auto=False`` builds the App with none.
-        """
+        """Route one event through the handler chain, first claim wins. A resize
+        first reaches every mounted widget's ``on_resize`` and then keeps
+        travelling: the broadcast informs, it never consumes."""
         if type(event) is ResizeEvent:
             for widget in iter_widgets(self.workspace):
                 on_resize = getattr(widget, "on_resize", None)
@@ -633,14 +488,8 @@ class App:
             self.on_stop()
 
     def run(self) -> None:
-        """The synchronous entry: own an event loop around :meth:`run_async`.
-
-        A Ctrl+C interrupt is a quit, not a crash.  The signal cancels the
-        session task, so ``run_async`` unwinds through its normal teardown
-        (``on_stop``, source close, screen leave); ``asyncio.run`` then
-        raises ``KeyboardInterrupt``, which this entry swallows so a host
-        sees a clean exit instead of a traceback.
-        """
+        """The synchronous entry: own an event loop around :meth:`run_async`; a
+        Ctrl+C interrupt is a quit, not a crash."""
         try:
             asyncio.run(self.run_async())
         except KeyboardInterrupt:

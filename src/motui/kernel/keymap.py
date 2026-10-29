@@ -1,41 +1,8 @@
-"""Keymap: the key-name to editing-action tables ``Input``/``Editor`` consume.
+"""Key-name to editing-method tables for Input/Editor.
 
-A keymap is a plain ``dict`` mapping a key event's key (:attr:`KeyEvent.key
-<motui.kernel.events.KeyEvent.key>`) to the name of the editing method it
-triggers -- ``"left" -> "move_left"`` says the left arrow calls the
-component's ``move_left()``.  Action names are nothing but method names:
-:meth:`~motui.widgets.textfield.Input.handle` looks the event's key up
-and calls the same-named method, with no action registry in between.
-
-The three default tables live here, one derivation chain in one place:
-
-* :data:`DEFAULT_INPUT_KEYMAP` is the base: the arrows, home/end,
-  backspace/delete and the ``c-a``/``c-e``/``c-u`` relatives, with the two
-  wrapped-row moves for up/down, ``c-z``/``c-y`` as the buffer's
-  undo/redo, and the ``s-*`` shift chords extending the text-internal
-  selection (``c-a`` selects the whole buffer).  It binds no ``enter``, so
-  the return key stays with the host as its submit gesture;
-* :data:`DEFAULT_EDITOR_KEYMAP` is the input table plus ``enter`` as
-  ``newline``: the editor itself consumes the return key;
-* :data:`EDITOR_SUBMIT_KEYMAP` is the editor table minus ``enter`` -- the
-  host takes the return key back as its submit gesture -- plus ``c-j`` as
-  ``newline``: an editor whose return key submits needs another way to break
-  a line.
-
-Components resolve their keymap at construction: ``keymap=None`` uses the
-component's default table (:data:`DEFAULT_INPUT_KEYMAP` for
-:class:`~motui.widgets.textfield.Input`,
-:data:`DEFAULT_EDITOR_KEYMAP` for
-:class:`~motui.widgets.textfield.Editor`).  A host rebinds
-single keys by handing in a copy with one entry replaced
-(``{**DEFAULT_INPUT_KEYMAP, "c-j": "clear"}``) or removes a binding by
-deleting its entry, so the component stops consuming that key and hands it
-back to the host for its own routing (submit, palette, quit, ...).
-
-Printable characters (a ``KeyEvent`` whose ``char`` is set) never go through the
-keymap -- they are inserted directly -- and neither does a
-:class:`~motui.kernel.events.PasteEvent`.
-"""
+``DEFAULT_INPUT_KEYMAP`` binds no ``enter`` (the host keeps it);
+``DEFAULT_EDITOR_KEYMAP`` adds it as newline; ``EDITOR_SUBMIT_KEYMAP``
+gives it back and binds ``c-j``."""
 
 from __future__ import annotations
 

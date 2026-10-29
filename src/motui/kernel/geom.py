@@ -1,14 +1,7 @@
-"""Geometry values: a size, a position and the rectangle algebra.
+"""Geometry values: sizes, positions and the rectangle algebra.
 
-The 2.0 kernel keeps geometry in plain frozen values: a rectangle is a
-0-based origin plus a non-negative extent, and every operation hands back a
-new rectangle instead of editing the one it was asked about.  The split
-algebra mirrors ``core.frame.Split`` (floor shares, the last child takes the
-remainder, ``min_size`` lifts, an overrun is clipped) while naming the axis
-by what it divides rather than by an orientation string: ``Axis.X`` cuts the
-width, ``Axis.Y`` cuts the height.  Nothing here touches the terminal or the
-1.x core.
-"""
+Frozen values; every operation returns a new rectangle. ``Axis.X`` cuts
+the width, ``Axis.Y`` the height."""
 
 from __future__ import annotations
 
@@ -20,12 +13,7 @@ __all__ = ["Axis", "Pos", "Rect", "Size"]
 
 
 class Axis(Enum):
-    """The axis a rectangle is divided along.
-
-    ``X`` cuts the width (left/right children), ``Y`` cuts the height
-    (top/bottom children).  The names say what moves, which is the opposite
-    of the 1.x ``"vertical"`` orientation string.
-    """
+    """The axis a rectangle is divided along: ``X`` cuts width, ``Y`` cuts height."""
 
     X = "x"
     Y = "y"
@@ -49,12 +37,8 @@ class Pos:
 
 @dataclass(frozen=True, slots=True, kw_only=True)
 class Rect:
-    """A rectangle of the screen: origin plus non-negative extent.
-
-    Width and height may be zero (an empty rectangle is legal) but never
-    negative.  The origin may sit anywhere; the right and bottom edges are
-    half-open, so a position on them is outside the rectangle.
-    """
+    """A rectangle of the screen: origin plus non-negative extent; the right and
+    bottom edges are half-open."""
 
     x: int = 0
     y: int = 0
@@ -87,11 +71,7 @@ class Rect:
         return self.x <= pos.x < self.right and self.y <= pos.y < self.bottom
 
     def intersect(self, other: Rect) -> Rect:
-        """The overlap of the two rectangles, or ``Rect()`` when disjoint.
-
-        The result is always contained in both operands, so the operation is
-        commutative and idempotent.
-        """
+        """The overlap of the two rectangles, or ``Rect()`` when disjoint."""
         left = max(self.x, other.x)
         top = max(self.y, other.y)
         right = min(self.right, other.right)
@@ -103,18 +83,8 @@ class Rect:
     def split(
         self, axis: Axis, weights: Sequence[float], min_size: int = 0
     ) -> tuple[Rect, ...]:
-        """Divide this rectangle along ``axis`` into one child per weight.
-
-        The span is the width for ``Axis.X`` and the height for ``Axis.Y``;
-        the cross axis is inherited unchanged.  Each weight's share is its
-        fraction of the total, floored, and the last child takes the
-        remainder -- the children partition the span, so no cell is left
-        unclaimed.  ``min_size`` then lifts every share to that floor, and a
-        share that overruns what remains is clipped: children abut, never
-        overlap, and the last ones may be empty when the floor takes more
-        than the span can host.  This is the 1.x ``Split.rects`` algebra
-        with ``Axis.X``/``Axis.Y`` in place of the orientation string.
-        """
+        """Divide along ``axis`` into one child per weight: shares floor, the last
+        takes the remainder, ``min_size`` lifts, and an overrun is clipped."""
         if not weights:
             raise ValueError("a split needs at least one weight")
         if any(weight < 0 for weight in weights):

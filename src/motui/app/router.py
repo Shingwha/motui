@@ -1,35 +1,8 @@
 """The event router: the default handler chain :class:`App` dispatches.
 
-A handler answers one question -- *did I consume this event?* -- and the App
-walks :attr:`App.handlers` in order, first claim wins.  The order below is
-the documented one, unchanged from the 1.x ``dispatch`` if-chain:
-
-1. the open command palette;
-2. the open modal layers, newest first;
-3. the open find bar;
-4. the toast stack;
-5. the mounted controllers, in mount order;
-6. the wheel (a selection drag mid-flight claims it first);
-7. the drag in flight, or the press that starts one;
-8. the mouse tier: the selection gesture, the pointer and the pane-focus
-   rule -- in that order, and all three see the report;
-9. the focus ring;
-10. the page keys (the focused ``Scrollable``, else the focused pane);
-11. the key bindings, then ``tab``/``s-tab`` cycling;
-12. the host hooks ``on_key``/``on_mouse``/``on_event``.
-
-The mouse tier is **one** handler on purpose: the gesture consumes a press,
-but the pointer still has to watch the same report (its click policy pairs
-the press with the release) and the pane-focus rule still moves focus --
-exactly as the reference wiring calls all three beside each other.  A
-per-tier early return would hide the report from the later two.
-
-Handlers own their repaint cue: one that moves state calls ``app.invalidate()``
-before answering ``True``, and one that answers ``False`` leaves the frame
-alone.  A :class:`~motui.kernel.events.ResizeEvent` is broadcast by
-``App.dispatch`` itself before the chain runs -- it informs, it never
-consumes.
-"""
+A handler answers "did I consume this event?"; the App walks the chain,
+first claim wins. The mouse tier is one handler so gesture, pointer and
+pane focus all see the same report."""
 
 from __future__ import annotations
 
@@ -90,7 +63,7 @@ def find(app: App, event: Event) -> bool:
 
 
 def toast(app: App, event: Event) -> bool:
-    """The toast stack consumes dismissal keys and asks for a repaint."""
+    """The toast stack consumes dismissal presses and asks for a repaint."""
     if app._toasts is not None and app._toasts.handle(event):
         app.invalidate()
         return True
@@ -134,12 +107,8 @@ def drag(app: App, event: Event) -> bool:
 
 
 def mouse(app: App, event: Event) -> bool:
-    """The mouse tier: gesture, pointer and the pane-focus rule, all three.
-
-    They run even when an earlier one consumed -- the pointer watches the
-    press the gesture owns, and the press still focuses its pane -- so the
-    answer is the OR of the three and the repaint happens once.
-    """
+    """The mouse tier: gesture, pointer and the pane-focus rule, all three; the
+    answer is their OR and the repaint happens once."""
     if not isinstance(event, MouseEvent):
         return False
     gesture = bool(app._gesture is not None and app._gesture.handle(event))
@@ -211,14 +180,8 @@ DEFAULT_HANDLERS: tuple[Handler, ...] = (
 
 
 def _wheel(app: App, event: MouseEvent) -> bool:
-    """Route one wheel notch: a horizontal scroller, else a vertical one.
-
-    ``wheel_left``/``wheel_right`` walk ``hit.chain`` deepest first for
-    the structural :class:`~motui.kernel.layout.ScrollableX` face and
-    move its window one column.  ``wheel_up``/``wheel_down`` keep the
-    1.x route: the nearest :class:`~motui.kernel.layout.Scrollable`,
-    else the hit pane, else the focused pane.
-    """
+    """Route one wheel notch: a horizontal scroller, else a vertical one,
+    walking the hit chain deepest first."""
     if event.button in ("wheel_left", "wheel_right"):
         return _wheel_x(app, event)
     rows = SCROLL_KEYS.get(event.button)
@@ -244,15 +207,8 @@ def _wheel(app: App, event: MouseEvent) -> bool:
 
 
 def _wheel_x(app: App, event: MouseEvent) -> bool:
-    """Move the nearest ``ScrollableX`` one column; ``True`` when taken.
-
-    The hit chain is walked deepest first, exactly like the vertical
-    branch, so a nested horizontal panel wins over an outer one.  A
-    target only consumes the notch when its offset moved: an ``"x"``
-    view at its last column (or a y-only view, whose structural method
-    declines) lets the walk continue outward.  The frame is refreshed
-    on the move.
-    """
+    """Move the nearest ``ScrollableX`` one column; a boundary notch lets the
+    walk continue outward."""
     hit: Hit | None = app.workspace.hit(event.x, event.y)
     if hit is None:
         return False
@@ -265,16 +221,8 @@ def _wheel_x(app: App, event: MouseEvent) -> bool:
 
 
 def _drag_press(app: App, event: MouseEvent) -> bool:
-    """Start a drag on the nearest widget overriding ``Widget.on_drag``.
-
-    Walks ``hit.chain`` backwards -- the deepest widget first -- and
-    hands the press to the first one whose ``on_drag`` is not the
-    :class:`~motui.widgets.base.Widget` no-op.  That widget answers
-    ``True`` only when the press landed on something it owns (the
-    ScrollPanel's bar column); otherwise the walk goes on and the press
-    falls through to the gesture and pointer tiers.  Only the left
-    button starts a drag.
-    """
+    """Start a drag on the nearest widget overriding ``Widget.on_drag``; only
+    the left button starts one."""
     if event.button != "left":
         return False
     hit: Hit | None = app.workspace.hit(event.x, event.y)
@@ -295,14 +243,8 @@ def _drag_press(app: App, event: MouseEvent) -> bool:
 
 
 def _drag_event(app: App, event: MouseEvent) -> bool:
-    """Feed one motion/release to the drag's target; ``True`` when taken.
-
-    The target is looked up in the fresh hit chain so the cell arrives
-    in its own coordinates; when the pointer left it the last cell is
-    used, and a lost target or a release ends the drag.  A release is
-    always consumed -- the drag it ends must not become a selection
-    press on whatever is under the pointer now.
-    """
+    """Feed one motion/release to the drag's target; a release is always
+    consumed so it never becomes a selection press."""
     target = app._drag_target
     if target is None:
         return False
@@ -324,7 +266,7 @@ def _drag_event(app: App, event: MouseEvent) -> bool:
 
 
 def _scroll_key(app: App, event: KeyEvent) -> bool:
-    """Scroll on a page key: the focused ``Scrollable``, else the pane."""
+    """Scroll on a page key: the focused ``Scrollable``, else the focused pane."""
     rows = SCROLL_KEYS.get(event.key)
     if not rows:
         return False

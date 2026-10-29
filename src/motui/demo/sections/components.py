@@ -1,19 +1,8 @@
 """The components section: live widgets beside the code that draws them.
 
-One tab strip groups the console into ``console``, ``probes`` and ``actions``
-pages, and every page splits in two: real controls on the left,
-the highlighted Python that built them on the right.  The snippet is a live
-echo, not a picture: the ``Input`` line re-renders with the text actually
-typed, the ``RadioGroup`` and ``Slider`` lines re-render with the values
-actually picked, and the focused control's lines are emphasised -- the point
-being "this is all the code".
-
-Buttons land toasts (a level glyph with a countdown, counted from the phase
-the toast was issued at), the confirm button opens a real :class:`Dialog` as
-a centred overlay, and the table sorts under the ``s`` key.  ``tab`` cycles
-the focus across the page's controls, ``escape`` closes the modal or returns
-to the menu, ``q`` quits -- except while the text field owns the focus.
-"""
+Three tabs (console/probes/actions) split into controls and the
+highlighted Python that built them; the snippet re-reads live state.
+Keys: tab focus, enter/space activate, s sorts, escape back, q quits."""
 
 from __future__ import annotations
 
@@ -68,13 +57,6 @@ _PROBES: tuple[tuple[str, str, str], ...] = (
 
 
 class _DialogBox(Widget):
-    """Render the dialog under the scene's own box width.
-
-    ``Align`` hands its child the full frame width, but the dialog derives
-    its box width from that constraint; :meth:`ComponentsScene._dialog_frame`
-    sizes the box from the frame instead.  Pinning the same width here keeps
-    the ``Align``-painted dialog and the scene's click rectangle identical.
-    """
 
     __slots__ = ("dialog",)
 
@@ -88,16 +70,12 @@ class _DialogBox(Widget):
 
 
 class ComponentsScene(Scene):
-    """The components playground: controls on the left, their code on the right.
+    """The components playground: controls on the left, their code on the
+    right.
 
-    The tab strip, every control of the active page and the modal dialog are
-    real widgets; the scene only routes.  ``tab``/``s-tab`` cycles the focus
-    across the active page's controls (the strip is target 0, so the arrows
-    reach it there), ``enter``/``space`` activates buttons, checkboxes and
-    table rows, ``s`` cycles the table's sort column, ``escape`` closes the
-    modal or returns to the menu and ``q`` quits -- except while the text
-    field owns the focus, where ``q`` types.
-    """
+    ``enter`` resets every control and the focus. ``tab`` cycles focus,
+    ``enter``/``space`` activates, ``s`` sorts the table, ``escape`` closes
+    or returns, and ``q`` quits unless the text field owns the focus."""
 
     name = "components"
 
@@ -235,18 +213,11 @@ class ComponentsScene(Scene):
             ]
 
     def toast(self, text: str, level: str = "success") -> None:
-        """Land a toast at the current phase; it fades over _TOAST_TICKS."""
         self._toast = (text, self._phase, level)
 
     # -- the code panel ----------------------------------------------------------
 
     def _snippet(self) -> list[tuple[str, int]]:
-        """The active page's snippet as ``(code, focus group)`` pairs.
-
-        The group maps a line onto the control that drew it (the strip is
-        group 0), so the render can emphasise the focused control's lines;
-        the text re-reads the controls' live state every frame.
-        """
         if self._tab == 0:
             return [
                 (f"callsign = Input({self.input.text!r})", 1),
@@ -274,7 +245,6 @@ class ComponentsScene(Scene):
         ]
 
     def _refresh_code(self) -> None:
-        """Re-highlight the snippet, emphasising the focused control's lines."""
         focused = self._targets[self._tab][self._focus]
         group = 0 if focused is self.tabs else self._focus
         lines: list[Line] = []

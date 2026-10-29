@@ -35,11 +35,8 @@ def render_scene(
     phase: int | None = None,
     seed: int = 0,
 ) -> str:
-    """One scene as its plain-text frame at ``width`` x ``height``.
-
-    ``phase=None`` uses the scene's registry preview phase, so motion's
-    ``--pages`` frame is not an empty board.
-    """
+    """One scene as its plain-text frame; ``phase=None`` uses the registry's
+    preview phase so motion is not an empty board."""
     spec = _spec(name)
     showcase = Showcase(
         scene=name,

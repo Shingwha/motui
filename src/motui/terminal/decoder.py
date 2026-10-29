@@ -1,21 +1,8 @@
 """The decoder: a pure ``bytes -> events`` state machine.
 
-``KeyDecoder`` turns a raw terminal byte stream into :class:`Event` values:
-:class:`KeyEvent` for the keyboard, :class:`MouseEvent` for SGR-1006, X10 and
-urxvt-1015 reports, :class:`PasteEvent` for bracketed paste,
-:class:`ResizeEvent` for ``CSI 8;rows;cols t`` and :class:`FocusEvent` for
-DECSET 1004's ``CSI I`` / ``CSI O``.  It assembles incremental UTF-8 and
-escape sequences across feeds, decodes C0 controls, CSI navigation keys, the
-SS3 family, the F1-F24 names, modifier parameters, the kitty keyboard
-protocol (`CSI codepoint;mods u`) and xterm's modifyOtherKeys, and it is
-synchronous and total: nothing raises, unknown input is dropped or degraded,
-never fatal -- and platform-free: no terminal, no screen, no clock.
-
-Names follow the frozen 1.2 event contract: printable keys are named after
-themselves, space is ``space`` with ``char=" "``, ``\\r`` is ``enter`` while
-``\\n`` is ``c-j``, and chords use ``c-``, ``a-``, ``s-`` in that order
-(``c-s-left``).
-"""
+It is incremental, synchronous and total: unknown input is dropped or
+degraded, never fatal, and nothing here touches a terminal, screen or
+clock."""
 
 from __future__ import annotations
 
@@ -138,12 +125,8 @@ def _modifier_bits(value: int) -> int:
 
 
 def _chord(base: str, modifiers: frozenset[str]) -> str:
-    """Spell ``base`` with the chord prefixes, ``c-`` then ``a-`` then ``s-``.
-
-    ``base`` may already carry a ``c-`` prefix when it was derived from a C0
-    codepoint; an explicit ``ctrl`` modifier then stands for that same fact
-    and is not written twice.
-    """
+    """Spell ``base`` with chord prefixes in a fixed order; a ``c-`` base does
+    not repeat an explicit ctrl."""
     if "ctrl" in modifiers and base.startswith("c-"):
         base = base[2:]
     prefix = "".join(
@@ -153,13 +136,8 @@ def _chord(base: str, modifiers: frozenset[str]) -> str:
 
 
 def _base_from_codepoint(code: int) -> tuple[str, str] | None:
-    """The ``(key, char)`` a Unicode codepoint names, or ``None`` to drop.
-
-    C0 controls keep the historical names (``enter`` for CR, ``c-j`` for LF,
-    ``tab``, ``escape``, ``backspace``); space has ``key="space"`` with
-    ``char=" "``; everything printable above the C0 range is named after
-    itself.  C1 controls and NUL carry no meaning and are dropped.
-    """
+    """The ``(key, char)`` a codepoint names, or ``None`` to drop it; C0 keeps
+    the historical names."""
     if code == 0x0D:
         return "enter", ""
     if code == 0x0A:
@@ -212,36 +190,9 @@ def _param_modifiers(parts: list[str]) -> frozenset[str]:
 class KeyDecoder:
     """Turns a raw byte stream into :class:`Event` values.
 
-    The decoder is incremental over ``feed`` calls: the stream may be split
-    anywhere -- one byte per call is fine -- and escape state is carried
-    across feeds rather than resolved at every boundary:
-
-    * a ``feed`` ending inside ``ESC``, ``ESC [ ...`` or ``ESC O`` leaves the
-      partial sequence pending (see :meth:`pending`); the next feed's bytes
-      continue assembling it (``feed(b"\\x1b")`` then ``feed(b"[A")`` yields
-      ``up``);
-    * an ``ESC`` followed by another ``ESC`` resolves immediately to one
-      escape key and restarts;
-    * an ``ESC`` followed by any non-``[``/non-``O`` byte, and a ``CSI``
-      aborted by a byte outside the parameter/final ranges, resolve as soon
-      as the disambiguating byte arrives: *escape* followed by the collected
-      characters re-read literally (the introducer is consumed);
-    * a complete but unrecognized sequence (unknown final byte, unknown
-      ``~`` parameter) is dropped;
-    * a *pending* sequence is adjudicated by :meth:`settle` after a silence
-      period: a bare ``ESC`` becomes the *escape* key, a pending ``CSI``
-      degrades to *escape* plus its parameters re-read literally, a pending
-      ``SS3`` to *escape* plus a literal ``O``;
-    * paste aggregation is different: it spans any number of feeds until
-      the end marker arrives, and a marker **split across feeds** is still
-      recognized -- the scan holds back a trailing partial marker (at most
-      ``len(_PASTE_END) - 1`` characters) instead of folding those bytes
-      into the payload;
-    * X10 mouse reports (``ESC [ M`` plus three bytes) are assembled across
-      feeds exactly like the other sequences.
-
-    Nothing raises: unknown input is dropped or degraded, never fatal.
-    """
+    Partial escape sequences stay pending across feeds and are settled after
+    silence; a paste marker split across feeds is still recognized. Nothing
+    raises."""
 
     def __init__(self) -> None:
         self._utf8 = codecs.getincrementaldecoder("utf-8")(errors="replace")
@@ -254,35 +205,21 @@ class KeyDecoder:
     # -- public API ----------------------------------------------------------
 
     def feed(self, data: bytes) -> list[Event]:
-        """Decode ``data`` (possibly a partial UTF-8 sequence) into events.
-
-        Bytes continue any pending escape/CSI sequence; state left pending
-        at the end of this feed stays pending for the next one.  The input
-        must be ``bytes`` -- text, bytearray and memoryview are programming
-        errors and raise ``TypeError``.
-        """
+        """Decode ``data`` (possibly a partial UTF-8 sequence) into events; state
+        left pending stays pending for the next feed."""
         if not isinstance(data, bytes):
             raise TypeError(f"feed() takes bytes, got {type(data).__name__}")
         text = self._utf8.decode(data)
         return self._emit(text)
 
     def pending(self) -> bool:
-        """Whether an escape/CSI/SS3/X10 sequence is still being assembled.
-
-        A paste in progress is never pending -- its payload is simply
-        text until the end marker arrives.
-        """
+        """Whether an escape/CSI/SS3/X10 sequence is still being assembled; a paste
+        is never pending."""
         return self._esc is not None
 
     def settle(self) -> list[Event]:
-        """Adjudicate a pending escape/CSI sequence after a silence period.
-
-        A pending bare ``ESC`` becomes the *escape* key; a pending ``CSI``
-        degrades to *escape* followed by its collected parameter characters
-        re-read literally; a pending ``SS3`` and an incomplete X10 report
-        release their introducer bytes as literal keys.  Pastes are
-        untouched.
-        """
+        """Adjudicate a pending escape/CSI after silence, degrading it to literal
+        keys; pastes are untouched."""
         events: list[Event] = []
         if self._esc == "escape":
             events.append(KeyEvent("escape"))
@@ -297,13 +234,8 @@ class KeyDecoder:
         return events
 
     def finish(self) -> list[Event]:
-        """Finish the stream: settle, flush pending UTF-8, close any paste.
-
-        A truncated UTF-8 sequence surfaces as U+FFFD; an unclosed bracketed
-        paste is delivered verbatim as one final :class:`PasteEvent`, the
-        held-back partial-marker tail included (it was never a marker: the
-        stream ended first).
-        """
+        """Finish the stream: settle, flush pending UTF-8 and deliver any unclosed
+        paste verbatim."""
         events = self.settle()
         events.extend(self._emit(self._utf8.decode(b"", final=True)))
         if self._paste is not None:
@@ -340,17 +272,8 @@ class KeyDecoder:
         return events
 
     def _advance_paste(self, text: str, i: int, n: int, events: list[Event]) -> int:
-        """Continue an open paste with ``text[i:]``; the index to resume at.
-
-        The scan joins the held-back tail (``_paste_hold``, empty between
-        feeds unless the previous one ended on a partial end marker) with
-        this feed's bytes and searches the marker there, so a marker split
-        across **any** feed boundary still closes the paste.  When no marker
-        is present, everything that cannot begin one is appended to the
-        payload and at most ``len(_PASTE_END) - 1`` trailing characters are
-        held back -- a tail that could still complete into the marker -- and
-        the whole feed counts as consumed.
-        """
+        """Continue an open paste; a trailing partial end marker is held back so a
+        marker split across feeds still closes it."""
         hold = self._paste_hold
         buffer = hold + text[i:]
         self._paste_hold = ""
@@ -372,13 +295,8 @@ class KeyDecoder:
         return i + (end + len(_PASTE_END)) - len(hold)
 
     def _advance_escape(self, text: str, i: int, events: list[Event]) -> int:
-        """Continue the pending escape/CSI/SS3/X10 sequence with ``text[i]``.
-
-        Returns the index to continue scanning from.  Every path either
-        completes the sequence, resolves it outright, or leaves it pending
-        for a later feed -- resolution never happens merely because a feed
-        ended.
-        """
+        """Continue the pending escape sequence with ``text[i]`` and return the
+        index to resume at."""
         ch = text[i]
         if self._esc == "x10":
             self._x10.append(ch)
@@ -429,12 +347,8 @@ class KeyDecoder:
         return i
 
     def _degrade_csi(self) -> list[Event]:
-        """Emit the escape part of a degraded CSI and clear the csi state.
-
-        The collected parameter characters are re-read literally as ground
-        keys, preserving the historical degrade semantics; the ``[``
-        introducer stays consumed.
-        """
+        """Emit the escape part of a degraded CSI and re-read its parameters as
+        literal keys."""
         events: list[Event] = [KeyEvent("escape")]
         for param in self._csi_params:
             key = _char_key(param)
@@ -496,7 +410,8 @@ class KeyDecoder:
         events.append(KeyEvent(_chord(name, modifiers), "", modifiers))
 
     def _emit_tilde(self, params: str, events: list[Event]) -> None:
-        """Decode the ``CSI n ~`` family, modifyOtherKeys included."""
+        """Decode the ``CSI n ~`` family, modifyOtherKeys and paste markers
+        included."""
         parts = params.split(";")
         code = _parse_int(parts[0]) if parts and parts[0] else None
         if code is None:
@@ -550,12 +465,8 @@ class KeyDecoder:
     def _emit_codepoint(
         self, code: int, modifiers: frozenset[str], kind: str, events: list[Event]
     ) -> None:
-        """Emit the key a codepoint + modifier set names (kitty and xterm).
-
-        A printable codepoint with no Ctrl/Alt/Super keeps its character
-        identity; with a control modifier it becomes a chord and carries no
-        ``char`` (the key is not text).
-        """
+        """Emit the key a codepoint and modifier set names; a control modifier
+        makes a chord with no ``char``."""
         base = _base_from_codepoint(code)
         if base is None:
             return
@@ -577,7 +488,8 @@ class KeyDecoder:
         events.append(ResizeEvent(cols, rows))
 
     def _emit_sgr(self, params: str, final: str, events: list[Event]) -> None:
-        """Decode one SGR-1006 report (``CSI < b ; x ; y M/m``)."""
+        """Decode one SGR-1006 report, normalizing its 1-based coordinates to
+        0-based cells."""
         if final not in ("M", "m"):
             return
         fields = params[1:].split(";")
@@ -640,12 +552,8 @@ class KeyDecoder:
         kind: str | None,
         events: list[Event],
     ) -> None:
-        """Decode a shared X10/urxvt button code into a :class:`MouseEvent`.
-
-        ``kind`` forces the report class for a lowercase ``m`` urxvt report
-        and is ``None`` for an X10 report, whose class comes from the code
-        (low bits 3 is a button-free release).
-        """
+        """Decode a shared X10/urxvt button code; ``kind`` forces the report class
+        for a lowercase ``m``."""
         modifiers = _mouse_modifiers(code)
         low = code & 0x03
         if code & _WHEEL_BIT:

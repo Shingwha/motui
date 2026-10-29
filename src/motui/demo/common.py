@@ -64,7 +64,6 @@ class FixedHeight:
 
 
 def fit(line: Line, width: int) -> Line:
-    """The line when it fits (the common case), else clipped to ``width``."""
     return line if line.width <= width else line.clip(_CLIP, width)
 
 
@@ -75,7 +74,6 @@ def ends(
     left_style: Style,
     right_style: Style,
 ) -> Line:
-    """One row with ``left`` at the start and ``right`` at the end."""
     gap = max(1, width - len(left) - len(right) - 2)
     line = Line(
         (
@@ -90,7 +88,6 @@ def ends(
 
 
 def center(width: int, rows: Sequence[Line]) -> list[Line]:
-    """Centre every row horizontally in ``width`` columns."""
     out: list[Line] = []
     for row in rows:
         pad = max(0, (width - row.width) // 2)
@@ -101,7 +98,6 @@ def center(width: int, rows: Sequence[Line]) -> list[Line]:
 
 
 def ease_out_back(t: float) -> float:
-    """The ease-out-back curve: overshoots ~1.1 mid-way, settles on 1.0."""
     c1 = 1.70158
     c3 = c1 + 1.0
     u = t - 1.0
@@ -111,7 +107,6 @@ def ease_out_back(t: float) -> float:
 def hit_target(
     rects: Sequence[tuple[int, int, int, int]], pos: Pos
 ) -> int | None:
-    """The index of the first ``(row, col, height, width)`` holding ``pos``."""
     for index, (row, col, height, width) in enumerate(rects):
         if row <= pos.y < row + height and col <= pos.x < col + width:
             return index
@@ -119,7 +114,6 @@ def hit_target(
 
 
 def pad_rows(rows: list[Line], height: int) -> list[Line]:
-    """Clip or pad ``rows`` to exactly ``height`` rows."""
     result = rows[:height]
     result.extend(Line() for _ in range(height - len(result)))
     return result

@@ -1,11 +1,7 @@
 """The showcase: ``python -m motui`` is one interactive page, not a tour.
 
-The shell opens on a layered splash, then lands on the Signal Lab index. The package is
-split by responsibility: :mod:`motui.demo.cli` owns the entry modes,
-:mod:`motui.demo.preview` the deterministic text/painter snapshots,
-:mod:`motui.demo.registry` the one scene registry, :mod:`motui.demo.shell`
-the phase/transition chrome and :mod:`motui.demo.sections` the scenes.
-"""
+It opens on a layered splash, then lands on the Signal Lab index; the
+package splits into cli, preview, registry, shell and sections."""
 
 from __future__ import annotations
 

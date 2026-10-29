@@ -1,9 +1,8 @@
-"""Style value type: a frozen SGR-style builder over a named + truecolor palette.
+"""Style value type: a frozen SGR-style builder over a named and truecolor
+palette.
 
-This module is the single place that knows how a :class:`Style` turns into SGR
-escape bytes.  Terminal-width measurement lives in :mod:`motui.kernel.text`;
-line assembly lives in :mod:`motui.kernel.cell`.
-"""
+This module is the one place that knows how a :class:`Style` turns into
+SGR escape bytes."""
 
 from __future__ import annotations
 
@@ -70,19 +69,8 @@ def _truecolor_code(rgb: tuple[int, int, int], background: bool) -> str:
 
 @dataclass(frozen=True, slots=True)
 class Color:
-    """A color in both authoring and terminal vocabularies.
-
-    ``value`` is the authoring color -- a ``#rrggbb`` string or an
-    ``(r, g, b)`` tuple -- and renders as a 24-bit truecolor parameter.
-    ``ansi`` is the color's name in :data:`FG_CODES`: the fallback a
-    16-color terminal uses, so a brand hue keeps its intended hue instead
-    of being quantized from RGB.  ``None`` means "quantize it", which is
-    also the historical behavior of a bare hex/tuple color.
-
-    A ``Color`` is a frozen value, so it may sit inside a :class:`Style`
-    and keep the style's prefix cache valid.  An ``ansi`` that is not an
-    :data:`FG_CODES` name is a construction error.
-    """
+    """A color in both authoring and terminal vocabularies: ``value`` renders
+    truecolor, ``ansi`` is the 16-color fallback so a brand hue survives."""
 
     value: str | tuple[int, int, int]
     ansi: str | None = None
@@ -114,13 +102,8 @@ def _color_name(color: Color) -> str | None:
 def _native_color_code(
     color: Color | str | tuple[int, int, int], *, background: bool
 ) -> str:
-    """The truecolor-mode SGR parameter for one color.
-
-    A :class:`Color` uses its authoring ``value`` (a name inside a
-    ``Color`` still keeps its base code); a bare name from :data:`FG_CODES`
-    keeps its base code (unknown names raise ``KeyError``); a hex string or
-    tuple emits a 24-bit parameter.
-    """
+    """The truecolor-mode SGR parameter for one color; named colors keep their
+    base code."""
     offset = 10 if background else 0
     if isinstance(color, Color):
         name = _color_name(color)
@@ -136,12 +119,7 @@ def _native_color_code(
 
 
 def _sgr_codes(style: Style) -> list[str]:
-    """Ordered SGR parameter list for ``style`` (attributes, then fg, then bg).
-
-    A color is a :class:`Color`, a name from :data:`FG_CODES` (unknown names
-    raise ``KeyError``), a ``#rrggbb`` string, or an ``(r, g, b)`` tuple --
-    the last three forms emit what they always did.
-    """
+    """Ordered SGR parameters: attributes, then foreground, then background."""
     codes: list[str] = []
     if style.bold:
         codes.append("1")
@@ -166,15 +144,8 @@ def _sgr_codes(style: Style) -> list[str]:
 class Style:
     """An immutable terminal style.
 
-    ``fg``/``bg`` are colors: a :class:`Color`, a name from
-    :data:`FG_CODES` (unknown names raise ``KeyError`` from :meth:`prefix`
-    -- an internal error, never silently swallowed), a ``#rrggbb`` string,
-    or an ``(r, g, b)`` tuple.  The hex and tuple forms emit 24-bit
-    truecolor SGR parameters; a :class:`Color` carries its own 16-color
-    fallback beside the truecolor value.  Instances are frozen and
-    hashable (tuples hash fine), so the SGR prefix can be memoized per
-    instance without observable mutation.
-    """
+    ``fg``/``bg`` accept a :class:`Color`, an ``FG_CODES`` name, a ``#rrggbb``
+    string or an RGB tuple. Frozen, so the SGR prefix is memoized per instance."""
 
     fg: Color | str | tuple[int, int, int] | None = None
     bg: Color | str | tuple[int, int, int] | None = None
@@ -191,13 +162,8 @@ class Style:
     _prefix: str | None = field(init=False, compare=False, repr=False, default=None)
 
     def prefix(self) -> str:
-        """SGR prefix that switches a terminal into this style.
-
-        Returns ``""`` when the style changes nothing.  The value is computed
-        at most once per instance (frozen instances are safely cacheable):
-        even the unstyled default -- the commonest path of all -- never
-        rebuilds its SGR parameters.
-        """
+        """SGR prefix switching a terminal into this style (``""`` when it changes
+        nothing), computed at most once per instance."""
         prefix = self._prefix
         if prefix is None:
             codes = _sgr_codes(self)
@@ -206,11 +172,8 @@ class Style:
         return prefix
 
     def merge(self, other: Style) -> Style:
-        """Return a new style with ``other`` applied on top of ``self``.
-
-        ``None`` fields of ``other`` pass through; boolean attributes are
-        OR-ed.  Neither operand is mutated.
-        """
+        """A new style with ``other`` on top: ``None`` fields pass through, boolean
+        attributes are OR-ed."""
         return Style(
             fg=other.fg if other.fg is not None else self.fg,
             bg=other.bg if other.bg is not None else self.bg,
@@ -306,17 +269,8 @@ def _nearest_gray(rgb: tuple[int, int, int]) -> tuple[int, tuple[int, int, int]]
 
 
 def quantize(rgb: tuple[int, int, int], mode: ColorMode = "256") -> int:
-    """The palette index ``rgb`` quantizes to under ``mode``.
-
-    ``"256"`` searches the xterm 256-color palette -- the 6x6x6 color cube
-    (indices 16..231) and the 24-step grayscale ramp (232..255) -- and
-    answers the nearer index; a tie keeps the cube entry.  ``"16"`` snaps
-    to the nearest of the sixteen base colors of the reference table.  The
-    full-precision and endless modes are not real quantizing paths:
-    ``"truecolor"`` answers the 256-color index (the stable approximation a
-    direct caller gets) and ``"none"`` answers ``-1`` -- no color, which is
-    how :func:`sgr_prefix` reads it.
-    """
+    """The palette index ``rgb`` quantizes to: the 256-color cube/gray ramp, or
+    the nearest of the sixteen base colors."""
     if mode == "none":
         return -1
     if mode == "16":
@@ -336,17 +290,8 @@ def _mode_color_code(
     *,
     background: bool,
 ) -> str | None:
-    """One downgraded SGR parameter for ``color``, or ``None`` to drop it.
-
-    A named color keeps its base code in every mode: a name is already the
-    terminal's own vocabulary, so there is nothing to quantize.  A
-    :class:`Color` whose ``value`` is a bare name behaves the same; a
-    :class:`Color` carrying RGB uses its ``ansi`` name under ``"16"`` when
-    one is given, and is quantized otherwise.  A bare hex string or tuple
-    is quantized and emitted as ``38;5;N``/``48;5;N`` under ``"256"`` and
-    as the nearest base color's code under ``"16"``.  ``"none"`` drops
-    every color, the attributes aside.
-    """
+    """One downgraded SGR parameter, or ``None`` to drop it; named colors keep
+    their base code in every mode."""
     if color is None or mode == "none":
         return None
     offset = 10 if background else 0
@@ -377,13 +322,8 @@ def _mode_color_code(
 
 
 def _mode_codes(style: Style, mode: ColorMode) -> list[str]:
-    """Ordered SGR parameters for ``style`` under a downgraded ``mode``.
-
-    The same order :func:`_sgr_codes` emits -- attributes, then fg, then bg
-    -- rebuilt with the colors downgraded.  It lives beside that function
-    rather than inside it, so ``Style.prefix()``'s cached path is untouched
-    by the capability story.
-    """
+    """Ordered SGR parameters for ``style`` with its colors downgraded for
+    ``mode``."""
     codes: list[str] = []
     if style.bold:
         codes.append("1")
@@ -405,16 +345,8 @@ def _mode_codes(style: Style, mode: ColorMode) -> list[str]:
 
 
 def sgr_prefix(style: Style, mode: ColorMode = "truecolor") -> str:
-    """SGR prefix that switches a terminal of capability ``mode`` into ``style``.
-
-    ``"truecolor"`` returns :meth:`Style.prefix` -- the instance cache, so
-    the default path's bytes are exactly what they always were.  The
-    downgraded modes rebuild the parameters: a hex or tuple color is
-    quantized (:func:`quantize`), a named color keeps its base code, and
-    ``"none"`` drops the colors while every attribute survives.  The answer
-    is never cached: it depends on the terminal, and
-    :meth:`Style.prefix`'s cache must stay capability-free.
-    """
+    """SGR prefix for a terminal of capability ``mode``; ``truecolor`` returns
+    the instance-cached prefix, downgraded modes rebuild and are never cached."""
     if mode == "truecolor":
         return style.prefix()
     codes = _mode_codes(style, mode)

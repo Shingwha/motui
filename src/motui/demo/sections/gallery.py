@@ -30,17 +30,12 @@ __all__ = ["GalleryScene"]
 
 
 class GalleryScene(Scene):
-    """A live page of real 2.0 components, not pictures of them.
+    """A live page of real widgets: tree, table, markdown, progress, slider and
+    input.
 
-    Three panes share the width: a ``Tree`` (fold/unfold and a cursor), a
-    ``Table`` (a row cursor) and a controls column holding a short
-    ``Markdown`` note, an animated ``ProgressBar``, a ``Slider`` and an
-    ``Input``.  ``tab`` cycles the focus between the four interactive
-    widgets; the arrows and typing go to the focused one.  ``esc`` returns
-    to the menu, and the layout is composed with ``Row``/``Column`` and
-    real constraints, so 80x24 and 100x30 both reflow without a fixed
-    width assumption.
-    """
+    ``tab`` cycles focus and the arrows or typing go to it; ``escape``
+    returns. ``enter`` resets focus and values; the layout reflows at any
+    width."""
 
     name = "gallery"
 
@@ -112,12 +107,10 @@ class GalleryScene(Scene):
 
     @property
     def focus(self) -> int:
-        """The index of the focused interactive widget."""
         return self._focus
 
     @property
     def origin(self) -> int:
-        """The top row of the centred block in the last render."""
         return self._top
 
     def enter(self) -> None:
