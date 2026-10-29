@@ -90,7 +90,8 @@ sub-cell grid, and the widget quantizes two private `motui.pixel.Raster`
 layers (art over fill) into ordinary rows. It is new in 2.1 and
 provisional. Draw with `plot/erase/stamp/line/rect/disc/ring`, choose
 `layer=LayerName.ART|FILL`, set a `heat` for trails, and let a
-`PixelPalette` map slot ids to `(main, cool)` colors. `Marker.BRAILLE`
+`PixelPalette` map slot ids to `(main, cool)` colors; `palette=None`
+derives the palette from the widget's theme. `Marker.BRAILLE`
 spends the eight dots; `Marker.HALF` folds four sub-rows into half blocks.
 
 ```python
@@ -99,7 +100,7 @@ from motui.pixel import PixelPalette
 from motui.widgets import LayerName, PixelCanvas
 
 palette = PixelPalette(slots={1: ((255, 99, 132), (122, 46, 64))})
-canvas = PixelCanvas(20, 8, palette=palette)
+canvas = PixelCanvas(width=20, height=8, palette=palette)
 canvas.disc(20, 16, 5, 1, layer=LayerName.FILL)  # target behind the ring
 canvas.ring(20, 16, 12, 2, 1)                    # braille ring
 canvas.decay(40)                                 # cool the trail
@@ -142,7 +143,7 @@ from motui.kernel import Constraints, Line, Surface
 
 class Banner:
     def render(self, c: Constraints) -> Surface:
-        rows = [Line.from_text("motui").clip("ellipsis", c.width)]
+        rows = [Line.from_text("motui").clip(WrapMode.ELLIPSIS, c.width)]
         if c.max_height is not None:
             rows = rows[: c.max_height]
         return Surface.clipped(rows, c.width)
@@ -158,14 +159,15 @@ invalidation and no-op interaction hooks. A subclass overrides only what it
 takes and returns `True` when it consumed the input.
 
 ```python
-from motui.kernel import Constraints, Line, Surface
+from motui.kernel import Constraints, Line, Surface, WrapMode
 from motui.widgets import Widget
+from motui.widgets.base import Keymap
 
 
 class Counter(Widget):
     focusable = True
     activatable = True
-    keymap = {"enter": "activate", "space": "activate"}
+    keymap = Keymap({"enter": "activate", "space": "activate"})
 
     def __init__(self) -> None:
         super().__init__()
@@ -250,7 +252,9 @@ own layer:
 
 ```python
 from motui import App, Input, Markdown, Table          # the curated root
-from motui.widgets import Canvas, Panel, ScrollPanel   # the complete library
+from motui.widgets import (                            # the complete library
+    Align, ButtonKind, Canvas, Panel, ScrollPanel, Stack,
+)
 from motui.kernel import Style, Line, Selection        # the kernel seam
 from motui.kernel import DEFAULT_INPUT_KEYMAP          # decoder and keymaps
 from motui.app import Runtime, Workspace, Scrollbar    # runtime and controllers
@@ -262,11 +266,12 @@ The component families are text (`Text`, `Markdown`, `Diff`, `Notice`),
 forms (`Input`, `Editor`, `Checkbox`, `RadioGroup`, `CheckboxGroup`,
 `Select`, `MultiSelect`, `ComboBox`, `Autocomplete`, `Slider`, `Form`,
 `Field`, `Option`), data (`List`, `Table`, `Tree`, `Tabs`, `NavList`,
-`ProgressBar`, `Spinner`), layout (`Row`, `Column`, `Padding`, `Panel`,
-`Divider`, `Spacer`, `Collapsible`, `ScrollPanel`), actions (`Button`,
-`Link`, `MenuBar`, `ContextMenu`, `ShortcutBar`, `StatusLine`), overlays
-(`Dialog`, `ButtonSpec`, `confirm_dialog`, `prompt_dialog`) and drawing
-(`Canvas`, `Sparkline`).
+`ProgressBar`, `Spinner`), layout (`Row`, `Column`, `Stack`, `Align`,
+`Padding`, `Panel`, `Divider`, `Spacer`, `Collapsible`, `ScrollPanel`),
+actions (`Button`, `ButtonKind`, `Link`, `MenuBar`, `ContextMenu`,
+`ShortcutBar`, `StatusLine`), overlays (`Dialog`, `ButtonSpec`,
+`confirm_dialog`, `prompt_dialog`) and drawing (`Canvas`, `PixelCanvas`,
+`Sparkline`).
 
 Every themed widget takes `theme=`; components that resolve role groups take
 one `styles: Styles` override, while `Text` takes one explicit `style=`.
@@ -309,7 +314,7 @@ class Shell(App):
         self.bind("c-k", self.ask)
 
     def ask(self) -> None:
-        self.open_modal(Dialog("Confirm", Text("Continue?"), ["Yes", "No"]))
+        self.open_modal(Dialog(Text("Continue?"), title="Confirm", buttons=["Yes", "No"]))
 
 
 Shell().run()
@@ -369,7 +374,8 @@ A wide table is a non-wrapping table in a horizontal panel:
 from motui import ScrollPanel, Table
 from motui.kernel.text import WrapMode
 
-table = Table(headers, rows, cell_wrap=WrapMode.OVERFLOW)
+rows = [("alpha", "ok"), ("beta", "warn")]
+table = Table(rows, headers=["name", "status"], cell_wrap=WrapMode.OVERFLOW)
 view = ScrollPanel(table, axis="x", height=8, bar=True)
 app.add(view)
 ```
@@ -403,6 +409,11 @@ A brand theme derives every role from one `ColorPalette`; `Theme.light()`,
 `terminal.auto_theme()` is the convenience that reads `os.environ` and
 returns a theme.
 
+Buttons take a `ButtonKind` role (`NEUTRAL`, `PRIMARY`, `GHOST` or
+`DANGER`); the role picks the floor (`surfaces.control`, `surfaces.accent`,
+`content.accent` or `surfaces.danger`) and `theme.controls.overlay(...)`
+merges hover, focus, pressed and disabled on top in that precedence.
+
 Structural marks are separate values: `Glyphs` (`GLYPHS`) holds cursors,
 prompts, folds, checks, bars and notice marks; `Border` holds one box style.
 Every carrying component takes `glyphs=...`; `Panel`, `Dialog` and `Table`
@@ -428,10 +439,13 @@ host's. `DEFAULT_EDITOR_KEYMAP` adds `enter` as newline;
 
 ## Results and the tree
 
-State attributes (`selected`, `checked`, `text`, `open`) can be read at any
-time. `take()` is the one-shot door: it returns the pending result and
-clears it, so `None` means "nothing pending" and `False` is a real result.
-Collect results with `walk()`:
+State attributes (`index`, `selected`, `marked`, `value`, `checked`, `open`,
+`text`) can be read at any time. `take()` is the one-shot door: it returns
+the pending result and clears it, so `None` means "nothing pending" and
+`False` is a real result. Only `activate()`/`toggle()` write one; moving a
+cursor clears it. A table answers the activated row object, a select the
+chosen option's value, a tree the node, a strip the label, and a dialog the
+pressed button's value. Collect results with `walk()`:
 
 ```python
 from motui.widgets.base import HasResult
@@ -508,7 +522,7 @@ reset; X-Ray moves and emits with arrows and `enter`/`space`.
   hooks and `take()`.
 - [MIGRATION](docs/MIGRATION.md) - the 1.x to 2.1 name table, recipes and the
   removal list.
-- [ADRs](docs/adr/README.md) - the 23 accepted architecture decisions.
+- [ADRs](docs/adr/README.md) - the 27 accepted architecture decisions.
 - [CONTRIBUTING](CONTRIBUTING.md) - the gates, the commit style and the
   release process.
 - [CHANGELOG](CHANGELOG.md) - what changed between releases.
