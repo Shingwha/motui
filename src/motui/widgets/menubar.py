@@ -31,10 +31,9 @@ focused or not -- its active label is the selection, not a focus band -- and
 the flag touches the widget all the same.
 
 :class:`ContextMenu` is :class:`~motui.widgets.choice.Select`'s desktop-menu
-preset: a vertical option list with the menu cursor, ``commit=False`` (only
-:meth:`~motui.widgets.choice.Select.on_action` settles a pick),
-``wrap=True`` (the ends cycle) and ``window=False`` (the list window hangs at
-the top).  An :meth:`~motui.widgets.choice.Select.on_action` leaves the
+preset: a vertical option list with the menu cursor, ``wrap=True`` (the
+ends cycle) and ``window=False`` (the list window hangs at the top).  An
+activation leaves the
 option under the cursor pending and :meth:`~motui.widgets.choice.Select.take`
 reads it once.  The menu itself neither opens nor positions itself; a host
 mounts it over a click with a modal controller --
@@ -61,9 +60,10 @@ __all__ = ["ContextMenu", "MenuBar"]
 class MenuBar(LabelStrip):
     """A horizontal menu bar: one row, one active label, a clamped cursor.
 
-    ``items`` is the label sequence; ``index`` is the active label (read-only
-    property) and is clamped into ``0..len(items)-1`` on construction and on
-    every later :meth:`select`/:meth:`move` (a disabled index passed to the
+    ``items`` is the label sequence; ``index`` is the active label
+    (assignable) and is clamped into ``0..len(items)-1`` on construction and
+    on every later :meth:`select`/:meth:`move` (a disabled index passed to
+    the
     constructor is kept -- the constructor rewrites no explicit request, the
     verbs refuse).  ``disabled_items`` names the labels that are visible but
     refuse :meth:`select`/:meth:`on_click`/:meth:`on_action` and are stepped over

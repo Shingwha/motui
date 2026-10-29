@@ -29,7 +29,7 @@ OPTIONS = [
 
 
 def _pick_combo(combo: ComboBox) -> bool:
-    combo.open()
+    combo.open = True
     return combo.on_key(key("enter"))
 
 

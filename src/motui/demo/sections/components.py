@@ -435,7 +435,7 @@ class ComponentsScene(Scene):
         """Toast the row the table's cursor just activated."""
         pick = self.table.take()
         if pick is not None:
-            self.toast(f"picked {self.table.rows[pick][0]}", "info")
+            self.toast(f"picked {pick[0]}", "info")
 
     def _modal_key(self, event: KeyEvent) -> str | None:
         """Route a key into the open dialog and resolve it when it answers."""

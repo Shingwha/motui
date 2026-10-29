@@ -81,8 +81,7 @@ UNDERLINE = Style(underline=True)
 class Tabs(LabelStrip):
     """A horizontal content strip: one row, a clamped, non-wrapping selection.
 
-    ``tabs`` is a list of labels; ``index`` is the selected index (read-only
-    property), clamped
+    ``tabs`` is a list of labels; ``index`` is the selected index (assignable), clamped
     into ``0..len(tabs)-1`` on construction (a disabled index passed there
     is kept: see the module docstring) and on every later
     :meth:`select`/:meth:`move`.  ``disabled_items`` is an iterable of indices

@@ -66,8 +66,7 @@ and :meth:`move` steps over them (clamped, never wrapping) exactly as
 hover is the pointer's echo, not a selection.
 
 The rail binds its own arrow keys through :attr:`keymap` (a host may
-rebind them on the instance); ``handle`` is the 1.x alias of :meth:`on_key`
-and stays until W3b3.  An empty
+rebind them on the instance).  An empty
 ``glyphs.rail`` turns the indicator off and collapses its seat: the bar
 column is the glyph's own width (``visible_width``, so a wide bar takes its
 columns) and ``bar_space`` -- the separator after that column -- defaults to

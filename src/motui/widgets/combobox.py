@@ -5,7 +5,7 @@ family that is a *field* and a *menu* at once: the field is the component's
 own :class:`~motui.widgets.textfield.Input` (:attr:`ComboBox.input`) and the
 menu is an :class:`~motui.widgets.autocomplete.Autocomplete`
 (:attr:`ComboBox.list`) filtered by the field's text.  The component lays the
-field's rows out and holds the dropdown's own state (:attr:`ComboBox.is_open`);
+field's rows out and holds the dropdown's own state (:attr:`ComboBox.open`);
 where the dropdown goes on screen is the host's business -- the class
 docstring's recipe mounts a :class:`~motui.app.modal.Modal` over
 :attr:`ComboBox.list`, one row under the field.
@@ -45,7 +45,7 @@ class ComboBox(ResultWidget):
     the field is the component's own
     :class:`~motui.widgets.textfield.Input` (``.input``), and while the
     dropdown is open the ``Autocomplete`` of the field's text (``.list``) is
-    painted under the field's row.  ``open()``/``close()``/``is_open`` drive
+    painted under the field's row.  The assignable ``open`` flag drives
     it; :meth:`on_key` routes: ``down``/``up`` step the list (consumed, the
     cursor wraps like every menu), ``enter`` takes the highlighted option's
     value as the one-shot result, closes and writes the option's label back
@@ -67,8 +67,8 @@ class ComboBox(ResultWidget):
     2. the host routes ``combo.on_key(event)`` **before** ``drop.handle``
        (the combo takes the keyboard while open, the modal keeps everything
        it declines: the mouse, the scrim, the dismissal);
-    3. opening and closing stay in step -- the host calls ``drop.open()``
-       with ``combo.open()`` and syncs the other way after routing, so a
+    3. opening and closing stay in step -- the host assigns ``drop.open``
+       from ``combo.open`` and syncs the other way after routing, so a
        click outside the panel (the modal's own dismissal) closes the
        dropdown with it.
 
@@ -110,10 +110,10 @@ class ComboBox(ResultWidget):
         *,
         text: str = "",
         max_rows: int | None = 8,
-        theme: Theme | None = None,
-        styles: Styles | None = None,
         max_drop_rows: int | None = 6,
         glyphs: Glyphs = GLYPHS,
+        theme: Theme | None = None,
+        styles: Styles | None = None,
     ) -> None:
         self.max_rows = max_rows
         self.max_drop_rows = max_drop_rows
