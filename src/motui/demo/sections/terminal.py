@@ -174,7 +174,9 @@ class TerminalScene(Scene):
 
     def _ladder_row(self, name: str) -> Line:
         """One marker step: the staircase at ``name``'s resolution, then its mark."""
-        canvas = Canvas(10, 1, marker=name, theme=self.theme)
+        canvas = Canvas(
+            width=10, height=1, plot_marker=name, theme=self.theme
+        )
         canvas.plot(_STAIR, style=self.theme.content.accent)
         return (
             Line((Segment(f"{name:<8}", self.theme.text.muted),))

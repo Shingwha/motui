@@ -40,7 +40,7 @@ from ..kernel.glyphs import GLYPHS, Border, Glyphs
 from ..kernel.layout import Constraints
 from ..kernel.style import NONE, Style
 from ..kernel.text import visible_width
-from .base import Widget
+from .drawing import Drawing
 
 __all__ = ["Canvas", "Sparkline"]
 
@@ -60,8 +60,11 @@ _BRAILLE_BITS = ((0x01, 0x02, 0x04, 0x40), (0x08, 0x10, 0x20, 0x80))
 _BLANK_SEGMENT = Segment(" ")
 _BLANK_CELL = Cell()
 
+#: The sparkline's default style: an immutable value safe as a default.
+_DEFAULT_STYLE = Style()
 
-class Canvas(Widget):
+
+class Canvas(Drawing):
     """A mutable cell grid; :meth:`surface` answers its immutable image.
 
     Coordinates are 0-based cells with the origin at the top left.  Writes
@@ -71,63 +74,56 @@ class Canvas(Widget):
     row after it.  A wide character occupies its lead cell plus a
     continuation cell whose ``char`` is empty, so a row's display width is
     still one column per cell.
+
+    Sizing is the :class:`~motui.widgets.drawing.Drawing` lifecycle: the grid
+    is resized explicitly (``width``/``height`` assignment, :meth:`resize` or
+    :meth:`fit`) and ``render`` only clips the cached image.  The ``plot``
+    marker is ``plot_marker``; it affects :meth:`plot` alone, while
+    ``put``/``text`` always write whole cells.
     """
 
     __slots__ = (
         "_cells",
         "_dirty",
-        "_height",
         "_lines",
         "_row_counts",
         "_row_rep",
         "_segments",
         "_spares",
-        "_surface",
-        "_width",
         "glyphs",
-        "marker",
+        "plot_marker",
     )
 
     def __init__(
         self,
+        *,
         width: int = 0,
         height: int = 0,
-        *,
-        marker: str = "cell",
+        plot_marker: str = "cell",
         glyphs: Glyphs = GLYPHS,
         theme=None,
-        styles=None,
     ) -> None:
-        super().__init__(theme, styles)
-        if marker not in _MARKERS:
-            raise ValueError(f"marker must be one of {_MARKERS}, got {marker!r}")
-        self.marker = marker
+        if plot_marker not in _MARKERS:
+            raise ValueError(
+                f"marker must be one of {_MARKERS}, got {plot_marker!r}"
+            )
+        super().__init__(width=width, height=height, theme=theme)
+        self.plot_marker = plot_marker
         self.glyphs = glyphs
-        self._width = max(0, int(width))
-        self._height = max(0, int(height))
-        self._cells: list[list[Cell]] = [
-            [Cell() for _ in range(self._width)] for _ in range(self._height)
-        ]
+        self._cells: list[list[Cell]] = []
         #: The cell's immutable segment form, built at write time.  ``Surface``
         #: materialization then coalesces these runs instead of constructing a
         #: segment per cell, and a cell nobody rewrote keeps its segment object
         #: across rebuilds.  ``None`` is a continuation cell (a wide glyph's
         #: second column).  Blank cells share one segment: the value is
         #: immutable and a write replaces the slot rather than the segment.
-        self._segments: list[list[Segment | None]] = [
-            [_BLANK_SEGMENT] * self._width for _ in range(self._height)
-        ]
+        self._segments: list[list[Segment | None]] = []
         #: Per row, how many cells carry each segment object, and the one
         #: object a uniform row carries (``None`` for a mixed row).  The
         #: counts let ``surface`` answer a whole uniform row with one cached
         #: line instead of walking its cells; writes maintain them in O(1).
-        self._row_counts: list[dict[int, int]] = [
-            {id(_BLANK_SEGMENT): self._width} if self._width else {}
-            for _ in range(self._height)
-        ]
-        self._row_rep: list[Segment | None] = [
-            _BLANK_SEGMENT if self._width else None for _ in range(self._height)
-        ]
+        self._row_counts: list[dict[int, int]] = []
+        self._row_rep: list[Segment | None] = []
         #: Canonical segment/cell values per ``(char, id(style))``, so every
         #: cell drawn with one character and one style object shares one
         #: immutable value (which is what makes a packed row one run).  The
@@ -136,37 +132,14 @@ class Canvas(Widget):
         self._spares: dict[tuple[str, int], tuple[Cell, Segment]] = {}
         #: Dirty rows and their cached lines: ``None`` means "never built",
         #: and every write adds its row here (and drops the surface cache).
-        self._dirty: set[int] = set(range(self._height))
-        self._lines: list[Line | None] = [None] * self._height
-        self._surface: Surface | None = None
+        self._dirty: set[int] = set()
+        self._lines: list[Line | None] = []
+        self._resize_storage(self._width, self._height)
 
     # -- geometry ----------------------------------------------------------
 
-    @property
-    def width(self) -> int:
-        """The canvas width in cells."""
-        return self._width
-
-    @width.setter
-    def width(self, value: int) -> None:
-        self._resize(max(0, int(value)), self._height)
-
-    @property
-    def height(self) -> int:
-        """The canvas height in cells."""
-        return self._height
-
-    @height.setter
-    def height(self, value: int) -> None:
-        self._resize(self._width, max(0, int(value)))
-
-    def resize(self, width: int, height: int) -> None:
-        """Resize the grid, keeping the cells of the overlapping rectangle."""
-        self._resize(max(0, int(width)), max(0, int(height)))
-
-    def _resize(self, width: int, height: int) -> None:
-        if width == self._width and height == self._height:
-            return
+    def _resize_storage(self, width: int, height: int) -> None:
+        """Rebuild the grid for the base's new size, keeping the overlap."""
         cells: list[list[Cell]] = []
         segments: list[list[Segment | None]] = []
         for y in range(height):
@@ -188,8 +161,6 @@ class Canvas(Widget):
                 row_segments[-1] = _BLANK_SEGMENT
             cells.append(row)
             segments.append(row_segments)
-        self._width = width
-        self._height = height
         self._cells = cells
         self._segments = segments
         self._row_counts = []
@@ -207,14 +178,12 @@ class Canvas(Widget):
             self._row_rep.append(representative if len(counts) == 1 else None)
         self._lines = [None] * height
         self._dirty = set(range(height))
-        self._surface = None
-        self.touch()
 
     def _ensure_grid(self) -> None:
         if len(self._cells) != self._height or (
             self._cells and len(self._cells[0]) != self._width
         ):
-            self._resize(self._width, self._height)
+            self._resize_storage(self._width, self._height)
 
     # -- writing -----------------------------------------------------------
 
@@ -230,8 +199,7 @@ class Canvas(Widget):
             _BLANK_SEGMENT if self._width else None for _ in range(self._height)
         ]
         self._dirty = set(range(self._height))
-        self._surface = None
-        self.touch()
+        self._invalidate()
 
     def put(self, x: int, y: int, char: str, style: Style = NONE) -> None:
         """Write one character (or cluster) at ``(x, y)``.
@@ -361,7 +329,7 @@ class Canvas(Widget):
         the cell with a full block.  An empty sequence is a no-op.
         """
         self._ensure_grid()
-        mode = self.marker if marker is None else marker
+        mode = self.plot_marker if marker is None else marker
         if mode not in _MARKERS:
             raise ValueError(f"marker must be one of {_MARKERS}, got {mode!r}")
         projected = [(float(px), float(py)) for px, py in points]
@@ -393,17 +361,15 @@ class Canvas(Widget):
 
     # -- the row image -----------------------------------------------------
 
-    def surface(self) -> Surface:
-        """The canvas as an immutable surface; only dirty rows are rebuilt.
+    def _build_surface(self) -> Surface:
+        """Assemble the full-size surface; only dirty rows are rebuilt.
 
-        A clean canvas answers the very same ``Surface`` value it answered
-        before, and a rebuild reuses the ``Line`` object of every row that
-        was not written since the last call -- the row cache is identity, not
-        equality, so a caller can see which rows changed.
+        A rebuild reuses the ``Line`` object of every row that was not
+        written since the last one -- the row cache is identity, not
+        equality, so a caller can see which rows changed.  The base caches
+        the returned surface until the next :meth:`_invalidate`.
         """
         self._ensure_grid()
-        if self._surface is not None and not self._dirty:
-            return self._surface
         lines = self._lines
         uniform: dict[int, Line] = {}
         for row in sorted(self._dirty):
@@ -426,21 +392,7 @@ class Canvas(Widget):
             else:
                 lines[row] = _row_line(self._segments[row])
         self._dirty.clear()
-        self._surface = Surface(width=self._width, rows=tuple(lines))
-        return self._surface
-
-    def render(self, c: Constraints) -> Surface:
-        """The canvas clipped to ``c``: ``max_height`` rows, at most ``width``.
-
-        A natural-height constraint (``max_height is None``) takes the whole
-        canvas; a budget takes the leading rows.  Rows are clipped, never
-        padded, and the surface width is the constraint's width.
-        """
-        image = self.surface()
-        height = image.height if c.max_height is None else min(image.height, c.max_height)
-        if height == image.height and c.width == image.width:
-            return image
-        return Surface.clipped(image.rows[:height], c.width)
+        return Surface(width=self._width, rows=tuple(lines))
 
     # -- internals ---------------------------------------------------------
 
@@ -508,8 +460,7 @@ class Canvas(Widget):
 
     def _touch(self, row: int) -> None:
         self._dirty.add(row)
-        self._surface = None
-        self.touch()
+        self._invalidate()
 
     def _mark_half(self, x: int, y: int, top: bool, style: Style) -> None:
         if not 0 <= x < self._width or not 0 <= y < self._height:
@@ -537,7 +488,7 @@ class Canvas(Widget):
 
     def __repr__(self) -> str:
         return (
-            f"Canvas({self._width}x{self._height}, marker={self.marker!r}, "
+            f"Canvas({self._width}x{self._height}, plot_marker={self.plot_marker!r}, "
             f"dirty={len(self._dirty)})"
         )
 
@@ -601,7 +552,7 @@ class Sparkline:
         values=(),
         *,
         marker: str = "half",
-        style: Style = Style(),
+        style: Style = _DEFAULT_STYLE,
         glyphs: Glyphs = GLYPHS,
     ) -> None:
         if marker not in _MARKERS:
@@ -616,7 +567,12 @@ class Sparkline:
         height = 1 if c.max_height is None else c.max_height
         if c.width <= 0 or height <= 0:
             return Surface(width=c.width, rows=())
-        canvas = Canvas(c.width, height, marker=self.marker, glyphs=self.glyphs)
+        canvas = Canvas(
+            width=c.width,
+            height=height,
+            plot_marker=self.marker,
+            glyphs=self.glyphs,
+        )
         canvas.plot(
             [(index, value) for index, value in enumerate(self.values)],
             style=self.style,
