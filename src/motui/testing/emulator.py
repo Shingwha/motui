@@ -1,42 +1,9 @@
 """A tiny VT emulator for asserting on the frames a painter writes.
 
-The emulator consumes the byte stream a :class:`~motui.terminal.paint.Painter`
-produces and maintains the cell grid a terminal would show.  It is a test
-instrument, not a terminal: it implements the escapes this toolkit emits and
-the few modes a full-screen session turns on, and it deliberately has no
-scrollback, no image protocols and no input side.
-
-The state is incremental: :meth:`Emulator.feed` may be called with arbitrarily
-split chunks (bytes or text) and a sequence that straddles a split is
-completed by the next call.  The parser is a small state machine over the
-ground text, ESC, CSI and OSC states; one emulator owns one grid.
-
-Supported input:
-
-* ``CUP`` -- ``CSI H`` and ``CSI r;cH``, one-based and clamped;
-* ``EL`` -- ``CSI K`` with modes 0 (default), 1 and 2;
-* ``ED`` -- ``CSI J`` with modes 0 (default), 1, 2 and 3; ``CSI 2J`` clears;
-* SGR -- reset, bold/dim/italic/underline/reverse/strike and their resets,
-  the sixteen base foreground/background colors, ``38;5;n``/``48;5;n`` and
-  ``38;2;r;g;b``/``48;2;r;g;b``, plus the default-color resets 39/49;
-* ``\r``, ``\n``, ``\b`` and tab stops every eight columns;
-* autowrap: a glyph that would cross the right edge continues on the next
-  row (immediate wrap -- there is no pending-wrap state);
-* ``DECSET``/``DECRST`` private modes, ignored except ``?1049``, which clears
-  the grid and homes the cursor on both enter and leave (the ticket's
-  convention; there is no saved primary buffer);
-* ``DECSET 2026`` (synchronized update), ignored;
-* OSC sequences terminated by ``BEL`` or ``ST``; OSC 8 records the link for
-  the cells written while it is open and clears it when the url is empty.
-
-Unsupported input is ignored rather than raised: a terminal faced with an
-escape it does not know must keep showing a coherent screen, and a test
-asserting on one frame should not fail because the frame also carried a mode
-byte the assertion does not care about.
-
-A line feed on the last row scrolls the grid up one row and discards the top
-row; there is no scrollback.  The painter never emits a newline (it addresses
-every row with ``CUP``), so a painted frame is unaffected by that choice.
+Consumes the painter's byte stream into a cell grid.  Supports CUP, EL/ED,
+SGR (base/256/RGB colors), CR/LF/BS/tab, immediate autowrap, ``?1049``
+(clear+home) and OSC 8 links; unknown escapes are ignored.  The final row's
+line feed scrolls; there is no scrollback or input.
 """
 
 from __future__ import annotations
@@ -71,11 +38,10 @@ _NONE = Style()
 
 @dataclass(frozen=True, slots=True)
 class Cell:
-    """One grid cell: its glyph, the SGR state over it and its OSC 8 link.
+    """One grid cell: glyph, SGR state and OSC 8 link.
 
-    A double-width glyph owns two cells: the glyph itself and a placeholder
-    whose ``char`` is empty.  Combining marks are appended to the glyph cell
-    they follow, so the cell text is the full grapheme cluster.
+    A wide glyph owns a lead cell and a continuation cell with ``char == ""``;
+    combining marks append to the cluster.
     """
 
     char: str = " "
@@ -105,12 +71,7 @@ def _value(values: list[int | None], index: int, default: int = 0) -> int:
 
 
 def _index_color(index: int) -> str | tuple[int, int, int]:
-    """The color a 256-color palette index names.
-
-    The sixteen base entries keep their names (so a test can assert the
-    terminal vocabulary the painter emitted); the cube and the grayscale
-    ramp become the ``(r, g, b)`` triple they stand for.
-    """
+    """The color a 256-color index names: a base name or an RGB triple."""
     index = max(0, min(255, index))
     if index < 16:
         return _BASE_NAMES[index]
@@ -128,10 +89,8 @@ def _index_color(index: int) -> str | tuple[int, int, int]:
 class Emulator:
     """A cell grid fed by one painter's bytes.
 
-    ``width``/``height`` are the screen geometry the bytes were rendered for.
-    :attr:`grid` is row-major, :attr:`cursor` is zero-based, and
-    :meth:`resize` keeps the top-left block (the region a real resize
-    preserves) while filling the new cells with blanks.
+    ``grid`` is row-major and ``cursor`` zero-based; ``resize`` keeps the
+    top-left block and blanks new cells.
     """
 
     def __init__(self, width: int = 80, height: int = 24) -> None:
@@ -168,10 +127,8 @@ class Emulator:
     def feed(self, data: str | bytes) -> None:
         """Consume bytes or text, continuing any sequence split across calls.
 
-        Bytes are decoded as UTF-8 incrementally, so a multi-byte glyph split
-        across two calls is completed by the second.  A caller should not mix
-        ``str`` chunks into the middle of a partial UTF-8 sequence: the
-        decoder holds those bytes, and only more bytes can complete them.
+        Bytes decode incrementally as UTF-8; do not mix ``str`` into a
+        partial byte sequence.
         """
         text = self._decoder.decode(data) if isinstance(data, bytes) else data
         for ch in text:
@@ -384,7 +341,6 @@ class Emulator:
             self._osc_buf += ch
 
     def _osc_esc(self, _ch: str) -> None:
-        """Finish the OSC on either terminator; a stray ESC byte is dropped."""
         self._finish_osc()
 
     def _finish_osc(self) -> None:

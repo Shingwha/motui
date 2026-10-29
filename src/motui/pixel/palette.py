@@ -35,11 +35,8 @@ _FALLBACKS: tuple[RGB, ...] = (
 def _token_rgb(style: Style, fallback: RGB) -> RGB:
     """The RGB triple a style's foreground names, or ``fallback``.
 
-    Accepts the three colour spellings the kernel treats as RGB-authoring:
-    a :class:`~motui.kernel.style.Color` wrapping a hex string or tuple, a
-    bare ``#rrggbb`` string, and a bare tuple.  A named ANSI colour (or no
-    foreground at all) cannot be mapped to a pixel colour, so it uses the
-    slot's fixed fallback instead of inventing a lookup table.
+    Handles ``Color``, ``#rrggbb`` and RGB tuples; named ANSI colors use the
+    slot fallback.
     """
     fg = style.fg
     value = fg.value if isinstance(fg, Color) else fg
@@ -61,15 +58,8 @@ def _token_rgb(style: Style, fallback: RGB) -> RGB:
 class PixelPalette:
     """A caller-provided map from slot ids to ``(main, cool)`` colors.
 
-    Fresh ink quantizes to the slot's *main* color; once a cell's peak heat
-    drops below :data:`~motui.pixel.COOL_AT` it quantizes to the *cool*
-    color.  ``bg`` is the color a ``"half"`` layer's unlit sub-rows show;
-    ``None`` keeps them transparent.  The four styles per slot (main/cool,
-    with and without ``bg``) are prebuilt once, so the quantizer answers
-    each cell with a dict lookup and reuses one style object per
-    ``(slot, state)`` -- the identity run fusion short-circuits on.
-
-    A slot with no palette entry quantizes to white.
+    Fresh ink uses main, cooled ink cool; ``bg`` fills unlit half-cell rows.
+    Unknown slots render white.
     """
 
     slots: Mapping[int, SlotColors]
@@ -92,15 +82,9 @@ class PixelPalette:
 
     @classmethod
     def from_theme(cls, theme: Theme) -> PixelPalette:
-        """Derive the eight-slot stage palette from a theme's role groups.
+        """Derive the eight-slot stage palette from the theme's role groups.
 
-        The slots read accent, inline code, success, warning, danger, the
-        first heading, muted and faint -- the theme's colour vocabulary in
-        the order a pixel scene spends it.  Each slot's cool colour is 38%
-        of its main colour per channel, and the stage keeps a transparent
-        background.  A token that names no RGB value falls back to the
-        showcase's fixed hue for that slot, so a theme built from ANSI names
-        alone still yields a usable palette.
+        Cool is 38% of main per channel; tokens without RGB use fallbacks.
         """
         tokens = (
             theme.content.accent,
