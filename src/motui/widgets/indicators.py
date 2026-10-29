@@ -3,18 +3,18 @@
 Three components that show a value, one family file:
 
 * :class:`ProgressBar` -- the determinate bar: a single-row
-  ``[\u2588\u2588\u2588\u2591\u2591\u2591]`` track whose filled part is ``fraction``
-  of the whole.  ``fraction`` is a mutable attribute that clamps into
-  ``[0, 1]`` on assignment; the host moves it over time and calls
-  ``refresh()`` -- ``render`` itself stays a pure function of the
-  component and ``width``.
+  ``[\u2588\u2588\u2588\u2591\u2591\u2591]`` track whose filled part is
+  :attr:`ProgressBar.fraction` of the whole.  ``value`` and ``maximum`` are
+  the state; ``fraction`` is the read-only quotient ``value / maximum``.
+  The host moves ``value`` over time -- ``render`` itself stays a pure
+  function of the component and ``width``.
 * :class:`Slider` -- the numeric control: ``[━━━━●───] 4``, a bracketed
   track whose length follows the painting width, the value printed after the
   closing bracket.  The value lives on the ``step`` grid the constructor
   defines; :meth:`Slider.move`, :meth:`Slider.on_click` (mapped against the
   track of the last render) and :meth:`Slider.on_action` are its controller
-  doors, and activation leaves the current value pending for
-  :meth:`Slider.take`.
+  doors, and activation answers whether the control is available -- the
+  value itself is the only state (no one-shot result).
 * :class:`Spinner` -- the activity indicator: a frame index cycling around a
   label.  :meth:`Spinner.advance` steps the cycle (wrapping around) and
   :meth:`Spinner.render` paints the current ``frame`` followed by ``text``
@@ -29,14 +29,14 @@ theme field > :data:`~motui.kernel.theme.DEFAULT_THEME`.
 
 from __future__ import annotations
 
-from ..kernel.glyphs import GLYPHS, Glyphs
-from ..kernel.events import KeyEvent
 from ..kernel.cell import Line, Segment, Surface
+from ..kernel.events import KeyEvent
 from ..kernel.geom import Pos
+from ..kernel.glyphs import GLYPHS, Glyphs
 from ..kernel.layout import Constraints
 from ..kernel.style import NONE
-from ..kernel.theme import Styles, Theme
 from ..kernel.text import WrapMode
+from ..kernel.theme import Styles, Theme
 from ..widgets.base import Widget
 
 __all__ = ["ProgressBar", "Slider", "Spinner"]
@@ -49,8 +49,11 @@ DEFAULT_WIDTH = 80
 class ProgressBar(Widget):
     """A determinate progress bar: label, ``[``, filled blocks, ``]``.
 
-    ``fraction`` clamps to ``[0, 1]`` (on construction and on every later
-    assignment, so ``bar.fraction = 1.4`` reads back ``1.0``).  The track is
+    ``value`` clamps into ``[0, maximum]`` on construction and on every
+    later assignment, so ``bar.value = 1.4`` reads back ``1.0`` with the
+    default maximum.  ``maximum`` must be positive (``ValueError``
+    otherwise) and re-clamps the value when assigned.  :attr:`fraction` is
+    the read-only quotient ``value / maximum``.  The track is
     ``width_chars`` columns wide when that is given, otherwise it fills the
     available width minus the label prefix and the two frame cells; the
     filled part is ``round(inner * fraction)`` blocks.  The filled blocks
@@ -60,7 +63,8 @@ class ProgressBar(Widget):
     """
 
     __slots__ = (
-        "_fraction",
+        "_maximum",
+        "_value",
         "glyphs",
         "label",
         "width_chars",
@@ -68,29 +72,51 @@ class ProgressBar(Widget):
 
     def __init__(
         self,
-        fraction: float = 0.0,
+        value: float = 0.0,
         *,
+        maximum: float = 1.0,
         label: str = "",
         width_chars: int | None = None,
         glyphs: Glyphs = GLYPHS,
         theme: Theme | None = None,
         styles: Styles | None = None,
     ) -> None:
+        if maximum <= 0:
+            raise ValueError(f"maximum must be positive, got {maximum!r}")
         super().__init__(theme, styles)
-        self.fraction = fraction
+        self._maximum = maximum
+        self.value = value
         self.label = label
         self.width_chars = width_chars
         self.glyphs = glyphs
 
     @property
-    def fraction(self) -> float:
-        """The completed fraction, always clamped into ``[0, 1]``."""
-        return self._fraction
+    def maximum(self) -> float:
+        """The value the bar is full at (always positive)."""
+        return self._maximum
 
-    @fraction.setter
-    def fraction(self, value: float) -> None:
-        self._fraction = min(1.0, max(0.0, value))
+    @maximum.setter
+    def maximum(self, value: float) -> None:
+        if value <= 0:
+            raise ValueError(f"maximum must be positive, got {value!r}")
+        self._maximum = value
+        self._value = min(max(self._value, 0.0), value)
         self.touch()
+
+    @property
+    def value(self) -> float:
+        """The completed value, always clamped into ``[0, maximum]``."""
+        return self._value
+
+    @value.setter
+    def value(self, value: float) -> None:
+        self._value = min(max(value, 0.0), self._maximum)
+        self.touch()
+
+    @property
+    def fraction(self) -> float:
+        """The completed fraction, the read-only ``value / maximum``."""
+        return self._value / self._maximum
 
     def render(self, c: Constraints) -> Surface:
         """The label-plus-track row, under the render constraints.
@@ -107,7 +133,7 @@ class ProgressBar(Widget):
             inner = max(0, c.width - Line.from_text(lead).width - 2)
         else:
             inner = max(0, self.width_chars)
-        done = min(inner, int(round(inner * self.fraction))) if inner else 0
+        done = min(inner, round(inner * self.fraction)) if inner else 0
         row = Line(
             (
                 Segment(lead),
@@ -124,8 +150,8 @@ class ProgressBar(Widget):
 
     def __repr__(self) -> str:
         return (
-            f"ProgressBar(fraction={self.fraction}, label={self.label!r}, "
-            f"width_chars={self.width_chars})"
+            f"ProgressBar(value={self.value}, maximum={self.maximum}, "
+            f"label={self.label!r}, width_chars={self.width_chars})"
         )
 
 
@@ -138,11 +164,12 @@ class Slider(Widget):
     minimum`` -- pins it to ``minimum``).  ``minimum``, ``maximum`` and
     ``step`` are property setters too: assigning any of them re-clamps and
     re-snaps the current value, so the invariant survives a range change.
-    :meth:`move` steps ``delta`` whole ``step``s (clamped at the ends; a
-    step that moved clears a stale pending value), :meth:`on_click` maps a
-    column of the track onto the grid, and :meth:`on_action` leaves the
-    current value pending for :meth:`take`.  A disabled slider
-    refuses all three doors and merges ``text.faint`` over every segment.
+    :meth:`move` steps ``delta`` whole ``step``s (clamped at the ends),
+    :meth:`on_click` maps a column of the track onto the grid, and
+    :meth:`activate` answers whether the control is available -- the value
+    is the only state, so there is no one-shot result to take.  A disabled
+    slider refuses all three doors and merges ``text.faint`` over every
+    segment.
 
     The track's length follows the painting width: ``[`` and ``]`` plus one
     space and the value's digits are the fixed part, the rest is track
@@ -165,7 +192,6 @@ class Slider(Widget):
         "_marked",
         "_maximum",
         "_minimum",
-        "_pending",
         "_step",
         "_value",
         "disabled",
@@ -205,10 +231,6 @@ class Slider(Widget):
         # The width ``click`` maps a column against before the first paint;
         # every render refreshes it.
         self._last_width = DEFAULT_WIDTH
-        #: The pending confirmation: written by ``activate`` (the current
-        #: value), read once through :meth:`take`, cleared by a move
-        #: or a click.
-        self._pending: int | None = None
         self._value = self._align(value)
 
     # -- the value -------------------------------------------------------------
@@ -272,9 +294,7 @@ class Slider(Widget):
     def move(self, delta: int) -> bool:
         """Step the value ``delta`` whole ``step``s, clamped; ``True`` when it moved.
 
-        A step that moved clears a stale pending value -- a pick never
-        survives the next move (the ``Select`` precedent).  A disabled
-        slider moves nowhere.
+        A disabled slider moves nowhere.
         """
         if self.disabled:
             return False
@@ -282,38 +302,38 @@ class Slider(Widget):
         moved = target != self._value
         if moved:
             self._value = target
-            self._pending = None
             self.touch()
         return moved
+
+    def activate(self) -> bool:
+        """Answer whether the slider is available; the value is the state."""
+        return not self.disabled
 
     def on_key(self, e: KeyEvent) -> bool:
         """Route one key: the arrows step the value, ``enter`` confirms it.
 
         ``left``/``up`` step back and ``right``/``down`` step on, exactly
         the 1.x focus tier's mapping; a step at the end of the range answers
-        ``False`` (nothing moved), so the host keeps the key.  Every other
-        key declines.
+        ``False`` (nothing moved), so the host keeps the key.  ``enter``
+        answers :meth:`activate`.  Every other key declines.
         """
         if e.key in ("left", "up"):
             return self.move(-1)
         if e.key in ("right", "down"):
             return self.move(1)
         if e.key == "enter":
-            return self.on_action("activate")
+            return self.activate()
         return False
 
     def on_action(self, name: str) -> bool:
         """Run one named action: activation or a one-step move.
 
-        ``"activate"`` confirms the value; ``"prev"`` / ``"next"`` (and the
-        arrow spellings) step the value one ``step``.  Unknown names
-        decline.
+        ``"activate"`` delegates :meth:`activate` (the value is not a
+        one-shot result); ``"prev"`` / ``"next"`` (and the arrow spellings)
+        step the value one ``step``.  Unknown names decline.
         """
         if name == "activate":
-            if self.disabled:
-                return False
-            self._pending = self._value
-            return True
+            return self.activate()
         if name in ("prev", "left", "up", "move_left", "move_up"):
             return self.move(-1)
         if name in ("next", "right", "down", "move_right", "move_down"):
@@ -330,9 +350,8 @@ class Slider(Widget):
         the range, and the value lands on the nearest grid point -- a cell
         at or left of the opening bracket lands on ``minimum``, a cell at
         or past the closing bracket on the largest grid point.  A hit
-        clears a stale pending value and answers ``True`` even when the
-        value did not move (a click is a hit whether or not it changed
-        anything).
+        answers ``True`` even when the value did not move (a click is a hit
+        whether or not it changed anything).
         """
         if pos.y != 0:
             return False
@@ -344,15 +363,8 @@ class Slider(Widget):
             self._value = self._align(
                 self.minimum + fraction * (self.maximum - self.minimum)
             )
-        self._pending = None
         self.touch()
         return True
-
-    def take(self) -> int | None:
-        """Read the pending confirmation once and clear it."""
-        value = self._pending
-        self._pending = None
-        return value
 
     def on_hover(self, pos: Pos | None) -> bool:
         """Mark the row under the pointer; ``True`` when the marking changed.

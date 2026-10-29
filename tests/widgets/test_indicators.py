@@ -10,13 +10,15 @@ from motui.kernel.layout import Constraints
 from motui.kernel.style import Style
 from motui.kernel.theme import DEFAULT_THEME, Styles
 from motui.widgets import ProgressBar, Slider, Spinner
-
 from tests.testing import key, texts
 
 
 @pytest.mark.parametrize(
     "fraction, expected",
-    [(0.0, "[\u2591\u2591\u2591\u2591\u2591\u2591]"), (1.0, "[\u2588\u2588\u2588\u2588\u2588\u2588]")],
+    [
+        (0.0, "[\u2591\u2591\u2591\u2591\u2591\u2591]"),
+        (1.0, "[\u2588\u2588\u2588\u2588\u2588\u2588]"),
+    ],
 )
 def test_progress_bar_fills_its_track_by_fraction(fraction, expected):
     assert texts(ProgressBar(fraction, width_chars=6), 20) == [expected]
@@ -26,10 +28,12 @@ def test_progress_bar_fills_its_track_by_fraction(fraction, expected):
 
 def test_progress_bar_clamps_and_can_lead_with_a_label():
     bar = ProgressBar(1.4, width_chars=4)
-    assert bar.fraction == 1.0
-    bar.fraction = -2
-    assert bar.fraction == 0.0
-    assert texts(ProgressBar(1.0, label="done", width_chars=4), 20) == ["done [\u2588\u2588\u2588\u2588]"]
+    assert bar.value == 1.0 and bar.fraction == 1.0
+    bar.value = -2
+    assert bar.value == 0.0 and bar.fraction == 0.0
+    assert texts(ProgressBar(1.0, label="done", width_chars=4), 20) == [
+        "done [\u2588\u2588\u2588\u2588]"
+    ]
 
 
 def test_progress_bar_styles_the_filled_and_empty_runs():
@@ -39,9 +43,15 @@ def test_progress_bar_styles_the_filled_and_empty_runs():
 
 
 def test_slider_renders_its_track_and_value():
-    assert texts(Slider(5, maximum=10), 14) == ["[\u2501\u2501\u2501\u2501\u2501\u25cf\u2501\u2501\u2501\u2501] 5"]
-    assert texts(Slider(0, maximum=10), 14) == ["[\u25cf\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501] 0"]
-    assert texts(Slider(10, maximum=10), 14) == ["[\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u25cf] 10"]
+    assert texts(Slider(5, maximum=10), 14) == [
+        "[\u2501\u2501\u2501\u2501\u2501\u25cf\u2501\u2501\u2501\u2501] 5"
+    ]
+    assert texts(Slider(0, maximum=10), 14) == [
+        "[\u25cf\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501] 0"
+    ]
+    assert texts(Slider(10, maximum=10), 14) == [
+        "[\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u25cf] 10"
+    ]
 
 
 def test_slider_clamps_and_snaps_onto_the_step_grid():
@@ -56,14 +66,15 @@ def test_slider_clamps_and_snaps_onto_the_step_grid():
     assert Slider(5, minimum=10, maximum=2).value == 10
 
 
-def test_slider_move_steps_and_clamps_and_clears_a_pending_value():
+def test_slider_move_steps_and_clamps():
     slider = Slider(5, maximum=10)
-    assert slider.on_action("activate") is True
+    assert slider.activate() is True
     assert slider.move(1) is True and slider.value == 6
-    assert slider.take() is None
     assert slider.move(99) is True and slider.value == 10
     assert slider.move(1) is False
     assert slider.move(-99) is True and slider.value == 0
+    # No one-shot result: the base Widget.take answers None and no state moves.
+    assert slider.take() is None
 
 
 def test_slider_click_maps_the_track_to_the_value():
@@ -74,9 +85,9 @@ def test_slider_click_maps_the_track_to_the_value():
     assert slider.on_click(Pos(x=1, y=1)) is False
 
 
-def test_slider_activate_takes_the_value_once_and_disabled_refuses():
+def test_slider_activate_answers_availability_and_disabled_refuses():
     slider = Slider(4)
-    assert slider.on_action("activate") is True and slider.take() == 4
+    assert slider.on_action("activate") is True and slider.value == 4
     assert slider.take() is None
     dead = Slider(
         4,
@@ -84,7 +95,7 @@ def test_slider_activate_takes_the_value_once_and_disabled_refuses():
         styles=Styles(text=replace(DEFAULT_THEME.text, faint=Style(italic=True))),
     )
     assert dead.move(1) is False and dead.on_click(Pos(x=1, y=0)) is False
-    assert dead.on_action("activate") is False and dead.take() is None
+    assert dead.on_action("activate") is False
     assert dead.render(Constraints(width=14))[0].segments[0].style.italic is True
 
 
@@ -162,7 +173,7 @@ def test_slider_on_key_steps_and_confirms():
     assert slider.on_key(key("left")) is True and slider.value == 4
     assert slider.on_key(key("down")) is True and slider.value == 5
     assert slider.on_key(key("enter")) is True
-    assert slider.take() == 5
+    assert slider.value == 5
     assert slider.on_key(key("x", "x")) is False
 
 
@@ -187,8 +198,6 @@ def test_slider_on_action_activates_and_moves():
     slider = Slider(5, maximum=10)
 
     assert slider.on_action("activate") is True
-    assert slider.take() == 5
+    assert slider.value == 5
     assert slider.on_action("next") is True and slider.value == 6
     assert slider.on_action("unknown") is False
-    # The move cleared the pending value instead of leaving a stale one.
-    assert slider.take() is None

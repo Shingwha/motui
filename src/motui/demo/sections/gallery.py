@@ -144,7 +144,7 @@ class GalleryScene(Scene):
 
     def tick(self, phase: int) -> str | None:
         self._phase = phase
-        self.progress.fraction = 0.55 + 0.4 * math.sin(phase / 60)
+        self.progress.value = 0.55 + 0.4 * math.sin(phase / 60)
         return None
 
     def on_key(self, event: KeyEvent) -> str | None:
