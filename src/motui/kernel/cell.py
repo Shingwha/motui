@@ -914,6 +914,26 @@ class Surface:
         """Number of rows in the surface."""
         return len(self.rows)
 
+    def overlay(self, base: Surface) -> Surface:
+        """Paint this surface on top of ``base``, row by row.
+
+        The block form of :meth:`Line.overlay`: the result spans the wider
+        and taller of the two blocks, a missing row counts as an empty one,
+        and each row is composed by the row method.  The answer is
+        normalized through :meth:`Surface.of`, so every row is at most --
+        and, by that builder's contract, exactly -- ``max(width)`` columns
+        and neither input is modified.  ``self`` is the top layer.
+        """
+        width = max(self.width, base.width)
+        height = max(self.height, base.height)
+        rows = [
+            (
+                self.rows[index] if index < self.height else Line()
+            ).overlay(base.rows[index] if index < base.height else Line())
+            for index in range(height)
+        ]
+        return Surface.of(rows, width)
+
     # -- sequence protocol -------------------------------------------------
 
     def __len__(self) -> int:
