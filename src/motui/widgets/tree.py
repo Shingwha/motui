@@ -1,53 +1,9 @@
 """Tree: an indented, collapsible list of :class:`TreeNode` values.
 
-``Tree`` walks its root nodes depth-first, descending into open nodes
-only, and renders one row per visible node: ``indent`` spaces per depth, a
-fold indicator (the vocabulary's ``\u25be``/``\u25b8`` by default) for a node
-with children -- a blank indicator column for a leaf, so every label starts
-at the same offset -- and the label itself.  Guides are deliberately
-minimal: plain space indentation, **no ``\u2502`` connectors**.
-
-The two indicator glyphs come from the keyword-only ``glyphs``
-vocabulary -- ``fold_open`` and ``fold_closed``.  They are content, not
-style, and their column is the state pair's wider seat
-(:func:`~motui.kernel.glyphs.pair_seat`): a leaf, and a node whose glyph is
-``""``, keeps a blank column of that same width, so labels stay aligned; a
-wide (CJK) glyph widens the column for every row, and two empty glyphs
-collapse it to zero columns.
-
-**The row-band contract.**  Every row resolves its band from the theme's row
-roles through :meth:`~motui.kernel.theme.RowStyles.band`: ``rows.base`` is
-the resting surface, ``rows.active`` the band under the focused cursor row
-and ``rows.inactive`` the unfocused one, ``rows.hover`` the pointer token,
-and ``rows.disabled`` the band under a disabled row.  A row is its
-text-styled segments -- the guide and the label in their own styles, the cursor row's
-run in no style of its own -- then ``.clip(WrapMode.ELLIPSIS, width).fill(fitted.width, band)``:
-the W1 primitive, the band underneath, the text styles on top.  The band
-merges under the row's own cells -- a pill behind the text, never a
-ribbon across the pane; a full-surface band is the host's container's job
-(``Padding(fill_style=...)`` / ``Panel(frame=False, style=...)``, which
-fill every row to the width they are handed).  The cursor row and every
-resting row (guides included) go through the same pipeline; only the
-engaged row swaps the band, and an unfocused cursor row wears
-``rows.inactive``.  The fill is skipped while the band is ``NONE``
--- the default theme's ground and both its engaged bands -- so resting
-rows render exactly the bytes they always did, and so do the cursor row
-and the hovered row until a host themes them.
-
-``move`` clamps the cursor inside the visible enabled
-rows without wrapping, and ``activate`` expands/collapses the node under
-it (a no-op on a leaf or a disabled node), re-clamping the cursor when
-rows disappear.  Styles resolve at render time from the theme (or a
-``styles=`` group override).
-
-Two host gestures narrow and steer the rows without the tree ever changing
-its own data: ``filter(query)`` prunes the tree to the labels holding the
-query (case-insensitive substring), keeps the ancestors of every hit and
-renders those chains open -- the user's ``open`` flags are never
-rewritten, so clearing the filter restores the tree the user built -- and
-``jump(char)`` is type-ahead: the cursor hops to the next *visible* node
-whose label starts with that character, case-insensitively, wrapping around
-the rows.
+``Tree`` walks root nodes depth-first through open nodes only and renders one
+row per visible node: indentation, a fold indicator (blank for leaves) and
+the label.  ``filter`` prunes to matching chains without rewriting flags;
+``jump`` is type-ahead.
 """
 
 from __future__ import annotations
@@ -67,14 +23,11 @@ __all__ = ["Tree", "TreeNode"]
 
 
 class TreeNode:
-    """One tree node: a label, child nodes, an ``open`` flag and ``disabled``.
+    """One tree node: label, children, ``open`` and ``disabled``.
 
-    A plain mutable class on purpose: :meth:`Tree.activate` flips ``open``
-    in place instead of rebuilding the path back to the root, which is what
-    a frozen dataclass would force.  ``children`` is copied into a list; a
-    node without children is a leaf and never opens.  A disabled node
-    renders ``text.faint`` and every cursor gesture skips or refuses it;
-    its ``open`` flag is still the user's own state.
+    Mutable on purpose: activation flips ``open`` in place.  A node without
+    children is a leaf; a disabled node renders faint and cursor gestures
+    skip it.
     """
 
     __slots__ = ("children", "disabled", "label", "open")
@@ -102,43 +55,12 @@ class TreeNode:
 class Tree(CursorWidget):
     """An indented node list with a cursor and per-node expand/collapse.
 
-    ``nodes`` is any iterable of :class:`TreeNode`; ``indent`` is the
-    per-depth space count.  ``selected`` is the visible node under the
-    cursor (``None`` for an empty tree).  The guide column and indicators
-    paint ``text.faint``, unselected labels ``text.base``, and the whole
-    cursor row carries the ``rows.active`` band underneath (the row's own
-    run carries no style of its own, the band rests underneath it).  A
-    disabled node's row paints ``text.faint``.  Styles resolve at render
-    time from the theme or a ``styles=`` group override; assigning
-    ``theme``/``styles`` touches the widget.
-
-    ``fold_open`` and ``fold_closed`` (default the vocabulary's ``\u25be`` and
-    ``\u25b8``) are the fold glyphs: each row's indicator column is the
-    pair's wider seat and a leaf keeps that column blank, so labels align
-    whatever the glyphs measure; ``""`` disables a glyph (its state leaves
-    the column blank) and two empty glyphs collapse the column.
-
-    ``focused`` is the focus flag the focus tier sets
-    : while it is ``True`` the
-    cursor row's band is ``rows.active``; while it is ``False`` that band
-    is ``rows.inactive`` -- the cursor stays legible but loses weight, and
-    every other row renders unchanged.
-
-    ``hover`` is the pointer tier's flag
-    ; :meth:`on_hover` marks the
-    visible node row under the pointer and that row wears
-    ``rows.hover`` -- the pointer's own token, whatever row it is on
-    (D3).
-    The marking starts ``None``, so an un-hovered tree renders
-    byte-for-byte what it always did.
-
-    :meth:`filter` prunes the visible rows to the labels holding a query
-    (case-insensitive substring) and keeps the chain to every hit, rendered
-    open -- the row's own ``\u25be``/``\u25b8`` indicator included; :meth:`jump`
-    is the printable-key type-ahead.  Both read the ``open`` flags,
-    neither writes them: the auto-expansion a filter shows is derived from
-    the match structure on every walk, so clearing the filter brings the
-    user's own rows back untouched.
+    ``selected`` is the visible node under the cursor.  The cursor row rides
+    ``rows.active`` (``rows.inactive`` unfocused), hover wins over it (D3),
+    and disabled rows paint faint.  ``indent`` sets per-depth spacing; the
+    fold pair shares one seated column so labels align.  Movement clamps;
+    activation expands/collapses and emits the node.  ``filter``/``jump``
+    narrow and steer rows without writing ``open`` flags.
     """
 
     __slots__ = (
@@ -196,13 +118,6 @@ class Tree(CursorWidget):
         self._hover_index: int | None = None
 
     def _band(self, current: bool, hovered: bool, disabled: bool = False) -> Style:
-        """The surface one node row rests on: :meth:`RowStyles.band`, by precedence.
-
-        The cursor row wears ``rows.active`` while focused and
-        ``rows.inactive`` while not; the pointer's row ``rows.hover`` and a
-        resting row ``rows.base``.  The ``rows`` group comes from
-        ``styles`` when overridden, else the theme.
-        """
         return self.group("rows").band(
             active=current, hovered=hovered, focused=self.focused, disabled=disabled
         )
@@ -210,15 +125,12 @@ class Tree(CursorWidget):
     # -- the cursor hooks -------------------------------------------------------
 
     def _entry_count(self) -> int:
-        """The visible node rows the cursor walks."""
         return len(self._visible())
 
     def _entry_at(self, index: int) -> object | None:
-        """The visible node at row ``index`` (side-effect free)."""
         return self._visible()[index][0]
 
     def _cursor_disabled(self) -> Iterable[int]:
-        """The visible rows a move steps over and ``select`` refuses."""
         return {i for i, (node, _, _) in enumerate(self._visible()) if node.disabled}
 
     def _cursor_wraps(self) -> bool:
@@ -226,17 +138,14 @@ class Tree(CursorWidget):
         return False
 
     def _cursor_enabled(self) -> bool:
-        """The whole-tree disabled switch gates every cursor verb."""
         return not self.disabled
 
     # -- the verbs ---------------------------------------------------------------
 
     def activate(self) -> bool:
-        """Toggle the visible node under the cursor; ``True`` when it folded.
+        """Toggle the node under the cursor; ``True`` when it folded.
 
-        A leaf has nothing to open, and a disabled node or tree answers
-        ``False``.  A real flip writes the node through the shared result
-        slot (read once by ``take``).
+        Emits the node.  Leaves, disabled nodes and a disabled tree refuse.
         """
         if self.disabled:
             return False
@@ -258,14 +167,7 @@ class Tree(CursorWidget):
         return self._fold(not node.open)
 
     def on_action(self, name: str) -> bool:
-        """Run one named tree action; ``False`` for an unknown name.
-
-        ``open`` / ``close`` fold the node under the cursor without
-        toggling; every other name is the shared cursor's (``prev`` /
-        ``next`` / ``first`` / ``last`` / ``page_*`` / ``activate`` /
-        ``toggle``).  An unknown name answers ``False`` without touching
-        the tree.
-        """
+        """``open``/``close`` fold explicitly; every other name is the shared cursor's."""
         if name == "open":
             return self._fold(True)
         if name == "close":
@@ -273,15 +175,9 @@ class Tree(CursorWidget):
         return super().on_action(name)
 
     def on_click(self, pos: Pos) -> bool:
-        """Place the cursor on the visible node at ``pos.y``; True on a hit.
+        """Place the cursor on the visible node at ``pos.y``; ``True`` on a hit.
 
-        ``pos.y`` is a 0-based row of this component's own ``render`` -- the
-        visible nodes, in draw order.  A row that is an enabled node answers
-        ``True`` and moves the cursor there (even when it already was); a
-        disabled node, a disabled tree, and any row past the last node
-        answer ``False`` and leave the cursor alone.  ``pos.x`` is ignored:
-        a node row belongs to its node from the first indent column to the
-        last label column -- no column narrows the hit.
+        ``pos.x`` is ignored; disabled nodes and trees refuse.
         """
         if self.disabled:
             return False
@@ -294,12 +190,10 @@ class Tree(CursorWidget):
         return True
 
     def _fold(self, opened: bool) -> bool:
-        """Set the node under the cursor to ``opened``; ``True`` on a change.
+        """Set the cursor node's ``open`` to ``opened``; ``True`` on a change.
 
-        The half :meth:`on_action`'s ``open`` / ``close`` names share: a
-        leaf, a disabled node or a disabled tree answers ``False``, an
-        already-folded node answers ``False`` (nothing changed), and a real
-        flip re-clamps the cursor into the rows that remain.
+        Leaves, disabled nodes and an already-matching state answer
+        ``False``; a real flip re-clamps the cursor.
         """
         if self.disabled:
             return False
@@ -314,28 +208,13 @@ class Tree(CursorWidget):
         return True
 
     def filter(self, query: str | None) -> bool:
-        """Prune the visible rows to the labels holding ``query``; True when they moved.
+        """Prune visible rows to labels holding ``query``; True when the rows moved.
 
-        A node stays visible when its own label holds ``query`` as a
-        **case-insensitive substring** *or* a node below it does -- the
-        ancestors of every hit are kept, so the chain to each match is on
-        screen and renders **open** (the walk descends any kept node with
-        kept children, whatever that node's own ``open`` flag says).
-        An empty string matches every label (the substring rule), so
-        ``filter("")`` shows the whole tree with every chain open; ``None``
-        clears the filter.
-
-        The auto-expansion is **derived, never written back**: the user's
-        expansion set is exactly the nodes' ``open`` flags and the
-        filter's own is recomputed from the match structure on every walk,
-        so the two cannot drift -- ``filter(None)`` restores the user's rows
-        because nothing was ever rewritten, and the filter never interferes
-        with :meth:`on_action`, whose fold simply waits for the filter to
-        clear.  The cursor returns to the top row whenever the query
-        changes (a new query is a new list -- the ``Autocomplete`` rule),
-        and the answer says whether the *rows* changed: ``True`` for a
-        query that prunes or restores, ``False`` for a no-op call (the same
-        query twice, clearing an unfiltered tree).
+        Case-insensitive substring; ancestors of hits are kept and their
+        chains render open.  ``""`` matches everything, ``None`` clears.
+        Auto-expansion is derived, never written to ``open``.  A changed
+        query resets the cursor to the top; the answer says whether the rows
+        changed.
         """
         query = None if query is None else str(query)
         if query == self._filter:
@@ -350,24 +229,11 @@ class Tree(CursorWidget):
         return self._visible() != before
 
     def jump(self, char: str) -> bool:
-        """Type-ahead: cursor to the next visible node starting with ``char``.
+        """Type-ahead: move the cursor to the next visible label starting with ``char``.
 
-        ``char`` is one printable character (anything else declines without
-        moving); the scan walks the **visible** rows -- the filtered ones
-        included -- starting at the row *after* the cursor and wrapping
-        around, so repeated presses cycle the matches and a press on a node
-        already under the cursor moves on to the next hit rather than
-        staying put.  The match is case-insensitive on the label's first
-        character.  ``True`` when the cursor landed on a different row;
-        ``False`` -- and nothing moved -- for a non-printable or multi-
-        character argument, an empty tree, or a character no visible label
-        starts with.
-
-        The demo shell routes no printable to a widget, so a host that
-        wants live type-ahead routes its character keys here itself::
-
-            if isinstance(event, KeyEvent) and event.char:
-                tree.jump(event.char)
+        Case-insensitive, wraps around and skips disabled rows; ``True``
+        when the cursor landed elsewhere.  Non-printable or multi-character
+        input, an empty tree and no match decline.
         """
         if len(char) != 1 or not char.isprintable():
             return False
@@ -388,16 +254,10 @@ class Tree(CursorWidget):
         return False  # no enabled visible label starts with the character
 
     def on_hover(self, pos: Pos | None) -> bool:
-        """Mark the visible node row under the pointer; True on a change.
+        """Mark the visible node row under the pointer; True when the marking changed.
 
-        The pointer tier's row-level half (D3): ``pos.y`` is a 0-based row of
-        the visible nodes in draw order -- exactly what :meth:`on_click`
-        consumes, minus the cursor move -- and ``pos.x`` is ignored (a node
-        row owns the whole width).  A row past the last node answers "no
-        node" and clears the marking; ``None`` clears it too (the pointer
-        left).  The answer is whether the marked row changed, and
-        :meth:`render` rests that row on the theme's ``hover`` band -- the
-        pointer's own token, whatever row it is on.
+        Resolved like :meth:`on_click` without moving the cursor; ``None``
+        clears it.
         """
         if pos is None:
             target = None
@@ -411,13 +271,7 @@ class Tree(CursorWidget):
         return changed
 
     def render(self, c: Constraints) -> Surface:
-        """One row per visible node, each through the row-band contract.
-
-        The constraint carries the width; a ``max_height`` budget
-        truncates the leading visible rows (the tree never grows past the
-        height it was offered).  The rows are :meth:`Surface.clipped`, not
-        padded, so short rows keep the bytes they always had.
-        """
+        """One banded row per visible node; ``max_height`` truncates leading rows."""
         self._sync_cursor()
         visible = self._visible()
         cursor = self._cursor.index
@@ -436,14 +290,10 @@ class Tree(CursorWidget):
         return Surface.clipped(out, c.width)
 
     def _visible(self) -> list[tuple[TreeNode, int, bool]]:
-        """The visible nodes as ``(node, depth, open)`` triples, in draw order.
+        """The visible nodes as ``(node, depth, open)`` in draw order.
 
-        ``open`` is what the row's own indicator shows: the node's
-        ``open`` flag on the unfiltered walk, and "this node holds a
-        kept child" on the filtered one (:meth:`_visit_filtered`) -- so a
-        drawn ``\\u25be`` never disagrees with the rows actually below it,
-        and the filter's derived auto-expansion is visible in the indicator
-        without the flag ever being written.
+        ``open`` is what the indicator draws: the node's flag normally, or
+        "has a kept child" under a filter (derived, never written back).
         """
         out: list[tuple[TreeNode, int, bool]] = []
         if self._filter is None:
@@ -469,14 +319,9 @@ class Tree(CursorWidget):
     ) -> None:
         """The filtered walk: keep a node when it matches or holds a match below.
 
-        Every node is visited -- a match below a match is a match too -- and
-        a node is emitted when its own label holds ``needle`` or the walk
-        below it emitted anything, with that subtree following it: the
-        ancestors of every hit are kept and the chains render open (the
-        emitted ``open`` flag is "there is a kept child", the row the
-        indicator draws).  The ``open`` flags are not read here, which
-        is exactly what makes the auto-expansion derived state (and the
-        user's rows restorable by simply clearing the filter).
+        Emits the ancestor chain with ``open=True`` where a kept child
+        follows; ``open`` flags are never consulted, so clearing restores
+        the user's tree.
         """
         for node in nodes:
             below: list[tuple[TreeNode, int, bool]] = []
@@ -493,21 +338,11 @@ class Tree(CursorWidget):
         current: bool,
         disabled: bool = False,
     ) -> Line:
-        """One node's row: the guide and the label, in their text styles.
+        """One node's row: indentation and indicator, then the label.
 
-        The cursor row is one run -- the guide, the indicator and the label
-        -- in no style of its own: its band is the row pipeline's
-        (:func:`~motui.kernel.cell.rest`), ``rows.active`` while focused and
-        ``rows.inactive`` while not.
-        Every other row carries the guide in ``text.faint`` and the label
-        in ``text.base`` and rests on the ground.  A disabled node (or a
-        disabled tree) paints the whole row in ``text.faint``.  ``opened``
-        is what the indicator draws -- the node's own ``open`` flag, or
-        the filter's derived chain state -- and a leaf keeps the indicator
-        column blank so labels align.  The column is the glyph pair's wider
-        seat (:func:`~motui.kernel.glyphs.pair_seat`), so a wide glyph
-        widens every row's column and a node whose state glyph is ``""``
-        leaves a blank column of that width.
+        The cursor row is one unstyled run (its band comes from the caller);
+        other rows paint the guide faint and the label base.  A leaf keeps
+        the pair's wider seat blank so labels align.
         """
         guide = " " * (self.indent * depth)
         pair_width = max(
