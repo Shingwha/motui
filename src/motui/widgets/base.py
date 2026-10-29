@@ -461,12 +461,14 @@ class CursorWidget(ResultWidget):
     """A result widget that walks one cursor over its entries.
 
     The shared half of every data view and menu: a :class:`Cursor` value
-    (``_cursor``) over the entries a subclass reports, the read-only
-    :attr:`index` / :attr:`selected` pair, and the ``select`` / ``move`` /
-    ``home`` / ``end`` verbs.  Subclasses supply the entry hooks -- count,
-    item at a visible row, disabled rows, wrap policy and page size -- and
-    implement :meth:`activate` / :meth:`toggle` when they have one; the
-    cursor arithmetic itself never repeats.
+    (``_cursor``) over the entries a subclass reports, the :attr:`index` /
+    :attr:`selected` pair, and the ``select`` / ``move`` / ``home`` /
+    ``end`` verbs.  Subclasses supply the entry hooks -- count, item at a
+    visible row, disabled rows, wrap policy and page size -- and implement
+    :meth:`activate` / :meth:`toggle` when they have one; the cursor
+    arithmetic itself never repeats.  ``index`` is assignable as the
+    host's convenience door and delegates to :meth:`select`; ``selected``
+    is read-only.
 
     **Clearing.**  Moving the cursor is a state change, not a pick: every
     cursor verb clears a pending result first (:meth:`_clear_result`), so a
@@ -502,6 +504,14 @@ class CursorWidget(ResultWidget):
         """The item at visible row ``index``; the base has none."""
         return None
 
+    def _cursor_enabled(self) -> bool:
+        """Whether the whole control accepts cursor gestures.
+
+        Per-row refusals live in :meth:`_cursor_disabled`; a control-level
+        ``disabled`` flag is the subclass's policy and gates every verb here.
+        """
+        return True
+
     def _cursor_disabled(self) -> Iterable[int]:
         """The visible rows a move steps over and ``select`` refuses."""
         return ()
@@ -525,6 +535,11 @@ class CursorWidget(ResultWidget):
         """The cursor position, clamped into the current entries (0 if empty)."""
         self._sync_cursor()
         return self._cursor.index
+
+    @index.setter
+    def index(self, value: int) -> None:
+        """Place the cursor through :meth:`select` (host-assignment door)."""
+        self.select(int(value))
 
     @property
     def selected(self) -> object | None:
@@ -551,6 +566,8 @@ class CursorWidget(ResultWidget):
         set always declines.
         """
         self._clear_result()
+        if not self._cursor_enabled():
+            return False
         self._sync_cursor()
         changed = self._cursor.select(index)
         if changed:
@@ -560,6 +577,8 @@ class CursorWidget(ResultWidget):
     def move(self, delta: int) -> bool:
         """Move the cursor ``delta`` enabled rows; ``False`` when unchanged."""
         self._clear_result()
+        if not self._cursor_enabled():
+            return False
         self._sync_cursor()
         changed = self._cursor.move(delta)
         if changed:
@@ -569,6 +588,8 @@ class CursorWidget(ResultWidget):
     def home(self) -> bool:
         """Jump to the first enabled row; ``False`` when unchanged."""
         self._clear_result()
+        if not self._cursor_enabled():
+            return False
         self._sync_cursor()
         changed = self._cursor.home()
         if changed:
@@ -578,6 +599,8 @@ class CursorWidget(ResultWidget):
     def end(self) -> bool:
         """Jump to the last enabled row; ``False`` when unchanged."""
         self._clear_result()
+        if not self._cursor_enabled():
+            return False
         self._sync_cursor()
         changed = self._cursor.end()
         if changed:
@@ -591,6 +614,15 @@ class CursorWidget(ResultWidget):
     def toggle(self) -> bool:
         """Flip a boolean or marked state; the base has none and declines."""
         return False
+
+    def on_key(self, event: KeyEvent) -> bool:
+        """Route one key through :attr:`keymap`; an unbound key declines."""
+        if not isinstance(event, KeyEvent):
+            return False
+        action = self.keymap.get(event.key)
+        if action is None:
+            return False
+        return self.on_action(action)
 
     def on_action(self, name: str) -> bool:
         """Route the nine action names; unknown names decline.
