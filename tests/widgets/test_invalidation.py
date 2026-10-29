@@ -18,7 +18,6 @@ from motui.kernel.style import Style
 from motui.kernel.text import WrapMode
 from motui.widgets import Canvas, Form, Input, List, ScrollPanel, Table, Text
 from motui.widgets.form import Field
-
 from tests.testing import key
 
 
@@ -102,7 +101,7 @@ def test_scroll_panel_scrolling_moves_the_section_rows():
 
 
 def test_table_cursor_and_an_explicit_touch_move_the_section_rows():
-    table = Table(["A", "B"], [["1", "2"], ["3", "4"]])
+    table = Table([["1", "2"], ["3", "4"]], headers=["A", "B"])
     block = Section("t", table)
     without_cursor = block.rows_view(Constraints(width=20))
     table.move(1)

@@ -43,12 +43,11 @@ class DashboardScene(Scene):
         self.spark = Sparkline([0.5] * 48, marker="braille", style=theme.status.success)
         self.signal_bar = ProgressBar(0.96, label="signal", theme=theme)
         self.relay_table = Table(
-            ["id", "ms", "state"],
             [
                 ["02", "42", "on"],
                 ["04", "68", "idle"],
                 ["07", "91", "idle"],
-            ],
+            ], headers=["id", "ms", "state"],
             theme=theme,
         )
         self._summary = Text("", style=theme.text.muted, theme=theme)

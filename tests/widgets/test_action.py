@@ -138,7 +138,7 @@ def test_link_focus_and_disabled_flags_shape_the_row():
         (lambda theme: Select([Option("one"), Option("two"), Option("three")], theme=theme), 2, 0),
         (lambda theme: Tabs(["one", "two"], theme=theme), 0, 8),
         (lambda theme: Tree([TreeNode("a"), TreeNode("b")], theme=theme), 1, 0),
-        (lambda theme: Table(["h"], [["a"], ["b"]], theme=theme), 5, 0),
+        (lambda theme: Table([["a"], ["b"]], headers=["h"], theme=theme), 5, 0),
     ],
 )
 def test_hover_at_marks_and_clears_one_row_across_components(build, row, col):

@@ -86,15 +86,15 @@ from __future__ import annotations
 
 from collections.abc import Iterable, Sequence
 
-from ..widgets.cursor import Cursor
-from ..kernel.events import KeyEvent
-from ..kernel.glyphs import GLYPHS, Glyphs, pair_seat, seat, seat_width
 from ..kernel.cell import Line, Segment, Surface, rest
+from ..kernel.events import KeyEvent
+from ..kernel.geom import Pos
+from ..kernel.glyphs import GLYPHS, Glyphs, pair_seat, seat, seat_width
 from ..kernel.layout import Constraints
-from ..widgets.mark import MarkSet
 from ..kernel.style import Style
 from ..kernel.theme import Styles, Theme
-from ..widgets.base import Widget
+from ..widgets.base import CURSOR_KEYMAP, CursorWidget
+from ..widgets.mark import MarkSet
 from .strip import Keymap
 
 __all__ = ["List"]
@@ -107,7 +107,7 @@ _ABOVE = object()
 _BELOW = object()
 
 
-class List(Widget):
+class List(CursorWidget):
     """A cursor over ``items``, rendered as a ``window``-row view.
 
     ``index`` is the cursor -- a 0-based item index, clamped on assignment
@@ -140,9 +140,6 @@ class List(Widget):
 
     __slots__ = (
         "_hover_row",
-        "_index",
-        "_keymap",
-        "_pending",
         "disabled",
         "disabled_items",
         "glyphs",
@@ -158,15 +155,8 @@ class List(Widget):
     hoverable = True
     activatable = True
 
-    #: The default key table (a per-instance copy backs ``self.keymap``).
-    keymap = Keymap(
-        {
-            "up": "prev",
-            "down": "next",
-            "home": "first",
-            "end": "last",
-        }
-    )
+    #: The family table plus the marking key.
+    keymap = Keymap({**CURSOR_KEYMAP, "space": "toggle"})
 
     def __init__(
         self,
@@ -181,9 +171,6 @@ class List(Widget):
         styles: Styles | None = None,
     ) -> None:
         super().__init__(theme, styles)
-        # The instance's own key table: rebinding one entry never reaches
-        # the class default (see :class:`~motui.widgets.strip.Keymap`).
-        self._keymap = dict(type(self).keymap)
         self.items = list(items)
         if window < 1:
             raise ValueError(f"window must be at least 1 row, got {window}")
@@ -201,7 +188,6 @@ class List(Widget):
         #: ``[x] ``/``[ ] `` prefix.  The set is the host's to read, clear
         #: and fill.
         self.marked = MarkSet()
-        self._index = 0
         # The item row the pointer is on, or ``None``; written by
         # ``on_hover``, read by ``render``.  ``None`` renders byte-for-byte
         # what the list always did.
@@ -211,10 +197,6 @@ class List(Widget):
         #: The item rows that cannot be landed on (a frozen set: assign a
         #: new iterable to replace it).
         self.disabled_items = frozenset(disabled_items)
-        # The pending one-shot pick: written by ``activate`` / a landing
-        # ``on_click``, read once by ``take`` and cleared by every
-        # consumed key.
-        self._pending: str | None = None
 
     def _band(self, current: bool, hovered: bool, disabled: bool = False) -> Style:
         """The surface one row rests on: :meth:`RowStyles.band`, by precedence.
@@ -230,97 +212,58 @@ class List(Widget):
 
     # -- the cursor -------------------------------------------------------------
 
-    @property
-    def index(self) -> int:
-        """The cursor's item index (``0`` while the list is empty)."""
-        return self._index
+    # -- the cursor hooks -------------------------------------------------------
 
-    @index.setter
-    def index(self, value: int) -> None:
-        self._index = Cursor(len(self.items)).clamp(value)
-        self.touch()
+    def _entry_count(self) -> int:
+        """The items the cursor walks."""
+        return len(self.items)
 
-    def _cursor(self) -> Cursor:
-        """The cursor value over the current items and disabled set."""
-        return Cursor(
-            len(self.items),
-            index=self._index,
-            disabled=self.disabled_items,
-        )
+    def _entry_at(self, index: int) -> object | None:
+        """The item at visible row ``index`` (side-effect free)."""
+        return self.items[index]
 
-    def move(self, delta: int) -> bool:
-        """Move the cursor ``delta`` enabled items, clamped at the ends.
+    def _cursor_disabled(self) -> Iterable[int]:
+        """The item rows a move steps over and ``select`` refuses."""
+        return self.disabled_items
 
-        The clamp is the table's deliberate opposite of a menu cycle (D10):
-        a list is a data view, so the first and last items are real edges.
-        ``disabled_items`` are stepped over, and a disabled control moves
-        nowhere.  The step clears a pending result -- landed or not -- so a
-        stale pick never survives the next key.
-        """
-        self._pending = None
-        if self.disabled or delta == 0:
-            return False
-        cursor = self._cursor()
-        moved = cursor.move(delta)
-        if moved:
-            self._index = cursor.index
-            self.touch()
-        return moved
+    def _cursor_wraps(self) -> bool:
+        """A data view clamps at its ends (D10); it never wraps."""
+        return False
 
-    def home(self) -> bool:
-        """Jump to the first enabled item; ``True`` when the cursor moved."""
-        self._pending = None
-        if self.disabled:
-            return False
-        cursor = self._cursor()
-        moved = cursor.home()
-        if moved:
-            self._index = cursor.index
-            self.touch()
-        return moved
+    def _cursor_enabled(self) -> bool:
+        """The whole-list disabled switch gates every cursor verb."""
+        return not self.disabled
 
-    def end(self) -> bool:
-        """Jump to the last enabled item; ``True`` when the cursor moved."""
-        self._pending = None
-        if self.disabled:
-            return False
-        cursor = self._cursor()
-        moved = cursor.end()
-        if moved:
-            self._index = cursor.index
-            self.touch()
-        return moved
+    def _page_size(self, size: int) -> int:
+        """A page is the visible window, capped by the item count."""
+        return min(size, self.window)
 
     def _is_disabled(self, index: int) -> bool:
         """Whether item ``index`` is disabled (the whole control or per item)."""
         return self.disabled or index in self.disabled_items
 
-    def _current(self) -> str | None:
-        """The enabled item under the cursor, or ``None`` (empty, stale, disabled)."""
-        if 0 <= self._index < len(self.items) and not self._is_disabled(self._index):
-            return self.items[self._index]
-        return None
+    # -- the verbs ---------------------------------------------------------------
 
-    def take(self) -> str | None:
-        """Read the pending pick once and clear it (the ``take`` door)."""
-        value = self._pending
-        self._pending = None
-        return value
+    def activate(self) -> bool:
+        """Leave the cursor item pending; ``False`` on no enabled item."""
+        if self.selected is None or self._is_disabled(self.index):
+            return False
+        self._emit(self.selected)
+        return True
 
     def toggle(self) -> bool:
         """Flip the cursor item's mark; ``True`` when there was one to flip.
 
         The marking gesture beside the cursor's own: the cursor item's mark
-        flips in :attr:`marked`, and nothing else moves -- ``index`` and
-        the pending result are the cursor's state.  The library binds no key
-        to it (``space`` stays the host's, see :meth:`handle`), so a host
-        routes its own mark key here.  ``False`` -- and no mark written --
-        for an empty list, a disabled control, or a disabled cursor row,
-        the :meth:`~motui.widgets.choice.Select.toggle` rule.
+        flips in :attr:`marked`, and nothing else moves -- ``index`` and the
+        pending result are the cursor's state, so a toggle never emits.
+        ``False`` -- and no mark written -- for an empty list, a disabled
+        control, or a disabled cursor row, the
+        :meth:`~motui.widgets.choice.Select.toggle` rule.
         """
-        if self._current() is None:
+        if self.selected is None or self._is_disabled(self.index):
             return False
-        self.marked.toggle(self._index)
+        self.marked.toggle(self.index)
         self.touch()
         return True
 
@@ -333,10 +276,9 @@ class List(Widget):
         (:meth:`_layout`): a counter row and every row past the rendered
         ones carry no item, so they answer ``False`` and change nothing.
         ``pos.x`` is ignored, and deliberately so: an item row owns the
-        whole width.  A hit moves the cursor there and leaves that item
-        pending (the radio family's contract: a landing click is a pick,
-        read once through :meth:`take`).  A disabled control or item
-        refuses the hit and changes nothing.
+        whole width.  A hit moves the cursor there (a state change, never a
+        pick -- activation is the emitting verb).  A disabled control or
+        item refuses the hit and changes nothing.
         """
         if self.disabled:
             return False
@@ -348,9 +290,7 @@ class List(Widget):
             return False
         if self._is_disabled(entry):
             return False
-        self._index = entry
-        self._pending = self.items[entry]
-        self.touch()
+        self.select(entry)
         return True
 
     def on_hover(self, pos: Pos | None) -> bool:
@@ -381,43 +321,11 @@ class List(Widget):
 
     # -- the keyboard -----------------------------------------------------------
 
-    def on_action(self, name: str) -> bool:
-        """Run one named cursor action; ``False`` only for an unknown name.
-
-        ``prev`` / ``next`` step one item, ``first`` / ``last`` jump to the
-        edges -- the four names :attr:`keymap` binds -- and ``activate`` /
-        ``toggle`` run the list's own activation and marking verbs.  A known
-        movement action answers ``True`` even at an edge, because the 1.x
-        ``handle`` consumed its four keys unconditionally; ``activate`` and
-        ``toggle`` answer whether there was something to take or flip, the
-        verbs' own rule.  An unknown name answers ``False`` without touching
-        the list, so a router keeps the key.
-        """
-        if name == "prev":
-            self.move(-1)
-            return True
-        if name == "next":
-            self.move(1)
-            return True
-        if name == "first":
-            self.home()
-            return True
-        if name == "last":
-            self.end()
-            return True
-        if name == "activate":
-            current = self._current()
-            self._pending = current
-            return current is not None
-        if name == "toggle":
-            return self.toggle()
-        return False
-
     def on_key(self, event: KeyEvent) -> bool:
         """Consume an event; ``True`` when the list took it.
 
         The routing table, in order: the event's key through
-        :attr:`keymap` (``up``/``down``/``home``/``end`` by default, and
+        :attr:`keymap` (the shared cursor table plus ``space: toggle``, and
         whatever a host rebound) and then its action; with
         :attr:`prefix_jump` armed, a :class:`~motui.kernel.events.KeyEvent`
         whose ``key`` is a single printable character jumps to the first
@@ -426,15 +334,14 @@ class List(Widget):
         list is the list's own gesture, never a leak to the host.
         Everything else -- ``enter``, ``tab``, the control chords, a
         :class:`~motui.kernel.events.PasteEvent` -- is declined, so the
-        host and the focus tier keep the keys they own.  Every consumed key
-        clears a pending result; a disabled control declines everything.
+        host and the focus tier keep the keys they own.  A disabled control
+        declines everything.
         """
         if self.disabled or not isinstance(event, KeyEvent):
             return False
         name = event.key
-        action = self.keymap.get(name)
-        if action is not None:
-            return self.on_action(action)
+        if name in self.keymap:
+            return super().on_key(event)
         if self.prefix_jump and len(name) == 1 and name.isprintable():
             self._jump(name)
             return True
@@ -446,17 +353,15 @@ class List(Widget):
         The prefix-jump rule, case-insensitive and always scanned from the
         top of the list ("the first item"), so the same key lands on the
         same row however the cursor wandered.  Disabled items are skipped
-        like every other cursor gesture.  A miss moves nothing; either way
-        the key was consumed and a pending result is cleared.
+        like every other cursor gesture.  A miss moves nothing and leaves
+        the pending result alone (no state changed).
         """
-        self._pending = None
         needle = char.lower()
         for index, item in enumerate(self.items):
             if not self._is_disabled(index) and item.lower().startswith(needle):
-                moved = index != self._index
+                moved = index != self.index
                 if moved:
-                    self._index = index
-                    self.touch()
+                    self.select(index)
                 return moved
         return False
 
@@ -470,7 +375,8 @@ class List(Widget):
         at both ends, so the cursor is always inside the window and the
         window slides one row at a time near an edge.
         """
-        return self._cursor().window(self.window, anchor="center")
+        self._sync_cursor()
+        return self._cursor.window(self.window, anchor="center")
 
     def _layout(self) -> list[int | object]:
         """What each rendered row carries: an item index, or a counter token.
@@ -513,7 +419,7 @@ class List(Widget):
         two-segment row the list always emitted.
         """
         style = self.group("text").faint if disabled else self.group("text").base
-        if index == self._index:
+        if index == self.index:
             lead = seat(self.glyphs.cursor)
         else:
             lead = " " * seat_width(self.glyphs.cursor)
@@ -543,6 +449,7 @@ class List(Widget):
         if count == 0:
             return Surface.clipped([], c.width)
         start, stop = self._visible_range()
+        cursor_index = self.index
         rows: list[Line] = []
         for entry in self._layout():
             if isinstance(entry, int):
@@ -552,7 +459,9 @@ class List(Widget):
                         self._row(entry, item_disabled),
                         c.width,
                         self._band(
-                            entry == self._index, entry == self._hover_row, item_disabled
+                            entry == cursor_index,
+                            entry == self._hover_row,
+                            item_disabled,
                         ),
                     )
                 )
@@ -583,4 +492,4 @@ class List(Widget):
         return Surface.clipped(rows, c.width)
 
     def __repr__(self) -> str:
-        return f"List({len(self.items)} items, index={self._index}, window={self.window})"
+        return f"List({len(self.items)} items, index={self.index}, window={self.window})"

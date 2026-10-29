@@ -64,13 +64,12 @@ class GalleryScene(Scene):
             theme=theme,
         )
         self.table = Table(
-            ["widget", "role"],
             [
                 ["Tree", "fold"],
                 ["Table", "grid"],
                 ["Slider", "value"],
                 ["Input", "type"],
-            ],
+            ], headers=["widget", "role"],
             theme=theme,
         )
         self.table.index = 1

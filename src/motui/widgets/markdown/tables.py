@@ -12,9 +12,9 @@ import re
 from typing import TYPE_CHECKING
 
 from ...kernel.cell import Line
-from .inline import inline_segments
-from ..table import Table
 from ...kernel.layout import Constraints
+from ..table import Table
+from .inline import inline_segments
 
 if TYPE_CHECKING:  # annotations only: rendering happens through a ctx
     from .context import RenderContext
@@ -67,11 +67,14 @@ class TableRule:
         ncols = len(header)
         aligns = [_align_of(marks, c) for c in range(ncols)]
         table = Table(
-            [inline_segments(cell, ctx) for cell in header],
             [
-                [inline_segments(row[c], ctx) if c < len(row) else "" for c in range(ncols)]
+                [
+                    inline_segments(row[c], ctx) if c < len(row) else ""
+                    for c in range(ncols)
+                ]
                 for row in body
             ],
+            headers=[inline_segments(cell, ctx) for cell in header],
             aligns=aligns,
             theme=ctx.theme,
         )

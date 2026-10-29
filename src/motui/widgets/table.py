@@ -83,12 +83,14 @@ bytes it always did.
 :class:`~motui.widgets.mark.MarkSet` of data-row indices and ``toggle()``
 flips the cursor row's mark (the host routes the key it chooses -- the
 library binds no gesture itself).  While the set is non-empty every data
-row leads with its ``glyphs.check_on``/``check_off`` seat inside its first cell -- one pair-wide column,
+row leads with its ``glyphs.check_on``/``check_off`` seat inside its
+first cell -- one pair-wide column,
 padded through :func:`~motui.kernel.glyphs.pair_seat` -- so a custom pair
 of unequal widths still lines up, and two empty strings collapse the column
 to zero.  The grid's frame, its rules and its row count are untouched,
 column 0's natural width grows by the pair, and an **empty** mark set
-renders exactly the bytes the table always did.  The marks are row inputs, and a ``sort_by`` re-order
+renders exactly the bytes the table always did.  The marks are row
+inputs, and a ``sort_by`` re-order
 re-points them at the record they were on exactly as it re-points the
 cursor, the pending result and the pointer's mark.
 
@@ -115,16 +117,15 @@ from __future__ import annotations
 from collections.abc import Iterable, Sequence
 from typing import NamedTuple
 
-from ..widgets.cursor import Cursor
-from ..kernel.events import KeyEvent
-from ..kernel.glyphs import GLYPHS, Border, Glyphs, pair_seat, seat_width
 from ..kernel.cell import Line, Segment, Surface, fuse, overlay, rest
+from ..kernel.geom import Pos
+from ..kernel.glyphs import GLYPHS, Border, Glyphs, pair_seat, seat_width
 from ..kernel.layout import Constraints
-from ..widgets.mark import MarkSet
 from ..kernel.style import NONE, Style
 from ..kernel.text import WrapMode, visible_width
 from ..kernel.theme import Styles, Theme
-from ..widgets.base import Widget
+from ..widgets.base import CURSOR_KEYMAP, CursorWidget
+from ..widgets.mark import MarkSet
 from .strip import Keymap
 
 __all__ = ["Table"]
@@ -247,7 +248,7 @@ def _cell_text(cell: str | tuple[str, Style] | Sequence[Segment] | Segment) -> s
     return "".join(seg.text for seg in cell)
 
 
-class Table(Widget):
+class Table(CursorWidget):
     """A box-line table of string, styled, or multi-segment cells.
 
     ``headers`` names the columns; ``rows`` holds the records (a short row
@@ -302,7 +303,8 @@ class Table(Widget):
     :class:`~motui.widgets.mark.MarkSet` of data-row indices and
     :meth:`toggle` flips the cursor row's mark (the host routes the key --
     the table binds none).  While the set is non-empty every data row leads
-    with its ``glyphs.check_on``/``check_off`` seat inside its first cell; the column is the pair's wider
+    with its ``glyphs.check_on``/``check_off`` seat inside its first cell;
+    the column is the pair's wider
     seat, so a custom pair lines up, and an empty pair (two ``""``)
     collapses it to zero columns.  An empty set renders exactly the bytes
     the table always did, the frame and the row
@@ -336,21 +338,20 @@ class Table(Widget):
     """
 
     __slots__ = (
-        "_glyphs",
         "_border",
+        "_cursor_armed",
+        "_glyphs",
         "_hover_row",
-        "_index",
-        "_keymap",
         "_last_layout",
+        "_memo_generation",
         "_memo_layout",
         "_memo_natural",
         "_memo_natural_generation",
-        "_memo_generation",
         "_memo_rows",
         "_memo_width",
-        "_pending",
         "_widths",
         "aligns",
+        "cell_wrap",
         "disabled",
         "disabled_items",
         "headers",
@@ -358,7 +359,6 @@ class Table(Widget):
         "max_col_width",
         "min_col_width",
         "rows",
-        "cell_wrap",
     )
 
     #: The table owns the keyboard, clicks, the pointer's row and activation.
@@ -367,24 +367,16 @@ class Table(Widget):
     hoverable = True
     activatable = True
 
-    #: The default key table (a per-instance copy backs ``self.keymap``).
-    keymap = Keymap(
-        {
-            "up": "prev",
-            "down": "next",
-            "left": "prev",
-            "right": "next",
-            "enter": "activate",
-        }
-    )
+    #: The family table plus the marking key.
+    keymap = Keymap({**CURSOR_KEYMAP, "space": "toggle"})
 
     def __init__(
         self,
-        headers: Iterable[str | tuple[str, Style] | Sequence[Segment] | Segment],
         rows: Iterable[
             Iterable[str | tuple[str, Style] | Sequence[Segment] | Segment]
-        ],
+        ] = (),
         *,
+        headers: Iterable[str | tuple[str, Style] | Sequence[Segment] | Segment] = (),
         aligns: Sequence[str] | None = None,
         glyphs: Glyphs = GLYPHS,
         grid: Border | None = None,
@@ -397,9 +389,6 @@ class Table(Widget):
         min_col_width: int = 3,
     ) -> None:
         super().__init__(theme, styles)
-        # The instance's own key table: rebinding one entry never reaches
-        # the class default (see :class:`~motui.widgets.strip.Keymap`).
-        self._keymap = dict(type(self).keymap)
         self.headers = list(headers)
         self.rows = [list(row) for row in rows]
         self.aligns = list(aligns) if aligns is not None else None
@@ -424,8 +413,10 @@ class Table(Widget):
         #: on (see :meth:`sort_by`).
         self.marked = MarkSet()
         # No cursor until a host (or a key) puts one there: a table without a
-        # cursor renders exactly the bytes it always did.
-        self._index: int | None = None
+        # cursor renders exactly the bytes it always did.  ``index`` still
+        # reads ``0`` (the empty table included) and ``selected`` the first
+        # row; the render-only flag keeps the fresh grid unbanded.
+        self._cursor_armed = False
         # The data row the pointer is on, or ``None``; written by
         # ``on_hover``, read by ``render``.  ``None`` renders byte-for-byte
         # what the table always did.
@@ -435,9 +426,6 @@ class Table(Widget):
         #: The data rows that cannot be landed on (a frozen set: assign a
         #: new iterable to replace it).
         self.disabled_items = frozenset(disabled_items)
-        # The pending activation: written by ``activate``, read once by
-        # ``take``, cleared by ``move`` and by a click that lands.
-        self._pending: int | None = None
         # Explicit column budgets (``set_widths``), or ``None`` for the
         # measured widths; read by ``_budgets`` on every render.
         self._widths: list[int] | None = None
@@ -459,86 +447,73 @@ class Table(Widget):
         self._memo_layout: list[_Slot] | None = None
         self._last_layout: list[_Slot] | None = None
 
-    # -- the cursor -------------------------------------------------------------
+    # -- the cursor hooks -------------------------------------------------------
 
-    @property
-    def index(self) -> int | None:
-        """The data row under the cursor; ``None`` while no row is selected.
+    def _entry_count(self) -> int:
+        """The data rows the cursor walks."""
+        return len(self.rows)
 
-        The index counts **data rows only** -- the header and the grid rules
-        are not rows the cursor can sit on.  ``None`` is both the initial
-        value and the empty table's only value.
-        """
-        return self._index
-
-    @index.setter
-    def index(self, value: int | None) -> None:
-        if value is None or not self.rows:
-            self._index = None
-        else:
-            self._index = Cursor(len(self.rows)).clamp(value)
-        self.touch()
-
-    @property
-    def selected(self) -> list | None:
-        """The raw data row under the cursor; ``None`` without one.
-
-        The row is returned as stored -- the caller's own cells, not a copy
-        and not a re-normalized row.  An index the current ``rows`` no
-        longer answer (a host swapped them out) reads as no cursor.
-        """
-        index = self._index
-        if index is None or not 0 <= index < len(self.rows):
-            return None
+    def _entry_at(self, index: int) -> object | None:
+        """The raw data row at visible row ``index`` (side-effect free)."""
         return self.rows[index]
 
-    def move(self, delta: int) -> bool:
-        """Move the cursor ``delta`` enabled data rows, clamped at the ends.
+    def _cursor_disabled(self) -> Iterable[int]:
+        """The data rows a move steps over and ``select`` refuses."""
+        return self.disabled_items
 
-        The clamp is deliberate, and the opposite of the menu family's
-        default: a menu is an *option list* -- its ends meet, so a step off
-        one row lands on the other -- while a table is a *data view*: the
-        first and the last data row are real edges, and a step past one
-        stops there (D10).  ``disabled_items`` are stepped over, and a
-        disabled table moves nowhere.  With no cursor yet, a step lands on
-        the edge it walks away from: ``down`` puts it on the first enabled
-        data row, ``up`` on the last.  ``False`` (and still no cursor)
-        without rows or an enabled landing, and ``False`` for a step that
-        goes nowhere -- which still clears a pending result, so a stale pick
-        never survives the next keystroke.
+    def _cursor_wraps(self) -> bool:
+        """A data view clamps at its ends (D10); it never wraps."""
+        return False
+
+    def _cursor_enabled(self) -> bool:
+        """The whole-table disabled switch gates every cursor verb."""
+        return not self.disabled
+
+    # -- the cursor -------------------------------------------------------------
+
+    def _arm(self) -> None:
+        """Mark the cursor as host-visible; a fresh table draws no band."""
+        if not self._cursor_armed:
+            self._cursor_armed = True
+            self.touch()
+
+    def select(self, index: int) -> bool:
+        """Place the cursor and arm the render band (the host's door)."""
+        self._arm()
+        return super().select(index)
+
+    def move(self, delta: int) -> bool:
+        """Move the cursor and arm the render band (the keyboard's door)."""
+        self._arm()
+        return super().move(delta)
+
+    def home(self) -> bool:
+        """Jump to the first enabled row and arm the render band."""
+        self._arm()
+        return super().home()
+
+    def end(self) -> bool:
+        """Jump to the last enabled row and arm the render band."""
+        self._arm()
+        return super().end()
+
+    def activate(self) -> bool:
+        """Leave the cursor row pending; ``False`` without an armed cursor.
+
+        The row is emitted as the caller's own object (no copy, no index).
+        A fresh table has no host-visible cursor, so it cannot activate; a
+        disabled table or row refuses too.
         """
-        self._pending = None
-        if self.disabled or delta == 0:
+        if not self._cursor_armed:
             return False
-        count = len(self.rows)
-        if count == 0:
+        selected = self.selected
+        if selected is None or not self.rows:
             return False
-        step = 1 if delta > 0 else -1
-        if self._index is None:
-            # No cursor yet: the step lands on the edge it walks away from,
-            # skipping disabled rows.  A sentinel index one past the edge
-            # makes the edge jump report whether any enabled row exists.
-            cursor = Cursor(
-                count,
-                index=-1 if step > 0 else count,
-                disabled=self.disabled_items,
-            )
-            landed = cursor.home() if step > 0 else cursor.end()
-            if not landed:
-                return False  # every row is disabled
-            self._index = cursor.index
-            self.touch()
-            return True
-        cursor = Cursor(
-            count,
-            index=self._index,
-            disabled=self.disabled_items,
-        )
-        moved = cursor.move(delta)
-        if moved:
-            self._index = cursor.index
-            self.touch()
-        return moved
+        index = self.index
+        if self._is_disabled(index):
+            return False
+        self._emit(selected)
+        return True
 
     def _is_disabled(self, index: int) -> bool:
         """Whether data row ``index`` is disabled (the table or per item)."""
@@ -560,8 +535,8 @@ class Table(Widget):
         rendered one -- answers ``False`` and changes nothing.  ``pos.x`` is
         ignored, and deliberately so: every column of a data row belongs to
         that row, so no column narrows the hit.  A hit moves the cursor
-        there (even when it already was) and clears a pending result; a
-        disabled table or data row refuses the hit.
+        there (even when it already was) and arms it; a disabled table or
+        data row refuses the hit.
         """
         if self.disabled:
             return False
@@ -573,33 +548,26 @@ class Table(Widget):
             return False
         if self._is_disabled(entry.data_row):
             return False
-        self._index = entry.data_row
-        self._pending = None
-        self.touch()
+        self.select(entry.data_row)
         return True
-
-    def take(self) -> int | None:
-        """Read the pending row index once and clear it (the ``take`` door)."""
-        value = self._pending
-        self._pending = None
-        return value
 
     def toggle(self) -> bool:
         """Flip the cursor row's mark; ``True`` when there was one to flip.
 
-        The marking gesture beside the cursor's own -- the library binds no
-        key to it, so the host routes ``space`` (or whatever it chooses)
-        here.  The cursor row's mark flips in :attr:`marked` and nothing
-        else moves: ``index``, the pending result and the pointer's hover
-        are the cursor's own state.  ``False`` -- and no mark written --
-        without a cursor (an empty table, or one no row has taken yet), on a
-        disabled row or table, exactly the ``Select.toggle`` rule.
+        The marking gesture beside the cursor's own -- the keymap binds
+        ``space`` to it.  The cursor row's mark flips in :attr:`marked` and
+        nothing else moves: ``index``, the pending result and the pointer's
+        hover are the cursor's own state, so a toggle never emits.  ``False``
+        -- and no mark written -- on a disabled row or table, exactly the
+        ``Select.toggle`` rule.
         """
-        if self.selected is None or self._index is None:
+        selected = self.selected
+        if selected is None or not self.rows:
             return False
-        if self._is_disabled(self._index):
+        index = self.index
+        if self._is_disabled(index):
             return False
-        self.marked.toggle(self._index)
+        self.marked.toggle(index)
         self.touch()
         return True
 
@@ -630,50 +598,6 @@ class Table(Widget):
             self._hover_row = target
             self.touch()
         return changed
-
-    # -- the keyboard -----------------------------------------------------------
-
-    def on_action(self, name: str) -> bool:
-        """Run one named table action; ``False`` for an unknown name.
-
-        ``prev`` / ``next`` step the cursor through :meth:`move` and answer
-        its result (the first step lands on the edge it walks away from; an
-        edge with nowhere to go reports ``False``, the old focus router's
-        rule).  ``activate`` takes the row index through the activation action,
-        ``toggle`` flips the cursor row's mark, and both answer their verb's
-        result.  An unknown name answers ``False`` without touching the
-        table.
-        """
-        if name == "prev":
-            return self.move(-1)
-        if name == "next":
-            return self.move(1)
-        if name == "activate":
-            if self.disabled or self.selected is None or self._index is None:
-                self._pending = None
-                return False
-            if self._is_disabled(self._index):
-                self._pending = None
-                return False
-            self._pending = self._index
-            return True
-        if name == "toggle":
-            return self.toggle()
-        return False
-
-    def on_key(self, event: KeyEvent) -> bool:
-        """Route a key through :attr:`keymap` to :meth:`on_action`.
-
-        The default table binds the arrows and ``enter``; a key no entry
-        names is declined so the host keeps it.  A disabled table's verbs
-        answer ``False``, as they always did.
-        """
-        if not isinstance(event, KeyEvent):
-            return False
-        action = self.keymap.get(event.key)
-        if action is None:
-            return False
-        return self.on_action(action)
 
     # -- the host's data gestures -------------------------------------------------
 
@@ -720,12 +644,10 @@ class Table(Widget):
         # (stale) stays where it is -- it keeps reading as "no row" either way.
         position = {old: new for new, old in enumerate(order)}
         self.rows[:] = [self.rows[i] for i in order]
-        if self._index is not None:
-            self._index = position.get(self._index, self._index)
+        if self._cursor_armed:
+            self._cursor.index = position.get(self._cursor.index, self._cursor.index)
         if self._hover_row is not None:
             self._hover_row = position.get(self._hover_row, self._hover_row)
-        if self._pending is not None:
-            self._pending = position.get(self._pending, self._pending)
         if len(self.marked):
             remapped = sorted({position.get(i, i) for i in self.marked})
             self.marked.clear()
@@ -780,9 +702,10 @@ class Table(Widget):
         return [rest(line, line_width, band) for line in lines]
 
     def header_line(self, width: int) -> Line | None:
-        """The header row's first visual line, byte-identical to the grid's; ``None`` without headers.
+        """The header row's first visual line, byte-identical to the grid's.
 
-        The single-line compatibility view of :meth:`header_lines`: the
+        ``None`` without headers.  The single-line compatibility view of
+        :meth:`header_lines`: the
         line :meth:`render` emits right after its top rule, at the same
         budgets and alignment pads.  A wrapped header hands back its first
         visual line; a host that pins the whole header asks for
@@ -862,10 +785,9 @@ class Table(Widget):
             if layout is None:  # a memo from before the layout slot existed
                 layout = self._layout(build_width)
         self._last_layout = layout
-        if c.max_height is not None:
-            rows = rows[: c.max_height]
-        else:
-            rows = list(rows)
+        rows = (
+            rows[: c.max_height] if c.max_height is not None else list(rows)
+        )
         if self.cell_wrap is WrapMode.OVERFLOW:
             return Surface.of(rows, surface_width, pad=False)
         return Surface.clipped(rows, c.width)
@@ -913,11 +835,11 @@ class Table(Widget):
         mapping -- see the very structure this grid emitted.
         """
         layout, lines = self._plan(width)
-        cursor = self._index
+        cursor = self._cursor.index if self._cursor_armed else None
         hover = self._hover_row
         rows_style = self.group("rows")
         out: list[Line] = []
-        for slot, line in zip(layout, lines):
+        for slot, line in zip(layout, lines, strict=True):
             if slot.data_row is None:  # a frame row or the blank empty row
                 band = rows_style.base
             else:
@@ -1035,10 +957,11 @@ class Table(Widget):
             cells: list[tuple[list[Segment], Style]] = []
             for i in range(ncols):
                 cell = raw[i] if i < len(raw) else ""
-                if row_disabled:
-                    base = disabled_style
-                else:
-                    base = first_column_style if i == 0 else NONE
+                base = (
+                    disabled_style
+                    if row_disabled
+                    else first_column_style if i == 0 else NONE
+                )
                 segments, cell_base = _cell_segments(cell, base)
                 if marking and i == 0:
                     # The prefix takes the cell's own base, so the band the
