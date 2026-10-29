@@ -79,7 +79,10 @@ class Dialog(CursorWidget):
     (``\u2502 body \u2502``), the button row is the buttons joined by single
     spaces and aligned ``"center"`` (the default) or ``"right"`` inside the
     same interior, and every box row is padded solid while ``shade`` is
-    ``True``.  ``border`` swaps the whole frame vocabulary (a
+    ``True``.  The interior cells -- pads, body, buttons and the shade
+    fill -- sit on ``surfaces.raised`` (the content styles merge on top),
+    while the border glyphs keep their border color.  ``border`` swaps the
+    whole frame vocabulary (a
     :class:`~motui.kernel.glyphs.Border`, ``glyphs.box`` by default),
     the border color defaults to ``borders.base`` -- ``status.danger`` while
     ``danger`` -- and the title to ``content.headings[1]`` (D5); both are
@@ -535,19 +538,35 @@ class Dialog(CursorWidget):
         solid rectangle); ``shade=False`` leaves the row ending right after
         its content plus the two pads, the closing pad travelling with it
         (the closing border, framed).  Borderless (``lead == 1``) the same
-        row loses the border cells and keeps the pads: two plain columns
-        where the framed row carries ``border_style``.
+        row loses the border cells and keeps the pads.
+
+        Every interior cell sits on ``surfaces.raised``: the pads, the
+        content and the shade fill merge the surface under their own styles,
+        while the border glyphs keep ``border_style`` untouched.
         """
+        raised = self.group("surfaces").raised
         fill = max(0, box - 2 * lead - content.width) if self.shade else 0
         if self.frame:
-            head = Segment(f"{self._border.left} ", border_style)
-            tail = Segment(f" {self._border.right}", border_style)
+            head = [
+                Segment(self._border.left, border_style),
+                Segment(" ", raised),
+            ]
+            tail = [
+                Segment(" ", raised),
+                Segment(self._border.right, border_style),
+            ]
         else:
-            head = tail = Segment(" ")
-        segments = [head, *content.segments]
+            head = tail = [Segment(" ", raised)]
+        segments = [
+            *head,
+            *(
+                segment.with_style(raised.merge(segment.style))
+                for segment in content.segments
+            ),
+        ]
         if fill:
-            segments.append(Segment(" " * fill))
-        segments.append(tail)
+            segments.append(Segment(" " * fill, raised))
+        segments.extend(tail)
         return Line(segments)
 
     def _button_row(
