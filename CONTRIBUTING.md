@@ -155,7 +155,7 @@ golden or API snapshot change.
 kernel: a wrap mode names how a row meets its width
 widgets: scroll panel windows columns and rows
 docs: architecture, contract and widgets describe the 2.1 tree
-release: the package is 2.1.0
+release: the package is 2.1.2
 ```
 
 ## Adding a component
@@ -204,16 +204,18 @@ headless entry and the tests share the same scene renderer.
 ## Versioning
 
 SemVer, with a deliberately slow MAJOR cadence. The current release is
-**2.1.0**. The 1.x -> 2.0 break and the 2.0 -> 2.1 additions are documented name by name in
+**2.1.2**. The 1.x -> 2.0 break, the 2.0 -> 2.1 additions and the
+2.1.0 -> 2.1.2 widget consistency pass are documented name by name in
 [`docs/MIGRATION.md`](docs/MIGRATION.md); no compatibility aliases or
 legacy arguments are provided.
 
-Inside 2.x the public contract is **additive**. 2.1 adds a provisional pixel
-surface (`motui.pixel`, `PixelCanvas`); as new names they may change in a
-minor until they are frozen. No existing 2.0 name changes meaning, and no
-name is removed without a MAJOR. A
-new kernel field must be keyword-only with a default; `tools/growth.py`
-proves that pattern.
+Inside 2.x the public contract is **additive**, with 2.1.2 as the one
+documented exception: a one-time widget-semantics consistency pass that
+changes constructors, state names and results and removes the old
+spellings. After 2.1.2 the additive rule resumes. The provisional pixel
+surface (`motui.pixel`, `PixelCanvas`) may still change in a minor until it
+is frozen. A new kernel field must be keyword-only with a default;
+`tools/growth.py` proves that pattern.
 
 - **MAJOR** — the yearly cut that owns the year's removals and renames.
 - **MINOR** — a name joins a facade, a new component/hook, or an additive

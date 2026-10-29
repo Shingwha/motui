@@ -188,8 +188,8 @@ uv run python tools/framebench.py
 - [x] W4c（`01266d2` 合并）
 - [x] W5（`fcc0108` 合并）
 - [x] W6（`c692c0b` 合并）
-- [ ] W7a docstrings widgets/pixel/testing
-- [ ] W7b docstrings app/kernel/terminal/demo
-- [ ] W7c docs/ADR/README
-- [ ] W7d test trim
-- [ ] W8
+- [x] W7a docstrings widgets/pixel/testing（6312→2183）
+- [x] W7b docstrings app/kernel/terminal/demo（6692→1604）
+- [x] W7c docs/ADR/README
+- [x] W7d test trim（1838→1383）
+- [x] W8

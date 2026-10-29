@@ -5,6 +5,93 @@ is [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and the version
 numbers follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html) with
 the library-specific reading spelled out in [`CONTRIBUTING.md`](CONTRIBUTING.md).
 
+## [2.1.2] — 2026-10-29
+
+**One widget vocabulary.** 2.1.2 is a consistency refactor across the
+component library, not a feature release. Constructors, state names, verbs,
+result types, keymaps, styles, composition and drawing now follow one
+contract. It is a deliberately breaking widget release: old names are
+removed, with no compatibility shims. The full table is in
+[MIGRATION](docs/MIGRATION.md).
+
+### Changed (breaking widget API)
+
+- **Constructors**: the primary content is the one positional argument and
+  everything else is keyword-only. `Table(rows, headers=...)`,
+  `Dialog(body, title=..., buttons=...)`, `Collapsible(body, title=...)`,
+  `Tree(nodes)`, `Tabs/MenuBar/NavList(items)`, `RadioGroup/CheckboxGroup(options)`,
+  `Canvas(*, width=...)`, `PixelCanvas(*, width=..., palette=None)`.
+- **State**: one name per concept -- `index`, `selected`, `marked`, `value`,
+  `checked`, `open`, `text`. `TreeNode.expanded` becomes `open`;
+  `ComboBox.is_open` becomes the `open` property; `Table.index` is an int and
+  `Table.selected` the row; `ProgressBar.fraction` is read-only.
+- **Verbs and results**: `activate()`, `toggle()`, `select(index)`,
+  `move(delta)`, `advance()`, `take()` are the shared verbs. `on_action`
+  routes nine names; movement returns whether the cursor moved. Moving
+  clears a pending result; only activation and toggling write one.
+  `Table.take()` returns the row, `Select.take()` the option value,
+  `Tree.take()` the node, `Tabs/NavList/MenuBar.take()` the label;
+  `Slider` has no result.
+- **Keymaps**: `CURSOR_KEYMAP` is the one cursor table; `Tree` binds
+  left/right to close/open; activation (enter/space) is the focus layer's
+  fallback, not a per-component `enter` binding.
+- **Styles**: `SurfaceStyles` gains `control`, `accent`, `danger` and
+  `inactive`; `ControlStyles` is now a state overlay
+  (`hover/focus/active/disabled` + `overlay()`), with `base`/`band()`
+  removed; `ButtonKind` (neutral/primary/ghost/danger) replaces
+  `ButtonSpec.danger`; Input/Editor sit on the `control` floor; Link,
+  Tabs and MenuBar focus is visible; Dialog interiors use `raised`.
+- **Composition and drawing**: `Line.overlay` / `Surface.overlay` compose
+  transparent cell layers; `Stack` (z-order, interactive-first hits) and
+  `Align` (two-dimensional anchor) join the containers; `Drawing` makes
+  resizing explicit and rendering pure (`resize`/`fit`/`surface`/`render`).
+  `Canvas.marker` becomes `plot_marker`; `PixelCanvas` derives its palette
+  from the theme when none is given.
+
+### Added
+
+- `Stack`, `Align`, `ButtonKind`, `SurfaceStyles.control/accent/danger/inactive`,
+  `ControlStyles.overlay()`, `PixelPalette.from_theme()`, `Drawing`.
+- ADR-027 (transparent composition), ADR-028 (drawing lifecycle),
+  ADR-029 (state/verb/result contract) and ADR-030 (control styling).
+
+### Fixed
+
+- Link and MenuBar focus now render visibly; Tabs and NavList gained
+  `activate()`/`take()`; `ComboBox` opens and closes through one `open`
+  property; Dialog buttons carry their role through `ButtonKind`; a table's
+  activation returns the row, not its index.
+
+### Removed
+
+- `Table(headers, rows)` order, `Tree.root_nodes`, `TreeNode.expanded`,
+  `ComboBox.is_open`/`open()`/`close()`, `Slider.take()`,
+  `ProgressBar(fraction)` setter, `ButtonSpec.danger`,
+  `ControlStyles.base`/`band()`, `Canvas.marker`, `Tabs.tabs`,
+  `RadioGroup.labels`/`CheckboxGroup.labels`, and the old
+  `commit`/`window`-era menu defaults. No aliases are provided.
+
+### Documentation
+
+- Widget and kernel docstrings were reduced from 13,004 to 3,787 lines
+  (contract cards, not essays). `CONTRACT`, `WIDGETS`, `ARCHITECTURE` and
+  `README` describe the 2.1.2 API; ADR-027..030 record the new decisions.
+
+### Tests
+
+- The suite was consolidated from 1,838 collected cases to 1,383, removing
+  repeated capability/keymap/height-budget matrices while keeping the unique
+  editing, table, tree, scroll, Markdown, Diff, syntax and pixel coverage.
+  The nine semantic frames stay green; the public surface is 244 rows.
+
+### Performance
+
+- `Line.overlay` gained segment-level transparency and narrow-glyph fast
+  paths (about 19x on the splash overlay); `Align`/`Column` skip redundant
+  row clipping. The splash's Stack composition renders in 10.7 ms p50 on a
+  machine where the pre-2.1.2 splash already measured 8.7 ms and
+  `pixel-quantize` was 2.4x its recorded baseline.
+
 ## [2.1.0] — 2026-10-28
 
 **PixelCanvas, and a showcase built to show it off.** 2.1 adds the
@@ -874,7 +961,8 @@ was ever published.
 - **The demo** — `python -m motui` runs an 11-page exhibit of the library,
   shipped inside the wheel and pinned frame by frame in the test suite.
 
-[Unreleased]: https://github.com/Shingwha/motui/compare/v2.1.0...HEAD
+[Unreleased]: https://github.com/Shingwha/motui/compare/v2.1.2...HEAD
+[2.1.2]: https://github.com/Shingwha/motui/releases/tag/v2.1.2
 [2.1.0]: https://github.com/Shingwha/motui/releases/tag/v2.1.0
 [2.0.0]: https://github.com/Shingwha/motui/releases/tag/v2.0.0
 [1.2.2]: https://github.com/Shingwha/motui/compare/v1.2.1...v1.2.2

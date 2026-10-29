@@ -1,4 +1,4 @@
-# Migration: 1.x to 2.1
+# Migration: 1.x to 2.1.2
 
 2.0 and 2.1 are breaking releases. There are no shims or forwarding
 modules: a removed name is gone, and this page is the one place that maps
@@ -75,7 +75,127 @@ Demo-internal changes (not a public API):
 | `Showcase.switch` resets a scene by convention | `Scene.enter()` is the one reset door | the shell calls it on entry and seek rewinds |
 | `demo.art` helpers | `demo/sections/splash/font.py` and `demo/common.py` | `big_text` and `gradient_styles` are deleted |
 
-## 3. Recipes
+## 3. 2.1.0 to 2.1.2: one widget vocabulary
+
+2.1.2 is the one breaking widget pass inside 2.x. It aligns the component
+library on one constructor rule, one state vocabulary, one verb set and one
+style model. There are no shims; the old spelling is gone.
+
+### 3.1 Constructors
+
+The primary content is the one positional argument; configuration is
+keyword-only; the style tail runs `glyphs, theme, styles, keymap`.
+
+| 2.1.0 | 2.1.2 |
+|---|---|
+| `Tabs(tabs)` | `Tabs(items)` |
+| `MenuBar(items)` / `NavList(items)` | unchanged |
+| `RadioGroup(labels)` | `RadioGroup(options)` |
+| `CheckboxGroup(labels)` | `CheckboxGroup(options)` |
+| `Table(headers, rows)` | `Table(rows, headers=...)` |
+| `Tree(root_nodes)` | `Tree(nodes)` |
+| `TreeNode(..., expanded=True)` | `TreeNode(..., open=True)` |
+| `Dialog(title, body, buttons)` | `Dialog(body, title=..., buttons=...)` |
+| `Collapsible(title, body)` | `Collapsible(body, title=...)` |
+| `Canvas(width, height, marker=...)` | `Canvas(*, width=..., height=..., plot_marker=...)` |
+| `PixelCanvas(width, height, palette=...)` | `PixelCanvas(*, width=..., height=..., palette=None)` |
+| `ProgressBar(fraction)` | `ProgressBar(value, *, maximum=1.0)` |
+| `Select(..., commit=True)` | `Select(..., window=...)`; movement never commits |
+| `ContextMenu(..., **kwargs)` | explicit `ContextMenu(options, *, title, max_rows, glyphs, theme, styles)` |
+
+### 3.2 State
+
+| 2.1.0 | 2.1.2 |
+|---|---|
+| `Tree.root_nodes` | `Tree.nodes` |
+| `TreeNode.expanded` | `TreeNode.open` |
+| `ComboBox.is_open` + `open()`/`close()` | `ComboBox.open` (bool property) + `toggle()` |
+| `Table.index: int \| None` | `Table.index: int`; `Table.selected` is the row |
+| `Tree.selected` (cursor node) | `Tree.index` (visible row) + `Tree.selected` (node) |
+| `RadioGroup.selected -> str` | `selected -> Option`; public `labels` removed |
+| `ProgressBar.fraction = x` | `value = x`; `fraction` is read-only |
+| `Slider.take()` | removed; `value` is the state |
+
+`index` is always an int (0 for an empty collection); `selected` is always
+the item object or `None`; `marked` is a `MarkSet` of source-row indices.
+
+### 3.3 Verbs and results
+
+`on_action` routes exactly
+`prev / next / first / last / page_prev / page_next / activate / toggle /
+open / close`. `on_action("activate")` delegates `activate()`;
+`on_action("toggle")` delegates `toggle()`. Movement and selection clear a
+pending result; only activation and toggling write one. `take()` reads once
+and clears.
+
+| Component family | `take()` returns |
+|---|---|
+| Button / Link | bool (pressed) |
+| Checkbox / Collapsible | bool (new checked/open) |
+| Select / RadioGroup / Autocomplete / ComboBox / ContextMenu | the option value |
+| MultiSelect / CheckboxGroup | the marked values, in row order |
+| List | the activated item |
+| Table | the activated row |
+| Tree | the activated node |
+| Tabs / MenuBar / NavList | the activated label |
+| Form | the submitted dict |
+| Dialog | the button value |
+| Text / Markdown | the inline-action payload |
+| Slider / Input / Editor | no `take()` |
+
+### 3.4 Keymaps
+
+`CURSOR_KEYMAP` is the one table: up/left = prev, down/right = next,
+home = first, end = last, page_up/down = page_prev/page_next. `Widget`
+installs an instance copy from the class table, so rebinding one widget does
+not touch the class. `Tree` replaces left/right with close/open. Enter and
+space activation is the focus layer's fallback; components no longer bind
+`enter` themselves. Text fields keep their own `TextBuffer` key table.
+
+### 3.5 Styles
+
+| 2.1.0 | 2.1.2 |
+|---|---|
+| `ControlStyles.base` / `band()` | removed; `SurfaceStyles.control` + `ControlStyles.overlay()` |
+| `Button` base band | `ButtonKind.NEUTRAL/PRIMARY/GHOST/DANGER` via `action_band` |
+| `ButtonSpec(danger=True)` | `ButtonSpec(kind=ButtonKind.DANGER)` |
+| Input/Editor plain rows | `surfaces.control` field floor; hover overlay |
+| Link focus | bold + underline (+ reverse) |
+| Dialog interior | `surfaces.raised` |
+
+`SurfaceStyles` also gains `accent`, `danger` and `inactive`.
+`Theme.flat()` maps every new surface to `NONE` and the control states to
+underline/bold/reverse/dim.
+
+### 3.6 Composition and drawing
+
+| 2.1.0 | 2.1.2 |
+|---|---|
+| manual row splicing for overlays | `Line.overlay` / `Surface.overlay` |
+| no z-order container | `Stack(children)` (bottom to top, interactive-first hits) |
+| no alignment container | `Align(child, horizontal=..., vertical=...)` |
+| `Canvas`/`PixelCanvas` resize inside render | `Drawing`: `resize`/`fit` explicit, `surface()` cached, `render` clips only |
+| `Canvas.marker` | `Canvas.plot_marker` |
+
+### 3.7 Checklist
+
+1. Change `Table(headers, rows)` to `Table(rows, headers=...)` and read
+   `take()` as a row.
+2. Rename `Tree.root_nodes`/`TreeNode.expanded` to `nodes`/`open`; move
+   cursor code to `index`/`select`.
+3. Replace `ComboBox.is_open`/`open()`/`close()` with `open`/`toggle()`.
+4. Update `RadioGroup`/`CheckboxGroup` to `options`; `selected` is an
+   `Option`.
+5. Replace `ProgressBar.fraction =` with `value =`; delete `Slider.take()`.
+6. Pass `Dialog(body, title=..., buttons=...)` and
+   `Collapsible(body, title=...)`.
+7. Make `Canvas`/`PixelCanvas` keyword-only; call `resize`/`fit` before
+   `render`.
+8. Move Button styling to `kind=` and `ButtonSpec(kind=...)`.
+9. Route activation through `activate()`; the focus layer supplies
+   enter/space.
+
+## 4. Recipes
 
 ### 3.1 App and terminal options
 
@@ -253,7 +373,7 @@ assert screen.cell(0, 0).char == "h"
 without sleeping. `ScriptedEvents` replays a fixed event sequence.
 `snapshot(tui)` renders the document as structured plain text.
 
-## 4. Removed names
+## 5. Removed names
 
 These are gone from the public surface and from the source; no alias is
 provided.
@@ -271,7 +391,7 @@ arguments.
 close, chrome, overlay, band); it is not a row cache and has no relation to
 the removed `Revisioned` protocol.
 
-## 5. Migration checklist
+## 6. Migration checklist
 
 1. Replace `TUI` references with `App`/`Runtime`/`Workspace`/`Terminal`.
 2. Pass `TerminalOptions` to `App`; map `mouse`/`hover` to `MouseMode`.

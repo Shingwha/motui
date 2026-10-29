@@ -15,7 +15,7 @@ from importlib.metadata import PackageNotFoundError, version
 try:
     __version__ = version("motui")
 except PackageNotFoundError:  # pragma: no cover - a pure source checkout
-    __version__ = "2.1.0"
+    __version__ = "2.1.2"
 
 from .app import App, CommandPalette, Modal
 from .kernel import (
