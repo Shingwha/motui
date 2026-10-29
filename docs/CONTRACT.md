@@ -161,7 +161,7 @@ class Component(Protocol):
 
 Interactive components share one hierarchy in `motui.widgets.base`:
 
-```python
+```text
 Widget
 ├── ResultWidget          # _result + take()
 │   ├── ActionWidget      # disabled / hint / activate / toggle / on_action
@@ -381,10 +381,10 @@ normative and the table is the bug.
 | `open` | `bool` | read/write | fold or dropdown | `TreeNode`, `Collapsible`, `ComboBox` |
 | `text` | `str` | read/write | text content | Text, Input, Editor, Markdown |
 
-Removed names: `root_nodes`, `expanded`, `is_open`, the public `labels`
-property, `Table.index: int | None`, writable `ProgressBar.fraction`, and
-`Canvas.marker` (now `plot_marker`). `ProgressBar.fraction` is the
-read-only quotient `value / maximum`.
+The old tree-root, node-fold, dropdown-flag and public label-list
+attributes are removed. `Table.index` is always an `int` (never `None`),
+`ProgressBar.fraction` is read-only (constructed from `value` and
+`maximum`), and `Canvas.plot_marker` replaces the old marker attribute.
 
 ### 9.3 Verbs
 

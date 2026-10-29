@@ -143,6 +143,7 @@ from motui.widgets import Option, Select
 
 picker = Select([Option("Small", 1), Option("Large", 2)], title="Size")
 picker.move(1)
+picker.activate()
 size = picker.take()      # 2, or None when nothing was picked
 ```
 
@@ -155,7 +156,7 @@ from motui.widgets import CheckboxGroup, RadioGroup
 mode = RadioGroup(["Fast", "Accurate"])
 features = CheckboxGroup(["Cache", "Compress"], marked=[0])
 
-mode.selected             # Option(label='Fast', value=None, description='')
+mode.selected             # Option(label='Fast', value='Fast', description='')
 features.marked           # MarkSet({0})
 features.take()           # ["Cache"]: the marked values, in row order
 ```

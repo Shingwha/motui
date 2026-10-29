@@ -138,7 +138,7 @@ surface = Surface.of([row], width=4)                       # clipped, then padde
 optional height budget, and answers rows at one content width.
 
 ```python
-from motui.kernel import Constraints, Line, Surface
+from motui.kernel import Constraints, Line, Surface, WrapMode
 
 
 class Banner:
