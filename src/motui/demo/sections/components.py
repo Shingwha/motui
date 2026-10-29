@@ -228,7 +228,7 @@ class ComponentsScene(Scene):
                 (f"gain = Slider({self.slider.value}, maximum=10)", 4),
             ]
         if self._tab == 1:
-            plain = ("probes = Table(['probe', 'ping', 'lock'], rows)", 1)
+            plain = ("probes = Table(rows, headers=['probe', 'ping', 'lock'])", 1)
             if self._sort_col < 0:
                 return [plain, ("# 5 live probes \u00b7 not sorted yet (s sorts)", 1)]
             column = self.table.headers[self._sort_col]
@@ -239,8 +239,8 @@ class ComponentsScene(Scene):
         return [
             ("save = Button('save preset')", 1),
             ("save.take()   # -> a toast", 1),
-            ("ask = Dialog('arm the uplink?', body,", 2),
-            ("             [('arm signal', 'ok'), ('cancel', None)])", 2),
+            ("ask = Dialog(body, title='arm the uplink?',", 2),
+            ("             buttons=[('arm signal', 'ok'), ('cancel', None)])", 2),
             ("ask.take()     # -> a toast", 2),
         ]
 
