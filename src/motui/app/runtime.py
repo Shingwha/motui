@@ -277,11 +277,8 @@ class Runtime:
         return min(deadlines) if deadlines else None
 
     def _paint_at(self, now: float) -> None:
-        """Paint one frame: sample the size, retile, compose, run the overlays and
-        paint the diff.
-
-        The retile re-divides in place, so panes keep their viewports and scroll
-        state. A new width clears the selection (reflow); a new height does not."""
+        """Paint one frame: sample the size, retile, compose, run overlays, paint
+        the diff. A new width clears the selection; a new height does not."""
         self.screen.refresh_size()
         width, height = self.screen.width, self.screen.height
         workspace = self.workspace

@@ -1,10 +1,8 @@
 """Key-name to editing-method tables for Input/Editor.
 
-A keymap maps a key event's key to the method name it calls -- there is
-no action registry. ``DEFAULT_INPUT_KEYMAP`` binds no ``enter`` (the host
-keeps it); ``DEFAULT_EDITOR_KEYMAP`` adds it as newline;
-``EDITOR_SUBMIT_KEYMAP`` gives ``enter`` back to the host and binds
-``c-j`` to newline."""
+``DEFAULT_INPUT_KEYMAP`` binds no ``enter`` (the host keeps it);
+``DEFAULT_EDITOR_KEYMAP`` adds it as newline; ``EDITOR_SUBMIT_KEYMAP``
+gives it back and binds ``c-j``."""
 
 from __future__ import annotations
 

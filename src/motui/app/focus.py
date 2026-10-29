@@ -71,10 +71,8 @@ class FocusManager:
     """The focus tier: who is focused, how it cycles, where events go.
 
     The constructor focuses nothing. Routing reads the keymap through
-    ``on_action``, then ``on_key``, then enter/space activation for an
-    ``activatable`` target. A click descends to the leaf, dispatches it,
-    focuses the nearest target and activates it on a repeat click. Traps save
-    and restore targets and focus."""
+    ``on_action``, then ``on_key``, then enter/space activation; a click
+    descends to the leaf, focuses the nearest target and activates on repeat."""
 
     __slots__ = ("_focused", "_on_change", "_targets", "_traps", "_wrap")
 

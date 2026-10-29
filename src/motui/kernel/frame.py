@@ -490,10 +490,8 @@ def _whole_cut(line: Line) -> bool:
 def _negotiate(
     rect: Rect, chromes: Sequence[Chrome]
 ) -> tuple[Rect, list[tuple[Chrome, int, int]]]:
-    """Subtract chrome budgets from ``rect``; the remainder is the viewport's.
-
-    A ``SEPARATOR_CHROME_NAME`` band is negotiated first so the divider stacks
-    outermost; budgets never shrink the viewport below one cell per axis."""
+    """Subtract chrome budgets from ``rect``; the ``SEPARATOR_CHROME_NAME``
+    band is negotiated first so the divider stacks outermost."""
     room_width = max(0, rect.width - 1)  # shared by the left and right edges
     room_height = max(0, rect.height - 1)  # shared by the top and bottom ones
     left = right = top = bottom = 0

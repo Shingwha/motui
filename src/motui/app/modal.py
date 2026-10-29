@@ -202,10 +202,7 @@ class Modal:
 
     def _key(self, event: Event) -> bool:
         """Route a key or paste body-first, then the panel's own hook; a decision
-        closes the modal.
-
-        An unclaimed ``escape`` cancels and every other event is consumed and
-        dropped, so host shortcuts never fire under an open modal."""
+        closes the modal. An unclaimed ``escape`` cancels."""
         dialog = self._dialog
         body = getattr(dialog, "body", None)
         keys = isinstance(event, KeyEvent)

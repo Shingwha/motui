@@ -173,10 +173,8 @@ def _char_width(cell: str) -> int:
 
 
 def _cell_spans(text: str) -> Iterator[tuple[int, int, int]]:
-    """Yield ``(start, end, width)`` for every printing cell of ``text``.
-
-    The toolkit's one cluster scanner: measurement, wrapping and column cuts
-    read the same boundaries, so they cannot disagree."""
+    """Yield ``(start, end, width)`` for every printing cell; the toolkit's
+    one cluster scanner shared by measure, wrap and cut."""
     i = 0
     n = len(text)
     while i < n:

@@ -125,12 +125,8 @@ def _modifier_bits(value: int) -> int:
 
 
 def _chord(base: str, modifiers: frozenset[str]) -> str:
-    """Spell ``base`` with the chord prefixes, ``c-`` then ``a-`` then ``s-``.
-
-    ``base`` may already carry a ``c-`` prefix when it was derived from a C0
-    codepoint; an explicit ``ctrl`` modifier then stands for that same fact
-    and is not written twice.
-    """
+    """Spell ``base`` with chord prefixes in a fixed order; a ``c-`` base does
+    not repeat an explicit ctrl."""
     if "ctrl" in modifiers and base.startswith("c-"):
         base = base[2:]
     prefix = "".join(
@@ -140,13 +136,8 @@ def _chord(base: str, modifiers: frozenset[str]) -> str:
 
 
 def _base_from_codepoint(code: int) -> tuple[str, str] | None:
-    """The ``(key, char)`` a Unicode codepoint names, or ``None`` to drop.
-
-    C0 controls keep the historical names (``enter`` for CR, ``c-j`` for LF,
-    ``tab``, ``escape``, ``backspace``); space has ``key="space"`` with
-    ``char=" "``; everything printable above the C0 range is named after
-    itself.  C1 controls and NUL carry no meaning and are dropped.
-    """
+    """The ``(key, char)`` a codepoint names, or ``None`` to drop it; C0 keeps
+    the historical names."""
     if code == 0x0D:
         return "enter", ""
     if code == 0x0A:

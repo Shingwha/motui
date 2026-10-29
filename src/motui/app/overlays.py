@@ -52,11 +52,8 @@ class _Toast:
 def _stack(
     toasts: Sequence[_Toast], rect: Rect, corner: str
 ) -> list[tuple[_Toast, Rect, list[Line]]]:
-    """Where each live toast paints inside ``rect``.
-
-    A toast renders at the ceiling (``MAX_TOAST_WIDTH`` or half the frame),
-    its band as wide as its widest row. The stack grows away from ``corner``
-    with one blank row between neighbours."""
+    """Where each live toast paints inside ``rect``: at the ceiling, band as
+    wide as its widest row, growing away from ``corner``."""
     ceiling = min(MAX_TOAST_WIDTH, rect.width // 2)
     if ceiling <= 0:
         return []
