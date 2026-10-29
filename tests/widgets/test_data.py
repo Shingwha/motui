@@ -678,7 +678,7 @@ def sample() -> TreeNode:
 def test_a_collapsed_root_renders_one_row():
     tree = Tree([sample()])
     assert texts(tree, 30) == ["\u25b8 src"]
-    assert tree.selected is tree.root_nodes[0]
+    assert tree.selected is tree.nodes[0]
 
 
 def test_activate_expands_and_collapses_the_visible_rows():
@@ -737,14 +737,14 @@ def test_a_leaf_and_an_empty_tree_decline_activation():
 def test_collapsing_re_clamps_the_cursor_into_the_new_rows():
     tree = Tree([sample()])
     tree.on_action("activate")
-    lib = tree.root_nodes[0].children[1]
-    lib.expanded = True
+    lib = tree.nodes[0].children[1]
+    lib.open = True
     tree.move(2)
     assert tree.on_action("activate") is True and tree.selected is lib
     assert len(tree.render(Constraints(width=30))) == 3
-    lib.expanded = True
+    lib.open = True
     tree.move(4)
-    lib.expanded = False
+    lib.open = False
     assert tree.selected is lib
 
 
@@ -767,22 +767,22 @@ def test_filter_prunes_to_the_matches_and_keeps_ancestors_open():
     assert tree.filter(None) is False
 
 
-def test_filter_never_rewrites_the_users_expansion_flags():
+def test_filter_never_rewrites_the_users_open_flags():
     tree = Tree([sample()])
-    src = tree.root_nodes[0]
-    src.children[1].expanded = True
+    src = tree.nodes[0]
+    src.children[1].open = True
     before = texts(tree, 30)
     assert tree.filter("a.py") is True
-    assert src.expanded is False and src.children[1].expanded is True
+    assert src.open is False and src.children[1].open is True
     assert tree.filter(None) is True
     assert texts(tree, 30) == before
 
 
 def test_jump_steps_to_the_next_visible_label_and_wraps():
     tree = Tree([sample()])
-    src = tree.root_nodes[0]
-    src.expanded = True
-    src.children[1].expanded = True
+    src = tree.nodes[0]
+    src.open = True
+    src.children[1].open = True
     src.children[1].children[1].label = "Beta"
     assert tree.jump("b") is True and tree.selected.label == "Beta"
     assert tree.jump("s") is True and tree.selected.label == "src"
@@ -843,12 +843,13 @@ def test_tree_answers_a_surface_and_honours_the_height_budget():
 
 def test_the_tree_keymap_folds_and_moves_through_named_actions():
     tree = Tree([sample()])
-    assert tree.on_key(key("enter")) is True
+    assert tree.on_key(key("enter")) is False  # the focus layer owns enter
+    assert tree.on_key(key("right")) is True
     assert texts(tree, 30)[0] == "\u25be src"
-    assert tree.on_action("collapse") is True
+    assert tree.on_key(key("left")) is True
     assert texts(tree, 30) == ["\u25b8 src"]
-    assert tree.on_action("collapse") is False
-    assert tree.on_action("expand") is True
+    assert tree.on_action("close") is False
+    assert tree.on_action("open") is True
     assert tree.on_action("next") is True and tree.selected.label == "app.py"
     assert tree.on_action("prev") is True and tree.selected.label == "src"
     assert tree.on_action("prev") is False  # clamped at the first visible row

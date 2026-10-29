@@ -57,9 +57,9 @@ class GalleryScene(Scene):
                         TreeNode("gallery"),
                         TreeNode("inspector"),
                     ],
-                    expanded=True,
+                    open=True,
                 ),
-                TreeNode("workspace", [TreeNode("runtime")], expanded=True),
+                TreeNode("workspace", [TreeNode("runtime")], open=True),
             ],
             theme=theme,
         )

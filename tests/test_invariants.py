@@ -166,7 +166,7 @@ CASES = {
     "Tabs": lambda: Tabs(["one", "two", "three"], glyphs=replace(GLYPHS, vertical_rule="|")),
     "Text": lambda: Text(_WIDE),
     "Tree": lambda: Tree(
-        [TreeNode("root", [TreeNode("child")], expanded=True)],
+        [TreeNode("root", [TreeNode("child")], open=True)],
         glyphs=replace(GLYPHS, fold_open="+", fold_closed="-"),
     ),
     "Widget": lambda: _WidgetProbe(),

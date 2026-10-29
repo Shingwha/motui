@@ -98,11 +98,11 @@ def _gallery() -> GalleryScene:
 
 def test_gallery_click_reaches_the_tree_and_folds_a_branch():
     scene = _gallery()
-    node = scene.tree.root_nodes[0]
+    node = scene.tree.nodes[0]
     scene.on_click(Pos(x=3, y=scene.origin + 5))
-    assert node.expanded is False
+    assert node.open is False
     scene.on_click(Pos(x=3, y=scene.origin + 5))
-    assert node.expanded is True
+    assert node.open is True
 
 
 def test_gallery_click_focuses_the_clicked_widget():
