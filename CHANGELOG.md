@@ -79,10 +79,14 @@ removed, with no compatibility shims. The full table is in
 
 ### Tests
 
-- The suite was consolidated from 1,838 collected cases to 1,383, removing
+- The suite was consolidated from 1,838 collected cases to 1,382, removing
   repeated capability/keymap/height-budget matrices while keeping the unique
   editing, table, tree, scroll, Markdown, Diff, syntax and pixel coverage.
   The nine semantic frames stay green; the public surface is 244 rows.
+- The ruff ratchet is gone: widgets, app and tests are checked without
+  directory excludes. Only generated Unicode ranges, frozen `Style` defaults,
+  the immutable `selection` default and the framebench bootstrap keep narrow
+  per-file ignores.
 
 ### Performance
 
