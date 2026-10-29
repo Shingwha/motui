@@ -1,12 +1,14 @@
-"""Layout containers: :class:`Row`, :class:`Column` and :class:`Stack`.
+"""Layout containers: :class:`Row`, :class:`Column`, :class:`Stack` and
+:class:`Align`.
 
 All are ordinary components of the component library
 (``render(Constraints) -> Surface``) that arrange child components instead
 of drawing: a ``Row`` places children side by side in columns of fixed or
 shared width, a ``Column`` stacks them vertically with optional blank rows
-between, and a ``Stack`` paints them on top of one another.  They nest (a
-``Row`` child may be a ``Column``); beyond that, prefer building blocks and
-padding by hand.  Only the kernel is imported:
+between, a ``Stack`` paints them on top of one another, and an ``Align``
+places one child at a two-dimensional anchor.  They nest (a ``Row`` child
+may be a ``Column``); beyond that, prefer building blocks and padding by
+hand.  Only the kernel is imported:
 :class:`~motui.kernel.document.Component` for the protocol,
 :class:`~motui.kernel.cell.Line` / ``Surface`` for assembly.  Import the
 containers from :mod:`motui.widgets.layout` or from :mod:`motui.widgets` /
@@ -363,6 +365,119 @@ class Stack(Container):
 
     def __repr__(self) -> str:
         return f"Stack({self.children!r})"
+
+
+class Align(Widget):
+    """One child placed at a two-dimensional anchor in the frame.
+
+    ``horizontal`` is ``"left"``, ``"center"`` or ``"right"``; ``vertical``
+    is ``"top"``, ``"middle"`` or ``"bottom"``; anything else raises
+    ``ValueError``.  The child renders once with the **full** constraints and
+    is measured by the block it actually painted: its height is
+    ``len(surface)`` and its width is the widest row, because the render
+    contract lets a component return short rows (a ``Text`` block does).
+    The blank frame is ``c.width`` columns wide and ``c.max_height`` rows
+    tall -- the child's own height when the constraint carries no budget --
+    and the child is embedded at the anchor with its overflow clipped, never
+    wrapped.  A child that fills the width shows no horizontal alignment:
+    that is the child's choice, there is no second measure.
+
+    ``child_at`` forwards only cells inside the child's painted rectangle,
+    minus the anchor offset, so a host can descend into an aligned child.
+    """
+
+    __slots__ = (
+        "_child_height",
+        "_child_width",
+        "_left",
+        "_top",
+        "child",
+        "horizontal",
+        "vertical",
+    )
+
+    HORIZONTAL = ("left", "center", "right")
+    VERTICAL = ("top", "middle", "bottom")
+
+    def __init__(
+        self,
+        child,
+        *,
+        horizontal: str = "center",
+        vertical: str = "middle",
+        theme: Theme | None = None,
+        styles: Styles | None = None,
+    ) -> None:
+        super().__init__(theme, styles)
+        if horizontal not in self.HORIZONTAL:
+            raise ValueError(
+                f"horizontal must be one of {self.HORIZONTAL}, got {horizontal!r}"
+            )
+        if vertical not in self.VERTICAL:
+            raise ValueError(
+                f"vertical must be one of {self.VERTICAL}, got {vertical!r}"
+            )
+        self.child = child
+        # The explicit tree: the aligned child is this widget's one child.
+        self.children = [child]
+        self.horizontal = horizontal
+        self.vertical = vertical
+        # Geometry of the last render: the anchor offset and the part of the
+        # child that fits inside the frame.
+        self._top = 0
+        self._left = 0
+        self._child_height = 0
+        self._child_width = 0
+
+    def render(self, c: Constraints) -> Surface:
+        """Render the child, embed it at the anchor, and clip the frame."""
+        surface = self.child.render(c)
+        rows = surface.rows
+        child_height = len(rows)
+        child_width = max((row.width for row in rows), default=0)
+        frame_width = c.width
+        frame_height = child_height if c.max_height is None else c.max_height
+        if self.horizontal == "left":
+            left = 0
+        elif self.horizontal == "center":
+            left = max(0, (frame_width - child_width) // 2)
+        else:
+            left = max(0, frame_width - child_width)
+        if self.vertical == "top":
+            top = 0
+        elif self.vertical == "middle":
+            top = max(0, (frame_height - child_height) // 2)
+        else:
+            top = max(0, frame_height - child_height)
+        self._top = top
+        self._left = left
+        self._child_height = min(child_height, frame_height - top)
+        self._child_width = min(child_width, frame_width - left)
+        out: list[Line] = []
+        for r in range(frame_height):
+            if top <= r < top + child_height:
+                row = Line.from_text(" " * left) + rows[r - top]
+                out.append(row.clip(WrapMode.CLIP, frame_width).fill(frame_width))
+            else:
+                out.append(Line.filled(frame_width))
+        return Surface.clipped(out, frame_width)
+
+    def child_at(self, row: int, col: int) -> tuple[Component, int, int] | None:
+        """The child's cell at ``(row, col)``, or ``None`` outside its rect."""
+        if (
+            row < self._top
+            or row >= self._top + self._child_height
+            or col < self._left
+            or col >= self._left + self._child_width
+        ):
+            return None
+        return self.child, row - self._top, col - self._left
+
+    def __repr__(self) -> str:
+        return (
+            f"Align({self.child!r}, horizontal={self.horizontal!r}, "
+            f"vertical={self.vertical!r})"
+        )
 
 
 class Spacer(Widget):
