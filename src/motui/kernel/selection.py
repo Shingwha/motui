@@ -1,26 +1,9 @@
-"""Document-space selection: the value, the overlay, and the text extraction.
+"""Document-space selection: the value, the overlay and the text extraction.
 
-A :class:`Selection` is a range of ``(block_id, row, column)`` addresses
-(:data:`SelectionAnchor`) -- document space, never screen space (D1): a
-scroll moves the highlight with its text, and :func:`extract` reaches
-content the viewport has long scrolled past.  Nothing here owns state,
-time, or policy: :func:`highlight` is a pure overlay a composition root
-applies to an already laid-out frame (D2), and :func:`extract` is the
-plain text that overlay covers.
-
-Two ordering facts shape the model.  Section ids carry no document order --
-``"b10"`` sorts before ``"b2"`` and user ids are arbitrary strings -- so
-direction can only be normalized where the order is known, at use time:
-both use sites order the pair against a walk of block ids (the document
-for extraction, the layout's document order for the overlay).  And an
-address whose block was removed resolves to nothing (D8), which makes a
-range with a missing endpoint resolve to nothing rather than guess.
-
-Column cutting is the kernel's, not a copy: :func:`motui.kernel.lines.cut_line`
-cuts by display columns through the same per-segment slicer word wrapping
-uses, and clamps lazily -- an anchor column past a short row reaches that
-row's end.
-"""
+Addresses are ``(block, row, column)`` in document space, never screen
+space, so a scroll moves the highlight with its text. Order is normalized
+at use against a known block walk, and a removed endpoint resolves to
+nothing rather than guessing."""
 
 from __future__ import annotations
 
@@ -40,16 +23,8 @@ SelectionAnchor = tuple[str, int, int]
 class Selection:
     """A range of document addresses, carried as the ``(anchor, head)`` pair.
 
-    Built through :meth:`between` and frozen afterwards.  The pair is stored
-    exactly as given -- dragging backwards from the anchor keeps the head
-    below it -- because direction only means something against the document
-    order the use sites know (see the module docstring); the overlay and the
-    extraction order the pair the same way, so a backwards drag covers
-    exactly the range a forwards drag covers.  Columns clamp lazily, when a
-    row's width is known.
-
-    Internals may grow spans; the v1 surface is this one range (D8).
-    """
+    Stored exactly as given; direction is normalized at use against a walk of
+    block ids, so a backwards drag covers the same range as a forwards one."""
 
     __slots__ = ("_anchor", "_head")
 
@@ -64,21 +39,13 @@ class Selection:
 
     @property
     def anchors(self) -> tuple[SelectionAnchor, SelectionAnchor]:
-        """The ``(anchor, head)`` pair, as it was passed to :meth:`between`.
-
-        Round-trips: ``Selection.between(*selection.anchors) == selection``.
-        A gesture extending the head reads the pair back off and rebuilds.
-        """
+        """The ``(anchor, head)`` pair, as passed to :meth:`between`; round-trips."""
         return (self._anchor, self._head)
 
     def _ordered(
         self, positions: dict[str, int]
     ) -> tuple[SelectionAnchor, SelectionAnchor]:
-        """The pair ordered by ``positions`` -- a walk of block ids as a map.
-
-        Different blocks rank by first appearance in the walk; one block
-        (or two blocks the walk never shows) by ``(row, col)``.
-        """
+        """Order the pair by block position, then by ``(row, col)`` within one block."""
         anchor, head = self._anchor, self._head
         left, right = positions.get(anchor[0], -1), positions.get(head[0], -1)
         if left != right:
@@ -106,14 +73,8 @@ class Selection:
 
 
 class _ResolvedRange:
-    """A selection ordered against one walk of block ids, ready to apply.
-
-    ``order`` is the walk: the layout's
-    :attr:`~motui.kernel.viewport.ScreenLayout.block_order` for
-    :func:`highlight`, the document's block ids for :func:`extract` --
-    both document order, which is what lets the overlay and the text
-    agree on which address starts the range.
-    """
+    """A selection ordered against one walk of block ids, ready to apply;
+    ``order`` is the layout's or the document's."""
 
     __slots__ = ("_end", "_end_at", "_positions", "_start", "_start_at")
 
@@ -135,13 +96,8 @@ class _ResolvedRange:
     def over(
         cls, selection: Selection, order: Sequence[str]
     ) -> _ResolvedRange | None:
-        """The selection resolved against ``order``, or ``None``.
-
-        ``None`` when an endpoint's block is not in the walk: a removed
-        block's address resolves to nothing (D8), and a range missing an
-        endpoint has nothing left to cover -- it never widens to swallow
-        the document.
-        """
+        """The selection resolved against ``order``, or ``None`` when an endpoint's
+        block is gone -- a range never widens to swallow the document."""
         positions = {block_id: index for index, block_id in enumerate(order)}
         start, end = selection._ordered(positions)
         if start[0] not in positions or end[0] not in positions:
@@ -149,11 +105,7 @@ class _ResolvedRange:
         return cls(start, end, positions)
 
     def _position(self, block_id: str) -> int | None:
-        """``block_id``'s position in the walk when it is inside the range.
-
-        The one containment judgment: a block outside the range -- before it,
-        after it, or never in the walk at all -- answers ``None``.
-        """
+        """The block's walk position when inside the range, else ``None``."""
         position = self._positions.get(block_id)
         if position is None or not self._start_at <= position <= self._end_at:
             return None
@@ -164,13 +116,8 @@ class _ResolvedRange:
         return self._position(block_id) is not None
 
     def row_range(self, block_id: str, row: int) -> tuple[int, int | None] | None:
-        """The columns ``(block_id, row)`` contributes, or ``None``.
-
-        ``None`` means the row is outside the range.  The end column is
-        ``None`` for "to the end of the row" -- the caller knows the row's
-        width, and that is where columns clamp (D8: addresses point at
-        cells, not content).
-        """
+        """The columns ``(block_id, row)`` contributes, or ``None``; an end column
+        of ``None`` means to the end of the row."""
         position = self._position(block_id)
         if position is None:
             return None
@@ -201,27 +148,11 @@ def highlight(
     *,
     style: Style = Style(reverse=True),
 ) -> ScreenLayout:
-    """The selection overlay (D2): one pure pass over a laid-out frame.
+    """The selection overlay: one pure pass over a laid-out frame.
 
-    Every screen row whose ``(block_id, row_in_block)`` -- from the
-    layout's :attr:`~motui.kernel.viewport.ScreenLayout.row_blocks` --
-    is in range gets its segments cut at the range's column boundaries and
-    ``style`` merged onto the cut pieces.  The default is plain reverse
-    video (so a segment's own hue becomes the highlight's background and
-    the terminal default becomes its text); the driver passes
-    ``theme.text.selection``, so the document selection and
-    :class:`~motui.app.find.Find` share one token.  Rows no block
-    owns are untouched, and so is everything outside
-    the range.
-
-    ``selection=None`` -- or a range that resolves to nothing (D8) --
-    returns the layout unchanged: no allocation, no copy.  The sealed-row
-    cache is never involved: the overlay builds new :class:`Line` values
-    over the layout's rows and touches nothing the viewport, the blocks,
-    or the components hold.  ``rows`` is the painting target and the only
-    field rewritten; ``body_rows`` (the window slice) travels through
-    as it was laid out.
-    """
+    Rows in range are cut at the column boundaries and ``style`` is merged
+    onto the pieces; ``None`` or an unresolvable range returns the layout
+    unchanged."""
     if selection is None:
         return layout
     order = layout.block_order
@@ -262,29 +193,12 @@ def highlight(
 
 
 def extract(document: Document, selection: Selection | None, *, width: int) -> str:
-    """The plain text of ``selection`` over ``document``, rows joined by ``"\\n"``.
+    """The plain text of ``selection`` over ``document``, rows joined by
+    newlines.
 
-    Walks the blocks in document order and slices the range's first and
-    last rows by their columns through the same cluster-aware cut the
-    overlay uses; rows fully inside the range are joined whole.  The
-    blocks are read straight from the document -- not through a viewport
-    window -- so content the viewport has scrolled past extracts exactly
-    like the visible rows, and an ``OPEN`` block yields what is there now
-    (D8's grid semantics: addresses point at cells, not identity).  The
-    rows come from each block's own cache
-    (:meth:`~motui.kernel.document.Section.rows_view`, the borrowed, read-only
-    view of it), which cannot go stale: a block that can be cached carries
-    the revision of the content it cached, so a live block's rows are
-    still the ones its content renders to.
-
-    ``width`` is the width the addresses were laid out against: row
-    numbers index wrapped rows, so another width addresses different
-    glyphs.  It is keyword-only because there is no honest default --
-    picking one silently would extract the wrong text.
-
-    ``selection=None`` -- or a range with a removed endpoint -- yields
-    ``""`` (D8), and so does an empty range.
-    """
+    Blocks are read from the document, not a viewport window, so scrolled-past
+    content extracts too. ``width`` must be the width the addresses were laid
+    out against, because row numbers index wrapped rows."""
     if selection is None:
         return ""
     blocks = document.blocks()

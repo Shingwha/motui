@@ -1,27 +1,8 @@
-"""The event model: keys, mouse reports, pastes, resizes, focus, sources.
+"""The event model: keys, mouse reports, pastes, resizes, focus and sources.
 
-Every input is an :class:`Event`:
-
-* :class:`KeyEvent` -- one key press: a routable ``key`` name, the printable
-  ``char`` if any, the structured ``modifiers`` and the press kind;
-* :class:`MouseEvent` -- a mouse report: the ``button`` name, the 0-based
-  coordinates, the report ``kind`` and the modifier set;
-* :class:`PasteEvent` -- a bracketed-paste payload, literal text;
-* :class:`ResizeEvent` -- the terminal's new ``width`` and ``height``;
-* :class:`FocusEvent` -- the window gained or lost focus.
-
-A mouse report is never a key: :class:`MouseEvent`, :class:`PasteEvent`,
-:class:`ResizeEvent` and :class:`FocusEvent` are siblings of
-:class:`KeyEvent`, not subclasses, so ``isinstance(event, KeyEvent)`` matches
-the keyboard only.
-
-The classes here are frozen dataclasses compared by value; nothing in this
-module reads bytes, touches a terminal, or builds an event loop.  The pure
-``bytes -> events`` decoder that produces these events lives in
-:mod:`motui.terminal.decoder`; the terminal-reading source lives in
-:mod:`motui.terminal.keys`.  Events carry no timestamp: time enters through
-the driver's ``clock()`` seam.
-"""
+All events are frozen value dataclasses. A mouse report is never a
+:class:`KeyEvent`, so ``isinstance(event, KeyEvent)`` matches the keyboard
+only. Nothing here reads bytes, touches a terminal, or carries a timestamp."""
 
 from __future__ import annotations
 
@@ -45,18 +26,8 @@ class Event:
 
 @dataclass(frozen=True, slots=True)
 class KeyEvent(Event):
-    """One key press.
-
-    ``key`` is the routing identity: a printable character's own text
-    (``"a"``, ``"中"``), ``"space"`` for the space bar, a control name
-    (``"enter"``, ``"tab"``, ``"backspace"``, ``"escape"``, ``"up"``,
-    ``"page_up"``, ...), or a chord (``"c-c"``, ``"c-s-left"``).  ``char``
-    is the printable character the key produced, empty for keys that produce
-    no character.  ``modifiers`` is the structured form of the same fact --
-    ``"ctrl"``, ``"alt"``, ``"shift"``, ``"super"`` -- filled only when an
-    escape sequence carries the modifier explicitly.  ``kind`` is
-    ``"press"``, ``"repeat"`` or ``"release"``.
-    """
+    """One key press: the routing ``key``, the printable ``char``, structured
+    ``modifiers``, and ``press``/``repeat``/``release`` kind."""
 
     key: str
     char: str = ""
@@ -66,22 +37,8 @@ class KeyEvent(Event):
 
 @dataclass(frozen=True, slots=True)
 class MouseEvent(Event):
-    """A mouse report.
-
-    ``button`` names the report's button -- ``"left"``, ``"middle"``,
-    ``"right"``, ``"none"``, or one of the four wheel directions
-    (``"wheel_up"``, ``"wheel_down"``, ``"wheel_left"``, ``"wheel_right"``).
-    ``x``/``y`` are the **0-based** column/row of the report: every cell
-    index in the toolkit is 0-based, so the decoder subtracts 1 from the
-    terminal's 1-based report fields when it builds the event, and a
-    component hit test consumes ``x``/``y`` directly.  Scrolling ignores
-    the coordinates entirely.
-
-    ``kind`` is ``"press"``, ``"release"``, ``"motion"`` (the pointer moved;
-    the button names the held one, or ``"none"``) or ``"wheel"`` (a discrete
-    wheel notch).  ``modifiers`` carries the report's ``"shift"``,
-    ``"alt"`` and ``"ctrl"`` bits.
-    """
+    """A mouse report; ``x``/``y`` are 0-based columns/rows -- the decoder
+    subtracts one from the terminal's report."""
 
     button: str = "none"
     x: int = 0
@@ -114,11 +71,7 @@ class FocusEvent(Event):
 
 @runtime_checkable
 class EventSource(Protocol):
-    """Anything that can hand out events: ``async read() -> Event | None``.
-
-    ``None`` means end of stream (EOF): a source that is exhausted, a closed
-    terminal, or a source that was never started.
-    """
+    """Anything that hands out events; ``None`` means end of stream."""
 
     async def read(self) -> Event | None:
         ...

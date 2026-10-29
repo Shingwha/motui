@@ -1,39 +1,9 @@
-"""Theme: the frozen value that carries every semantic style default.
+"""Theme: the frozen value carrying every semantic style default.
 
-The 2.0 theme is a tree of ten **role groups** -- ``text``, ``surfaces``,
-``borders``, ``controls``, ``rows``, ``status``, ``content``, ``chrome``,
-``overlays`` and ``syntax`` -- each a frozen, keyword-only value whose fields
-are :class:`~motui.kernel.style.Style` tokens.  A component reads the token
-it paints with (``theme.content.accent``, ``theme.rows.hover`` ...) instead
-of a flat palette name, so a role can change without every call site
-changing with it.
-
-Two ways to build a variant exist:
-
-* :class:`ColorPalette` -- the brand-colour authoring layer.  It names the
-  *creation* colours (ink, muted, surface, accent, success ...), and
-  :meth:`Theme.from_palette` derives every role token from them.
-  :data:`DARK_PALETTE` and :data:`LIGHT_PALETTE` are the shipped palettes.
-* :func:`dataclasses.replace` on a :class:`Theme` -- the surgical route,
-  replacing one group or one token (``replace(theme, content=replace(
-  theme.content, accent=Style(...)))``).
-
-The shipped :data:`DEFAULT_THEME` is :class:`Theme`'s own default values,
-which are the **Ink & Signal dark theme**: ``Theme() == Theme.dark()``.
-``Theme.light()`` derives the light palette, ``Theme.flat()`` the same dark
-theme with every background surface flattened, and ``Theme.auto()`` picks
-between the two shipped themes from the environment.
-
-Every component takes ``style=...`` (an explicit override, which always
-wins) plus ``theme=Theme | None`` (default ``None``).  A component resolves
-each style it renders as::
-
-    explicit style parameter  >  theme field  >  DEFAULT_THEME field
-
-:meth:`Theme.group` resolves one role group against an optional
-``Styles`` override, so a widget, a controller and a highlighter all read
-the same rule.
-"""
+Ten role groups of :class:`Style` tokens; components read a role token
+instead of a palette name. Variants come from :class:`ColorPalette`,
+``dataclasses.replace``, or the ``dark``/``light``/``flat``/``auto``
+constructors."""
 
 from __future__ import annotations
 
@@ -69,13 +39,8 @@ __all__ = [
 
 @dataclass(frozen=True, slots=True, kw_only=True)
 class ColorPalette:
-    """The creation colours a theme is derived from.
-
-    ``value``-style fields pair a truecolor hex with the nearest ANSI name
-    (``Color``), so a 16-colour terminal keeps the intended hue.  The
-    defaults are :data:`DARK_PALETTE`'s values; ``LIGHT_PALETTE`` overrides
-    every one of them.
-    """
+    """The creation colours a theme is derived from; each ``Color`` pairs a
+    truecolor value with its ANSI fallback."""
 
     ink: Style = NONE
     muted: Style = Style(fg=Color("#8b95a7", ansi="bright_black"))
@@ -124,13 +89,8 @@ LIGHT_PALETTE = ColorPalette(
 
 
 def _inverse_for(palette: ColorPalette) -> Style:
-    """The text colour that reads on a solid accent/surface.
-
-    The inverse is not derivable from the other palette fields (it is the
-    page colour, which ``surface`` leaves transparent), so the two shipped
-    palettes name it explicitly: white on the light palette, near-black on
-    the dark one.  A custom palette gets the dark answer.
-    """
+    """The text colour that reads on a solid accent or dark surface; it is not
+    derivable from the other palette fields."""
     return Style(fg="#ffffff") if palette == LIGHT_PALETTE else Style(fg="#0d1117")
 
 
@@ -154,12 +114,8 @@ class TextStyles:
 
 @dataclass(frozen=True, slots=True, kw_only=True)
 class SurfaceStyles:
-    """Background surfaces, from the resting page to the control floor.
-
-    ``control`` is the field/neutral-button floor, ``accent`` and
-    ``danger`` the solid button floors, and ``inactive`` the unfocused
-    cursor band (the ``rows.inactive`` surface as a plain floor).
-    """
+    """Background surfaces, from the resting page to the control floor;
+    ``accent`` and ``danger`` are the solid button floors."""
 
     base: Style = NONE
     raised: Style = DARK_PALETTE.surface_raised
@@ -199,13 +155,8 @@ class ControlStyles:
         pressed: bool = False,
         disabled: bool = False,
     ) -> Style:
-        """The state overlay a control merges over its own base style.
-
-        ``disabled > pressed > focused > hovered > NONE`` -- the one
-        precedence every control shares.  The answer is a style to
-        :meth:`~motui.kernel.style.Style.merge` onto a base, never a whole
-        band: the base stays the component's own role token.
-        """
+        """The state overlay a control merges onto its base style:
+        ``disabled > pressed > focused > hovered > NONE``."""
         if disabled:
             return self.disabled
         if pressed:
@@ -239,15 +190,8 @@ class RowStyles:
         marked: bool = False,
         disabled: bool = False,
     ) -> Style:
-        """The band a row paints, by precedence.
-
-        ``disabled > hovered > (active ? (focused ? active : inactive)) >
-        selected > marked > base``.  An active row resolves through its
-        focus branch and stops there: a focused cursor row wears ``active``,
-        an unfocused one wears ``inactive``.  The pointer's band still wins
-        over the cursor (it is the more immediate signal), and a disabled
-        row wins over everything.
-        """
+        """The band a row paints: ``disabled > hovered > active (focused ? active :
+        inactive) > selected > marked > base``."""
         if disabled:
             return self.disabled
         if hovered:
@@ -326,13 +270,8 @@ class SyntaxStyles:
 
 @dataclass(frozen=True, slots=True, kw_only=True)
 class Styles:
-    """Per-widget role-group overrides, one field per :class:`Theme` group.
-
-    ``None`` inherits the widget's theme group; a value replaces that whole
-    group.  A migrated widget accepts this through ``styles=`` instead of
-    the per-token ``style`` / ``hover_style`` / ... parameters, and resolves
-    the token when it renders, so a theme switch reaches a mounted widget.
-    """
+    """Per-widget role-group overrides; ``None`` inherits the theme group, a
+    value replaces it whole."""
 
     text: TextStyles | None = None
     surfaces: SurfaceStyles | None = None
@@ -348,17 +287,11 @@ class Styles:
 
 @dataclass(frozen=True, slots=True, kw_only=True)
 class Theme:
-    """Every semantic style the toolkit renders with, in ten role groups.
+    """Every semantic style the toolkit renders with, in ten role groups; the
+    field defaults are the Ink & Signal dark theme.
 
-    The fields' **default values are the Ink & Signal dark theme**, so
-    ``DEFAULT_THEME`` -- ``Theme()`` -- is ``Theme.dark()``.
-    :meth:`light`, :meth:`flat` and :meth:`from_palette` build the other
-    shipped variants.
-
-    Instances are frozen: build variants with :func:`dataclasses.replace`
-    rather than mutating.  Equality is field-wise, so a custom theme never
-    compares equal to :data:`DEFAULT_THEME` unless every group matches.
-    """
+    Frozen: build variants with ``replace`` or the constructors, never by
+    mutating."""
 
     text: TextStyles = field(default_factory=TextStyles)
     surfaces: SurfaceStyles = field(default_factory=SurfaceStyles)
@@ -372,14 +305,8 @@ class Theme:
     syntax: SyntaxStyles = field(default_factory=SyntaxStyles)
 
     def group(self, name: str, styles: Styles | None = None) -> object:
-        """The role group ``name``: the ``styles`` override, else the theme's.
-
-        The one resolution rule every themed consumer shares (a
-        :class:`~motui.widgets.base.Widget`, a controller and a syntax
-        highlighter alike).  ``styles=None`` -- or a group left ``None`` on
-        the override -- answers this theme's group; a group set on the
-        override wins whole.
-        """
+        """The role group ``name``: the ``styles`` override when set, else this
+        theme's group."""
         override = getattr(styles, name, None) if styles is not None else None
         return override if override is not None else getattr(self, name)
 
@@ -397,13 +324,8 @@ class Theme:
 
     @classmethod
     def flat(cls) -> Theme:
-        """The dark theme with every surface flattened.
-
-        No background surfaces: position reads through attributes instead
-        (reverse for the engaged/selected row, underline for hover, dim
-        for an unfocused cursor), and the overlays reverse rather than
-        paint a raised surface.
-        """
+        """The dark theme with every surface flattened: position reads through
+        attributes (reverse, underline, dim) instead of backgrounds."""
         theme = cls.dark()
         return replace(
             theme,
@@ -441,16 +363,8 @@ class Theme:
 
     @classmethod
     def auto(cls, env: Mapping[str, str]) -> Theme:
-        """Pick light or dark from ``env``; unknown falls back to dark.
-
-        ``TERM_BACKGROUND`` (``light``/``white`` or ``dark``/``black``) wins;
-        otherwise a numeric ``COLORFGBG`` background slot is read -- ``7``
-        or a bright value (``9``..``15``) is a light background, everything
-        else is dark.  The environment is an explicit argument: the kernel
-        never reads :data:`os.environ`, and
-        :func:`motui.terminal.capability.auto_theme` is the convenience that
-        passes it.
-        """
+        """Pick light or dark from ``env``: ``TERM_BACKGROUND`` wins, then
+        ``COLORFGBG``; unknown falls back to dark."""
         background = env.get("TERM_BACKGROUND", "").strip().lower()
         if background in ("light", "white"):
             return cls.light()

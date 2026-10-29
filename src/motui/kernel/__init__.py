@@ -1,11 +1,7 @@
 """The 2.0 kernel: pure values and protocols, with no I/O and no terminal.
 
-Everything here is a value or a protocol: geometry, the row model, styles,
-themes, events, the document model, layout and scrolling, the frame
-compositor and selection arithmetic.  The package is a leaf: it may depend on
-the standard library and on ``wcwidth``, and on nothing else in ``motui``.
-Bytes and the terminal live one layer up, in :mod:`motui.terminal`.
-"""
+A leaf package: standard library and ``wcwidth`` only. Bytes and the
+terminal live one layer up, in :mod:`motui.terminal`."""
 
 from __future__ import annotations
 

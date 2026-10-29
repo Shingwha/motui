@@ -1,27 +1,8 @@
 """Text measurement and wrapping: the width truth and the break rule.
 
-:func:`visible_width` is the single source of truth for display width in the
-whole toolkit: components measure and truncate through it, and the painter
-only counts rows.  It sums the one cluster scanner (:func:`_cell_spans`),
-whose per-character width is memoized on the character (:func:`_wcwidth`),
-which :func:`index_bounds_at_columns` reads as a second view -- an address
-into the same cells, for any number of display columns at once -- so the
-column-space cut :func:`motui.kernel.cell.cut_line` performs measures by
-the very clusters this module counts.  :func:`wrap_text`
-(plain text) and :func:`wrap_spans` (offset pairs, shared with
-:mod:`motui.kernel.cell` and the editing engine) implement one word-aware
-break rule.  The Markdown renderer lives in :mod:`motui.widgets.markdown`,
-and the plain-text component beside the rows it renders through:
-:class:`motui.widgets.text.Text`.
-
-:class:`WrapMode` names *how* a row responds to a width limit; the
-corresponding layout lives on :class:`motui.kernel.cell.Line`
-(``reflow`` / ``clip``), which measures through this module.
-
-The short names below (``width`` / ``wrap`` / ``spans`` / ``fit`` /
-``ellipsize`` / ``index_at`` / ``bounds``) are the 2.0 vocabulary; the
-1.x names stay exported beside them until W5 removes the old spellings.
-"""
+:func:`visible_width` is the toolkit's one display-width measure; the
+cluster scanner here feeds wrapping, cutting and fitting, which all share
+one break rule."""
 
 from __future__ import annotations
 
@@ -52,13 +33,8 @@ __all__ = [
 
 
 class WrapMode(Enum):
-    """How a line is fitted to a width.
-
-    ``WORD`` and ``CHAR`` may produce several rows (1..N); ``ELLIPSIS``,
-    ``CLIP`` and ``OVERFLOW`` are single-row modes.  ``OVERFLOW`` is the only
-    mode that may return a row wider than the limit; the container clips it
-    at its own edge.
-    """
+    """How a line is fitted to a width; WORD and CHAR may yield several rows,
+    the other modes exactly one."""
 
     WORD = "word"
     CHAR = "char"
@@ -75,15 +51,7 @@ ELLIPSIS = "…"
 
 
 def _normalize_tabs(text: str) -> str:
-    """The module's tab rule, in one place: every tab becomes one space.
-
-    A length-preserving substitution -- a tab counts :data:`TAB_WIDTH`
-    column, never a jump to a tab stop -- so offsets into the normalized
-    text stay valid and the wrap rule sees breakable whitespace where the
-    measure counted a cell.  The one entry point for the rule: wrapping
-    (:func:`wrap_text`) and the column-space cut
-    (:func:`motui.kernel.cell.slice_line`) both normalize through it.
-    """
+    """Every tab becomes one space: length-preserving, with no tab stops."""
     return text.replace("\t", " ")
 
 # Grapheme-cluster rules, expressed with code points -- the runtime
@@ -177,34 +145,14 @@ _MARK_RANGES = (
 
 @lru_cache(maxsize=4096)
 def _wcwidth(ch: str) -> int | None:
-    """One character's ``wcwidth``, memoized.
-
-    The scanner's innermost call -- asked for every character of every row
-    it reads, and a row's characters repeat massively across frames (a CJK
-    transcript's alphabet is a few hundred cells).  The answer is a pure
-    function of the character, so it is cached on the character itself, the
-    ``Style._prefix`` pattern: the cache keys on the value it derives from,
-    nothing invalidates it, and its bound is the only thing that keeps it
-    finite.  ``None`` and ``-1`` pass through unchanged, so every rule about
-    what a width means stays the scanner's and does not become this
-    memo's.
-    """
+    """One character's ``wcwidth``, memoized; the cache keys on the value it
+    derives from."""
     return wcwidth(ch)
 
 
 @lru_cache(maxsize=4096)
 def _is_mark(ch: str) -> bool:
-    """Whether ``ch`` is a combining mark (Mn/Me) by the compact table.
-
-    The table's own test, the one question the scanner asks it: ``in`` on a
-    tuple of ranges would compare tuples, so the walk is spelled out -- with
-    an early exit, the ranges being sorted -- and memoized on the character
-    exactly like :func:`_wcwidth` beside it (asked only for the continuation
-    characters that follow a base, and the same few hundred marks repeat
-    across a transcript's whole alphabet).  The answer is a pure function of
-    the character; the caller falls back to ``wcwidth`` for anything past
-    the table (a mark assigned after Unicode 15.1).
-    """
+    """Whether ``ch`` is a combining mark by the compact table, memoized."""
     code = ord(ch)
     for start, stop in _MARK_RANGES:
         if start > code:
@@ -216,13 +164,8 @@ def _is_mark(ch: str) -> bool:
 
 @lru_cache(maxsize=4096)
 def _char_width(cell: str) -> int:
-    """Width in columns of one printed cell: a base character with the
-    variation selectors that widen it, or a regional-indicator pair.
-
-    The multi-character cell's measure, asked only for the cells that are
-    not a bare base character -- so it is memoized on the cell text, which
-    repeats as massively as the characters do.
-    """
+    """Width of one printed cell: a base with widening selectors, or a
+    regional-indicator pair."""
     width = wcswidth(cell)
     if width is None or width < 0:
         return sum(w for w in map(_wcwidth, cell) if w and w > 0)
@@ -232,19 +175,8 @@ def _char_width(cell: str) -> int:
 def _cell_spans(text: str) -> Iterator[tuple[int, int, int]]:
     """Yield ``(start, end, width)`` for every printing cell of ``text``.
 
-    The toolkit's one cluster scanner: the same rule constants
-    :func:`visible_width` has always run, exposed as the cells themselves
-    instead of only their widths, so measurement and every column-space walk
-    read the same boundaries and cannot disagree about where a cluster
-    begins or ends again.  A cell is one printing base character, the
-    variation selectors that widen it (VS1..VS16 and the VS17..VS256
-    supplement), and the continuation characters that join it; a character
-    that starts no cell (a continuation with no base, a non-printable)
-    yields nothing.  A combining mark is a continuation wherever it stands
-    -- by the compact :data:`_MARK_RANGES` table, the ``wcwidth``
-    zero-width test, or both -- so it never adds a column and never starts
-    a cell of its own.
-    """
+    The toolkit's one cluster scanner: measurement, wrapping and column cuts
+    read the same boundaries, so they cannot disagree."""
     i = 0
     n = len(text)
     while i < n:
@@ -301,40 +233,11 @@ def _cell_spans(text: str) -> Iterator[tuple[int, int, int]]:
 
 def visible_width(text: str) -> int:
     """Display width of ``text`` in terminal columns, measured by grapheme
-    cluster -- the toolkit's single source of truth for display width, built
-    on ``wcwidth`` alone: the cluster rules are expressed with code points,
-    so there is no second measure and no new runtime dependency.
+    cluster.
 
-    One cluster contributes the width of its first printing cell -- a base
-    character together with the variation selectors that widen it, or a
-    regional-indicator pair making one flag cell.  Every continuation
-    character contributes 0:
-
-    - a combining mark (a Mn/Me code point -- the compact
-      :data:`_MARK_RANGES` table, or anything ``wcwidth`` reports as 0)
-      adds nothing, including one standing with no base at the start of the
-      string;
-    - a variation selector, VS1..VS16 (U+FE00-U+FE0F) or the VS17..VS256
-      supplement (U+E0100-U+E01EF), merges into its base (VS16 widens it ->
-      2; the supplement is zero width, and it can widen a base the same
-      way when the tables say so);
-    - a zero-width joiner (U+200D) joins the cell that follows it, so the
-      joiner and the joined cell add nothing to the cluster's width;
-    - a skin-tone modifier (U+1F3FB-U+1F3FF) adds nothing;
-    - two regional indicators (U+1F1E6-U+1F1FF) form one flag cell -- the
-      pair measures 2, a second indicator contributing 0 beyond the flag's
-      own two columns, and a lone indicator keeps its 2-column cell.
-
-    So ``"\\U0001F468\\u200d\\U0001F469\\u200d\\U0001F467\\u200d\\U0001F466"``
-    measures 2, ``"\\U0001F9D1\\U0001F3FD\\u200d\\U0001F4BB"`` measures 2,
-    ``"e\\u0301"`` measures 1 and ``"\\U0001F1EF\\U0001F1F5"`` measures 2.
-    This is deliberately **not a full UAX #29 segmentation**: the four
-    classes above are the terminal-relevant corners, and everything else
-    the scanner meets follows ``wcwidth`` alone -- a character ``wcwidth``
-    reports as printable starts its own cell at that width.  A tab
-    contributes :data:`TAB_WIDTH` columns; every other non-printable
-    character contributes 0; the empty string is 0.
-    """
+    One cluster contributes its first printing cell's width; combining marks,
+    joiners, skin tones and extra regional indicators contribute 0. This is the
+    toolkit's single width truth."""
     if not text:
         return 0
     if text.isascii():
@@ -348,19 +251,14 @@ def visible_width(text: str) -> int:
 
 
 def index_pair_at_columns(text: str, first: int, second: int) -> tuple[int, int]:
-    """Both boundary indices of ``[first, second)``, one scanner walk.
-
-    The two-boundary form of :func:`index_bounds_at_columns`, for the shape
-    a cut needs: its start and end resolved in a single pass.  The floor
-    rule is written once there: a boundary inside a multi-column cluster
-    resolves down to the cluster's start, whatever boundary reads it.
-    """
+    """Both boundary indices of ``[first, second)`` in one scanner walk; a
+    boundary inside a multi-column cluster snaps down."""
     start_at, end_at = index_bounds_at_columns(text, first, second)
     return start_at, end_at
 
 
 def _ascii_run_end(text: str, at: int) -> int:
-    """The end of the run of printable-ASCII characters starting at ``at``."""
+    """The end of the printable-ASCII run starting at ``at``."""
     n = len(text)
     end = at
     while end < n and " " <= text[end] <= "~":
@@ -369,16 +267,8 @@ def _ascii_run_end(text: str, at: int) -> int:
 
 
 def _ascii_run_head(text: str, at: int) -> int:
-    """The first index at or after ``at`` where a run of printable ASCII begins.
-
-    A run's second character and every character after it is a one-column
-    cell of its own: a cell absorbs a printable ASCII character only by
-    continuing past its predecessor, and a printable ASCII predecessor ends
-    its own cell there.  So the first index whose character *and* whose
-    predecessor are both printable ASCII is the first index the walk may skip
-    to without asking the scanner a question -- the one statement about a run
-    the fast path needs, and it is the ASCII rule and nothing else.
-    """
+    """The first index where a printable-ASCII run begins, given its predecessor
+    is printable ASCII too."""
     n = len(text)
     while at < n and not (
         " " <= text[at] <= "~" and " " <= text[at - 1] <= "~"
@@ -388,29 +278,8 @@ def _ascii_run_head(text: str, at: int) -> int:
 
 
 def index_bounds_at_columns(text: str, *columns: int) -> tuple[int, ...]:
-    """Character index of the cell each of ``columns`` lands in, one walk.
-
-    The boundary resolver for any number of cut points at once, answered in
-    one pass -- the shape a splice needs, whose three cut points each walked
-    the row's prefix apart before.  Each boundary is answered
-    independently and the answers come back in the order the columns were
-    given, so a caller may repeat, reorder or overlap them freely.
-
-    The floor rule is written once here, for every boundary alike: a boundary
-    inside a multi-column cluster resolves down to that cluster's start, a
-    boundary at or past the last cell resolves to ``len(text)``, and
-    ``column <= 0`` resolves to ``0``.
-
-    The walk keeps one home for the cluster rules (D1).  A run of printable
-    ASCII is one cell per character -- the scanner's own rule for those
-    characters -- so a wholly printable-ASCII string resolves arithmetically
-    and a mixed string's run resolves arithmetically too.  The one thing the
-    fast path must not presume is that the run's *last* character ends a
-    cluster: what follows it may be a continuation the scanner folds into
-    that character's cell, so the run is skipped only up to its last
-    character and the character itself is read by :func:`_cell_spans`, which
-    remains the only code that decides where a cluster begins or ends.
-    """
+    """Character index of the cell each column lands in, resolved in one walk; a
+    boundary inside a multi-column cluster resolves to its start."""
     n = len(text)
     if not columns:
         return ()
@@ -464,22 +333,8 @@ def index_bounds_at_columns(text: str, *columns: int) -> tuple[int, ...]:
 
 
 def fit_text(text: str, budget: int) -> str:
-    """Longest one-shot prefix of ``text`` measuring at most ``budget`` columns.
-
-    ``budget <= 0`` yields ``""`` and text that already fits is returned
-    whole.  The postcondition ``visible_width(fit_text(text, b)) <= b``
-    holds for every input -- including emoji sequences whose whole-string
-    measurement disagrees with the per-character sum: a VS16 selector
-    widens its base character (``"\\u26a0\\ufe0f"`` measures 2 whole but 1
-    per character) while a ZWJ run collapses into one cluster (a family
-    emoji measures 2 whole but 8 per character).  A greedy per-character
-    scan proposes the cut; the prefix is then re-measured whole and shrunk
-    until it fits (VS16 direction) and grown while the next character
-    still fits (ZWJ direction), so both discrepancies are corrected.  The
-    cut is greedy: the returned prefix never leaves room for one more
-    character, but a cluster collapse completing later in the string is
-    not chased.
-    """
+    """Longest prefix measuring at most ``budget`` columns; re-measured whole so
+    VS16 and ZWJ clusters cannot overflow."""
     if budget <= 0:
         return ""
     if visible_width(text) <= budget:
@@ -500,14 +355,8 @@ def fit_text(text: str, budget: int) -> str:
 
 
 def ellipsize_tail(text: str, width: int) -> str:
-    """Truncate ``text`` to ``width`` columns, marking the cut with ``…`` at the end.
-
-    Returns ``""`` for ``width <= 0``, ``"…"`` for ``width == 1`` (when the
-    text does not already fit), and the text unchanged when it fits.  The
-    cut comes from :func:`fit_text`, so the result never overflows
-    ``width`` -- including emoji whose whole-string width differs from the
-    per-character sum.
-    """
+    """Truncate to ``width`` columns, marking the cut with ``…`` at the end;
+    never overflows."""
     if width <= 0:
         return ""
     if visible_width(text) <= width:
@@ -520,26 +369,11 @@ def ellipsize_tail(text: str, width: int) -> str:
 def wrap_spans(
     text: str, width: int, *, preserve_whitespace: bool = False
 ) -> list[tuple[int, int]]:
-    """Character spans of ``text`` that make up each wrapped row.
+    """Character spans of the rows ``text`` wraps into.
 
-    The break rule (shared by :func:`wrap_text` and :func:`lines.wrap_line`):
-    prefer breaking at spaces, hard-break words longer than ``width``, and let
-    wide characters occupy a line of their own when ``width`` is smaller than
-    the character.  Whitespace at a break is dropped: leading whitespace of a
-    row is skipped and trailing whitespace never extends a span.  Returns at
-    least one span; ``(0, 0)`` means "one empty row".  ``text`` is expected to
-    be tab-normalized (same length, so offsets stay valid).
-
-    ``preserve_whitespace=True`` selects the **editing** rule instead: every
-    character of ``text`` belongs to exactly one span (the spans are
-    contiguous and concatenate back to ``text``), because in an editable
-    buffer a space is content, not layout.  Leading and trailing spaces
-    therefore render, and a row that would otherwise break inside a word
-    backs up to the last space it holds so the word can continue whole on
-    the next row; only a word with no space behind it is hard-broken.  The
-    word-aware preference and the wide-character rule are the same, so
-    cursor movement and rendering still read one geometry.
-    """
+    Breaks prefer spaces, over-long words are hard-broken, and whitespace at a
+    break is dropped. ``preserve_whitespace=True`` selects the editing rule:
+    every character belongs to exactly one span."""
     spans: list[tuple[int, int]] = []
     if width <= 0 or text == "":
         return [(0, 0)]
@@ -607,21 +441,8 @@ def wrap_spans(
 
 
 def _wrap_spans_kept(text: str, width: int) -> list[tuple[int, int]]:
-    """The editing rule behind ``wrap_spans(preserve_whitespace=True)``.
-
-    Walks the text's printing cells (:func:`_cell_spans`) and fills each row
-    to ``width`` columns.  Nothing is ever dropped: a space is an ordinary
-    one-column cell, a run of spaces may fill a row by itself, and the
-    concatenated spans reassemble ``text`` exactly.
-
-    The break still prefers a word boundary.  When the next cell would
-    overflow and the cut would land inside a word (both the previous and the
-    next character are not a space), the row backs up to just past its last
-    space -- the spaces stay at the end of the row they were typed on and
-    the word starts whole on the next one.  A word with no space inside the
-    row (a single long token) is hard-broken at the width, and a cell wider
-    than ``width`` owns its row, exactly as in the prose rule.
-    """
+    """The editing rule: nothing is dropped; a row backs up to its last space so
+    a word starts whole on the next row."""
     spans: list[tuple[int, int]] = []
     n = len(text)
     start = 0  # the row's first character
@@ -660,14 +481,7 @@ def _wrap_spans_kept(text: str, width: int) -> list[tuple[int, int]]:
 
 
 def wrap_text(text: str, width: int) -> list[str]:
-    """Word-aware wrap of ``text`` into rows of at most ``width`` columns.
-
-    Breaks prefer spaces; over-long words and CJK runs are hard-broken; a wide
-    character wider than ``width`` occupies a row by itself (the rows stay
-    finite, so ``width == 1`` terminates).  Empty input yields ``[""]``, and
-    ``width <= 0`` also yields ``[""]``.  Tabs count as one space and become
-    break opportunities.
-    """
+    """Word-aware wrap of ``text`` into rows of at most ``width`` columns."""
     if width <= 0 or text == "":
         return [""]
     text = _normalize_tabs(text)

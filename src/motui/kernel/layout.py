@@ -1,30 +1,8 @@
 """Layout values: constraints, the scrolling window and the scroll geometry.
 
-``Constraints`` is the input a component renders against.  ``ScreenLayout`` is
-one screen's worth of rows -- the fixed regions plus the scrolling window --
-with the row-ownership table that lets an overlay resolve a screen row back
-to its document address.  :class:`Viewport` renders a document against a size
-and remembers where the user has scrolled to; its private body index keeps
-per-block heights and prefix sums so a layout locates the window by bisect
-and materializes only the rows the window covers.
-
-``Scroll`` is the immutable geometry every scrolling surface shares (the
-viewport, the scroll view, the pane): the furthest legal offset, the clamp
-after a layout, the minimal move that reveals a row and the scrollbar thumb
-are formulas that live here once.  :class:`Scrollable` is the narrow
-read/write face the scrollbar and the wheel route go through;
-:class:`ScrollableX` is its horizontal sibling: the one-method face the
-wheel route queries in a hit chain, so the app never imports the widget
-that implements it.
-
-``ScrollAxis``/``Scroll`` are the 2.0 immutable two-axis values.  The thumb
-formula they carry is copied verbatim from the 1.x mutable geometry
-(including the builtin ``round`` half-to-even rule).  The value is
-stateless: the one piece of bookkeeping a tail-following window needs -- the
-extent the last clamp derived -- is passed back in by the surface that
-holds the value (see :meth:`ScrollAxis.clamp`), so ``sticky`` can pin to a
-bottom that moved without being stored on the axis.
-"""
+``Scroll``/``ScrollAxis`` hold the one thumb and clamp formula; :class:`Viewport`
+keeps per-block heights and prefix sums, so a layout bisects to the window
+and materializes only its rows."""
 
 from __future__ import annotations
 
@@ -58,11 +36,8 @@ class RowSpan:
 
 @dataclass(frozen=True, slots=True, kw_only=True)
 class Constraints:
-    """What a component is asked to render into.
-
-    ``width`` is required and non-negative; ``max_height`` is ``None`` for a
-    natural height or a non-negative row budget for a filled one.
-    """
+    """What a component is asked to render into: required ``width`` and an
+    optional row budget."""
 
     width: int = 0
     max_height: int | None = None
@@ -80,11 +55,8 @@ class Constraints:
 class ScrollAxis:
     """One axis of a scrolling window: offset, content, viewport and follow.
 
-    Every verb returns a new value; the receiver is never mutated.  ``sticky``
-    marks the value as tail-following (the vertical axis of :class:`Scroll`
-    starts sticky), so a clamp lands on the bottom rather than keeping a
-    detached offset.
-    """
+    Every verb returns a new value. ``sticky`` follows the tail, so a clamp
+    lands on the bottom rather than keeping a detached offset."""
 
     offset: int = 0
     content: int = 0
@@ -97,19 +69,11 @@ class ScrollAxis:
         return max(0, self.content - self.viewport)
 
     def clamp(self, previous_extent: int | None = None) -> ScrollAxis:
-        """Re-derive the offset for this extent, given the previous one.
+        """Re-derive the offset for this extent, given the caller's previous
+        ``max_offset``.
 
-        ``previous_extent`` is the ``max_offset`` the caller's last clamp
-        derived (``None`` before the first), the bookkeeping the 1.x
-        mutable state held itself.  A sticky axis whose offset stood at
-        that previous bottom pins to the new bottom, so content that grew
-        under a tail-following window carries it along; a detached axis --
-        offset below the previous extent -- clamps in place.  Every
-        non-sticky axis always clamps into ``[0, max_offset]``.  Calling
-        without an argument is the same as ``previous_extent=None``: a
-        sticky axis pins to its own bottom, which is the right answer for
-        a value seen for the first time.
-        """
+        A sticky axis that stood at the previous bottom pins to the new bottom;
+        every other axis clamps in place."""
         limit = self.max_offset
         at_previous_bottom = previous_extent is None or self.offset >= previous_extent
         if self.sticky and at_previous_bottom:
@@ -117,13 +81,8 @@ class ScrollAxis:
         return replace(self, offset=max(0, min(self.offset, limit)))
 
     def reveal(self, row: int) -> ScrollAxis:
-        """Bring ``row`` into the window, moving as little as possible.
-
-        The row is clamped into the content; an already visible row (or an
-        empty content or viewport) moves nothing, and the returned offset is
-        clamped into the legal range.  ``sticky`` is carried through
-        unchanged: revealing is an explicit move, not a tail follow.
-        """
+        """Bring ``row`` into the window with the smallest move; ``sticky`` is
+        carried through because revealing is an explicit move."""
         if self.content <= 0:
             return self
         target = max(0, min(int(row), self.content - 1))
@@ -139,13 +98,8 @@ class ScrollAxis:
         return self
 
     def thumb(self, track: int, min_length: int = 1) -> tuple[int, int] | None:
-        """The thumb's ``(start, length)`` over ``track`` cells.
-
-        ``None`` when there is nothing to map -- the content fits the window
-        (an empty document included) or ``min_length`` shaved the thumb away.
-        The formula is the 1.x one, including the builtin ``round`` (half to
-        even), so the geometry is reproducible rather than approximate.
-        """
+        """The thumb's ``(start, length)`` over ``track`` cells, or ``None`` when the
+        content fits; the 1.x formula including its half-to-even rounding."""
         if track <= 0 or self.content <= self.viewport:
             return None
         length = min(
@@ -181,53 +135,12 @@ class Scroll:
 
 @dataclass(frozen=True)
 class ScreenLayout:
-    """One screen's worth of rows.
+    """One screen's worth of rows plus the row-ownership table.
 
-    ``rows`` is the full painting target: exactly ``height`` rows -- the
-    top fixed region first, then the viewport region, the bottom fixed
-    region last.  ``body_rows`` is the viewport region alone: exactly
-    ``viewport_height`` rows, blank-padded below the content so the fixed
-    regions always sit at their screen edges.  ``viewport_start`` is the
-    body's first row *within* ``rows`` (the top pinned rows above it), so a
-    frame-level reader can turn "the first visible body row" into a screen
-    row without re-laying anything out.
-
-    ``row_blocks`` is the row-ownership table of this exact layout, one
-    entry per screen row in painting order: ``(block id, row within that
-    block)`` or ``None`` for a row no block owns -- the table travelling
-    with the layout so overlays (text selection) resolve a row back to its
-    document address without reaching into the viewport.  ``block_order`` lists the
-    block ids in document order -- every block the document holds, whether
-    or not any of its rows are on screen -- so an overlay can order two
-    document addresses (a selection's anchor and head live in different
-    blocks) without the ids themselves carrying order.  Both fields default
-    to "nothing known", which leaves every row unowned: a layout built by
-    hand is painted as-is and highlights nothing.
-
-    ``rows`` / ``body_rows`` / ``row_blocks`` (and ``block_order``) are
-    **tuples**: a layout is one immutable value, and a reader can never
-    mutate the rows another reader holds.  The constructor accepts any
-    iterable for them and normalizes to a tuple in :meth:`__post_init__`,
-    so a hand-built layout may pass lists too; an input that already is a
-    tuple is taken as is -- the normalization serves hand-built layouts,
-    and a tuple has nothing left to normalize.
-
-    ``offset`` / ``total_rows`` carry the window's scroll state as it was
-    laid out: the body-row index the window starts at, and the body rows
-    the document holds (fixed-region rows excluded) -- what a scrollbar
-    maps its thumb onto.  They are populated by :meth:`Viewport.layout` and
-    default to "nothing known" (0), so chrome renders from the layout alone
-    and never reaches into live viewport attributes.
-
-    ``width`` / ``height`` describe the rectangle the rows were laid out
-    in -- a layout names one screen's rows *and* the rectangle they were
-    laid out in.  ``width`` is the column count every row is measured and
-    wrapped against; ``height`` is the row count ``rows`` holds (the same
-    number ``len(rows)`` answers).  They are populated by
-    :meth:`Viewport.layout` from its own arguments and default to "nothing
-    known" (0) -- the :attr:`row_blocks` precedent -- so a hand-built
-    layout stays honest about the geometry it never claimed.
-    """
+    ``rows`` holds the top region, the viewport region and the bottom region;
+    ``body_rows`` is the viewport alone. ``row_blocks`` maps each screen row to
+    ``(block id, row)``, and ``offset``/``total_rows`` carry the scroll state
+    so chrome renders from the layout alone."""
 
     rows: tuple[Line, ...]
     body_rows: tuple[Line, ...]
@@ -240,13 +153,7 @@ class ScreenLayout:
     viewport_start: int = 0
 
     def __post_init__(self) -> None:
-        """Normalize the row containers to tuples (a frozen value's arrays).
-
-        The normalization serves hand-built layouts, whose fields may be
-        lists; an input that already is a tuple is taken as is, so a
-        layout built by :meth:`Viewport.layout` -- which constructs tuples
-        -- pays no second pass over the rows it just built.
-        """
+        """Normalize the row containers to tuples; a tuple input pays no second pass."""
         if type(self.rows) is not tuple:
             object.__setattr__(self, "rows", tuple(self.rows))
         if type(self.body_rows) is not tuple:
@@ -258,27 +165,16 @@ class ScreenLayout:
 
     @property
     def surface(self) -> Surface:
-        """The layout's rows as a :class:`Surface` at the layout width.
-
-        The one value both render paths understand: a composition is already
-        exactly the rows to paint, so the surface is a clipped view over
-        them (short rows stay short, exactly as the painter writes them).
-        """
+        """The layout's rows as a :class:`Surface` at the layout width, clipped (short
+        rows stay short, exactly as the painter writes them)."""
         return Surface.clipped(self.rows, self.width)
 
 
 class _BodyEntry:
-    """One body block's indexed shape: the block, its generation, its height.
+    """One body block's indexed shape: the block, its generation and its height.
 
-    The index deliberately stores **no rows** -- a block's cached list is a
-    borrow (:meth:`~motui.kernel.document.Section.rows_view`), never owned here --
-    so the entry is only a height token the geometry recomputes from: the
-    rows themselves are taken from the block's own cache at the moment the
-    window materializes them.  ``generation`` is the counter the block
-    answered when ``count`` was measured; ``None`` marks a pure component
-    without a counter, which is re-measured on every
-    :meth:`_BodyIndex.ensure` (no counter cannot prove itself unchanged).
-    """
+    The index stores no rows -- a block's cache is borrowed when the window
+    materializes."""
 
     __slots__ = ("block", "count", "generation")
 
@@ -289,35 +185,11 @@ class _BodyEntry:
 
 
 class _BodyIndex:
-    """The viewport's private body index: who is in the body, how tall.
+    """The viewport's private body index: who is in the body and how tall.
 
-    The per-frame geometry facts of one document, kept between layouts so a
-    frame pays for what changed instead of for the document: body entries in
-    document order (``block, generation, count``), the cumulative heights
-    (``_cum[i]`` is the body row the *i*-th entry starts at, so the window
-    is located by bisect), the body total, the pinned blocks in document
-    order, and the ``block_order`` tuple (rebuilt only when the document
-    mutates, handed to every layout as the same object).
-
-    Freshness is a two-level check.  The key ``(Document.mutation, c)``
-    catches structural change and any change to the constraints (width or
-    height budget) -- either one rebuilds every entry (``row_count`` renders
-    a first layout's blocks exactly as the per-frame walk always did).  Within
-    a key, every ``ensure`` sweeps the entries and probes each block's
-    ``generation``: an equal value means the block's height stands (one
-    integer comparison -- the counter is the widget's own promise that its
-    rows are unchanged), a moved value re-measures the
-    block through :meth:`~motui.kernel.document.Section.row_count` (which
-    re-renders and refills the block's own cache) and re-runs the prefix sums
-    **from that entry on** -- the naive suffix recompute, because a moved
-    block in an append-mostly document is almost always at the tail.  A
-    ``None`` generation (a pure component without a counter) is always dirty:
-    the entry is re-measured every frame, which re-renders that block every
-    frame -- exactly once, the same single render the per-frame rows walk
-    paid, because the rows that render produced are carried to the window
-    on ``_frame_rows`` (a frame-scoped hold, the exact lifetime the walk's
-    ``body`` list had; the index keeps no rows across frames).
-    """
+    Freshness is keyed ``(Document.mutation, constraints)``; within a key each
+    block's ``generation`` is probed -- an equal value proves the height -- and
+    prefix sums re-run only from a moved entry, the naive suffix the append-mostly case wants."""
 
     __slots__ = (
         "_bottom",
@@ -350,14 +222,7 @@ class _BodyIndex:
         self._frame_rows: dict[Section, Sequence[Line]] = {}
 
     def ensure(self, c: Constraints) -> None:
-        """Bring the index up to date for ``c``; the one entry door.
-
-        After it answers, the geometry properties (pinned blocks, entries,
-        prefix sums, body total, block order) describe the document at these
-        constraints as of the blocks' current snapshots.  Cheap when nothing
-        changed: one key comparison plus one ``generation`` probe per body
-        block.
-        """
+        """Bring the index up to date for ``c``; cheap when only snapshots moved."""
         self._frame_rows = {}
         mutation = self._document.mutation
         if self._key is not None and self._key == (mutation, c):
@@ -388,16 +253,8 @@ class _BodyIndex:
         return self._order
 
     def window_spans(self, start: int, end: int) -> list[tuple[Section, int, int]]:
-        """The body entries overlapping ``[start, end)`` as slice requests.
-
-        Each answer is ``(block, slice start, slice stop)``: the rows to
-        take from that block's own cache, addressing exactly the body rows
-        the window covers.  The window is located by bisecting the prefix
-        sums (``_cum``), so finding the first overlapping block costs
-        ``log n`` regardless of how far down the document it sits; a
-        zero-height entry at the boundary is skipped, exactly as the
-        per-frame walk skipped it.
-        """
+        """The body entries overlapping ``[start, end)`` as ``(block, slice start,
+        slice stop)``; the first is located by bisecting the prefix sums."""
         entries = self._entries
         cum = self._cum
         spans: list[tuple[Section, int, int]] = []
@@ -418,17 +275,8 @@ class _BodyIndex:
         return spans
 
     def entry_rows(self, block: Section, c: Constraints) -> Sequence[Line]:
-        """The rows a windowed body block lends this frame.
-
-        The measurement pass already rendered every block without a usable
-        snapshot (they render per call by contract, so asking them again
-        here would render them twice in one frame); their rows are kept in
-        ``_frame_rows`` for this frame and handed back, so the slice the
-        window takes answers the very rows the entry's count was measured
-        from.  Every other block answers its own cache through
-        :meth:`~motui.kernel.document.Section.rows_view` -- a hit, the sweep has
-        kept it warm.
-        """
+        """The rows a windowed block lends this frame; per-call blocks are rendered
+        once per frame and handed back."""
         rows = self._frame_rows.get(block)
         if rows is None:
             return block.rows_view(c)
@@ -462,12 +310,8 @@ class _BodyIndex:
             self._recompute_prefix(dirty_from)
 
     def _recompute_prefix(self, from_index: int) -> None:
-        """Re-run the prefix sums from ``from_index`` on (naive suffix, P6).
-
-        Entries before ``from_index`` are untouched, so their accumulated
-        height is still true; everything after shifts by whatever the dirty
-        entries gained or lost.
-        """
+        """Re-run the prefix sums from ``from_index``; entries before it are still
+        true."""
         entries = self._entries
         cum = self._cum
         running = cum[from_index]
@@ -477,16 +321,8 @@ class _BodyIndex:
         self._total = running
 
     def _rebuild(self, mutation: int, c: Constraints) -> None:
-        """Build every entry from the document (a key change: structure or constraints).
-
-        The walk is the one per-document pass: pinned blocks are filed by
-        region, each body block is measured through ``row_count`` (which
-        renders a first-seen block exactly once, as the per-frame rows walk
-        always did), and the ids collected in the same pass become the
-        ``block_order`` tuple -- rebuilt only when the document actually
-        mutated, so a constraints-only change reuses the ids of the same
-        structure.
-        """
+        """Build every entry from the document; ``block_order`` is rebuilt only when
+        the document mutated."""
         blocks = self._document.blocks()
         entries: list[_BodyEntry] = []
         cum: list[int] = [0]
@@ -523,17 +359,11 @@ class _BodyIndex:
 
 
 class Viewport:
-    """Scroll state over a document: window offset, row ownership.
+    """Scroll state over a document: window offset and row ownership.
 
-    One window over one document: the offset (with its stick-to-bottom
-    rule) and the row-ownership table each layout rebuilds.  The rows
-    themselves are the blocks' -- every walk here goes through the block's
-    own cache (the read-only doors :meth:`~motui.kernel.document.Section.rows_view`
-    and :meth:`~motui.kernel.document.Section.row_count`), borrowed, never copied.
-    The geometry between layouts is the :class:`_BodyIndex`: heights and
-    prefix sums kept across frames, keyed ``(Document.mutation, width)``,
-    so a stable frame re-probes snapshots instead of re-walking blocks.
-    """
+    Rows are borrowed from the blocks' own caches, never copied whole; the
+    body index keeps heights and prefix sums keyed ``(mutation, constraints)``,
+    so a stable frame re-probes instead of re-walking."""
 
     def __init__(self, document: Document) -> None:
         self._document = document
@@ -556,37 +386,10 @@ class Viewport:
     def layout(self, width: int, height: int) -> ScreenLayout:
         """Render the document against ``width``x``height`` and apply scroll state.
 
-        Fixed-region blocks render first, in document order: ``Placement.TOP``
-        rows above the window, ``Placement.BOTTOM`` rows below it, and the
-        unpinned ones form the scrollable body.  The window height is
-        ``vh = max(height - top_total - bottom_total, 0)``.  When the fixed
-        regions alone would exceed ``height`` the bottom region is
-        preserved first (the status bar and input box must not be lost),
-        the top region keeps only the leading rows that still fit
-        (truncated at its head) and the viewport is left empty.  The
-        offset is clamped into ``[0, max(0, total - viewport_height)]``
-        and pinned to the maximum while sticking to the bottom.  The
-        window holds the content rows themselves, blank-padded below the
-        content: it is sliced out of the blocks that overlap
-        ``[offset, offset + vh)`` -- located on the index's prefix sums by
-        bisect, and materialized only for those blocks (a cached block's
-        rows are sliced, never copied whole) -- so a long document costs
-        one snapshot probe per body block, a re-render of what moved, and
-        the window itself, not the materialization of every row.  Rows
-        come back as exactly ``height`` entries: top region, viewport
-        region, bottom region.  Every layout also rebuilds the
-        row-ownership table and ships it on the returned
-        :class:`ScreenLayout` (alongside the document order of the block
-        ids and the window's offset and total rows), so both the
-        full-repaint and the diff path resolve clicks against the very
-        same result, an overlay painted at the composition root resolves a
-        row back to its document address without reaching into the
-        viewport, and chrome renders from the layout alone.
-
-        A document with a ``FILL`` section takes
-        :meth:`_layout_with_fill` instead: the natural flow keeps its own
-        window and the fill takes the residual height.
-        """
+        Top, body and bottom regions in document order; the bottom region wins a
+        height squeeze. The window is sliced only from the blocks overlapping it
+        -- bisected on cached prefix sums -- and the row-ownership table ships on
+        the result."""
         fill = self._document.fill()
         if fill is not None:
             return self._layout_with_fill(fill, width, height)
@@ -663,23 +466,8 @@ class Viewport:
         )
 
     def _layout_with_fill(self, fill: Section, width: int, height: int) -> ScreenLayout:
-        """Lay out a document whose last flow section fills the remainder.
-
-        The index is deliberately not consulted: a fill section would enter
-        it as an ordinary body block (its natural height is meaningless)
-        and pollute the prefix sums every later layout would bisect.  This
-        path walks the sections directly instead -- the flow is exactly the
-        natural content above the fill, so it is materialized here anyway.
-
-        Pinned regions keep the normal priority (bottom first, then top,
-        each clamped to the screen).  The flow is windowed against the
-        space left, with the same :class:`ScrollAxis` clamp the indexed
-        path uses, so scrolling and tail-follow behave identically; the
-        fill then renders under a ``max_height`` of the residual rows and
-        is blank-padded to it (a surface that answers fewer rows leaves the
-        rest unowned).  ``total_rows`` counts the natural flow only: the
-        fill never scrolls.
-        """
+        """Lay out a document whose ``FILL`` section takes the residual height; the
+        fill is excluded from the index so it never pollutes the prefix sums."""
         blocks = self._document.blocks()
         c = Constraints(width=width)
         top_rows: list[Line] = []
@@ -749,24 +537,8 @@ class Viewport:
         )
 
     def natural_height(self, width: int) -> int:
-        """The rows this document occupies at ``width``: every block's rows.
-
-        What a region whose height is its *content* -- the frame's bottom
-        band, a pinned footer -- needs before it can be laid out: the
-        fixed regions' rows plus the body's.  The body's share is the
-        index's maintained total (the sweep has already re-measured every
-        block whose snapshot moved); the pinned blocks are counted through
-        :meth:`~motui.kernel.document.Section.row_count` (a cached block answers
-        the length of its cache; nothing here materializes rows).  A band
-        laid out at exactly this height holds its whole content and no
-        blank fill, so it hugs the edge it is reserved against.
-
-        A ``FILL`` block has no natural height (it takes what is left), so
-        a document that holds one is measured as pinned rows plus natural
-        flow rows -- never through the body index, which would count the
-        fill's own render at the constraint height and make the band grow
-        to fill itself.
-        """
+        """The rows the document occupies at ``width``: every block's rows, measured
+        without materializing them."""
         blocks = self._document.blocks()
         if self._document.fill() is not None:
             c = Constraints(width=width)
@@ -790,32 +562,15 @@ class Viewport:
         self.scroll_by(-n)
 
     def scroll_down(self, n: int = 1) -> None:
-        """Scroll ``n`` rows toward the bottom (clamped at the last window).
-
-        Landing on the bottom edge re-attaches the view: content that arrives
-        afterwards moves the window again (pgdn all the way down resumes
-        auto-follow).
-        """
+        """Scroll ``n`` rows toward the bottom; landing on the bottom edge re-attaches
+        auto-follow."""
         if n <= 0:
             return
         self.scroll_by(n)
 
     def scroll_to(self, offset: int) -> bool:
-        """Put the window's top at ``offset``, clamped into ``[0, max]``.
-
-        The absolute sibling of :meth:`scroll_up` / :meth:`scroll_down`: the
-        target is clamped at the top edge (0) and at the bottom one
-        (:meth:`_max_offset`, the extent :meth:`scroll_down` clamps against
-        and the layout pins to while sticking), so a target above the
-        document shows its first window and one past its end the last window
-        -- exactly the rows scrolling there would land on.  A landing on the
-        bottom edge re-attaches the view: an absolute jump to the tail
-        resumes auto-follow, the same rule :meth:`scroll_down`'s clamp
-        follows.  Before the first layout the extent is not known, so every
-        ``offset`` clamps to 0 -- which is the tail of a fresh viewport
-        already, and the next layout pins it there while the viewport still
-        sticks to the bottom.  ``True`` when the offset moved.
-        """
+        """Put the window's top at ``offset``, clamped; landing on the bottom
+        re-attaches the tail. ``True`` when the offset moved."""
         y = self._scroll.y
         limit = y.max_offset
         target = max(0, min(int(offset), limit))
@@ -826,13 +581,8 @@ class Viewport:
         return moved
 
     def scroll_by(self, delta: int) -> bool:
-        """Step the window ``delta`` rows (clamped); ``True`` when it moved.
-
-        The relative sibling of :meth:`scroll_to`: a downward step follows
-        the scroll-down rule (landing on the bottom re-attaches the tail),
-        an upward one the scroll-up rule (it detaches, at the top edge
-        included), and ``0`` moves nothing.
-        """
+        """Step the window ``delta`` rows; a downward landing re-attaches the tail,
+        an upward move detaches. ``True`` when it moved."""
         if delta == 0:
             return False
         moved = self.scroll_to(self._scroll.y.offset + delta)
@@ -865,11 +615,8 @@ class Viewport:
 
     @property
     def document(self) -> Document:
-        """The document this viewport is the window over.
-
-        What a frame's ownership table resolves a claimed cell against: the
-        pane owns the address, its document owns the block.
-        """
+        """The document this viewport is the window over; a pane's claimed cells
+        resolve against it."""
         return self._document
 
     @property
@@ -880,13 +627,8 @@ class Viewport:
 
 @runtime_checkable
 class Scrollable(Protocol):
-    """Anything a scrollbar or a wheel route can read and move.
-
-    The narrow face the interaction tier needs: the geometry to paint a
-    thumb from and the two verbs to move the window.  :class:`Viewport`,
-    ``ScrollPanel`` and ``Pane`` (delegating its viewport) answer it without
-    sharing a base class.
-    """
+    """Anything a scrollbar or wheel route can read and move: the scroll value
+    and the two verbs. Viewport, ScrollPanel and Pane all answer it."""
 
     @property
     def scroll(self) -> Scroll: ...
@@ -898,12 +640,7 @@ class Scrollable(Protocol):
 
 @runtime_checkable
 class ScrollableX(Protocol):
-    """Anything a horizontal wheel can move, in the one method it needs.
-
-    The wheel route walks a hit chain for this structural face -- the same
-    way it walks for :class:`Scrollable` -- so ``app`` never imports the
-    widget library.  ``ScrollPanel`` answers it on the ``"x"`` and
-    ``"both"`` axes; a boundary notch returns ``False`` and moves nothing.
-    """
+    """Anything a horizontal wheel can move, in the one method it needs;
+    ``app`` therefore never imports the widget library."""
 
     def scroll_x_by(self, delta: int) -> bool: ...
