@@ -17,7 +17,7 @@ to the menu, ``q`` quits -- except while the text field owns the focus.
 
 from __future__ import annotations
 
-from ...kernel.cell import Line, Segment, Surface, cut_line
+from ...kernel.cell import Line, Segment, Surface
 from ...kernel.events import KeyEvent
 from ...kernel.geom import Pos
 from ...kernel.glyphs import GLYPHS, seat
@@ -26,6 +26,7 @@ from ...kernel.style import Style
 from ...kernel.text import WrapMode
 from ...kernel.theme import Theme
 from ...widgets import (
+    Align,
     Button,
     Checkbox,
     Column,
@@ -35,6 +36,7 @@ from ...widgets import (
     RadioGroup,
     Row,
     Slider,
+    Stack,
     Table,
     Tabs,
     Text,
@@ -63,6 +65,26 @@ _PROBES: tuple[tuple[str, str, str], ...] = (
     ("draco", "91 ms", "0.88"),
     ("europa", "55 ms", "0.96"),
 )
+
+
+class _DialogBox(Widget):
+    """Render the dialog under the scene's own box width.
+
+    ``Align`` hands its child the full frame width, but the dialog derives
+    its box width from that constraint; :meth:`ComponentsScene._dialog_frame`
+    sizes the box from the frame instead.  Pinning the same width here keeps
+    the ``Align``-painted dialog and the scene's click rectangle identical.
+    """
+
+    __slots__ = ("dialog",)
+
+    def __init__(self, dialog: Dialog) -> None:
+        super().__init__()
+        self.dialog = dialog
+
+    def render(self, c: Constraints) -> Surface:
+        inner = min(56, max(24, c.width - 4))
+        return self.dialog.render(Constraints(width=inner, max_height=c.max_height))
 
 
 class ComponentsScene(Scene):
@@ -106,6 +128,13 @@ class ComponentsScene(Scene):
             title="arm the uplink?",
             buttons=[("arm signal", "ok"), ("cancel", None)],
             theme=theme,
+        )
+        self._modal_background = LinesView(theme)
+        self._modal_stack = Stack(
+            [
+                self._modal_background,
+                Align(_DialogBox(self.dialog), horizontal="center", vertical="middle"),
+            ]
         )
 
         # -- focus targets per page (index 0 is always the tab strip) -------
@@ -282,7 +311,7 @@ class ComponentsScene(Scene):
         rows.append(self._hint_line())
         rows = [row.clip(_CLIP, width) for row in rows[:height]]
         if self._modal:
-            rows = self._overlay(rows, width, height)
+            return self._overlay(rows, width, height)
         return Surface.of(rows, width)
 
     def _heading_line(self) -> Line:
@@ -343,33 +372,14 @@ class ComponentsScene(Scene):
         dh = len(dialog_rows)
         return dialog_rows, max(0, (width - dw) // 2), dh
 
-    def _overlay(self, rows: list[Line], width: int, height: int) -> list[Line]:
-        """The modal dialog centred over the frame, the frame row cut around it."""
+    def _overlay(self, rows: list[Line], width: int, height: int) -> Surface:
+        """The modal dialog centred over the frame, composed by the stack."""
         dialog_rows, dx, dh = self._dialog_frame(width)
-        if not dialog_rows:
-            return rows
-        dw = max(row.width for row in dialog_rows)
-        dialog_rows = [row.fill(dw) for row in dialog_rows]
+        dw = max((row.width for row in dialog_rows), default=0)
         dy = max(0, (height - dh) // 2)
         self._dialog_rect = (dy, dx, dh, dw)
-        # The ground must carry real segments to the full width: a cut into a
-        # bare blank Line answers nothing, and the dialog would lose its pad.
-        ground = [row.fill(width) for row in rows[:height]]
-        ground.extend(Line((Segment(" " * width),)) for _ in range(height - len(ground)))
-        out: list[Line] = []
-        for row in range(height):
-            if dy <= row < dy + dh:
-                line = dialog_rows[row - dy]
-                out.append(
-                    (
-                        cut_line(ground[row], 0, dx)
-                        + line
-                        + cut_line(ground[row], dx + dw, width)
-                    ).clip(_CLIP, width)
-                )
-            else:
-                out.append(ground[row])
-        return out
+        self._modal_background.lines = rows[:height]
+        return self._modal_stack.render(Constraints(width=width, max_height=height))
 
     # -- behaviour ---------------------------------------------------------------
 
