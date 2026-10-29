@@ -3,17 +3,21 @@
 A :class:`PixelCanvas` owns two :class:`~motui.pixel.Raster` grids -- a
 ``fill`` layer of background blocks folded at half-cell resolution and an
 ``art`` layer of lines and sprites drawn at the marker's resolution -- and
-answers :meth:`render` by handing both to the pixel engine's one quantizer.
-Every colour comes from the caller's
-:class:`~motui.pixel.PixelPalette`; the widget contributes the layer
-organization, geometry and draw/erase/fade verbs, and ``motui.pixel``
+answers :meth:`surface` by handing both to the pixel engine's one quantizer.
+Every colour comes from the widget's
+:class:`~motui.pixel.PixelPalette`: a caller-provided palette wins, and the
+default is derived from the widget's theme
+(:meth:`~motui.pixel.PixelPalette.from_theme`).  The widget contributes the
+layer organization, geometry and draw/erase/fade verbs, and ``motui.pixel``
 contributes the pixels-to-cells semantics.
 
 The widget is the only drawing door: the rasters are private, the verbs
 take a :class:`LayerName`, and the marker is validated when assigned.  A
-render re-quantizes from scratch (the widget cannot see edits made through
-a private buffer) and syncs the buffers to the constraint's size first; a
-render at a new size rebuilds them empty, which a pixel scene refills on
+surface is quantized once per invalidation (any verb, a palette or marker
+assignment, or a resize) and cached; :meth:`render` only clips it.  Sizing
+is explicit -- a host calls :meth:`resize` or :meth:`fit` before painting --
+so rendering at another width probes the image instead of dropping the ink.
+A real resize rebuilds both rasters empty, which a pixel scene refills on
 its next tick.
 
 Octant resolution is deliberately absent: the engine's marker vocabulary
@@ -26,9 +30,8 @@ from collections.abc import Iterable
 from enum import StrEnum
 
 from ..kernel.cell import Surface
-from ..kernel.layout import Constraints
 from ..pixel import Marker, PixelLayer, PixelPalette, Raster, quantize
-from .base import Widget
+from .drawing import Drawing
 
 __all__ = ["LayerName", "PixelCanvas"]
 
@@ -40,66 +43,47 @@ class LayerName(StrEnum):
     FILL = "fill"
 
 
-class PixelCanvas(Widget):
+class PixelCanvas(Drawing):
     """Two private rasters, fill under art, quantized through the palette.
 
     ``width``/``height`` are cell dimensions; every cell is a 2x4 sub-cell
     grid.  Drawing verbs take sub-cell positions on one layer, floats
-    truncated and out-of-range writes clipped.  Rendering at a new size
-    rebuilds both rasters empty -- a pixel scene redraws every tick, so
-    losing the ink is by contract, and :meth:`resize` does the same
-    explicitly.
+    truncated and out-of-range writes clipped.  A real resize rebuilds both
+    rasters empty -- a pixel scene redraws every tick, so losing the ink is
+    by contract.  The surface cache is dropped by every verb and by a
+    ``palette``/``marker`` assignment, and ``render`` never resizes.
     """
 
-    __slots__ = ("_art", "_cols", "_fill", "_marker", "_rows", "palette")
+    __slots__ = ("_art", "_fill", "_marker", "_palette")
 
     def __init__(
         self,
+        *,
         width: int = 0,
         height: int = 0,
-        *,
         marker: Marker | str = Marker.BRAILLE,
-        palette: PixelPalette,
+        palette: PixelPalette | None = None,
         theme=None,
-        styles=None,
     ) -> None:
-        super().__init__(theme, styles)
+        super().__init__(width=width, height=height, theme=theme)
         self._marker = _resolve_marker(marker)
-        self.palette = palette
-        self._cols = max(0, int(width))
-        self._rows = max(0, int(height))
-        self._art = Raster(self._cols, self._rows)
-        self._fill = Raster(self._cols, self._rows)
+        self._palette = (
+            PixelPalette.from_theme(self._theme) if palette is None else palette
+        )
+        self._art = Raster(self._width, self._height)
+        self._fill = Raster(self._width, self._height)
 
     # -- geometry ----------------------------------------------------------
 
     @property
-    def width(self) -> int:
-        """The canvas width in cells."""
-        return self._cols
-
-    @width.setter
-    def width(self, value: int) -> None:
-        self._resize(max(0, int(value)), self._rows)
-
-    @property
-    def height(self) -> int:
-        """The canvas height in cells."""
-        return self._rows
-
-    @height.setter
-    def height(self, value: int) -> None:
-        self._resize(self._cols, max(0, int(value)))
-
-    @property
     def pixel_width(self) -> int:
         """The sub-cell width of both layers."""
-        return self._cols * 2
+        return self._width * 2
 
     @property
     def pixel_height(self) -> int:
         """The sub-cell height of both layers."""
-        return self._rows * 4
+        return self._height * 4
 
     @property
     def marker(self) -> Marker:
@@ -111,20 +95,22 @@ class PixelCanvas(Widget):
         resolved = _resolve_marker(value)
         if resolved is not self._marker:
             self._marker = resolved
-            self.touch()
+            self._invalidate()
 
-    def resize(self, width: int, height: int) -> None:
-        """Resize both rasters; the sub-cells of the old size are dropped."""
-        self._resize(max(0, int(width)), max(0, int(height)))
+    @property
+    def palette(self) -> PixelPalette:
+        """The quantizer's palette; assigning drops the cached surface."""
+        return self._palette
 
-    def _resize(self, cols: int, rows: int) -> None:
-        if cols == self._cols and rows == self._rows:
-            return
-        self._cols = cols
-        self._rows = rows
+    @palette.setter
+    def palette(self, value: PixelPalette) -> None:
+        self._palette = value
+        self._invalidate()
+
+    def _resize_storage(self, cols: int, rows: int) -> None:
+        """Rebuild both rasters at the base's new size; the old ink is gone."""
         self._art = Raster(cols, rows)
         self._fill = Raster(cols, rows)
-        self.touch()
 
     def _layer(self, layer: LayerName | str) -> Raster:
         try:
@@ -155,7 +141,7 @@ class PixelCanvas(Widget):
     ) -> None:
         """Light one sub-cell in ``slot`` at ``heat``."""
         self._layer(layer).plot(x, y, slot, heat)
-        self.touch()
+        self._invalidate()
 
     def erase(
         self,
@@ -166,7 +152,7 @@ class PixelCanvas(Widget):
     ) -> None:
         """Blank one sub-cell on ``layer``."""
         self._layer(layer).erase(x, y)
-        self.touch()
+        self._invalidate()
 
     def stamp(
         self,
@@ -178,7 +164,7 @@ class PixelCanvas(Widget):
     ) -> None:
         """Ink a batch of sub-cell points with one slot and one heat."""
         self._layer(layer).stamp(points, slot, heat)
-        self.touch()
+        self._invalidate()
 
     def line(
         self,
@@ -193,7 +179,7 @@ class PixelCanvas(Widget):
     ) -> None:
         """Draw a line on ``layer``."""
         self._layer(layer).line(x0, y0, x1, y1, slot, heat)
-        self.touch()
+        self._invalidate()
 
     def rect(
         self,
@@ -209,7 +195,7 @@ class PixelCanvas(Widget):
     ) -> None:
         """Draw a rectangle on ``layer``; ``fill`` solidifies it."""
         self._layer(layer).rect(x0, y0, x1, y1, fill=fill, slot=slot, heat=heat)
-        self.touch()
+        self._invalidate()
 
     def disc(
         self,
@@ -223,7 +209,7 @@ class PixelCanvas(Widget):
     ) -> None:
         """Draw a filled disc on ``layer``."""
         self._layer(layer).disc(cx, cy, r, slot, heat)
-        self.touch()
+        self._invalidate()
 
     def ring(
         self,
@@ -238,12 +224,12 @@ class PixelCanvas(Widget):
     ) -> None:
         """Draw a ring on ``layer``."""
         self._layer(layer).ring(cx, cy, r, thickness, slot, heat)
-        self.touch()
+        self._invalidate()
 
     def decay(self, amount: int, *, layer: LayerName | str = LayerName.ART) -> None:
         """Fade ``layer``'s heat by ``amount``; the fill layer never does by default."""
         self._layer(layer).decay(amount)
-        self.touch()
+        self._invalidate()
 
     def clear(self, *, layer: LayerName | str | None = None) -> None:
         """Blank one layer, or both when ``layer`` is ``None``."""
@@ -252,27 +238,24 @@ class PixelCanvas(Widget):
             self._fill.clear()
         else:
             self._layer(layer).clear()
-        self.touch()
+        self._invalidate()
 
     # -- the whole canvas --------------------------------------------------
 
-    def render(self, c: Constraints) -> Surface:
-        """The layers quantized at the constraint's size; a frozen surface.
+    def _build_surface(self) -> Surface:
+        """Quantize both layers at the canvas's own size; a frozen surface.
 
-        A natural-height constraint keeps the current row count; a budget
-        resizes to exactly that many rows (rebuilding the rasters, per the
-        class contract).  The surface width is the constraint's width and
-        every row answers it exactly.
+        The base caches the answer until the next invalidation.  A canvas
+        with no cells is an empty surface -- the quantizer has no grid to
+        walk -- and every other answer is exactly the canvas width.
         """
-        rows = self._rows if c.max_height is None else max(0, int(c.max_height))
-        self._resize(max(0, int(c.width)), rows)
-        if self._cols == 0 or self._rows == 0:
-            return Surface(width=c.width, rows=())
-        return Surface.of(quantize(self._layers(), self.palette), c.width)
+        if self._width == 0 or self._height == 0:
+            return Surface(width=self._width, rows=())
+        return Surface.of(quantize(self._layers(), self._palette), self._width)
 
     def __repr__(self) -> str:
         return (
-            f"PixelCanvas({self._cols}x{self._rows}, "
+            f"PixelCanvas({self._width}x{self._height}, "
             f"marker={self._marker.value!r})"
         )
 

@@ -5,6 +5,7 @@ from __future__ import annotations
 import pytest
 
 from motui.kernel.layout import Constraints
+from motui.kernel.theme import DEFAULT_THEME
 from motui.pixel import Marker, PixelPalette
 from motui.widgets.pixel_canvas import LayerName, PixelCanvas
 
@@ -18,7 +19,7 @@ PALETTE = PixelPalette(
 
 
 def test_the_canvas_quantizes_art_over_fill_through_the_pixel_palette():
-    canvas = PixelCanvas(2, 2, palette=PALETTE)
+    canvas = PixelCanvas(width=2, height=2, palette=PALETTE)
     canvas.plot(0, 0, slot=1)  # art dot, cell (0, 0)
     canvas.plot(2, 0, slot=1)  # art dot, cell (1, 0)
     canvas.plot(0, 6, slot=2, layer=LayerName.FILL)  # lower half of cell (0, 1)
@@ -35,7 +36,7 @@ def test_the_canvas_quantizes_art_over_fill_through_the_pixel_palette():
 
 
 def test_erase_and_decay_cross_the_fresh_cool_and_dark_states():
-    canvas = PixelCanvas(1, 1, palette=PALETTE)
+    canvas = PixelCanvas(width=1, height=1, palette=PALETTE)
     for subrow in range(4):
         canvas.plot(0, subrow, slot=1)  # the cell's whole left braille column
     assert canvas.render(Constraints(width=1, max_height=1))[0].text == "\u2847"
@@ -51,18 +52,42 @@ def test_erase_and_decay_cross_the_fresh_cool_and_dark_states():
     assert canvas.render(Constraints(width=1, max_height=1))[0].text == " "
 
 
-def test_render_rebuilds_the_buffers_at_a_new_size_and_keeps_ink_while_it_holds():
-    canvas = PixelCanvas(2, 2, palette=PALETTE)
+def test_resize_rebuilds_the_buffers_and_render_never_resizes():
+    canvas = PixelCanvas(width=2, height=2, palette=PALETTE)
     canvas.plot(0, 0, slot=1)
-    rebuilt = canvas.render(Constraints(width=4, max_height=1))
-    assert canvas.width == 4 and canvas.height == 1
-    assert rebuilt.width == 4 and rebuilt.height == 1
-    assert rebuilt[0].text == "    "  # a resize drops the ink, by contract
+    probe = canvas.render(Constraints(width=4))  # natural height: both rows
+    assert (canvas.width, canvas.height) == (2, 2)  # a probe changes nothing
+    assert probe.width == 4 and probe.height == 2
+    canvas.resize(4, 1)
+    assert (canvas.width, canvas.height) == (4, 1)
+    assert canvas.render(Constraints(width=4))[0].text == "    "  # the ink is gone
     canvas.plot(1, 0, slot=1)
     held = canvas.render(Constraints(width=4))  # natural height: size holds
     assert held.height == 1 and held[0].text == "\u2808   "
-    empty = canvas.render(Constraints(width=0))
-    assert empty.width == 0 and empty.height == 0
+    empty = PixelCanvas(width=0, height=0, palette=PALETTE)
+    surface = empty.render(Constraints(width=0))
+    assert surface.width == 0 and surface.height == 0
+
+
+def test_the_palette_defaults_to_the_theme_and_an_explicit_one_wins():
+    derived = PixelCanvas(width=1, height=1)
+    assert derived.palette == PixelPalette.from_theme(DEFAULT_THEME)
+    explicit = PixelCanvas(width=1, height=1, palette=PALETTE)
+    assert explicit.palette is PALETTE
+
+
+def test_palette_and_marker_assignments_invalidate_the_surface_cache():
+    canvas = PixelCanvas(width=1, height=1, palette=PALETTE)
+    canvas.plot(0, 0, slot=1)
+    first = canvas.surface()
+    assert canvas.surface() is first
+    canvas.palette = PixelPalette(slots={1: ((1, 2, 3), (0, 0, 0))})
+    assert canvas.surface() is not first
+    recolored = canvas.surface()
+    assert recolored[0].segments[0].style.fg == (1, 2, 3)
+    canvas.marker = Marker.HALF
+    assert canvas.surface() is not recolored
+    assert canvas.render(Constraints(width=1))[0].text == "\u2580"
 
 
 def test_marker_and_layer_names_validate_at_the_widget_door():
@@ -76,3 +101,10 @@ def test_marker_and_layer_names_validate_at_the_widget_door():
     with pytest.raises(ValueError, match="layer must be one of"):
         canvas.plot(0, 0, layer="background")
     assert canvas.pixel_width == 0 and canvas.pixel_height == 0
+
+
+def test_construction_is_keyword_only():
+    with pytest.raises(TypeError):
+        PixelCanvas(2, 2, palette=PALETTE)  # type: ignore[call-arg]
+    with pytest.raises(TypeError):
+        PixelCanvas(width=2, height=2, palette=PALETTE, styles=None)  # type: ignore[call-arg]

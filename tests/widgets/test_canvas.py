@@ -15,7 +15,7 @@ def texts(canvas: Canvas) -> list[str]:
 
 
 def test_put_text_and_lines_clip_at_the_edges():
-    canvas = Canvas(5, 3)
+    canvas = Canvas(width=5, height=3)
     canvas.put(1, 1, "#")
     assert texts(canvas) == ["     ", " #   ", "     "]
     canvas.put(-1, 0, "x")
@@ -32,7 +32,7 @@ def test_put_text_and_lines_clip_at_the_edges():
 
 
 def test_box_draws_corners_and_edges():
-    canvas = Canvas(6, 4)
+    canvas = Canvas(width=6, height=4)
     canvas.box(1, 1, 4, 3)
     assert texts(canvas) == [
         "      ",
@@ -40,13 +40,13 @@ def test_box_draws_corners_and_edges():
         " \u2502  \u2502 ",
         " \u2514\u2500\u2500\u2518 ",
     ]
-    ascii_box = Canvas(4, 3)
+    ascii_box = Canvas(width=4, height=3)
     ascii_box.box(0, 0, 4, 3, border=Border.ascii())
     assert texts(ascii_box) == ["+--+", "|  |", "+--+"]
 
 
 def test_a_box_outside_the_canvas_is_clipped():
-    canvas = Canvas(4, 2)
+    canvas = Canvas(width=4, height=2)
     canvas.box(-2, 0, 4, 2)
     rows = texts(canvas)
     assert len(rows) == 2 and all(len(row) == 4 for row in rows)
@@ -55,16 +55,16 @@ def test_a_box_outside_the_canvas_is_clipped():
 
 
 def test_blit_copies_cells_at_an_offset():
-    source = Canvas(2, 2)
+    source = Canvas(width=2, height=2)
     source.put(0, 0, "a")
     source.put(1, 1, "b")
-    target = Canvas(4, 3)
+    target = Canvas(width=4, height=3)
     target.blit(source, 2, 1)
     assert texts(target) == ["    ", "  a ", "   b"]
 
 
 def test_a_wide_character_owns_two_columns_and_never_splits():
-    canvas = Canvas(4, 1)
+    canvas = Canvas(width=4, height=1)
     canvas.put(1, 0, "\u4e2d")
     assert texts(canvas) == [" \u4e2d "]
     assert canvas.surface().rows[0].width == 4
@@ -72,7 +72,7 @@ def test_a_wide_character_owns_two_columns_and_never_splits():
     assert texts(canvas) == [" \u4e2d "]
     canvas.width = 2  # cutting the continuation column blanks the lead
     assert texts(canvas) == ["  "]
-    repaired = Canvas(4, 1)
+    repaired = Canvas(width=4, height=1)
     repaired.put(0, 0, "\u4e2d")
     repaired.put(1, 0, "x")  # writing half a wide glyph blanks the old cluster
     assert texts(repaired) == [" x  "]
@@ -81,7 +81,7 @@ def test_a_wide_character_owns_two_columns_and_never_splits():
 
 
 def test_a_write_marks_exactly_its_row_dirty():
-    canvas = Canvas(3, 3)
+    canvas = Canvas(width=3, height=3)
     first = canvas.surface()
     assert canvas.surface() is first  # clean: the very same surface value
     canvas.put(0, 1, "x")
@@ -94,7 +94,7 @@ def test_a_write_marks_exactly_its_row_dirty():
 
 
 def test_resize_keeps_the_overlap_and_rebuilds_every_row():
-    canvas = Canvas(3, 2)
+    canvas = Canvas(width=3, height=2)
     canvas.put(0, 0, "a")
     canvas.put(2, 1, "c")
     canvas.resize(2, 3)
@@ -102,45 +102,80 @@ def test_resize_keeps_the_overlap_and_rebuilds_every_row():
     assert canvas.width == 2 and canvas.height == 3
 
 
+def test_construction_is_keyword_only_and_the_marker_is_now_plot_marker():
+    with pytest.raises(TypeError):
+        Canvas(3, 2)  # type: ignore[call-arg]
+    with pytest.raises(TypeError):
+        Canvas(width=3, height=2, marker="half")  # type: ignore[call-arg]
+    canvas = Canvas(width=2, height=1, plot_marker="half")
+    assert canvas.plot_marker == "half"
+
+
+def test_render_never_resizes_and_fit_adopts_the_constraint():
+    canvas = Canvas(width=4, height=2)
+    canvas.put(0, 0, "x")
+    canvas.render(Constraints(width=2, max_height=1))
+    assert (canvas.width, canvas.height) == (4, 2)  # a probe changes nothing
+    assert texts(canvas) == ["x   ", "    "]
+    canvas.fit(Constraints(width=3, max_height=1))
+    assert (canvas.width, canvas.height) == (3, 1)
+    assert texts(canvas) == ["x  "]
+    canvas.fit(Constraints(width=5))  # natural height keeps the row count
+    assert (canvas.width, canvas.height) == (5, 1)
+
+
+def test_every_write_verb_invalidates_the_surface_cache():
+    canvas = Canvas(width=2, height=1)
+    first = canvas.surface()
+    canvas.clear()
+    cleared = canvas.surface()
+    assert cleared is not first
+    canvas.put(0, 0, "#")
+    assert canvas.surface() is not cleared
+    assert texts(canvas) == ["# "]
+    canvas.plot([(0, 0)])
+    assert texts(canvas) == ["\u2588 "]
+
+
 def test_the_cell_marker_plots_normalized_points():
-    canvas = Canvas(4, 2)
+    canvas = Canvas(width=4, height=2)
     canvas.plot([(0, 0), (1, 1)])
     assert texts(canvas) == ["   \u2588", "\u2588   "]
-    blank = Canvas(3, 2)
+    blank = Canvas(width=3, height=2)
     blank.plot([])
     assert texts(blank) == ["   ", "   "]
 
 
 def test_the_half_marker_packs_two_points_per_cell():
-    canvas = Canvas(2, 1, marker="half")
+    canvas = Canvas(width=2, height=1, plot_marker="half")
     canvas.plot([(0, 0), (1, 1)])
     assert texts(canvas) == ["\u2584\u2580"]
-    both = Canvas(1, 1, marker="half")
+    both = Canvas(width=1, height=1, plot_marker="half")
     both.plot([(0, 0), (0, 1)])
     assert texts(both) == ["\u2588"]
 
 
 def test_the_braille_marker_maps_dots_to_the_standard_bitset():
-    full = Canvas(1, 1, marker="braille")
+    full = Canvas(width=1, height=1, plot_marker="braille")
     full.plot([(0, row) for row in range(4)] + [(1, row) for row in range(4)])
     assert texts(full) == ["\u28ff"]
-    top_left = Canvas(2, 1, marker="braille")
+    top_left = Canvas(width=2, height=1, plot_marker="braille")
     top_left.plot([(0, 3), (1, 0)])
     assert texts(top_left) == ["\u2801\u2880"]  # dot 1 top left, dot 8 bottom right
-    bottom_left = Canvas(2, 1, marker="braille")
+    bottom_left = Canvas(width=2, height=1, plot_marker="braille")
     bottom_left.plot([(0, 0), (1, 3)])
     assert texts(bottom_left) == ["\u2840\u2808"]  # dot 7 bottom left, dot 4 top right
 
 
 def test_plot_rejects_an_unknown_marker():
     with pytest.raises(ValueError):
-        Canvas(1, 1, marker="dots")
+        Canvas(width=1, height=1, plot_marker="dots")
     with pytest.raises(ValueError):
-        Canvas(1, 1).plot([(0, 0)], marker="dots")
+        Canvas(width=1, height=1).plot([(0, 0)], marker="dots")
 
 
 def test_render_clips_to_the_constraints():
-    canvas = Canvas(5, 3)
+    canvas = Canvas(width=5, height=3)
     assert canvas.render(Constraints(width=5)) is canvas.surface()
     clipped = canvas.render(Constraints(width=3, max_height=2))
     assert isinstance(clipped, Surface)
