@@ -33,7 +33,7 @@ from ..kernel.text import WrapMode
 from ..kernel.theme import Styles, Theme
 from ..widgets.base import Container, Widget
 
-__all__ = ["Column", "Padding", "Row", "Spacer"]
+__all__ = ["Align", "Column", "Padding", "Row", "Spacer", "Stack"]
 
 
 

@@ -26,6 +26,7 @@ from motui.kernel.glyphs import GLYPHS, Border
 from motui.pixel import PixelPalette
 from motui.testing import headless_tui
 from motui.widgets import (
+    Align,
     Autocomplete,
     Button,
     Canvas,
@@ -63,6 +64,7 @@ from motui.widgets import (
     Spacer,
     Sparkline,
     Spinner,
+    Stack,
     StatusLine,
     Table,
     Tabs,
@@ -94,6 +96,7 @@ class _WidgetProbe(Widget):
 
 
 CASES = {
+    "Align": lambda: Align(Text("centered")),
     "Autocomplete": lambda: Autocomplete(
         [Option("alpha"), Option("beta")], glyphs=replace(GLYPHS, cursor=">")
     ),
@@ -155,6 +158,7 @@ CASES = {
     "Spacer": lambda: Spacer(2),
     "Sparkline": lambda: Sparkline([0, 2, 1, 3], marker="braille"),
     "Spinner": lambda: Spinner("working"),
+    "Stack": lambda: Stack([Text("back"), Align(Text("front"))]),
     "StatusLine": lambda: StatusLine(left=("ready",), right=("60 fps",)),
     "Table": lambda: Table(
         ["name", "value"], [["alpha", "1"]], grid=Border.ascii()

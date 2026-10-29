@@ -125,7 +125,7 @@ def test_a_stack_merges_the_lower_style_under_a_top_cell():
 
 
 def test_a_stack_routes_hits_to_the_first_interactive_layer_top_down():
-    background = Canvas(5, 1)
+    background = Canvas(width=5, height=1)
     button = Button("go")
     # A non-interactive Canvas on top is not a click target: the Button
     # below it takes the cell.
