@@ -240,7 +240,10 @@ class Column(Container):
         for i, raw in enumerate(raw_cells):
             if i and self.gap > 0:
                 out.extend(Line() for _ in range(self.gap))
-            out.extend(row.clip(WrapMode.ELLIPSIS, width) for row in raw)
+            out.extend(
+                row if row.width <= width else row.clip(WrapMode.ELLIPSIS, width)
+                for row in raw
+            )
         self._memo = (key, out, raw_cells)
         return _answer(out, c)
 
@@ -454,12 +457,23 @@ class Align(Widget):
         self._child_height = min(child_height, frame_height - top)
         self._child_width = min(child_width, frame_width - left)
         out: list[Line] = []
+        # A child already at the left edge needs no prefix row: ``Line() +
+        # row`` is the same value, so the row can be normalized in place.
+        prefix = Line.from_text(" " * left) if left else None
+        # The frame padding is the same immutable value on every blank row.
+        blank = Line.filled(frame_width)
         for r in range(frame_height):
             if top <= r < top + child_height:
-                row = Line.from_text(" " * left) + rows[r - top]
-                out.append(row.clip(WrapMode.CLIP, frame_width).fill(frame_width))
+                row = rows[r - top]
+                if prefix is not None:
+                    row = prefix + row
+                if row.width > frame_width:
+                    row = row.clip(WrapMode.CLIP, frame_width)
+                if row.width < frame_width:
+                    row = row.fill(frame_width)
+                out.append(row)
             else:
-                out.append(Line.filled(frame_width))
+                out.append(blank)
         return Surface.clipped(out, frame_width)
 
     def child_at(self, row: int, col: int) -> tuple[Component, int, int] | None:
