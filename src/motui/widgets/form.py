@@ -137,10 +137,11 @@ class Form(CursorWidget):
 
     def _sync_focus(self) -> None:
         """Mirror ``index`` onto every focusable field."""
+        current = self.index
         for position, field in enumerate(self._fields):
             component = field.component
             if getattr(component, "focusable", False):
-                component.focused = position == self.index
+                component.focused = position == current
 
     def focus(self, target: int | str) -> bool:
         """Focus a field by position or name; ``True`` when the focus moved.
