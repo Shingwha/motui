@@ -34,7 +34,20 @@ from ..kernel.theme import DEFAULT_THEME, Styles, Theme
 from .cursor import Cursor
 from .mark import MarkSet
 
-__all__ = ["Container", "Cursor", "HasResult", "MarkSet", "Widget"]
+__all__ = [
+    "ActionWidget",
+    "Container",
+    "Cursor",
+    "HasResult",
+    "MarkSet",
+    "ResultWidget",
+    "Widget",
+]
+
+#: The "nothing pending" marker of :class:`ResultWidget`.  A sentinel -- not
+#: ``None`` -- so a legal ``None`` result (a cancelled dialog) stays
+#: distinguishable from an empty slot.
+_MISSING: object = object()
 
 
 @runtime_checkable
@@ -277,6 +290,109 @@ class Widget:
     def take(self) -> object | None:
         """Read the one-shot result; a widget without one answers ``None``."""
         return None
+
+
+class ResultWidget(Widget):
+    """A widget with a one-shot result, read once through :meth:`take`.
+
+    ``_result`` starts at the module sentinel :data:`_MISSING`, so "nothing
+    pending" and a legal ``None`` payload -- a cancelled dialog, an empty
+    pick -- stay distinguishable: :meth:`take` clears the slot either way,
+    and the caller uses *having called take* as the cancel signal.  Verbs
+    write with :meth:`_emit`; state-changing verbs clear with
+    :meth:`_clear_result` so a stale pick never survives a cursor move.
+    """
+
+    __slots__ = ("_result",)
+
+    def __init__(
+        self, theme: Theme | None = None, styles: Styles | None = None
+    ) -> None:
+        super().__init__(theme, styles)
+        object.__setattr__(self, "_result", _MISSING)
+
+    def _emit(self, value: object) -> None:
+        """Leave ``value`` pending (``None`` included) and touch the widget."""
+        object.__setattr__(self, "_result", value)
+        self.touch()
+
+    def _clear_result(self) -> bool:
+        """Drop a pending result; ``True`` when there was one to drop."""
+        if self._result is _MISSING:
+            return False
+        object.__setattr__(self, "_result", _MISSING)
+        self.touch()
+        return True
+
+    def take(self) -> object | None:
+        """Read the pending result once; a spent slot answers ``None``.
+
+        The legal ``None`` payload and the spent slot answer the same value
+        here (the protocol is ``object | None``); only the caller knows
+        whether it called :meth:`take` at all, which is the cancel signal.
+        """
+        if self._result is _MISSING:
+            return None
+        value = self._result
+        object.__setattr__(self, "_result", _MISSING)
+        return cast("object | None", value)
+
+
+class ActionWidget(ResultWidget):
+    """A result widget with a ``disabled`` gate, a tooltip ``hint`` and verbs.
+
+    The shared half of :class:`~motui.widgets.action.Button`,
+    :class:`~motui.widgets.action.Checkbox` and
+    :class:`~motui.widgets.action.Link`: ``disabled`` refuses every door
+    (each concrete verb checks it), ``hint`` is the tooltip protocol (the
+    empty default means no hint), and :meth:`on_click` is the pointer door
+    to :meth:`activate`.
+
+    :meth:`on_action` routes exactly two names: ``"activate"`` delegates
+    :meth:`activate` and ``"toggle"`` delegates :meth:`toggle`; every other
+    name -- and a verb the subclass has not implemented, whose base answer
+    is ``False`` -- declines, so the keymap router keeps routing the key.
+    """
+
+    __slots__ = ("disabled", "hint")
+
+    #: Every action widget takes the activation verb; a concrete control
+    #: implements :meth:`activate` (or :meth:`toggle`).
+    activatable = True
+
+    def __init__(
+        self,
+        *,
+        disabled: bool = False,
+        hint: str = "",
+        theme: Theme | None = None,
+        styles: Styles | None = None,
+    ) -> None:
+        super().__init__(theme, styles)
+        # Initial state installed without a touch: construction is not a
+        # change (see :meth:`Widget.__init__`).
+        object.__setattr__(self, "disabled", disabled)
+        object.__setattr__(self, "hint", hint)
+
+    def activate(self) -> bool:
+        """Run the main operation; the base has none and declines."""
+        return False
+
+    def toggle(self) -> bool:
+        """Flip a boolean or marked state; the base has none and declines."""
+        return False
+
+    def on_click(self, pos: Pos) -> bool:
+        """The pointer door to the main operation; ``pos`` is ignored."""
+        return self.activate()
+
+    def on_action(self, name: str) -> bool:
+        """Run ``activate``/``toggle``; unknown names decline."""
+        if name == "activate":
+            return self.activate()
+        if name == "toggle":
+            return self.toggle()
+        return False
 
 
 class Container(Widget):

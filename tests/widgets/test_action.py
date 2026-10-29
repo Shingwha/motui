@@ -11,7 +11,6 @@ from motui.kernel.layout import Constraints
 from motui.kernel.style import Style
 from motui.kernel.theme import DEFAULT_THEME, Styles
 from motui.widgets import Button, Checkbox, Link, Option, Select, Table, Tabs, Tree, TreeNode
-
 from tests.testing import texts
 
 
@@ -26,14 +25,12 @@ def test_button_renders_one_fitted_row_in_the_accent_band():
 def test_button_hover_and_focus_merge_their_bands():
     button = Button("Run")
     button.hover = True
-    assert button.render(Constraints(width=20))[0].segments[0].style == DEFAULT_THEME.content.accent.merge(
-        DEFAULT_THEME.surfaces.hover
-    )
+    style = button.render(Constraints(width=20))[0].segments[0].style
+    assert style == DEFAULT_THEME.content.accent.merge(DEFAULT_THEME.surfaces.hover)
     button.hover = False
     button.focused = True
-    assert button.render(Constraints(width=20))[0].segments[0].style == DEFAULT_THEME.content.accent.merge(
-        DEFAULT_THEME.controls.focus
-    )
+    style = button.render(Constraints(width=20))[0].segments[0].style
+    assert style == DEFAULT_THEME.content.accent.merge(DEFAULT_THEME.controls.focus)
     assert button.render(Constraints(width=20))[0].text == " Run "
 
 
@@ -128,7 +125,8 @@ def test_link_focus_and_disabled_flags_shape_the_row():
         ),
     )
     link.focused = True
-    assert link.render(Constraints(width=20))[0].segments[0].style == DEFAULT_THEME.content.link.merge(Style(bold=True))
+    style = link.render(Constraints(width=20))[0].segments[0].style
+    assert style == DEFAULT_THEME.content.link.merge(Style(bold=True))
     link.disabled = True
     assert link.on_action("activate") is False
     assert link.render(Constraints(width=20))[0].segments[0].style == Style(italic=True)
@@ -154,7 +152,9 @@ def test_hover_at_marks_and_clears_one_row_across_components(build, row, col):
     plain = texts(component, 30)
     assert component.on_hover(Pos(x=col, y=row)) is True
     assert any(
-        seg.style.underline for line in component.render(Constraints(width=30)) for seg in line.segments
+        seg.style.underline
+        for line in component.render(Constraints(width=30))
+        for seg in line.segments
     )
     assert component.on_hover(Pos(x=col, y=row)) is False
     assert component.on_hover(None) is True
@@ -207,11 +207,22 @@ def test_the_action_family_declares_focus_click_hover_and_activation():
 
 def test_on_action_runs_activate_and_declines_unknown_names():
     for control in (Button("Run"), Checkbox("Bold"), Link("docs")):
-        assert control.on_action("toggle") is False
-        assert control.take() is None
         assert control.on_action("activate") is True
         assert control.take() is True
         assert control.take() is None
+        assert control.on_action("bogus") is False
+        assert control.take() is None
+
+
+def test_on_action_toggle_delegates_to_the_toggle_verb():
+    box = Checkbox("Bold")
+    assert box.on_action("toggle") is True
+    assert (box.checked, box.take()) == (True, True)
+    assert box.on_action("toggle") is True
+    assert (box.checked, box.take()) == (False, False)
+    # A button and a link have no toggle verb; the base answer declines.
+    assert Button("Run").on_action("toggle") is False
+    assert Link("docs").on_action("toggle") is False
 
 
 def test_on_click_is_the_positional_door_and_take_clears():
