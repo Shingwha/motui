@@ -14,7 +14,7 @@ import pytest
 
 from motui import DEFAULT_THEME, Button, Input, List, Markdown, Theme
 from motui.kernel.layout import Constraints
-from motui.kernel.style import NONE, Style
+from motui.kernel.style import NONE, Color, Style
 from motui.kernel.theme import DARK_PALETTE, Styles
 from motui.widgets import Divider
 
@@ -45,9 +45,22 @@ def test_default_theme_ships_the_dark_values():
 def test_the_band_family_defaults_to_the_dark_roles():
     assert DEFAULT_THEME.surfaces.hover == DARK_PALETTE.surface_hover
     assert DEFAULT_THEME.surfaces.base == NONE
+    assert DEFAULT_THEME.surfaces.control == DARK_PALETTE.surface_raised
+    assert DEFAULT_THEME.surfaces.accent == Style(
+        bg=Color("#53c8f0", ansi="bright_cyan")
+    )
+    assert DEFAULT_THEME.surfaces.danger == Style(
+        bg=Color("#f2708a", ansi="bright_red")
+    )
+    assert DEFAULT_THEME.surfaces.inactive == DARK_PALETTE.surface_inactive
     assert DEFAULT_THEME.rows.active == DARK_PALETTE.surface_active
     assert DEFAULT_THEME.text.caret == Style(reverse=True)
-    assert DEFAULT_THEME.controls.focus == Style(underline=True)
+    assert DEFAULT_THEME.controls.hover == Style(bold=True, underline=True)
+    assert DEFAULT_THEME.controls.focus == Style(
+        bold=True, underline=True, reverse=True
+    )
+    assert DEFAULT_THEME.controls.active == Style(reverse=True, underline=True)
+    assert DEFAULT_THEME.controls.disabled == Style(dim=True)
     assert DEFAULT_THEME.text.selection == Style(reverse=True)
 
 

@@ -9,7 +9,7 @@ from typing import get_type_hints
 
 import pytest
 
-from motui.kernel.style import NONE, Style
+from motui.kernel.style import NONE, Color, Style
 from motui.kernel.theme import (
     DARK_PALETTE,
     DEFAULT_THEME,
@@ -95,7 +95,21 @@ def test_dark_light_and_flat_are_built_from_the_palettes():
 
     flat = Theme.flat()
     assert flat.surfaces == SurfaceStyles(
-        base=NONE, raised=NONE, hover=NONE, active=NONE, selected=NONE
+        base=NONE,
+        raised=NONE,
+        hover=NONE,
+        active=NONE,
+        selected=NONE,
+        control=NONE,
+        accent=NONE,
+        danger=NONE,
+        inactive=NONE,
+    )
+    assert flat.controls == ControlStyles(
+        hover=Style(underline=True),
+        focus=Style(bold=True, underline=True),
+        active=Style(reverse=True, underline=True),
+        disabled=Style(dim=True),
     )
     assert flat.rows.active == Style(reverse=True)
     assert flat.rows.inactive == Style(dim=True)
@@ -116,6 +130,10 @@ def test_from_palette_is_a_pure_derivation():
     assert dark.syntax.keyword == DARK_PALETTE.accent
     assert dark.chrome.scrollbar == DARK_PALETTE.faint
     assert Theme.light().content.accent == LIGHT_PALETTE.accent
+    assert Theme.light().surfaces.control == LIGHT_PALETTE.surface_raised
+    assert Theme.light().surfaces.accent == Style(bg=LIGHT_PALETTE.accent.fg)
+    assert Theme.light().surfaces.danger == Style(bg=LIGHT_PALETTE.danger.fg)
+    assert Theme.light().surfaces.inactive == LIGHT_PALETTE.surface_inactive
     assert DARK_PALETTE != LIGHT_PALETTE
 
 
@@ -160,19 +178,49 @@ def test_row_band_precedence_is_exact():
     assert rows.band(disabled=True, hovered=True, active=True) == rows.disabled
 
 
-def test_control_band_precedence_is_exact():
+def test_control_overlay_precedence_is_exact():
     controls = ControlStyles(
-        base=Style(fg="red"),
         hover=Style(fg="green"),
         focus=Style(fg="blue"),
         active=Style(fg="yellow"),
         disabled=Style(fg="magenta"),
     )
-    assert controls.band() == controls.base
-    assert controls.band(hovered=True) == controls.hover
-    assert controls.band(focused=True, hovered=True) == controls.focus
-    assert controls.band(active=True, focused=True) == controls.active
-    assert controls.band(disabled=True, active=True) == controls.disabled
+    assert controls.overlay() == NONE
+    assert controls.overlay(hovered=True) == controls.hover
+    assert controls.overlay(focused=True, hovered=True) == controls.focus
+    assert controls.overlay(pressed=True, focused=True) == controls.active
+    assert controls.overlay(disabled=True, pressed=True) == controls.disabled
+
+
+def test_control_overlay_merges_onto_a_base_style():
+    controls = ControlStyles(
+        hover=Style(underline=True),
+        focus=Style(bold=True, reverse=True),
+        active=Style(strike=True),
+        disabled=Style(dim=True),
+    )
+    base = Style(fg="red", bg="black")
+    merged = base.merge(controls.overlay(focused=True))
+    assert merged.fg == "red" and merged.bg == "black"
+    assert merged.bold is True and merged.reverse is True
+    assert base.merge(controls.overlay()) == base
+
+
+def test_control_defaults_are_state_overlays_without_a_base_band():
+    controls = ControlStyles()
+    assert not hasattr(controls, "base")
+    assert not hasattr(controls, "band")
+    assert controls.overlay() == NONE
+
+
+def test_the_surface_floor_tokens_default_to_the_dark_roles():
+    surfaces = SurfaceStyles()
+    assert surfaces.control == DARK_PALETTE.surface_raised
+    assert surfaces.accent == Style(bg=Color("#53c8f0", ansi="bright_cyan"))
+    assert surfaces.danger == Style(bg=Color("#f2708a", ansi="bright_red"))
+    assert surfaces.inactive == DARK_PALETTE.surface_inactive
+    # They are plain defaults on the frozen dataclass, not required fields.
+    assert SurfaceStyles(control=NONE).accent == surfaces.accent
 
 
 def test_band_resolvers_are_side_effect_free():
@@ -182,7 +230,7 @@ def test_band_resolvers_are_side_effect_free():
     assert rows == before
     controls = ControlStyles()
     before = controls
-    assert controls.band(focused=True) == controls.band(focused=True)
+    assert controls.overlay(focused=True) == controls.overlay(focused=True)
     assert controls == before
 
 
