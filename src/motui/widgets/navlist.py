@@ -1,89 +1,9 @@
 """NavList: the vertical navigation list -- one row per item, a bar indicator.
 
-:class:`NavList` is the rail a host pins at the edge of its frame: one row
-per item, every row the same shape -- a one-cell indicator **seat**, one
-space and the label (``"\\u258c overview"``) -- the whole row ``fit`` to the
-painting width so a narrow pane truncates with an ellipsis instead of
-wrapping.  The active row fills the seat with ``glyphs.rail`` (``"\\u258c"``, the
-left-half block of the VS Code / WinUI activity-bar vocabulary) in
-``content.accent``; every other row leaves the
-seat blank (``bar_space``) and wears ``text.faint`` on
-the label.  The label column therefore never moves between
-rows: the bar is the indicator, the blank seat the rows without one.
-
-``groups`` adds the documentation-sidebar shape: an iterable of
-``(position, label)`` pairs inserts one **group title row** before the
-item at that *item* position -- ``(0, "FOUNDATIONS")`` above the first
-item, ``(3, "COMPONENTS")`` above the fourth -- so a long rail reads as a
-few named sections instead of one flat ladder.  A group row is chrome, not
-an item: its seat is left blank (``bar_space``, the bar column never
-moves) and its ``label`` renders verbatim in ``text.muted`` (the caller
-spells the case -- the demo passes it uppercase --
-the component never rewrites a label).  Group rows are **unselectable and
-unclickable**, they never take the hover band, and ``index`` /
-``select`` / ``move`` keep counting **items** only -- a group row is
-transparent to every verb, a rendered row is where the two meet.  A
-``position`` below zero clamps above the first item, one past the last
-item lays the group row after it; groups at one position keep their given
-order.  An empty ``items`` still renders zero rows: there is nothing to
-group.
-
-The style roles resolve at render time from the theme (or a ``styles=``
-group override): ``content.accent`` paints the active label,
-``text.faint`` the inactive and disabled ones,
-``surfaces.hover`` the row under the pointer, ``text.muted`` the
-non-active bars and the group rows, and ``content.accent`` the active bar.
-``rows.base`` is the resting surface every row rests on.
-``focused`` is the focus flag the focus tier sets
-the focus tier sets: while it is ``False`` the active
-bar composes ``text.muted`` whole over its style -- the indicator
-drops a hue, it is never removed, and the label is never dimmed (the
-``Tabs`` rule, verbatim).  It starts ``True``, the old default.
-
-**The row-band contract.**  Every row resolves its band from the theme's
-row roles: ``rows.base`` is the resting surface, ``rows.active`` the
-selected row's band (the rail never dims it, focused or not) and
-``rows.hover`` the pointer's (D3: one token per signal).  A row is
-its text-styled
-segments -- the seat and the label in their own styles -- then
-``.clip(WrapMode.ELLIPSIS, width).fill(fitted.width, band)``: the W1 primitive, the band
-underneath, the text styles on top.  The band merges under the row's own
-cells -- a pill behind the text, never a ribbon across the pane; a
-full-surface band is the host's container's job
-(``Padding(fill_style=...)`` / ``Panel(frame=False, style=...)``, which
-fill every row to the width they are handed).  The active row keeping its
-accent label and gaining the band is decision D3; the fill is skipped
-while the band is ``NONE`` -- the default theme's ground and both its
-engaged bands -- so resting rows and group rows render exactly the bytes
-they always did, and so do the active row and the hovered row until a
-host themes them.
-
-``disabled`` names the indices that are visible but not selectable: their
-label renders in ``text.faint`` over the
-non-active ``text.muted`` bar seat, :meth:`on_click` and :meth:`select` refuse them,
-and :meth:`move` steps over them (clamped, never wrapping) exactly as
-:meth:`Tabs.move` does.  A pointer over a disabled row still marks it --
-hover is the pointer's echo, not a selection.
-
-The rail binds its own arrow keys through :attr:`keymap` (a host may
-rebind them on the instance).  An empty
-``glyphs.rail`` turns the indicator off and collapses its seat: the bar
-column is the glyph's own width (``visible_width``, so a wide bar takes its
-columns) and ``bar_space`` -- the separator after that column -- defaults to
-one space while the bar is on and to ``""`` when it is off.  The blank rows' gutter
-is therefore ``" " * seat_width(bar)`` (the bar column plus the default
-separator), and an empty bar renders each label at column 0 -- no dangling
-gutter -- with the state carried by the foreground alone.  An explicit
-``bar_space`` sets the separator's width; the demo's one-cell gutter is
-exactly the default.  An empty list renders **zero rows** -- not one blank
-row: a navigation list is a viewport child, and empty means nothing to
-show, unlike a tab strip's one-row chrome.
-
-Pure component: the host routes keys and cells, ``render`` only draws.
-Rows are the items -- there is no window and no column arithmetic, so
-:meth:`on_click` takes the row as the index (the column is ignored, and the
-docstring says so, as the clickable charter demands) and
-:meth:`on_hover` speaks the same row language as :class:`Tabs`.
+Each row is a one-cell indicator seat, a separator and a label; the active
+row fills the seat with ``glyphs.rail``.  ``groups`` inserts unselectable
+title rows between items.  The rail clamps (never wraps) and is a pure
+component: the host routes keys and cells.
 """
 
 from __future__ import annotations
@@ -106,30 +26,13 @@ __all__ = ["NavList"]
 class NavList(CursorWidget):
     """A vertical navigation list: a bar indicator, a clamped selection.
 
-    ``items`` is a list of labels, one row each; ``index`` is the selected
-    index (read-only property), clamped into ``0..len(items)-1`` on
-    construction (a disabled
-    index passed there is kept -- the constructor rewrites no explicit
-    request, the verbs are what refuse) and on every later
-    :meth:`select`/:meth:`move`.  ``disabled_items`` is an iterable of indices
-    that render but refuse :meth:`on_click`/:meth:`select` and are stepped
-    over by :meth:`move`; the ``disabled`` flag refuses every gesture.
-    ``groups`` lays group title rows between the
-    items (see the module docstring): they render but refuse every verb,
-    and ``index`` stays an **item** index.
-
-    Every row renders the bar column -- ``glyphs.rail`` (the active row) or
-    the blank ``_bar_seat`` (the others) -- then the ``_separator``, then the
-    label -- ``Line.clip`` to the painting width -- so all rows share one
-    shape and the labels line up in one column.  ``glyphs.rail`` comes from
-    the vocabulary; its column is the glyph's own display width, the blank
-    rows leave that column empty, and
-    ``bar_space`` is the separator after it (one space by default while the
-    bar is on, ``""`` when it is off).  Both states therefore put the label
-    at one column, and an empty bar collapses the whole gutter to zero
-    columns.  The active row keeps its accent label and carries the
-    ``rows.active`` band underneath it (D3); the resting rows and the
-    group title rows rest on the ground.  An empty list renders ``[]``.
+    ``index`` is an item index, clamped by the verbs (the constructor keeps
+    an explicit request).  ``disabled_items`` render faint and refuse
+    clicks/selection; ``disabled`` refuses everything.  ``groups`` inserts
+    unselectable title rows at item positions.  All rows share one bar
+    column and separator, so labels align.  The active row keeps its accent
+    label and rides ``rows.active``; hover wins over it (D3).  An empty list
+    renders no rows.
     """
 
     __slots__ = (
@@ -220,13 +123,7 @@ class NavList(CursorWidget):
         self._cursor.index = self._cursor.clamp(index)
 
     def _band(self, current: bool, hovered: bool, disabled: bool = False) -> Style:
-        """The surface one rail row rests on: the theme's row roles.
-
-        The rail never dims its engaged row: it reads ``rows.active``
-        whether or not the rail is focused (D3), the pointer's row
-        ``rows.hover`` and a resting row ``rows.base``.  The ``rows`` group
-        comes from ``styles`` when overridden, else the theme.
-        """
+        """The rail's row band: disabled > hover > active > base; active never dims."""
         rows = self.group("rows")
         if disabled:
             return rows.disabled
@@ -239,15 +136,12 @@ class NavList(CursorWidget):
     # -- the cursor hooks -------------------------------------------------------
 
     def _entry_count(self) -> int:
-        """The item rows the cursor walks (group rows are chrome)."""
         return len(self.items)
 
     def _entry_at(self, index: int) -> object | None:
-        """The label at item row ``index`` (side-effect free)."""
         return self.items[index]
 
     def _cursor_disabled(self) -> Iterable[int]:
-        """The item rows a move steps over and ``select`` refuses."""
         return self._disabled_items
 
     def _cursor_wraps(self) -> bool:
@@ -255,18 +149,12 @@ class NavList(CursorWidget):
         return False
 
     def _cursor_enabled(self) -> bool:
-        """The whole-rail disabled switch gates every cursor verb."""
         return not self.disabled
 
     # -- the activation verb ----------------------------------------------------
 
     def activate(self) -> bool:
-        """Leave the active item pending; ``False`` on no pick.
-
-        A disabled rail, an empty rail and a disabled active item answer
-        ``False`` and leave nothing pending.  A real pick writes the label
-        through the shared result slot (read once by ``take``).
-        """
+        """Leave the active item's label pending; disabled or empty rails refuse."""
         if self.disabled or not self.items:
             return False
         index = self.index
@@ -281,15 +169,10 @@ class NavList(CursorWidget):
         return self._bar_space
 
     def on_click(self, pos: Pos) -> bool:
-        """Select the item the **rendered** row ``pos.y`` covers; True on a hit.
+        """Select the item the rendered row ``pos.y`` covers; ``True`` on a hit.
 
-        The row is the cell: the list paints its rows itself -- items and
-        group rows interleaved -- and never windows, so there is no
-        last-render table to walk and ``pos.x`` is ignored (the whole row is
-        the cell).  A row outside the list, on a **disabled** item, on a
-        **group title row**, or on a disabled rail answers ``False`` and
-        changes nothing; a hit on an enabled item selects it -- even when it
-        already was active -- and answers ``True``.
+        ``pos.x`` is ignored.  Group rows, disabled items, out-of-range rows
+        and a disabled rail decline.
         """
         if self.disabled:
             return False
@@ -300,17 +183,10 @@ class NavList(CursorWidget):
         return True
 
     def on_hover(self, pos: Pos | None) -> bool:
-        """Mark the item the **rendered** row ``pos.y`` covers; True on a change.
+        """Mark the item the rendered row ``pos.y`` covers; True when it changed.
 
-        The row is the cell, ``pos.x`` is ignored, and every row that
-        covers no item -- a group title row, ``None`` (the pointer left),
-        anything past the last row -- answers "no row" and clears the
-        marking, exactly as :meth:`Tabs.on_hover` does; a group row is
-        therefore never marked.  Disabled items are marked like any other
-        (the band is the pointer's echo, not a selection).  The answer
-        is whether the marked row changed; :meth:`render` rests that row on
-        ``rows.hover`` -- the pointer's own token, whatever row
-        it is on (D3).
+        Group rows and cells past the list carry no item; disabled items
+        still mark (hover is the pointer's echo, not a selection).
         """
         target = None if pos is None else self._item_at(pos.y)
         changed = target != self._hover_index
@@ -320,27 +196,11 @@ class NavList(CursorWidget):
         return changed
 
     def render(self, c: Constraints) -> Surface:
-        """One row per item **and group row** (``[]`` for an empty list), each on its band.
+        """One banded row per item and group title; an empty list renders none.
 
-        An item row is ``bar + separator + label`` on the selected item --
-        the bar in ``content.accent`` (``text.muted`` whole while
-        unfocused) -- and ``blank bar column + separator + label`` on the
-        others, so the label column is the same everywhere (the blank column
-        is the bar glyph's display width); the label wears its own
-        style (``text.faint`` for a disabled index: the stricter state
-        wins), then the band the row resolved to (D3: the selected row's
-        ``rows.active`` under its accent label, the pointer's row
-        ``rows.hover`` -- and the hover wins wherever the two meet).  A group row is
-        ``blank column + separator + label`` in ``text.muted`` -- the seat is
-        left blank, the label verbatim (the caller spells its case) -- and
-        rests on the ground, never the engaged band.  An empty ``glyphs.rail``
-        collapses the seat with it (the blank column is zero wide and the
-        separator defaults to ``""``), so every row renders the label alone
-        and the state is carried by the foreground alone.  Every row is
-        ``fit`` to ``c.width`` with its band resting underneath
-        (:func:`~motui.kernel.cell.rest`); the surface is
-        :meth:`Surface.clipped` and a ``max_height`` budget truncates the
-        leading rows.
+        Item rows share the bar column/separator shape; group rows are muted
+        chrome on the ground.  An unfocused rail mutes the active bar but
+        never dims the label.  ``max_height`` truncates.
         """
         if not self.items:
             return Surface.clipped([], c.width)
@@ -397,12 +257,7 @@ class NavList(CursorWidget):
     # -- the row plan ------------------------------------------------------------
 
     def _plan(self) -> list[tuple[str, object]]:
-        """The rendered rows, top to bottom: ``("group", label)`` or ``("item", index)``.
-
-        Derived from ``items`` and the group positions on every call, so
-        replacing ``items`` never leaves a stale plan behind; the positions
-        themselves were clamped to the item range at construction.
-        """
+        """The rendered rows: ``("group", label)`` or ``("item", index)``, top to bottom."""
         plan: list[tuple[str, object]] = []
         remaining = list(self._groups)
         for position in range(len(self.items) + 1):
@@ -413,11 +268,7 @@ class NavList(CursorWidget):
         return plan
 
     def _item_at(self, row: int) -> int | None:
-        """The item index the rendered ``row`` covers, or ``None`` (a group row).
-
-        ``None`` for every row outside the plan as well: one answer for
-        "this row is no item", whether it is chrome or nothing at all.
-        """
+        """The item index the rendered ``row`` covers, or ``None`` (group/outside)."""
         plan = self._plan()
         if 0 <= row < len(plan) and plan[row][0] == "item":
             return plan[row][1]  # type: ignore[return-value]

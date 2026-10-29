@@ -1,53 +1,9 @@
 """ScrollPanel: a window over any component's rows and columns.
 
-A :class:`ScrollPanel` renders its child at the width it can give it and
-shows a fixed-height slice of the result.  It is the composition-layer
-answer to "this content is taller or wider than its slot": charts, long
-forms, a panel's body, a markdown document -- any component works
-unchanged, because the child keeps rendering through the one ``render(c)``
-protocol.
-
-Three knobs decide the window:
-
-* ``height`` -- how many rows to show; ``None`` (the default) shows the
-  child's every row and makes vertical scrolling a no-op;
-* ``offset`` -- the first visible child row, clamped to the last window
-  ``max(0, total_rows - height)``;
-* ``bar`` -- paint one-cell bars: the vertical one in the rightmost column
-  (the child then rendering at ``width - 1`` columns) and the horizontal
-  one in the bottom row.
-
-``axis`` picks the directions: ``"y"`` (the default) moves rows only,
-``"x"`` moves columns only and never clips the child's height, and
-``"both"`` moves the two axes independently.  Horizontal overflow is legal
-by contract -- a child may answer a surface wider than its constraints --
-and the panel hard-cuts every row with
-:func:`~motui.kernel.cell.cut_line`, no ellipsis: the removed columns are
-scrollable, so a ``…`` would claim a truncation that did not happen.  The
-vertical-only path keeps the 1.x ``clip(ELLIPSIS)`` rule and its bytes.
-
-The bars use :attr:`~motui.kernel.glyphs.Glyphs.bar_empty` and
-:attr:`~motui.kernel.glyphs.Glyphs.bar_full` in ``chrome.scrollbar`` and
-``chrome.scrollbar_thumb``.  Both take their geometry from the same
-:meth:`~motui.kernel.layout.ScrollAxis.thumb` formula: proportional to the
-visible fraction, at least one cell, and no thumb at all when the content
-fits the window (the bar then paints its plain track).  With ``"both"``
-the bars meet in the bottom-right corner, which the vertical track owns.
-
-:meth:`ScrollPanel.on_key` owns the scrolling keys through the class
-``keymap`` -- ``up``/``down`` one row, ``page_up``/``page_down`` one window,
-``home``/``end`` the edges -- and :meth:`ScrollPanel.on_mouse` the wheel on
-both axes (``wheel_left``/``wheel_right`` move one column).  Each answers
-``True`` only when an offset actually moved, so a host keeps the boundaries'
-keys.  :meth:`ScrollPanel.drag` owns the vertical bar
-itself: a press on the thumb grabs it, the motions map the grabbed row
-through the same thumb geometry, a press on the track pages toward it, and
-the release ends the drag.  ``ScrollPanel`` is a
-:class:`~motui.kernel.document.Container`: a visible cell maps to the child
-cell ``(offset + row, x_offset + col)``, and the bars' column and row
-belong to the view.  the widget's ``generation`` covers both offsets and the knobs,
-and a widget child touches its ancestors when it changes, so a sealed
-block around a scroll view still repaints when the child changes in place.
+Renders the child at the width it can give it and shows a fixed-height (and
+optionally column-windowed) slice.  ``height``, ``offset``/``x_offset`` and
+``bar``/``axis`` decide the window; bars share one thumb formula.  Keys,
+wheel and vertical-bar drag move it; ``child_at`` maps visible cells back.
 """
 
 from __future__ import annotations
@@ -71,25 +27,11 @@ __all__ = ["ScrollPanel"]
 class ScrollPanel(Widget):
     """A clipped, scrollable window over one child component.
 
-    ``height=None`` shows every child row; a fixed ``height`` shows exactly
-    that many rows, padding with blank rows when the child is shorter (so
-    the view's slot never jumps).  ``offset`` starts at the requested row
-    (never negative) and is clamped into the legal range on every render,
-    which is what makes a child that shrinks safe.  ``child``, ``height``,
-    ``bar`` and ``axis`` are ordinary attributes a host may change on
-    resize; :attr:`offset`, :attr:`x_offset`, :attr:`total_rows` and
-    :attr:`total_columns` are read-only views of the last render's geometry.
-
-    The width split is deliberate: with a vertical bar the child renders at
-    ``width - 1``, so the bar never covers content; without one it renders
-    at ``width``.  The bottom bar is painted inside the ``height`` slot, so
-    it costs one content row rather than growing the surface.  Every
-    painted row is fitted back to the painting width.
-
-    ``axis`` names the scrolling directions: ``"y"`` (the default) moves
-    rows only, ``"x"`` moves columns only and shows every child row, and
-    ``"both"`` clamps the two offsets independently.  Any other value is
-    rejected at construction rather than silently ignored.
+    ``height=None`` shows every row; a fixed height pads short children so
+    the slot never jumps. Offsets clamp on each render.  A vertical bar
+    takes one column from the child, a bottom bar one row from the window.
+    ``axis`` is ``"y"``, ``"x"`` or ``"both"``; any other value raises.
+    Offsets/totals are read-only views of the last render.
     """
 
     __slots__ = (
@@ -241,12 +183,10 @@ class ScrollPanel(Widget):
     # -- scrolling --------------------------------------------------------------
 
     def scroll_to(self, offset: int) -> bool:
-        """Move the window's first row to ``offset`` (clamped); ``True`` when it moved.
+        """Move the first visible row to ``offset`` (clamped); True when it moved.
 
-        The clamp uses the last render's row count; before the first render
-        a fixed-height view accepts the offset and clamps it on that render,
-        while ``height=None`` never scrolls (every row is visible).  The
-        view never follows the tail, so the y axis stays non-sticky.
+        Before the first render the offset is accepted and clamped then;
+        ``height=None`` never scrolls.
         """
         y = self._scroll.y
         target = max(0, int(offset))
@@ -273,12 +213,10 @@ class ScrollPanel(Widget):
         return self.scroll_to(self._scroll.y.offset + int(delta))
 
     def scroll_to_x(self, offset: int) -> bool:
-        """Move the window's first column to ``offset`` (clamped).
+        """Move the first visible column to ``offset`` (clamped); True when moved.
 
-        ``True`` when the offset moved.  A y-only view has no horizontal
-        extent and declines.  The clamp uses the last render's column
-        count; before the first render the offset is accepted and clamped
-        by that render, mirroring :meth:`scroll_to`.
+        A y-only view declines; before the first render the offset is
+        accepted and clamped then.
         """
         if self.axis == "y":
             return False
@@ -301,21 +239,14 @@ class ScrollPanel(Widget):
         return self.scroll_to_x(self._scroll.x.max_offset)
 
     def scroll_x_by(self, delta: int) -> bool:
-        """The structural horizontal-wheel face: step ``delta`` columns.
-
-        The same move :meth:`scroll_x` makes; it exists as its own verb so
-        the app's wheel route can find a horizontal scroller through
-        :class:`~motui.kernel.layout.ScrollableX` without importing this
-        widget.
-        """
+        """The ``ScrollableX`` face of :meth:`scroll_x` (one column step)."""
         return self.scroll_x(delta)
 
     def reveal(self, row: int) -> bool:
-        """Bring the child ``row`` into the window, moving as little as possible.
+        """Bring child ``row`` into the window, moving as little as possible.
 
-        The row is clamped into the child's rows; a target already visible
-        (or a view that shows everything) moves nothing.  ``False`` before
-        the first render, for an empty child, or when the row was visible.
+        ``False`` before the first render, for an empty child, or when the
+        row is already visible.
         """
         y = self._scroll.y
         revealed = y.reveal(row)
@@ -328,14 +259,10 @@ class ScrollPanel(Widget):
     # -- events -----------------------------------------------------------------
 
     def on_action(self, name: str) -> bool:
-        """Run one named scrolling action; ``False`` for an unknown name.
+        """Run a scrolling action: prev/next, page_*, first/last, scroll_prev/next.
 
-        ``prev`` / ``next`` step one row, ``page_prev`` / ``page_next`` one
-        window, ``first`` / ``last`` the edges, and ``scroll_prev`` /
-        ``scroll_next`` one column on an x-scrolling view.  Every name
-        answers whether the offset actually moved (the 1.x ``handle``
-        rule), so a boundary keeps the key for the host; an unknown name
-        answers ``False`` untouched.
+        The answer is whether an offset moved, so a boundary keeps the key;
+        unknown names decline.
         """
         if name == "prev":
             return self.scroll_up(1)
@@ -356,12 +283,7 @@ class ScrollPanel(Widget):
         return False
 
     def on_key(self, event: KeyEvent) -> bool:
-        """Route one scrolling key through :attr:`keymap` to :meth:`on_action`.
-
-        The default table binds the arrows, the page keys and the edges.
-        A key release and every key no entry names are declined, so the
-        host's dispatch still gets its turn.
-        """
+        """Route a scrolling key through :attr:`keymap`; releases and unbound keys decline."""
         if not isinstance(event, KeyEvent) or event.kind == "release":
             return False
         action = self.keymap.get(event.key)
@@ -370,13 +292,7 @@ class ScrollPanel(Widget):
         return self.on_action(action)
 
     def on_mouse(self, event: MouseEvent) -> bool:
-        """Route one wheel notch to the axis it names.
-
-        ``wheel_up`` / ``wheel_down`` move one row on ``"y"`` / ``"both"``,
-        ``wheel_left`` / ``wheel_right`` one column on ``"x"`` / ``"both"``;
-        the other axis's wheel is declined, so a y-only view leaves
-        horizontal scrolling to its host.
-        """
+        """Route one wheel notch to the axis it names; the other axis declines."""
         if not isinstance(event, MouseEvent):
             return False
         if event.button == "wheel_up":
@@ -390,19 +306,13 @@ class ScrollPanel(Widget):
         return False
 
     def on_drag(self, pos: Pos, phase: str) -> bool:
-        """Advance one step of a bar drag; ``True`` when the view took it.
+        """Advance a vertical-bar drag; True when the view took it.
 
-        Only the vertical bar's column (``pos.x == self._last_inner``,
-        inside the painted content rows) can start a drag: a press on the
-        thumb records the grab -- its bar row and the offset it was taken
-        at -- while a press on the track pages one viewport toward the
-        pointer's side.  A motion while grabbed maps the row delta through
-        the thumb geometry anchored at the grab (the same ``(start,
-        length)`` :meth:`~motui.kernel.layout.ScrollAxis.thumb` paints), so
-        the thumb never jumps; a release ends the drag and answers whether
-        there was a grab to end.  A view without a vertical bar, a content
-        that fits the window (no thumb to map) and a press outside the bar
-        column all decline.
+        A press on the thumb grabs it (its row and offset); a press on the
+        track pages toward the pointer.  Motions map through the thumb
+        geometry anchored at the grab, so it never jumps; a release ends the
+        drag.  Views without a vertical bar, fitting content or presses off
+        the bar decline.
         """
         row, col = pos.y, pos.x
         if phase == "release":
@@ -436,12 +346,8 @@ class ScrollPanel(Widget):
     def on_click(self, pos: Pos) -> bool:
         """Take a click on a bar cell as a press-and-release drag.
 
-        A click on the content columns is declined so the focus ring's
-        descend reaches the child; the bars are the view's own (the child
-        never renders there), so a click there answers ``True`` whatever it
-        did -- clicking a bar with no thumb is still a click on the bar.
-        The bottom bar's row only consumes the click; horizontal dragging
-        is not part of this wave.
+        Content columns decline so the focus ring can descend to the child;
+        either bar consumes the click.  The bottom bar does not drag yet.
         """
         if not self.bar or not self._rendered:
             return False
@@ -458,10 +364,8 @@ class ScrollPanel(Widget):
     def child_at(self, row: int, col: int) -> tuple[Component, int, int] | None:
         """Map a visible cell to ``(child, offset + row, x_offset + col)``.
 
-        The geometry is the last :meth:`render`'s: rows/columns past the
-        painted window, the bars' row and column, blank padding rows and
-        any negative coordinate answer ``None``.  Before the first render
-        every cell answers ``None``.
+        Bars, padding rows, out-of-range cells and pre-render cells answer
+        ``None``.
         """
         if row < 0 or col < 0:
             return None
@@ -480,15 +384,10 @@ class ScrollPanel(Widget):
     def render(self, c: Constraints) -> Surface:
         """Render the child at the inner width and paint the visible window.
 
-        The window height is the explicit ``height`` when the view has one
-        -- the host's slot wins outright -- and the child's natural row
-        count otherwise, capped by ``c.max_height`` when the constraint
-        carries a budget.  A bottom bar is painted inside that slot, so the
-        content window is one row shorter; a right-hand bar takes one
-        column from the child's width.  The two offsets clamp independently
-        against this render's extents.  Horizontal rows are hard-cut with
-        ``cut_line`` (no ``…``); vertical-only rows keep the 1.x
-        ``clip(ELLIPSIS)`` path byte for byte.
+        The slot is ``height`` when set (capped by ``max_height`` for a
+        natural-height view); bars take a row/column from it.  Offsets clamp
+        per render.  Horizontal rows are hard-cut (no ellipsis); vertical
+        rows keep the ellipsis rule.
         """
         width = c.width
         bar_y = self._bar_vertical and width > 0

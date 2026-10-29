@@ -1,25 +1,9 @@
-"""Layout containers: :class:`Row`, :class:`Column`, :class:`Stack` and
-:class:`Align`.
+"""Layout containers: :class:`Row`, :class:`Column`, :class:`Stack`, :class:`Align`.
 
-All are ordinary components of the component library
-(``render(Constraints) -> Surface``) that arrange child components instead
-of drawing: a ``Row`` places children side by side in columns of fixed or
-shared width, a ``Column`` stacks them vertically with optional blank rows
-between, a ``Stack`` paints them on top of one another, and an ``Align``
-places one child at a two-dimensional anchor.  They nest (a ``Row`` child
-may be a ``Column``); beyond that, prefer building blocks and padding by
-hand.  Only the kernel is imported:
-:class:`~motui.kernel.document.Component` for the protocol,
-:class:`~motui.kernel.cell.Line` / ``Surface`` for assembly.  Import the
-containers from :mod:`motui.widgets.layout` or from :mod:`motui.widgets` /
-the package root.
-
-Children still receive a bare width int while the library migrates (they may
-be 1.x components); the composed rows are clipped into a Surface, and a
-``max_height`` budget truncates them.
-
-:class:`Spacer` and :class:`Padding` complete the set: blank rows, and
-whitespace around a child (optionally filled into a solid band).
+They arrange child components rather than drawing: Row/Column tile rows,
+Stack overlays layers, Align anchors one child.  ``Spacer`` and ``Padding``
+add whitespace.  Only the kernel is imported; composition memories key on
+child-row identity.
 """
 
 from __future__ import annotations
@@ -38,12 +22,10 @@ __all__ = ["Align", "Column", "Padding", "Row", "Spacer", "Stack"]
 
 
 def _answer(rows: list[Line], c: Constraints) -> Surface:
-    """The composed rows as the 2.0 answer, honouring the height budget.
+    """The composed rows as a clipped surface, honouring ``max_height``.
 
-    ``Surface.clipped`` only truncates, so a container's rows -- already
-    fitted to the width -- pass through byte-for-byte.  The height budget
-    slices a copy; the container's own memo keeps the untruncated rows, so a
-    later call with a larger budget can still answer from it.
+    The memo keeps the untruncated rows, so a larger later budget can
+    still answer from it.
     """
     if c.max_height is not None:
         rows = rows[: c.max_height]
@@ -53,25 +35,11 @@ def _answer(rows: list[Line], c: Constraints) -> Surface:
 class Row(Container):
     """Children laid out side by side in aligned columns.
 
-    ``widths[i]`` fixes a column's width (``None`` = flexible).  Flexible
-    columns share what remains after the fixed columns and the inter-column
-    gaps: the remainder is discarded (``remaining // count``), never
-    redistributed, so the grid stays predictable.  Every cell is padded to
-    its column width, the row count is the tallest child, and a ``fit(width)``
-    at the end keeps rows inside ``width`` even when fixed widths overflow.
-    Containers lay children out, they never restyle them.  The container
-    implements ``Container.child_at`` over the geometry of its last render:
-    a cell inside a column maps to that child, an inter-column gap column
-    and a blank filler row below a shorter child belong to the ``Row``
-    itself.
-
-    The assembly is remembered per **child-row identity** (each child's rows
-    by object, plus the column widths, the gap and the width): a host that
-    repaints the same children re-splices nothing -- the child rows read
-    through their own memories and the composed rows come back by copy
-    (render-cost W4).  The remembered rows are the very ``Line`` values of
-    the previous answer, and the ``child_at`` geometry is refreshed on a hit
-    exactly as on a miss.
+    ``widths[i]`` fixes a column; flexible columns share ``remaining //
+    count`` (remainder discarded), so the grid stays predictable.  Cells
+    pad to their column, the height is the tallest child.  ``child_at``
+    maps a rendered cell to its child; gap columns and filler rows belong
+    to the Row.  Assembly is memoized on child-row identity.
     """
 
     __slots__ = ("_cell_rows", "_cells", "_memo", "gap", "widths")
@@ -100,12 +68,7 @@ class Row(Container):
         self._memo: tuple[tuple, list[Line], list[list[Line]]] | None = None
 
     def render(self, c: Constraints) -> Surface:
-        """Lay the children out side by side and answer a clipped surface.
-
-        Children receive the constraint's inner widths and the composed
-        rows are fitted to ``c.width`` as before.  ``max_height`` truncates
-        the final rows.
-        """
+        """Lay the children out side by side and return the clipped surface."""
         width = c.width
         count = len(self.children)
         if count == 0:
@@ -168,8 +131,8 @@ class Row(Container):
     def child_at(self, row: int, col: int) -> tuple[Component, int, int] | None:
         """The child owning a cell of the last render, in the child's coords.
 
-        Gap columns, the blank filler rows below a shorter child and every
-        cell before the first render answer ``None``.
+        Gap columns, filler rows under shorter children and pre-render
+        cells answer ``None``.
         """
         if row < 0 or col < 0:
             return None
@@ -188,14 +151,8 @@ class Row(Container):
 class Column(Container):
     """Children stacked vertically, ``gap`` blank rows between them.
 
-    The container implements ``Container.child_at`` over the geometry of its
-    last render: a row inside a child's own rows maps to that child, a
-    ``gap`` row belongs to the ``Column`` itself.
-
-    Like :class:`Row`, the stack is remembered per **child-row identity**
-    (each child's rows by object, plus the gap and the width): an unchanged
-    stack hands back the same rows without re-fitting a child row, and the
-    ``child_at`` offsets are rebuilt from the child row counts either way.
+    ``child_at`` maps a row inside a child; gap rows belong to the Column.
+    The stack is memoized on child-row identity.
     """
 
     __slots__ = ("_memo", "_offsets", "gap")
@@ -214,11 +171,7 @@ class Column(Container):
         self._memo: tuple[tuple, list[Line], list[list[Line]]] | None = None
 
     def render(self, c: Constraints) -> Surface:
-        """Stack the children and answer a clipped surface.
-
-        Children render at their inner widths; ``max_height`` truncates the
-        final rows.
-        """
+        """Stack the children and return the clipped surface."""
         width = c.width
         raw_cells: list[list[Line]] = []
         offsets: list[tuple[int, int]] = []
@@ -248,12 +201,7 @@ class Column(Container):
         return _answer(out, c)
 
     def child_at(self, row: int, col: int) -> tuple[Component, int, int] | None:
-        """The child owning a row of the last render, in the child's coords.
-
-        ``col`` passes through unchanged: a stacked child renders at the
-        full width.  ``gap`` rows and every cell before the first render
-        answer ``None``.
-        """
+        """The child owning a row of the last render; ``col`` passes through."""
         if row < 0 or col < 0:
             return None
         for i in range(min(len(self._offsets), len(self.children))):
@@ -269,11 +217,9 @@ class Column(Container):
 def _interactive_at(component: Component, row: int, col: int) -> bool:
     """Whether ``component`` has an interactive target at ``(row, col)``.
 
-    The capability flags count anywhere in the component's own extent; a
-    coordinate door (``child_at``) counts when the cell descends to a
-    component that is interactive.  The walk is pure geometry -- it never
-    calls ``render`` -- and depth-guarded like the kernel's ``descend``, so
-    a malformed container cannot hang a hit test.
+    Capability flags count over the component's extent; ``child_at`` is
+    followed to an interactive descendant.  Pure geometry (never renders),
+    depth-guarded so a malformed container cannot hang a hit test.
     """
     for _ in range(64):
         if (
@@ -295,24 +241,11 @@ def _interactive_at(component: Component, row: int, col: int) -> bool:
 class Stack(Container):
     """Children painted on top of one another, ``children[0]`` at the bottom.
 
-    Every layer renders with the **same** constraints -- the whole frame
-    width and the same height budget -- and the surfaces are composed bottom
-    to top with :meth:`motui.kernel.cell.Surface.overlay`: a transparent
-    cell lets the layer below show through, any other cell wins and merges
-    the underlying style.  The result is clipped to ``c.width`` and
-    ``c.max_height``.  With no children the stack answers the empty frame
-    :meth:`~motui.kernel.cell.Surface.blank` of that size.
-
-    **Hit testing prefers interaction over z-order.**  ``child_at`` walks
-    from the top layer down and answers the first layer that has an
-    interactive component at the cell -- a ``clickable``/``focusable``/
-    ``hoverable`` component, or a container whose own ``child_at`` descends
-    to one.  A non-interactive layer such as a background ``Canvas`` is
-    therefore not a click target even when it is on top.  When no layer has
-    an interactive node there, the topmost layer containing the cell wins
-    (so text selection and geometry-only hits keep their z semantics), and a
-    cell outside every layer answers ``None``.  The geometry comes from the
-    last render; before it, every cell answers ``None``.
+    Every layer renders with the same constraints and layers overlay bottom
+    to top; a transparent cell shows through.  Hit testing prefers
+    interaction over z-order: the first top-down layer with an interactive
+    component at the cell wins, else the topmost layer containing it.
+    Geometry comes from the last render.
     """
 
     __slots__ = ("_geometry",)
@@ -348,10 +281,7 @@ class Stack(Container):
         return Surface.clipped(rows, c.width)
 
     def child_at(self, row: int, col: int) -> tuple[Component, int, int] | None:
-        """The layer owning a cell: interactive top-down, else topmost.
-
-        Every layer shares the stack's origin, so the cell needs no offset.
-        """
+        """The layer owning a cell: interactive top-down, else topmost."""
         if row < 0 or col < 0 or not self._geometry:
             return None
         topmost: tuple[Component, int, int] | None = None
@@ -373,20 +303,11 @@ class Stack(Container):
 class Align(Widget):
     """One child placed at a two-dimensional anchor in the frame.
 
-    ``horizontal`` is ``"left"``, ``"center"`` or ``"right"``; ``vertical``
-    is ``"top"``, ``"middle"`` or ``"bottom"``; anything else raises
-    ``ValueError``.  The child renders once with the **full** constraints and
-    is measured by the block it actually painted: its height is
-    ``len(surface)`` and its width is the widest row, because the render
-    contract lets a component return short rows (a ``Text`` block does).
-    The blank frame is ``c.width`` columns wide and ``c.max_height`` rows
-    tall -- the child's own height when the constraint carries no budget --
-    and the child is embedded at the anchor with its overflow clipped, never
-    wrapped.  A child that fills the width shows no horizontal alignment:
-    that is the child's choice, there is no second measure.
-
-    ``child_at`` forwards only cells inside the child's painted rectangle,
-    minus the anchor offset, so a host can descend into an aligned child.
+    ``horizontal`` is left/center/right, ``vertical`` top/middle/bottom;
+    invalid values raise ``ValueError``.  The child renders once with the
+    full constraints; its extent is its row count by its widest row, and
+    overflow is clipped, never wrapped.  ``child_at`` maps only the child's
+    painted rectangle.
     """
 
     __slots__ = (
@@ -433,7 +354,6 @@ class Align(Widget):
         self._child_width = 0
 
     def render(self, c: Constraints) -> Surface:
-        """Render the child, embed it at the anchor, and clip the frame."""
         surface = self.child.render(c)
         rows = surface.rows
         child_height = len(rows)
@@ -495,15 +415,10 @@ class Align(Widget):
 
 
 class Spacer(Widget):
-    """``rows`` blank rows: vertical whitespace as a first-class component.
+    """``rows`` blank rows: vertical whitespace as a component.
 
-    Replaces the ``Text("")`` rows hosts used to stack for breathing room
-    between blocks.  ``rows <= 0`` renders nothing.  A spacer has no styles
-    and no theme values it reads -- it is whitespace, nothing else -- and no
-    children, so it implements no ``Container.child_at``:
-    ``isinstance(Spacer, Container)`` is ``False``.  It still inherits
-    :class:`~motui.widgets.base.Widget` so ``walk()``/``touch()`` and the
-    capability defaults cover it like every other mounted node.
+    ``rows <= 0`` renders nothing.  It reads no styles and has no children,
+    so it is not a ``Container``.
     """
 
     __slots__ = ("rows",)
@@ -526,27 +441,10 @@ class Spacer(Widget):
 class Padding(Widget):
     """Whitespace around a child component.
 
-    ``left``/``right``/``top``/``bottom`` are blank columns/rows around the
-    child's own rows; the child renders at ``width - left - right`` and every
-    emitted row is ``fit`` back to ``width``.  The fill is
-    ``surfaces.base`` -- resolved at render time from ``styles`` (when
-    given) or the theme, and ``NONE`` by default, so the padding is plain
-    (invisible) spaces.  A non-``NONE`` fill paints the blank
-    areas and merges *under* the child's own
-    segment styles -- the child's colors win, the fill shows through
-    wherever the child has none -- so the whole block reads as one
-    continuous band, the full-width role-band pattern.
-    The container
-    implements ``Container.child_at`` over the geometry of its last render:
-    only the child's own cells -- inside the insets -- map to the child,
-    every padding cell belongs to the ``Padding`` itself.
-
-    The padded rows are remembered per **child-row identity** (the child's
-    rows by object, plus the clipped insets, the resolved fill and the
-    width): a host
-    that repaints the same child re-processes no row -- the fill merge in
-    particular is skipped wholesale -- and a hit refreshes the ``child_at``
-    geometry exactly as a miss does (render-cost W4).
+    The child renders at ``width - left - right`` and rows are fitted back
+    to ``width``.  The fill is ``surfaces.base`` (``NONE`` by default),
+    merged under the child's styles.  ``child_at`` maps only the child's
+    cells.  Padded rows are memoized on child-row identity.
     """
 
     __slots__ = (
@@ -593,11 +491,7 @@ class Padding(Widget):
         self._memo: tuple[tuple, list[Line], list[Line]] | None = None
 
     def render(self, c: Constraints) -> Surface:
-        """Pad the child and answer a clipped surface.
-
-        The child renders at the inner width; ``max_height`` truncates the
-        final rows (the memo keeps the untruncated ones).
-        """
+        """Pad the child and return the clipped surface."""
         width = c.width
         left = max(0, self.left)
         top = max(0, self.top)
@@ -631,12 +525,7 @@ class Padding(Widget):
         return _answer(out, c)
 
     def child_at(self, row: int, col: int) -> tuple[Component, int, int] | None:
-        """The child owning a cell of the last render, in the child's coords.
-
-        Only the child's own cells -- below ``top`` and inside the
-        ``left``/``right`` insets -- map to it; every padding cell and every
-        cell before the first render answers ``None``.
-        """
+        """The child owning a cell of the last render; padding cells answer ``None``."""
         if row < 0 or col < 0:
             return None
         if row < self._top or row >= self._top + self._child_rows:
@@ -646,13 +535,7 @@ class Padding(Widget):
         return self.child, row - self._top, col - self._left
 
     def _content_row(self, row: Line, inner: int, fill: Style) -> Line:
-        """One child row plus the blank columns to its right.
-
-        A ``NONE`` fill keeps the row's natural width followed by the
-        ``right`` pad.  A band fill paints the blank columns up to
-        ``inner + right`` in it and merges it under the child's
-        segment styles, so the band stays continuous.
-        """
+        """One child row plus the right padding; a fill merges under the child's styles."""
         if fill == NONE:
             return row + Line.from_text(" " * max(0, self.right))
         segments = [seg.with_style(fill.merge(seg.style)) for seg in row.segments]

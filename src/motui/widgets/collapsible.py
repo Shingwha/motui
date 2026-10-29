@@ -1,37 +1,8 @@
 """Collapsible: a titled section that folds its body away.
 
-One control, one row: the title leads with a state marker -- ``\u25be ``
-while the section is open, ``\u25b8 `` while it is folded -- and the
-:attr:`Collapsible.body` component's rows follow, inset by the marker's
-width, only while :attr:`Collapsible.open` is ``True``.  The whole title
-row is the control: :meth:`Collapsible.on_click` and
-:meth:`Collapsible.activate` are the same flip, and each leaves the new
-state pending for :meth:`Collapsible.take` (D15 -- a state plus
-controller methods, no callbacks)::
-
-    \u25be options
-      Body line one
-      Body line two
-
-The body is any component (:class:`~motui.widgets.decor.Panel`'s child
-protocol): it renders through the same ``render(c)`` -- at
-``width`` minus the marker's columns, the width the inset leaves it -- so a
-nested ``Panel``, a field or a layout works unchanged.  The component is a
-:class:`~motui.kernel.document.Container`: a title-row cell answers ``None``
-(the wrapper owns it) and an open body cell maps to
-``(body, local_row, local_col)``, so a pointer tier can descend into the
-folded content.  A click on a body row is **not** the section's control: it
-answers ``False`` like any cell outside the title.
-
-``on_hover`` is the pointer tier's row marking -- the title row merges
-``surfaces.hover`` while the pointer is on it; ``focused`` is the focus flag
-the focus tier sets, and a focused title row additionally merges
-``controls.overlay(focused=True)``.  Both markings start off, so a plain
-collapsible renders byte-for-byte what it always did.  The title band is
-``content.accent``; a disabled section merges ``text.faint`` and the
-disabled overlay instead.  All bands resolve at render time from ``styles``
-(when given) or the theme, and the body keeps whatever styles its own
-construction resolved.
+The title row leads with a fold marker; while ``open`` the body renders
+inset under it.  Clicking or activating the title flips ``open`` and leaves
+it pending.  ``child_at`` descends into an open body.
 """
 
 from __future__ import annotations
@@ -51,29 +22,11 @@ __all__ = ["Collapsible"]
 class Collapsible(ActionWidget):
     """A titled section whose body folds away under its title row.
 
-    ``open`` is a read-write attribute: :meth:`activate` / :meth:`toggle`
-    flip it and leave the new value pending -- the host reads it once
-    through :meth:`take` -- and a host may also set it directly (nothing
-    renders stale: the body is re-rendered per call).  ``body`` is a
-    read-write attribute too, the component whose rows follow the title
-    while open.
-
-    The title row renders ``"\u25be title"`` / ``"\u25b8 title"`` in
-    ``content.accent``; the pointer's row marking
-    (:meth:`on_hover`) merges ``surfaces.hover`` over it and
-    ``focused`` merges ``controls.overlay(focused=True)``, so hover
-    and focus are each plainly visible against the title.  ``render``
-    answers the title row alone while closed, and the title plus the
-    body's rows -- inset by the marker's width and ``fit`` to the painting
-    width -- while open.  ``hover`` is the tier's block-level flag and
-    paints nothing of its own (the row marking is the whole emphasis).
-
-    The open body's inset rows are remembered per **body-row identity**
-    (the body's rows by object, plus the width and the marker): a host that
-    repaints an open section re-indents nothing, and a hit hands back the
-    very same rows by copy (render-cost W4).  The title row is one row --
-    it re-renders every call, so hover and focus markings never go stale,
-    and the body is left to its own memory.
+    ``open`` is assignable; ``activate``/``toggle`` flip it and emit the new
+    value, while a direct assignment just repaints.  The title draws the
+    marker and title in ``content.accent`` with hover/focus overlays; the
+    body renders inset by the marker while open.  Open body rows are
+    memoized on identity; the title row re-renders every call.
     """
 
     __slots__ = (
@@ -127,13 +80,7 @@ class Collapsible(ActionWidget):
     # -- the toggle --------------------------------------------------------------
 
     def on_click(self, pos: Pos) -> bool:
-        """Flip :attr:`open` when the click lands on the title row.
-
-        ``pos.y == 0`` is the title row -- the control -- and any other row
-        (a body row, a cell past the render) answers ``False``: the body is
-        the body's own business.  ``pos.x`` is ignored: the title row owns
-        the whole width.  A disabled section refuses the click.
-        """
+        """Flip ``open`` when the click lands on the title row (row 0); ``pos.x`` is ignored."""
         if pos.y != 0:
             return False
         return self.activate()
@@ -151,13 +98,10 @@ class Collapsible(ActionWidget):
         return True
 
     def child_at(self, row: int, col: int) -> tuple[Component, int, int] | None:
-        """Map a cell to the body while open; the title belongs to the wrapper.
+        """Map a cell to the open body; the title row belongs to the wrapper.
 
-        The geometry is the last :meth:`render`'s: row 0 is the title row
-        (the wrapper owns every cell of it) and the following
-        :attr:`_body_count` rows are the body's own rows, inset by the
-        marker's width.  A closed section maps nothing; a cell past the
-        body maps nothing.
+        Body cells are inset by the marker width; a closed section maps
+        nothing.
         """
         if not self.open or row <= 0:
             return None
@@ -168,15 +112,7 @@ class Collapsible(ActionWidget):
         return self.body, local, max(0, col - indent)
 
     def on_hover(self, pos: Pos | None) -> bool:
-        """Mark the title row under the pointer; ``True`` when the marking changed.
-
-        The pointer tier's row-level half: row 0 is the title row, and
-        every other row -- a body row, or ``None`` (the pointer left) --
-        clears the marking.  The column is ignored.  The answer is whether
-        the marking changed, so a motion inside the row answers ``False``
-        (nothing to repaint); :meth:`render` merges ``surfaces.hover``
-        over the marked title row.
-        """
+        """Mark the title row under the pointer; True when that changed."""
         target = pos is not None and pos.y == 0
         changed = target != self._marked
         if changed:
@@ -187,17 +123,7 @@ class Collapsible(ActionWidget):
     # -- rendering ---------------------------------------------------------------
 
     def render(self, c: Constraints) -> Surface:
-        """The title row and, while open, the body's inset rows.
-
-        The body renders at the inner width (``width`` minus the marker's
-        columns) and the memo
-        key stays the width alone -- a smaller ``max_height`` truncates the
-        assembled rows after the memo is consulted, never repaints the body.
-        ``_body_count`` keeps the untruncated body geometry :meth:`child_at`
-        maps through (the W2a container precedent).  The answer is
-        :meth:`~motui.kernel.cell.Surface.clipped`, not padded: short rows
-        keep their natural width, so the painted bytes are unchanged.
-        """
+        """The title row and, while open, the body's inset rows."""
         width = c.width
         style = self.group("content").accent
         if self.disabled:
