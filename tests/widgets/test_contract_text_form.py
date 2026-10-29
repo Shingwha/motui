@@ -12,6 +12,7 @@ import pytest
 from motui.kernel.geom import Pos
 from motui.kernel.layout import Constraints
 from motui.widgets import (
+    ButtonKind,
     ButtonSpec,
     Collapsible,
     Dialog,
@@ -213,6 +214,24 @@ def test_a_buttonless_dialog_declines_activation():
     assert dialog.on_key(key("enter")) is False
     assert dialog.selected is None and dialog.focused_button is None
     assert dialog.take() is None
+
+
+def test_button_spec_kind_is_the_fourth_field_and_drives_the_danger_rule():
+    spec = ButtonSpec("Go", 7, None, ButtonKind.DANGER)
+    assert (spec.label, spec.value, spec.styles, spec.kind) == (
+        "Go",
+        7,
+        None,
+        ButtonKind.DANGER,
+    )
+    assert not hasattr(spec, "danger")
+    dialog = Dialog(
+        Rows("body"),
+        buttons=[ButtonSpec("Cancel", None), spec],
+        danger=True,
+    )
+    assert dialog.danger is True
+    assert dialog.index == 0  # the danger kind is never the default focus
 
 
 def test_progress_bar_value_clamps_and_fraction_is_read_only():
