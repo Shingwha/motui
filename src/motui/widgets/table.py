@@ -1,115 +1,7 @@
-"""Table component: a box-drawing grid of styled cells.
+"""Table: a box-drawing grid of styled cells with cursor, marks and sorting.
 
-:class:`Table` renders a full box frame around the grid: a top rule
-``┌─┬─┐``, the header row, the separator rule ``├─┼─┤`` and a bottom rule
-``└─┴─┘``, with the data rows in between and one ``├─┼─┤`` rule between
-every two rows -- a full grid (an empty body leaves the frame alone).  A
-column's natural width is the widest cell in it (header included) plus one
-padding cell per side.
-
-Two width policies share that frame.  ``cell_wrap`` (``WrapMode.WORD`` by
-default) selects how an over-long cell responds to its budget.  ``WORD`` and
-``CHAR`` cap the natural widths at ``max_col_width``, floor them at
-``min_col_width`` and, when the capped total still exceeds ``width``, shrink
-the budgets proportionally above the floor; every cell then wraps inside its
-budget (``Line.reflow`` keeps each ``Segment``, its ``link`` and its
-``action``) -- a record as tall as its tallest cell, a rule only under its
-last visual line, and the mark prefix on its first visual line alone.
-``ELLIPSIS`` and ``CLIP`` keep the old one-row policy byte for byte: no cap,
-no floor beyond one column, and over-long cells are ellipsized or hard-cut.
-``OVERFLOW`` keeps the grid's natural width -- every column takes its widest
-cell no matter how narrow the constraints are -- and the frame, its rules
-and its header are all generated at that width, so the answer is a surface
-wider than ``Constraints.width`` for a scroll container to window.  The
-wrapped policy's ``max_col_width`` cap is deliberately not applied here
-(OVERFLOW means "hand the whole cell to the container"); ``set_widths``
-pins are, because they are an explicit host budget.  Below ``width`` the
-grid keeps its natural size: the right edge is never stretched.
-
-Cells are ``str``, ``(str, Style)`` or ``Sequence[Segment]``.  ``str`` and
-tuple cells normalize to a single segment (a tuple's style replaces the
-cell's default, padding spaces included); a ``Segment`` list keeps its
-styles -- an attribute-only segment (fg and bg both unset) is merged onto
-the cell's base style, a colored segment stays absolute, the same rule
-the Markdown inline engine applies.  The base style is ``text.muted`` on
-the header row and ``text.base`` on data rows' first column
-(``NONE`` elsewhere).  ``aligns`` gives each column's alignment
-(``left`` / ``center`` / ``right``; anything else, and any column past
-the list, reads as left) and is applied with pad segments inside the
-column budget.  All rows of one table share exactly one width (frame
-consistency); each is still clipped to ``width`` as a final guard.
-
-The grid lines use ``borders.grid`` (uncolored by default, which reads
-cleanest on any background); a ``styles=`` override can tint them.
-
-**The row-band contract.**  Every row resolves its band through the theme's
-:class:`~motui.kernel.theme.RowStyles`: ``base`` is the resting surface,
-``active`` -- the band the cursor row's cells carry -- ``rows.active``,
-``hover`` the pointer's row hover token (``rows.hover``) and ``disabled``
-the ``text.faint`` token.  The selected row's
-cells carry the band *underneath* their own styles (the W1 primitive, the
-Rich ``Padding(style=...)`` rule); the resting rows -- the header and the
-grid rules included, which are chrome rather than row bands and never take
-the engaged band -- rest on the ground.  Every row's band merges under that
-row's own cells -- a pill behind the grid, never a ribbon across the pane;
-a full-surface band is the host's container's job
-(``Padding(fill_style=...)`` / ``Panel(frame=False, style=...)``, which
-fill every row to the width they are handed).  The fill is skipped while
-the band is ``NONE`` (the default theme's ground and both its engaged
-bands), so a resting row is then exactly the row it always was, byte for
-byte, while any themed ground -- or a themed engaged band -- covers the
-row's own cells.
-
-The table can also carry a **row cursor**: ``index`` names a data row
-(``None`` -- the default -- highlights nothing, so an unset table renders
-byte-for-byte what a plain grid always did), the cursor row renders every
-one of its data cells over the ``rows.active`` band (the reverse-video
-band reads better on a data grid than an accent),
-and ``move`` / ``click`` / ``activate`` are the interactive surface a host
-routes keys and hits to.  ``move`` clamps at the ends (a data view, not a
-menu cycle -- D10), ``click`` maps a block row onto a data row through the
-very layout ``render`` emits, and ``activate`` leaves the cursor row's index
-pending for :meth:`take` (read once, self-clearing).
-
-The pointer tier adds a second, weaker highlight: ``on_hover(pos)``
-marks the data row a cell resolves to -- through the same layout, without
-moving the cursor -- and that row's cells take the row hover band
-(``rows.hover``), whatever row it is on (D3: the hover wins even over the
-cursor's).
-The marking starts ``None``, so an un-hovered table renders exactly the
-bytes it always did.
-
-**Marks are a third, sticky kind of emphasis.**  ``marked`` is the public
-:class:`~motui.widgets.mark.MarkSet` of data-row indices and ``toggle()``
-flips the cursor row's mark (the host routes the key it chooses -- the
-library binds no gesture itself).  While the set is non-empty every data
-row leads with its ``glyphs.check_on``/``check_off`` seat inside its
-first cell -- one pair-wide column,
-padded through :func:`~motui.kernel.glyphs.pair_seat` -- so a custom pair
-of unequal widths still lines up, and two empty strings collapse the column
-to zero.  The grid's frame, its rules and its row count are untouched,
-column 0's natural width grows by the pair, and an **empty** mark set
-renders exactly the bytes the table always did.  The marks are row
-inputs, and a ``sort_by`` re-order
-re-points them at the record they were on exactly as it re-points the
-cursor, the pending result and the pointer's mark.
-
-The host also owns the two *data* gestures the grid itself never makes:
-``sort_by(col, reverse=...)`` reorders the records by a column's rendered
-text (stable, and the cursor, a pending result and the pointer's mark follow
-the record they were on -- never the row number), and ``set_widths(...)`` pins
-per-column budgets (``None`` goes back to the measured widths; the render
-clamps whatever does not fit).  ``header_line(width)`` is the third,
-styling-free half: the header row *alone*, byte-identical to the grid's own,
-for a host that pins it as a sticky row (the recipe is in the method's
-docstring -- the widget knows nothing of viewports).
-
-Only the kernel is imported; ``render`` is a pure function of the table and
-``width``.  That is what makes the memory safe: while the widget's ``generation``
--- moved by every touch -- and the width hold still, the
-remembered rows are exactly what a fresh render would answer, so
-:meth:`Table.render` hands them back as a list copy instead of rebuilding
-the grid.
+Depends only on ``motui.kernel``; ``render`` is a pure function of the table
+and the width.
 """
 
 from __future__ import annotations
@@ -135,14 +27,7 @@ _ALIGNS = ("left", "center", "right")
 
 
 class _Slot(NamedTuple):
-    """One rendered visual row: its kind, its data row, its visual line.
-
-    ``kind`` is a data-row index for a body row or a frame token (``"top"``,
-    ``"header"``, ``"header_rule"``, ``"row_rule"``, ``"bottom"``,
-    ``"empty"``); ``data_row`` is the :attr:`Table.rows` index a body row
-    carries (``None`` for frame rows), and ``visual_line`` is the row's
-    0-based visual line -- 0 for every frame row and for an unwrapped body.
-    """
+    """One visual row: kind (data-row index or frame token), data row, visual line."""
 
     kind: str | int
     data_row: int | None
@@ -156,14 +41,11 @@ def _wrap_budgets(
     max_col_width: int | None,
     min_col_width: int,
 ) -> list[int]:
-    """The wrapped table's per-column content budgets at ``width``.
+    """Per-column content budgets for the wrapped policies.
 
-    The natural widths are capped at ``max_col_width`` (``None`` -- no cap)
-    and floored at ``min_col_width``.  When the floored total does not fit
-    the content columns left by the frame and the per-cell padding, the
-    budget shrinks proportionally to the capped widths, never below the
-    floor; a width too narrow even for the floors degenerates to an equal
-    share of at least one column per column.
+    Caps at ``max_col_width``, floors at ``min_col_width`` and shrinks
+    proportionally when over budget, never below the floor; a width too
+    narrow for the floors gives every column an equal share.
     """
     floor = max(1, min_col_width)
     if max_col_width is None:
@@ -193,11 +75,10 @@ def _wrap_budgets(
 
 
 def _shrink(natural: list[int], inner_total: int) -> list[int]:
-    """Cell budgets proportional to the natural widths, floored, each >= 1.
+    """Natural widths scaled into ``inner_total``, floored at one per column.
 
-    ``inner_total`` is clamped up to one column per column, so an
-    over-narrow ``width`` still yields a (possibly ellipsized) grid rather
-    than negative budgets.
+    ``inner_total`` is clamped up to one column per column, so budgets never
+    go negative.
     """
     n = len(natural)
     total = max(inner_total, n)
@@ -212,12 +93,9 @@ def _cell_segments(
 ) -> tuple[list[Segment], Style]:
     """Normalize one cell to ``(segments, base)``.
 
-    ``str`` becomes a single segment in ``base``; ``(str, Style)`` and a
-    lone :class:`Segment` become a single segment whose style also becomes
-    the cell base, so the padding spaces keep it (byte-identical to the
-    single-segment row).  A ``Segment`` sequence is kept run by run: an
-    attribute-only segment (fg and bg both unset) is merged onto
-    ``base``, a colored segment stays absolute.
+    A tuple or lone ``Segment`` also replaces the cell base so padding keeps
+    its style; a segment list is kept run by run, attribute-only runs merged
+    onto ``base`` and colored runs left absolute.
     """
     if isinstance(cell, Segment):
         return [cell], cell.style
@@ -231,14 +109,7 @@ def _cell_segments(
 
 
 def _cell_text(cell: str | tuple[str, Style] | Sequence[Segment] | Segment) -> str:
-    """One cell's plain text -- styles dropped, the string the sort reads.
-
-    The same four cell shapes :func:`_cell_segments` normalizes, measured
-    for their text alone: ``str`` is itself, a ``(text, style)`` tuple (or a
-    lone :class:`Segment`) yields its text and a ``Segment`` sequence its
-    concatenation.  Used by :meth:`Table.sort_by`, which orders on the text
-    a reader sees, never on the styles.
-    """
+    """One cell's plain text, styles dropped -- the key :meth:`Table.sort_by` reads."""
     if isinstance(cell, Segment):
         return cell.text
     if isinstance(cell, tuple) and len(cell) == 2:
@@ -249,92 +120,15 @@ def _cell_text(cell: str | tuple[str, Style] | Sequence[Segment] | Segment) -> s
 
 
 class Table(CursorWidget):
-    """A box-line table of string, styled, or multi-segment cells.
+    """A box-line table of string, styled or multi-segment cells.
 
-    ``headers`` names the columns; ``rows`` holds the records (a short row
-    is padded with empty cells, a long row is truncated at the last
-    header).  Column widths follow the width policy above: ``cell_wrap``
-    (``WrapMode.WORD`` by default) caps at ``max_col_width``, floors at
-    ``min_col_width`` and wraps over-long cells, while ``ELLIPSIS`` /
-    ``CLIP`` keep the old natural/shrink/truncate behavior byte for byte
-    (``OVERFLOW`` keeps the natural grid width for a horizontal scroll
-    container and ignores ``max_col_width``; ``set_widths`` pins still
-    apply).  The
-    header row always uses ``text.muted``, and ``text.base`` only touches
-    data rows' first column.  ``aligns`` aligns
-    each column (``left`` / ``center`` / ``right``, default left).  Grid
-    lines use ``borders.grid`` (uncolored by default), and one ``├─┼─┤``
-    rule separates every two data rows.
-    Styles resolve at render time from the theme (or a ``styles=`` group
-    override): ``text``, ``borders`` and ``rows`` are read through
-    :meth:`~motui.widgets.base.Widget.group`, and assigning ``theme``/``styles``
-    touches the widget, so a theme switch repaints a mounted table.
-
-    The optional row cursor is the table's interactive face: ``index`` is
-    the data row under it (``None`` -- the default, and the empty table's
-    only value -- highlights nothing), ``selected`` reads that row's raw
-    cells, and the cursor row's data cells carry the ``rows.active``
-    band underneath their own styles
-    while the header and the grid rules stay untouched;
-    the row count and the column budgets are exactly the same whether a
-    row is under the cursor or not.  ``move(delta)`` steps
-    it and clamps at the ends, ``on_click(pos)`` maps a rendered row onto
-    a data row (``col`` is ignored: a data row owns its whole width), and
-    activation leaves it pending for :meth:`take` -- the row
-    index a host reads once, cleared by the next ``move`` or by a click
-    that lands.
-    ``focused`` is the focus flag the focus tier sets
-    the focus tier sets: while it is ``False`` the
-    cursor row wears ``rows.inactive`` instead -- the band stays legible
-    but loses weight, and every other row renders unchanged.  It starts
-    ``True``, the old constructor default.
-
-    ``hover`` is the pointer tier's flag
-    the pointer tier sets; :meth:`on_hover` marks the
-    data row under the pointer -- resolved through the same row layout
-    (:meth:`_layout`) :meth:`on_click` reads, without moving the cursor -- and
-    that row's cells take the row hover band under the band they
-    already carry (the cursor's included: D3's precedence makes the hover
-    win outright, so a hovered cursor row wears the hover band alone).  The
-    marking starts ``None``, so an un-hovered table renders byte-for-byte
-    what it always did.
-
-    **Marking** is the third, sticky emphasis: :attr:`marked` is the public
-    :class:`~motui.widgets.mark.MarkSet` of data-row indices and
-    :meth:`toggle` flips the cursor row's mark (the host routes the key --
-    the table binds none).  While the set is non-empty every data row leads
-    with its ``glyphs.check_on``/``check_off`` seat inside its first cell;
-    the column is the pair's wider
-    seat, so a custom pair lines up, and an empty pair (two ``""``)
-    collapses it to zero columns.  An empty set renders exactly the bytes
-    the table always did, the frame and the row
-    structure never change, and a :meth:`sort_by` re-order re-points the
-    marks at their records like the cursor.
-
-    Three host-facing extras ride beside that interactive face.
-    :meth:`sort_by` reorders the data rows by one column's rendered text --
-    stable, and the cursor, a pending result and the pointer's mark
-    follow the *record* into its new position, never the row number -- while
-    :meth:`set_widths` pins explicit per-column budgets (``None`` restores
-    the measured ones) and :meth:`header_line` hands the header row out on
-    its own, byte-identical to the grid's, for a host that pins it as a
-    sticky row.  None of the three changes a default render: a table that
-    is neither sorted, pinned nor header-stripped paints what it always did.
-
-    **The memory.**  A grid render normalizes, bands, measures, pads and
-    fuses every cell of every row -- 24 ms for a 240-row table -- and a host
-    repaints the same table frame after frame (every mouse move repaints),
-    so :meth:`render` remembers its last answer: while the widget's
-    ``generation`` and the width are unchanged, the remembered rows come
-    back as a list copy and the natural-width measurement they were built
-    from rides in the same slot instead of being re-measured.  :attr:`rows`
-    is the host's own list, so an in-place edit -- ``rows[i][j] = ...``,
-    ``rows.append(...)``, ``headers[:] = ...`` -- is invisible to the
-    counter: the host must call :meth:`~motui.widgets.base.Widget.touch`
-    after editing in place.  Assigning ``rows`` (or any public attribute)
-    touches automatically.  A cell's own ``Segment`` list is deliberately
-    not walked: a cell is a value in every documented use, and a host that
-    mutates a segment list under a rendered table must touch as well.
+    ``cell_wrap`` picks the width policy: ``WORD``/``CHAR`` wrap under
+    ``max_col_width``/``min_col_width``, ``ELLIPSIS``/``CLIP`` keep one row,
+    ``OVERFLOW`` keeps the natural grid width for a scroll container.  An
+    optional cursor bands its row and activates to :meth:`take`; marks are
+    sticky row indices; sorting and width pins follow row identity.
+    ``render`` is memoized on ``generation`` and width -- call ``touch``
+    after in-place edits.
     """
 
     __slots__ = (
@@ -450,15 +244,12 @@ class Table(CursorWidget):
     # -- the cursor hooks -------------------------------------------------------
 
     def _entry_count(self) -> int:
-        """The data rows the cursor walks."""
         return len(self.rows)
 
     def _entry_at(self, index: int) -> object | None:
-        """The raw data row at visible row ``index`` (side-effect free)."""
         return self.rows[index]
 
     def _cursor_disabled(self) -> Iterable[int]:
-        """The data rows a move steps over and ``select`` refuses."""
         return self.disabled_items
 
     def _cursor_wraps(self) -> bool:
@@ -466,13 +257,11 @@ class Table(CursorWidget):
         return False
 
     def _cursor_enabled(self) -> bool:
-        """The whole-table disabled switch gates every cursor verb."""
         return not self.disabled
 
     # -- the cursor -------------------------------------------------------------
 
     def _arm(self) -> None:
-        """Mark the cursor as host-visible; a fresh table draws no band."""
         if not self._cursor_armed:
             self._cursor_armed = True
             self.touch()
@@ -498,12 +287,7 @@ class Table(CursorWidget):
         return super().end()
 
     def activate(self) -> bool:
-        """Leave the cursor row pending; ``False`` without an armed cursor.
-
-        The row is emitted as the caller's own object (no copy, no index).
-        A fresh table has no host-visible cursor, so it cannot activate; a
-        disabled table or row refuses too.
-        """
+        """Leave the cursor row pending; ``False`` without an armed cursor or on a disabled row."""
         if not self._cursor_armed:
             return False
         selected = self.selected
@@ -516,27 +300,13 @@ class Table(CursorWidget):
         return True
 
     def _is_disabled(self, index: int) -> bool:
-        """Whether data row ``index`` is disabled (the table or per item)."""
         return self.disabled or index in self.disabled_items
 
     def on_click(self, pos: Pos) -> bool:
         """Place the cursor on the data row rendered at ``pos.y``; True on a hit.
 
-        ``pos.y`` is a 0-based row of this component's own ``render`` output
-        -- exactly what :meth:`~motui.app.TUI.hit` reports -- and the
-        mapping back onto a data row comes from the **most recent render's**
-        visual-row structure (:meth:`_layout`): the top rule, the header
-        (every visual line of it) and every ``├─┼─┤`` rule carry no data,
-        while every visual line of a wrapped record maps onto that record.
-        The mapping follows the rendered structure wherever it goes -- a
-        shrunk or wrapped cell, a header that takes more room than the body:
-        the layout is read off the same shape ``render`` emits.  A row that
-        carries no data -- the frame rows, and every row past the last
-        rendered one -- answers ``False`` and changes nothing.  ``pos.x`` is
-        ignored, and deliberately so: every column of a data row belongs to
-        that row, so no column narrows the hit.  A hit moves the cursor
-        there (even when it already was) and arms it; a disabled table or
-        data row refuses the hit.
+        ``pos.x`` is ignored: a data row owns its whole width.  Frame rows
+        and rows past the last rendered one answer ``False``.
         """
         if self.disabled:
             return False
@@ -552,14 +322,9 @@ class Table(CursorWidget):
         return True
 
     def toggle(self) -> bool:
-        """Flip the cursor row's mark; ``True`` when there was one to flip.
+        """Flip the cursor row's mark; ``True`` when one flipped.
 
-        The marking gesture beside the cursor's own -- the keymap binds
-        ``space`` to it.  The cursor row's mark flips in :attr:`marked` and
-        nothing else moves: ``index``, the pending result and the pointer's
-        hover are the cursor's own state, so a toggle never emits.  ``False``
-        -- and no mark written -- on a disabled row or table, exactly the
-        ``Select.toggle`` rule.
+        Never emits; a disabled table or row refuses.
         """
         selected = self.selected
         if selected is None or not self.rows:
@@ -574,19 +339,7 @@ class Table(CursorWidget):
     def on_hover(self, pos: Pos | None) -> bool:
         """Mark the data row under the pointer; True when the marking changed.
 
-        The pointer tier's row-level half (D3), and :meth:`on_click`'s
-        mapping without its cursor move: ``pos.y`` is a 0-based row of this
-        component's own ``render`` output, resolved through the same
-        most-recent-render visual-row structure (:meth:`_layout`) -- a frame
-        row (a rule, any header visual line) carries no data and clears the
-        marking, exactly as a row past the last rendered one does.  Every
-        visual line of a wrapped record maps onto that record.  ``pos.x``
-        is ignored, and ``None`` clears the marking (the pointer left).  The
-        answer is whether the marked data row
-        changed, so a motion inside one record answers ``False``;
-        :meth:`render` rests that row's cells -- every visual line of them
-        -- on the row hover band (the cursor row's included: D3's
-        precedence makes the hover win outright).
+        ``None`` clears it; frame rows carry no data.  ``pos.x`` is ignored.
         """
         target: int | None = None
         if pos is not None:
@@ -602,32 +355,10 @@ class Table(CursorWidget):
     # -- the host's data gestures -------------------------------------------------
 
     def sort_by(self, col: int, *, reverse: bool = False) -> bool:
-        """Reorder the data rows by column ``col``'s rendered text; True on a change.
+        """Reorder rows by column ``col``'s rendered text; True when the order moved.
 
-        The key is the column's **rendered text** (the plain string a reader
-        sees: a cell's styles, its inline markup and its ellipsis play no
-        part): the header row names the columns, so ``col`` is a data column
-        index, and anything outside them -- a negative index, a column past
-        the headers, a cell a short row leaves out -- reads as the empty
-        string, which sorts first.  The sort is **stable** (the built-in
-        ``list.sort`` rule): rows with equal keys keep their relative order,
-        with ``reverse=True`` reversing the keys, not the ties.
-
-        Row identity survives the reorder: the cursor (:attr:`index`), a
-        pending result, the pointer's mark and the entries of
-        :attr:`marked` are positions *into* the row list, and each is
-        re-pointed at the record it was on -- the cursor stays on the same
-        record wherever the record lands, the host's pending pick names the
-        same row it always did, and a marked record stays marked.  A
-        position no current row answers (a host swapped the rows out) is
-        left untouched, exactly as it reads elsewhere.
-
-        The table never sorts on its own -- there is no header-click magic,
-        no cursor side effect, and a click on the header row still maps onto
-        no data row.  A host calls this (from a header hit it resolved
-        itself, from a sort control of its own) and the next :meth:`render`
-        paints the new order; ``True`` says the order actually moved, so a
-        no-op sort (every key equal) answers ``False``.
+        Stable; the cursor, pending result and marks follow their record,
+        never the row number.  A bad column reads as the empty string.
         """
         if not self.rows:
             return False
@@ -657,34 +388,18 @@ class Table(CursorWidget):
         return True
 
     def set_widths(self, widths: Sequence[int] | None) -> None:
-        """Pin explicit per-column cell budgets; ``None`` restores the measured widths.
+        """Pin per-column cell budgets; ``None`` restores the measured widths.
 
-        ``widths`` is one budget per data column, in header order (a cell's
-        columns of padding come on top of it, exactly as they do for a
-        measured width).  The two rules that always held still hold: a
-        column past the list keeps its measured width, and the render
-        **clamps** -- a budget below one reads as one, and budgets whose
-        total does not fit the painting width shrink proportionally, the
-        same fallback an over-wide natural table takes.  So explicit widths
-        are a *preference*, never an overflow: no row ever exceeds ``width``
-        and the frame stays one width.
-
-        The list is copied, so a caller's own list stays its own;
-        ``set_widths(None)`` is the way back to the auto widths (the
-        constructor state).
+        Budgets are clamped at render: at least one, shrunk proportionally
+        when the total does not fit.
         """
         self._widths = None if widths is None else [int(w) for w in widths]
         self.touch()
 
     def header_lines(self, width: int) -> list[Line]:
-        """Every header visual line, byte-identical to the grid's own header.
+        """Every header visual line, byte-identical to the grid's header at ``width``.
 
-        The wrapped header can take several visual lines; each is built at
-        the same budgets and alignment pads as :meth:`render` uses, so the
-        list is the grid's header block exactly.  A table with no columns
-        answers an empty list: its render is one blank row and there is no
-        header to pin.  With a single-row ``cell_wrap`` this is the old
-        header row.
+        An empty list without columns.
         """
         if not self.headers:
             return []
@@ -704,32 +419,8 @@ class Table(CursorWidget):
     def header_line(self, width: int) -> Line | None:
         """The header row's first visual line, byte-identical to the grid's.
 
-        ``None`` without headers.  The single-line compatibility view of
-        :meth:`header_lines`: the
-        line :meth:`render` emits right after its top rule, at the same
-        budgets and alignment pads.  A wrapped header hands back its first
-        visual line; a host that pins the whole header asks for
-        :meth:`header_lines`.  A table with no columns answers ``None``.
-
-        Recipe -- a **sticky header**.  The table scrolls inside a pane; the
-        host pins the header above it as its own component::
-
-            class StickyHeader:
-                \"\"\"The table's header, rendered at the pane's width.\"\"\"
-
-                def __init__(self, table):
-                    self.table = table
-
-                def render(self, c):
-                    return Surface.clipped(self.table.header_lines(c.width), c.width)
-
-            tui.add(StickyHeader(table), placement=Placement.TOP)
-            tui.add(table)                      # the grid scrolls under the pin
-
-        The pinned rows line up with the grid because both read the same
-        budgets.  There is deliberately **no viewport magic** in the widget:
-        the host decides what to pin and when (the lines are values, taken
-        fresh on every render).
+        ``None`` without headers.  A host pinning a wrapped header uses
+        :meth:`header_lines`; the widget knows nothing of viewports.
         """
         lines = self.header_lines(width)
         return lines[0] if lines else None
@@ -737,30 +428,12 @@ class Table(CursorWidget):
     # -- the render ---------------------------------------------------------------
 
     def render(self, c: Constraints) -> Surface:
-        """The grid at the constraint width, remembered while the snapshot holds.
+        """The grid at the constraint width, remembered while generation and width hold.
 
-        With ``OVERFLOW`` the natural grid width -- the width the cells'
-        own content asks for -- is the painting width whenever it exceeds
-        ``c.width``, and the frame, the rules and every row are built at
-        that width; the surface then carries it so a horizontal scroll
-        container can window it.  The width memo keys on that build width,
-        so a pane resize below the natural width re-uses the one grid.  A
-        ``max_height`` budget
-        truncates the leading grid rows, so a table inside a shorter pane
-        never paints past its slot.  The budget is deliberately not part of
-        the memory's key: the full grid at the width is remembered once and
-        every budget slices the same rows, so alternating budgets cannot
-        thrash the build.
-
-        While the width and the widget's ``generation`` are unchanged, the remembered
-        rows of the last grid come back as a list copy -- no cell
-        normalization, banding, measuring, wrapping, padding or fusing (the
-        component's memory, see the class docstring).  A miss builds the
-        grid, remembers it together with its natural widths and visual-row
-        layout and moves the key; the returned rows are always the caller's
-        own.  Either way the visual-row layout is recorded for
-        :meth:`on_click` / :meth:`on_hover` -- the last render's full layout,
-        which also describes the untruncated rows a host may have pinned.
+        A ``max_height`` budget truncates leading rows without invalidating
+        the memo.  With ``OVERFLOW`` the surface is as wide as the natural
+        grid for a scroll container.  The visual-row layout is recorded for
+        hit mapping.
         """
         width = c.width
         build_width = width
@@ -793,13 +466,7 @@ class Table(CursorWidget):
         return Surface.clipped(rows, c.width)
 
     def _grid_width(self, width: int) -> int:
-        """The full frame width at ``width`` under the current cell policy.
-
-        The rules take one column each (``ncols + 1``) and every column two
-        padding cells; the budgets are the policy's (for ``OVERFLOW`` the
-        natural widths, whatever ``width`` is).  An empty table has no
-        frame: one blank row is its whole render.
-        """
+        """The full frame width at ``width``; 0 for a headerless table (one blank row)."""
         ncols = len(self.headers)
         if ncols == 0:
             return 0
@@ -807,16 +474,13 @@ class Table(CursorWidget):
         return sum(b + 2 for b in budgets) + ncols + 1
 
     def _mark_width(self) -> int:
-        """The mark column's width: the pair's wider seat in display columns."""
         marked_glyph, unmarked_glyph = self._mark_pair()
         return max(seat_width(marked_glyph), seat_width(unmarked_glyph))
 
     def _mark_pair(self) -> tuple[str, str]:
-        """The ``(marked, unmarked)`` pair the first cell's marks are drawn from."""
         return self._glyphs.check_on, self._glyphs.check_off
 
     def _mark_seat(self, marked: bool) -> str:
-        """One row's mark seat, padded to the pair's wider member."""
         marked_glyph, unmarked_glyph = self._mark_pair()
         glyph, other = (
             (marked_glyph, unmarked_glyph)
@@ -826,14 +490,7 @@ class Table(CursorWidget):
         return pair_seat(glyph, other)
 
     def _grid(self, width: int) -> tuple[list[Line], list[_Slot]]:
-        """The freshly built grid at ``width``: :meth:`render`'s miss path.
-
-        The one place the row structure is assembled; :meth:`render` calls
-        it only when the snapshot moved or the width changed, and never
-        hands the list out itself (the memory keeps it).  The visual-row
-        layout comes back beside the lines so the memory -- and the hit
-        mapping -- see the very structure this grid emitted.
-        """
+        """Build the freshly banded grid at ``width``; the memo's miss path."""
         layout, lines = self._plan(width)
         cursor = self._cursor.index if self._cursor_armed else None
         hover = self._hover_row
@@ -850,12 +507,8 @@ class Table(CursorWidget):
     def _plan(self, width: int) -> tuple[list[_Slot], list[Line]]:
         """The visual-row structure at ``width`` and its un-banded lines.
 
-        One entry per visual line: the frame rows and every visual line of a
-        (possibly wrapped) header record and data record.  A record's
-        ``row_rule`` follows its **last** visual line; the final rule is the
-        frame's bottom.  A single-row ``cell_wrap`` gives every record
-        exactly one visual line, so the structure -- and every line's bytes
-        -- is the old one.
+        A record's ``row_rule`` follows its last visual line; the final rule
+        is the frame's bottom.
         """
         ncols = len(self.headers)
         if ncols == 0:
@@ -939,13 +592,10 @@ class Table(CursorWidget):
     def _data_cells(
         self, ncols: int
     ) -> list[list[tuple[list[Segment], Style]]]:
-        """Every data record's normalized cells, mark prefix included.
+        """Every data record's normalized cells with the mark prefix on the first.
 
-        ``text.base`` touches the first column, ``text.faint`` a disabled
-        row and ``NONE`` every other cell; while anything is marked the
-        first cell leads with its seat.  The prefix lives at the head of the
-        cell's segments, which is what keeps it on the record's first visual
-        line once the cell wraps.
+        The prefix sits at the head of the first cell so wrapping keeps it on
+        the record's first visual line.
         """
         text = self.group("text")
         first_column_style = text.base
@@ -981,11 +631,7 @@ class Table(CursorWidget):
         border_style: Style,
         aligns: list[str],
     ) -> list[Line]:
-        """One record's visual lines: one row, or the wrapped block.
-
-        ``WORD`` and ``CHAR`` take the wrapping policy; the single-row
-        modes keep exactly one visual line per record.
-        """
+        """One record's visual lines: one row, or a wrapped block under WORD/CHAR."""
         if self.cell_wrap not in (WrapMode.WORD, WrapMode.CHAR):
             return [self._row(cells, budgets, border_style, aligns)]
         return self._wrapped_row(cells, budgets, border_style, aligns)
@@ -997,14 +643,9 @@ class Table(CursorWidget):
         border_style: Style,
         aligns: list[str],
     ) -> list[Line]:
-        """One record wrapped to ``budgets``: as many visual lines as its tallest cell.
+        """One record wrapped to ``budgets``: as many lines as its tallest cell.
 
-        Every cell is wrapped through :meth:`~motui.kernel.cell.Line.reflow`
-        under ``cell_wrap`` (``WORD`` or ``CHAR``; styles, links and actions
-        survive), each visual line is padded to its column budget with the
-        cell's base style, and every visual line carries its own left and
-        right border.  A cell shorter than the record's tallest one pads
-        blank on the lines past its end.
+        Every visual line keeps its own borders; shorter cells pad blank.
         """
         wrapped = [
             Line(segments).reflow(self.cell_wrap, budgets[i])
@@ -1028,17 +669,8 @@ class Table(CursorWidget):
     def _row_band(self, r: int, cursor: int | None, hover: int | None) -> Style:
         """The surface one data row rests on, resolved by the theme's row roles.
 
-        The resolution is :meth:`~motui.kernel.theme.RowStyles.band`: the
-        precedence rule (D3) lives in the theme.
-        **The hovered row wears the hover band
-        whatever row it is on** -- the pointer is the more immediate signal,
-        and the band's own precedence puts it over the cursor.  The cursor
-        row carries ``rows.active`` while focused and ``rows.inactive``
-        while not; every other data row rests on ``rows.base``, and a
-        disabled row wears ``rows.disabled``.  The header and the grid rules
-        are chrome: they rest on ``rows.base`` and never take the engaged
-        band.  The ``rows`` group comes from ``styles`` when overridden,
-        else the theme.
+        Hover wins over cursor (D3); the header and grid rules never take the
+        engaged band.
         """
         return self.group("rows").band(
             active=r == cursor,
@@ -1048,29 +680,13 @@ class Table(CursorWidget):
         )
 
     def _aligns(self) -> list[str]:
-        """The per-column alignments: a name outside ``_ALIGNS`` reads as left."""
         return [a if a in _ALIGNS else "left" for a in (self.aligns or ())]
 
     def _natural_widths(self) -> list[int]:
-        """The widest cell of every column, headers and data rows alike, by text.
+        """Widest cell per column by text, remembered while ``generation`` holds.
 
-        The measuring rule of the constructor's docstring, in one place:
-        ``_cell_segments`` normalizes each cell exactly as :meth:`render`
-        will (the band merges never change a cell's text, so the widths are
-        the same), and an empty cell a short row leaves out contributes
-        zero.  :meth:`render` and :meth:`header_line` read it, which is what
-        keeps their budgets -- and their header bytes -- in step.
-
-        The answer is **remembered** while the table's ``generation``
-        holds: the walk normalizes every cell of every row, and both
-        callers ask for the very same widths frame after frame (a pinned
-        header asks without rendering the grid at all), so a hit answers
-        the remembered list without measuring.  Every input the walk reads
-        -- the rows, the headers, the header style and the marks (the
-        first column's cell carries the mark prefix) -- is part of the
-        snapshot, so a hit is always the value a fresh walk would answer;
-        the returned list is the memory's own, and every caller only reads
-        it (``_budgets`` copies what it changes).
+        ``render`` and ``header_lines`` both read it, keeping their budgets
+        and header bytes in step.
         """
         generation = self.generation
         widths = self._memo_natural
@@ -1081,7 +697,6 @@ class Table(CursorWidget):
         return widths
 
     def _measure_widths(self) -> list[int]:
-        """The fresh measurement behind :meth:`_natural_widths`."""
         ncols = len(self.headers)
         natural = [
             sum(visible_width(seg.text) for seg in segs)
@@ -1102,17 +717,7 @@ class Table(CursorWidget):
         return natural
 
     def _budgets(self, natural: list[int], width: int) -> list[int]:
-        """The per-column cell budgets at ``width``: explicit widths, then the policy.
-
-        ``set_widths``' pinned budgets replace the measured ones column by
-        column (a column past the pinned list keeps its measured width, a
-        pinned value below one reads as one).  With a single-row
-        ``cell_wrap`` the old fits/shrink rule then runs exactly as it
-        always did: a total that fits keeps the budgets (never stretched),
-        a total that does not shrinks proportionally, floored at one column
-        each.  With ``WORD`` / ``CHAR`` the wrapped policy runs instead --
-        cap, floor, proportional split -- see :func:`_wrap_budgets`.
-        """
+        """Per-column cell budgets: pinned widths first, then the cell-wrap policy."""
         ncols = len(self.headers)
         pins = self._widths
         if pins is not None:
@@ -1137,23 +742,7 @@ class Table(CursorWidget):
         return _shrink(natural, inner - 2 * ncols)
 
     def _layout(self, width: int | None = None) -> list[_Slot]:
-        """What each rendered visual row carries: its kind, data row and visual line.
-
-        :meth:`render` emits one line per entry and :meth:`on_click` /
-        :meth:`on_hover` read the same structure back (the last render's,
-        through :meth:`_hit_layout`), so the table's row arithmetic lives in
-        exactly one place.  An entry whose ``data_row`` is an ``int`` is a
-        visual line of that :attr:`rows` entry; a frame entry carries
-        ``None``: ``"top"`` / ``"header"`` / ``"header_rule"`` above the
-        body, ``"row_rule"`` after a record's last visual line,
-        ``"bottom"``, and ``"empty"`` -- the single blank row of a
-        headerless table.  The shape is derived from the row list and the
-        wrapped cell heights, never from pinned row numbers, so a data
-        row's position follows whatever the table renders.
-
-        ``width=None`` answers the unwrapped structure (one visual line per
-        record): the hit mapping's fallback before the first render.
-        """
+        """What each rendered visual row carries; ``width=None`` is the unwrapped shape."""
         if not self.headers:
             return [_Slot("empty", None, 0)]
         if width is None or self.cell_wrap not in (WrapMode.WORD, WrapMode.CHAR):
@@ -1161,7 +750,6 @@ class Table(CursorWidget):
         return self._plan(width)[0]
 
     def _unwrapped_layout(self) -> list[_Slot]:
-        """The one-visual-line-per-record structure (single-row modes, no render yet)."""
         layout: list[_Slot] = [
             _Slot("top", None, 0),
             _Slot("header", None, 0),
@@ -1177,7 +765,6 @@ class Table(CursorWidget):
         return layout
 
     def _hit_layout(self) -> list[_Slot]:
-        """The visual-row structure hit mapping reads: the last render's, or the fallback."""
         layout = self._last_layout
         return layout if layout is not None else self._unwrapped_layout()
 
@@ -1188,16 +775,7 @@ class Table(CursorWidget):
         border_style: Style,
         aligns: list[str],
     ) -> Line:
-        """One ``│ cell │ cell │`` row, every cell keeping its own segments.
-
-        A cell is truncated to its column budget through
-        ``Line.clip(cell_wrap, inner)`` (the marker is one column in
-        ``ELLIPSIS`` mode, absent in ``CLIP``); the alignment pad fills the
-        remaining budget as a ``Segment`` in the cell's base style.  ``str``
-        and tuple cells have one style throughout, so the fused row is
-        byte-identical to the single-segment rendering.  Columns past
-        ``aligns`` read as left.
-        """
+        """One ``│ cell │ cell │`` row, every cell padded or clipped to its budget."""
         segments: list[Segment] = [Segment(self._border.left, border_style)]
         for i, (cell_segments, base) in enumerate(cells):
             segments.extend(
@@ -1217,7 +795,6 @@ class Table(CursorWidget):
         aligns: list[str],
         column: int,
     ) -> list[Segment]:
-        """The padded, truncated, space-wrapped interior of one cell."""
         line = Line(cell)
         # OVERFLOW's budget is the cell's natural width, so only an explicit
         # ``set_widths`` pin can make a cell over-wide: that pin is a hard
@@ -1252,8 +829,7 @@ class Table(CursorWidget):
         line: str,
         border_style: Style,
     ) -> Line:
-        """A horizontal rule: ``left``, one run per column joined by ``cross``,
-        ``right`` (``┌──┬──┐`` and kin, from the grid's :class:`Border`)."""
+        """A horizontal rule from the grid's ``Border``: ``┌──┬──┐`` and kin."""
         rule = left + cross.join(line * (b + 2) for b in budgets) + right
         return Line.from_text(rule, border_style)
 
