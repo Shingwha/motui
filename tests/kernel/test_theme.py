@@ -136,7 +136,9 @@ def test_the_default_theme_is_the_dark_visual():
     assert DEFAULT_THEME.overlays.toast == DARK_PALETTE.surface_raised
     head = Markdown("# Title").render(Constraints(width=40))[0].segments[0].style
     assert head == DARK_PALETTE.heading.merge(Style(underline=True))
-    assert Button("ok").render(Constraints(width=40))[0].segments[0].style == DARK_PALETTE.accent
+    assert Button("ok").render(Constraints(width=40))[0].segments[0].style == (
+        DEFAULT_THEME.surfaces.control.merge(DEFAULT_THEME.text.base)
+    )
     field = Input()
     field.insert("hello")
     assert field.render(Constraints(width=40))[0].segments[0].text == "\u276f "

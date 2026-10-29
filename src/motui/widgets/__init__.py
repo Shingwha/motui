@@ -40,7 +40,7 @@ built-in syntax-highlighting seam --
 :mod:`motui.widgets.syntax`, and is imported from there.
 """
 
-from .action import Button, Checkbox, Link
+from .action import Button, ButtonKind, Checkbox, Link
 from .autocomplete import Autocomplete
 from .base import Widget
 from .canvas import Canvas, Sparkline
@@ -70,6 +70,7 @@ __all__ = [
     "Align",
     "Autocomplete",
     "Button",
+    "ButtonKind",
     "ButtonSpec",
     "Canvas",
     "Checkbox",
