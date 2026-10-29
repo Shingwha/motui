@@ -52,7 +52,6 @@ def _utf8_stdout() -> None:
 
 
 def _pages(width: int, height: int) -> None:
-    """Print every scene as plain text, one full-width rule per scene."""
     for name in SCENES:
         spec = SPEC_BY_NAME[name]
         header = f"\u2500\u2500 /{name} \u2014 {spec.title} "
@@ -66,7 +65,6 @@ def _list() -> None:
 
 
 def _interactive(scene: str) -> None:
-    """Run the showcase on a real terminal until the scene asks to quit."""
     app = App(
         terminal=TerminalOptions(mouse=MouseMode.MOVE),
         throttle=1 / TICK_HZ,

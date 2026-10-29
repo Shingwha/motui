@@ -65,10 +65,8 @@ def window_stage(error: float) -> str:
 class RingsGame:
     """The deterministic rings state machine, independent of the canvas.
 
-    Every render is a pure function of the phase and geometry: births are
-    dealt from one seeded :class:`random.Random` in schedule order, misses
-    are decided from the deadline, and a resize starts a fresh game.
-    """
+    Births come from one seeded RNG in schedule order, misses from the
+    deadline, so every render is a pure function of phase and geometry."""
 
     __slots__ = (
         "_phase",
@@ -109,7 +107,6 @@ class RingsGame:
         return window_stage(min(errors, default=float("inf")))
 
     def reset(self) -> None:
-        """A fresh game: no rings, the seed and every counter reset."""
         self._phase = 0
         self._rng = random.Random(RINGS_SEED)
         self.rings.clear()
@@ -120,12 +117,6 @@ class RingsGame:
         self.attempts = 0
 
     def sync(self, phase: int, width: int, height: int) -> None:
-        """Advance the bookkeeping to ``phase`` on a ``width x height`` board.
-
-        Births due by ``phase`` are dealt from the seeded RNG in order; a
-        live ring whose force window has passed dissolves as a Miss;
-        finished bursts and fades drop off the list.
-        """
         self._phase = phase
         now = phase / TICK_HZ
         while True:
@@ -164,7 +155,6 @@ class RingsGame:
         self.born_count += 1
 
     def judge(self, now: float) -> Ring | None:
-        """Judge the nearest ring and return it when it enters a hit window."""
         best: Ring | None = None
         best_error = 0.0
         for ring in self.rings:

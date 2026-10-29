@@ -1,31 +1,7 @@
-"""The painter: full-screen row-diff rendering onto a :class:`~motui.terminal.screen.Screen`.
+"""The painter: full-screen row-diff rendering onto a Screen.
 
-The painter owns no document and no scroll state: every frame arrives as a
-:class:`~motui.kernel.layout.ScreenLayout` the caller laid out (the
-driver owns the :class:`~motui.kernel.layout.Viewport` that carries the
-scroll position), and the painter writes only what changed -- a full repaint
-when the screen size changes (or on the very first frame, prefixed by an
-erase), otherwise a per-row cursor-addressed rewrite of the rows that differ
-from the previous frame.  An unchanged frame is zero bytes -- a frame that
-only moves the pinned cursor anchor (:meth:`Painter.set_cursor`) writes that
-anchor escape alone.  When the screen is not live the painter stays
-completely silent but still keeps the logical rows, so :attr:`Painter.rows`
-can be queried on non-live runs.
-
-Every non-empty frame leaves as **one write** -- the joined rows bracketed by
-the synchronized-update pair (DECSET 2026) -- followed by **one flush**, so a
-terminal that knows the mode swaps the frame in a single repaint instead of
-showing it half-painted; ``sync=False`` turns the bracket off for a host
-streaming to something that cannot parse it.  The bracket never changes the
-zero-byte contract: an empty payload writes nothing at all.
-
-Rows are rendered for the capability the screen declares
-(``screen.color_mode``, ``"truecolor"`` for a screen that declares none): the
-bytes come from :func:`~motui.terminal.render.styled_line`, the terminal
-layer's cached SGR/OSC 8 rendering for a row and a mode.  No cache ever
-depends on the terminal: the renderer is keyed on ``(line, mode)``, both
-values.
-"""
+It writes only changed rows (a full repaint on a size change), brackets a
+frame in the sync pair and flushes once; an unchanged frame is zero bytes."""
 
 from __future__ import annotations
 
@@ -45,34 +21,20 @@ __all__ = ["Painter"]
 
 
 def _styled_row(row: Line, mode: str) -> str:
-    """The row's SGR bytes under ``mode``.
-
-    The one byte path for a row: :func:`~motui.terminal.render.styled_line`
-    caches on ``(line, mode)``, so a repeated frame costs one lookup and the
-    capability is part of the key rather than hidden inside a row.
-    """
+    """The row's SGR bytes under ``mode``; the render cache is keyed on
+    ``(line, mode)``."""
     return styled_line(row, mode)  # type: ignore[arg-type]
 
 
 def _row_write(index: int, styled: str) -> str:
-    """Position at 1-based ``index``, erase the row, paint ``styled``.
-
-    A row whose rendering is empty still gets the positioning and the
-    erase: stale content from an earlier frame must be cleared.
-    """
+    """Position at 1-based ``index``, erase the row and paint ``styled``; an
+    empty rendering still clears stale content."""
     return cursor_position(index + 1, 1) + CLEAR_LINE + styled
 
 
 class Painter:
-    """Renders one laid-out frame onto a screen, one diffed frame at a time.
-
-    :attr:`frames` counts every :meth:`paint` call -- including frames that
-    wrote no bytes -- so a host can measure its real frame rate off it.
-    ``sync`` (the default) brackets each frame's non-empty payload in the
-    synchronized-update pair (DECSET 2026, see :meth:`_emit`); the payload is
-    still one write and one flush, and a frame with nothing to say stays
-    silent either way.
-    """
+    """Renders one laid-out frame onto a screen, one diffed frame at a time;
+    ``frames`` counts every paint call, changed bytes or not."""
 
     def __init__(self, screen: Screen, *, sync: bool = True) -> None:
         self._screen = screen
@@ -90,41 +52,13 @@ class Painter:
         self.frames = 0
 
     def set_cursor(self, row: int, col: int) -> None:
-        """Pin the terminal cursor at 0-based ``(row, col)`` (the IME anchor).
-
-        A full-screen application that draws its own input box leaves the
-        terminal cursor wherever the last row rewrite ended -- mid-transcript
-        while the reply streams -- and the console's IME pops its candidate
-        window there.  An application that owns an input box calls this
-        whenever the cursor cell may have moved (typically once per frame);
-        every live frame then ends with the matching cursor-position escape,
-        so the IME follows the input box instead of the streaming text.
-
-        The anchor is the frame epilogue: appended after the diff of a frame
-        that wrote anything, and written alone by a frame that wrote nothing
-        but moved the anchor.  A non-live screen never receives it (runtime
-        output stays zero bytes).  An anchor outside the screen clamps into
-        it; a size change neither clears nor re-emits the anchor -- the next
-        frame re-clamps it, and the application is expected to recompute it
-        (as the demo does after a keypress).
-        """
+        """Pin the terminal cursor at 0-based ``(row, col)`` -- the IME anchor --
+        appended as the frame epilogue or written alone when only it moved."""
         self._anchor = (row, col)
 
     def reset(self) -> None:
-        """Forget what is on screen: the next frame repaints every row.
-
-        The diff is a belief about the screen's *content*, and only two things
-        can make that belief wrong without the painter knowing: the size (the
-        painter watches it) and a **buffer switch that clears the screen
-        behind its back**.  Escaping to the alternate screen is the second
-        kind: a host that painted before entering left its frame on the
-        normal buffer, and the alt screen starts blank -- a diff against
-        those rows would write nothing and show an empty screen until some
-        row happens to change.  The driver calls this on entry for exactly
-        that reason; a host that switches buffers itself calls it too.
-
-        ``frames`` keeps counting: this forgets the pixels, not the history.
-        """
+        """Forget what is on screen so the next frame repaints every row; needed
+        after a buffer switch clears the screen behind the diff."""
         self._rows = []
         self._width = self._height = None
 
@@ -138,23 +72,8 @@ class Painter:
     def paint(self, target: ScreenLayout | Surface) -> None:
         """Paint one frame: full repaint on (re)size, row diff otherwise.
 
-        The target is either a composed :class:`ScreenLayout` or a
-        :class:`Surface`; both answer rows and a width.  A surface is
-        clipped to its own declared width (the width it was rendered for);
-        a layout is clipped to the screen width, exactly as before.
-
-        The painted rows are normalized to the screen first: more rows than
-        the screen are truncated, fewer are blank-padded with empty
-        :class:`Line` values, so :attr:`rows` is exactly ``screen.height``
-        rows after every paint (see the property).
-
-        Every row is then hard-clipped before any bytes are built.  An
-        over-wide row would make the terminal wrap the write onto the next
-        line, corrupting every row after it; this is the final guard that
-        keeps the byte stream row-addressed even when a component outgrows
-        the width it was rendered for (the cut adds no ellipsis, so a row
-        that already fits is untouched).
-        """
+        Rows are truncated or padded to the screen and hard-clipped before any
+        bytes: an over-wide row would wrap and corrupt every following row."""
         self.frames += 1
         self._screen.refresh_size()
         width, height = self._screen.width, self._screen.height
@@ -205,15 +124,8 @@ class Painter:
         self._width, self._height = width, height
 
     def _emit(self, payload: str) -> None:
-        """Push one frame's bytes: one write, one flush -- and the sync pair.
-
-        With ``sync`` on, a non-empty payload leaves as ``begin + payload +
-        end`` (DECSET 2026, still a single write), so the terminal holds the
-        frame and swaps it in whole; a terminal that does not know the mode
-        ignores both bytes.  An empty payload is not a write at all: the
-        zero-byte contract for unchanged frames is a property of the payload,
-        never of the switch.
-        """
+        """Push one frame's bytes as one write and one flush, bracketed by the sync
+        pair when enabled; an empty payload writes nothing."""
         if not payload:
             return
         if self._sync:
@@ -223,11 +135,6 @@ class Painter:
 
     @property
     def rows(self) -> list[Line]:
-        """The current target screen: exactly ``screen.height`` rows.
-
-        Empty before the first paint (nothing has been painted yet).  After
-        a paint the length is the screen's height: a shorter layout was
-        blank-padded, a longer one truncated, so a caller reading
-        ``len(painter.rows)`` never sees a stale geometry.
-        """
+        """The current target screen: exactly ``screen.height`` rows, empty before
+        the first paint."""
         return list(self._rows)

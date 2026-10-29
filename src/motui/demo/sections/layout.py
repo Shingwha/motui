@@ -1,21 +1,8 @@
-"""The layout section: the constraint drills, driven from the keys.
+"""The layout section: four constraint drills switched by number keys.
 
-Four drills share one frame, switched with the number keys:
-
-* **split** -- two panes share the width; the arrows move the sash and both
-  panes report the columns they actually got.
-* **dock** -- a one-rule dock pins north, south, west or east under the
-  arrows; the free area reports what it still holds.
-* **scroll** -- a long source file (one measured line wider than any pane)
-  in a two-axis :class:`ScrollPanel`: every arrow scrolls, and the long line
-  can be scrolled to its very tail.
-* **wide table** -- a ten-column manifest whose natural grid is wider than
-  the pane in a horizontally scrolling panel: ``left``/``right`` walk to the
-  last column.
-
-No animation and no clock: the drills answer the keys and read back real
-geometry, so a fresh scene always replays the same bytes.
-"""
+1 split (arrows move the sash), 2 dock (arrows re-dock), 3 two-axis
+scroll, 4 wide table. No clock: the readout reads back real geometry,
+so a replay is identical."""
 
 from __future__ import annotations
 
@@ -134,16 +121,9 @@ _WIDE_ROWS: tuple[tuple[str, ...], ...] = (
 
 
 class LayoutScene(Scene):
-    """The layout drills: split, dock and two scrolls you can drive.
-
-    ``1``-``4`` pick the drill; the arrows mean what the drill says.  The
-    split's sash and the dock's side are plain state, and both scroll
-    panels answer the arrows themselves -- ``left``/``right`` step four
-    columns on the horizontal axis, everything else routes into the panel's
-    own key table.  ``escape`` returns to the menu, ``q`` quits.  The
-    readout row under the body reads the live geometry off the last render,
-    so the numbers are always what the pixels show.
-    """
+    """The layout drills: ``1``-``4`` pick, the arrows drive the active drill,
+    ``escape`` returns and ``q`` quits. ``enter`` resets the sash, dock and
+    both scroll positions."""
 
     name = "layout"
 

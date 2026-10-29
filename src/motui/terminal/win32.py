@@ -1,39 +1,8 @@
-"""The Windows console plumbing: mode bits, record mapping, ctypes structs.
+"""The Windows console plumbing: mode bits, record mapping and ctypes structs.
 
-Everything Windows-specific about reading the console lives here: the console
-input-mode bits and :func:`windows_input_mode`; the record mappers
-(:func:`_key_from_values`, :func:`_console_record_fields`,
-:func:`_console_record_events`, :func:`_console_mouse_report`); the pure replay
-:func:`keys_from_console_events`; and the ctypes structures plus the
-``kernel32`` prototype binding the live reader in
-:mod:`motui.terminal.keys` calls.
-
-Mouse records are surfaced with the VT path's own semantics: the mapper
-synthesizes the equivalent SGR-1006 report payloads
-(:func:`_console_mouse_report`) and feeds them to the one
-:class:`~motui.terminal.decoder.KeyDecoder`, so a press, release or motion
-resolves to the same :class:`~motui.kernel.events.MouseEvent` on both
-platforms -- the decoder stays the single authority on what a report means.
-The record path has no tracking mode of its own (there is no 1002/1003
-here), so the ``hover`` switch the mappers take is its counterpart of
-DECSET 1003: with it set, a bare pointer move surfaces as the wire's
-button-free motion (the synthesized 35, ``MouseEvent("none")``); off (the
-default), the move stays dropped exactly as the default 1002 VT path never
-sends it.
-
-Focus and buffer-size records surface as
-:class:`~motui.kernel.events.FocusEvent` and
-:class:`~motui.kernel.events.ResizeEvent`; key records keep
-``wRepeatCount`` and replay it as one press followed by ``repeat`` events.
-
-The ctypes structures are defined portably (``ctypes`` is stdlib everywhere)
-so this module imports identically on every platform and the field offsets
-can be asserted in tests; the field widths follow the Windows SDK, so on
-Windows these are exactly KEY_EVENT_RECORD (16 bytes), MOUSE_EVENT_RECORD
-(16 bytes) and INPUT_RECORD (20 bytes).  Elsewhere the sizes differ and
-nothing here is ever touched: the record path only runs when
-``os.name == "nt"``.
-"""
+Mouse records are synthesized as SGR-1006 payloads and fed to the one
+decoder, so both platforms resolve the same events. The structs are
+defined portably so tests can assert their offsets."""
 
 from __future__ import annotations
 
@@ -122,34 +91,9 @@ ConsoleRecord = tuple[int, ...]
 
 
 def windows_input_mode(old: int) -> int:
-    """The console input mode for raw-ish reading, derived from ``old``.
-
-    Clears ``ENABLE_LINE_INPUT`` and ``ENABLE_ECHO_INPUT`` (the toolkit does
-    its own line editing and echoing) and sets
-    ``ENABLE_VIRTUAL_TERMINAL_INPUT``.  That bit is an input *delivery*
-    switch, and its semantics are exactly what the console path in this
-    module depends on: with it set, the console hands input over as a VT
-    byte stream -- every key press arrives as one or more KEY_EVENT records
-    whose ``UnicodeChar`` carries a single sequence byte (ESC, CR, BS,
-    printables, code points), the virtual-key field typically unused.  So
-    ``_read_console_records`` feeds those characters to :class:`KeyDecoder`
-    (which assembles sequences across records and settles them after a
-    silence window) rather than mapping records through the virtual-key
-    table; only a NUL character falls back to that table.
-
-    Every other bit passes through untouched -- notably
-    ``ENABLE_PROCESSED_INPUT``, which a console normally has set and which
-    keeps Ctrl-C raising a real ``KeyboardInterrupt`` as a second line of
-    defence.
-
-    The one deliberate exception is ``ENABLE_QUICK_EDIT_MODE``: it lets the
-    console host intercept the mouse for its own text selection, competing
-    with the application's mouse reporting.  It is cleared, and
-    ``ENABLE_EXTENDED_FLAGS`` is set alongside (Windows ignores QuickEdit
-    changes without it) -- the same trade raw mode makes on POSIX: the
-    application takes the mouse, so it owes the user a selection of its
-    own.  ``close()`` restores the saved mode wholesale.
-    """
+    """The raw-ish console input mode: clears line, echo and QuickEdit, sets VT
+    input; every other bit (notably processed input for Ctrl-C) passes
+    through."""
     return (
         (old & ~(_ENABLE_LINE_INPUT | _ENABLE_ECHO_INPUT | _ENABLE_QUICK_EDIT_MODE))
         | _ENABLE_VIRTUAL_TERMINAL_INPUT
@@ -207,11 +151,8 @@ class _WindowBufferSizeRecord(ctypes.Structure):
 
 
 class _EventUnion(ctypes.Union):
-    """The ``Event`` member of INPUT_RECORD.
-
-    Every member fits in the SDK's 16-byte payload, so the union keeps the
-    INPUT_RECORD layout whichever kind the record carries.
-    """
+    """The ``Event`` member of INPUT_RECORD; every member fits the SDK's
+    16-byte payload."""
 
     _fields_ = [
         ("Key", _KeyEventRecord),
@@ -255,12 +196,8 @@ def _kernel32() -> ctypes.WinDLL:
 
 
 def _key_from_values(vk: int, char: str, ctrl: int) -> KeyEvent | None:
-    """Map a record's virtual key, character and control state to a key.
-
-    The record path's fallback resolution, used when a key record delivers
-    no character (``"\\x00"``): the virtual-key table first, then control
-    bytes, then Ctrl combinations, then the plain Unicode character.
-    """
+    """Map a record's virtual key, character and control state to a key when
+    the record delivered no character."""
     name = _VK_KEYS.get(vk)
     if name is not None:
         return KeyEvent(name)
@@ -275,14 +212,8 @@ def _key_from_values(vk: int, char: str, ctrl: int) -> KeyEvent | None:
 
 
 def _console_record_fields(record: _InputRecord) -> ConsoleRecord:
-    """The tagged field tuple :func:`_console_record_events` consumes.
-
-    The ctypes record's fields, tagged by :attr:`EventType` so the pure
-    mappers (and the replay seam) never touch ctypes.  Key records carry
-    their five fields -- ``bKeyDown`` and ``wRepeatCount`` included -- mouse
-    records ``(x, y, button_state, flags, control_state)``; focus and
-    buffer-size records carry their one and two fields.
-    """
+    """The tagged field tuple :func:`_console_record_events` consumes; the
+    pure mappers never touch ctypes."""
     if record.EventType == _MOUSE_EVENT:
         mouse = record.Event.Mouse
         return (
@@ -310,12 +241,7 @@ def _console_record_fields(record: _InputRecord) -> ConsoleRecord:
 
 
 def _repeated(events: list[Event], repeat: int) -> list[Event]:
-    """Apply a key record's ``wRepeatCount`` to the events it produced.
-
-    The first event of a held key is the press; the remaining repetitions
-    surface as ``kind="repeat"``.  Anything that is not a press (a kitty
-    release decoded from the VT bytes, a resize, ...) is not repeated.
-    """
+    """Apply a key record's ``wRepeatCount``: a press then ``repeat`` events."""
     if repeat <= 1:
         return events
     out: list[Event] = []
@@ -329,22 +255,8 @@ def _repeated(events: list[Event], repeat: int) -> list[Event]:
 def _console_record_events(
     record: ConsoleRecord, decoder: KeyDecoder, bits: int = 0, *, hover: bool = False
 ) -> tuple[list[Event], int]:
-    """Decode one tagged console record, carrying the held-button state.
-
-    A key record -- ``(_KEY_EVENT, bKeyDown, repeat, vk, char, ctrl)`` --
-    feeds its character to ``decoder`` (the VT byte path) or falls back to
-    the virtual-key mapping; ``repeat`` replays the produced press as
-    ``kind="repeat"`` events.  A mouse record -- ``(_MOUSE_EVENT, x, y,
-    button_state, flags, ctrl)`` -- goes to :func:`_console_mouse_report`;
-    ``hover`` is the record path's counterpart of the VT path's DECSET 1003
-    and gates its button-free motion reports.  A focus record becomes a
-    :class:`~motui.kernel.events.FocusEvent`; a buffer-size record a
-    :class:`~motui.kernel.events.ResizeEvent`.
-
-    The return is the events plus the held-button bits after this record,
-    since a console press or release is a transition the previous record's
-    state disambiguates.
-    """
+    """Decode one tagged console record, threading the held-button state across
+    records."""
     if record[0] == _MOUSE_EVENT:
         return _console_mouse_report(record[1:], decoder, bits, hover=hover)
     if record[0] == _FOCUS_EVENT:
@@ -366,13 +278,8 @@ def _console_record_events(
 
 
 def _sgr_report(code: int, x: int, y: int, final: str = "M") -> bytes:
-    """One SGR-1006 mouse report payload: ESC ``[`` ``<`` code ``;`` x+1 ``;`` y+1 final.
-
-    The console's cell coordinates are 0-based and the report's 1-based, the
-    mirror of the decoder's normalization, so a coordinate survives the trip
-    through the report unchanged.  UTF-8, like every other byte the console
-    path hands the decoder.
-    """
+    """One SGR-1006 report payload, translating 0-based cells to the report's
+    1-based coordinates."""
     return f"{ESC}[<{code};{x + 1};{y + 1}{final}".encode()
 
 
@@ -391,33 +298,8 @@ def _console_mouse_report(
     *,
     hover: bool = False,
 ) -> tuple[list[Event], int]:
-    """Synthesize the VT path's SGR-1006 reports for one console mouse record.
-
-    ``record`` is ``(x, y, button_state, flags, control_state)`` -- the
-    MOUSE_EVENT_RECORD fields -- and ``bits`` is the held-button state the
-    previous record left: the console reports the full current state with
-    every record, so a press is a newly-set bit, a release the transition
-    to zero, and both need the previous state to name the button.  The
-    reports are built as SGR-1006 payloads and fed to the one decoder, so
-    the console path resolves press, release, motion and the vertical wheel
-    exactly as the VT path does.
-
-    A ``MOUSE_MOVED`` flag with buttons held is a motion report carrying the
-    motion bit; a double-click is ignored, so it surfaces as the two presses
-    it physically is (timing policy belongs to the controller).  A record
-    that both transitions a button and carries ``MOUSE_MOVED`` reports the
-    button only -- the VT path never mixes a press and a motion bit in one
-    report.  A wheel tick is discrete: it emits its report and leaves ``bits``
-    alone, since a console may zero the low word of a wheel record while a
-    button is still held.
-
-    ``hover`` is the record path's DECSET 1003 counterpart: with it set, a
-    ``MOUSE_MOVED`` record with no button held and no transition
-    synthesizes the wire's button-free motion report (low bits 3), which
-    the decoder normalizes to ``MouseEvent("none")``.  Off (the default), a
-    bare pointer move stays dropped exactly as the default 1002 VT path
-    drops it.
-    """
+    """Synthesize the VT path's SGR reports for one console mouse record; a
+    press is a newly set bit, so the previous state names the button."""
     x, y, state, flags, _ctrl = record
     events: list[Event] = []
     if flags & _MOUSE_WHEELED:
@@ -450,21 +332,8 @@ def _console_mouse_report(
 def keys_from_console_events(
     events: Iterable[ConsoleRecord], *, hover: bool = False
 ) -> list[Event]:
-    """Replay a console-record stream through the one decoder.
-
-    Pure and console-free, so every record kind the console delivers is
-    testable without a Windows console: each record is tagged by its
-    INPUT_RECORD event type -- a key record ``(_KEY_EVENT, bKeyDown, repeat,
-    vk, char, ctrl)``, a mouse record ``(_MOUSE_EVENT, x, y, button_state,
-    flags, ctrl)``, a focus record ``(_FOCUS_EVENT, focused)`` or a
-    buffer-size record ``(_WINDOW_BUFFER_SIZE_EVENT, width, height)`` -- and
-    the mapping logic is the very same ``_console_record_events`` the live
-    reader uses, held-button state threaded across the stream exactly as the
-    live reader threads it.  A fresh decoder is created per call and no
-    settle/flush is applied -- a replay ending mid-sequence leaves that
-    state inside the throwaway decoder, exactly where the live reader would
-    settle it after a silence period.
-    """
+    """Replay a console-record stream through the one decoder; pure and
+    console-free, with held-button state threaded across the stream."""
     decoder = KeyDecoder()
     out: list[Event] = []
     bits = 0

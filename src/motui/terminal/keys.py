@@ -1,21 +1,8 @@
-"""The key sources: :class:`RawTerminalKeys`, the real terminal source.
+"""The key sources: RawTerminalKeys, the real terminal source.
 
-``RawTerminalKeys`` reads a real terminal -- POSIX ``termios`` raw mode or the
-Windows console-record path (see :mod:`motui.terminal.win32`) -- with a daemon
-reader thread feeding an executor-backed queue, so ``read()`` stays async
-without the thread touching asyncio, and a cooked-line fallback when the
-terminal cannot be switched to raw mode.
-
-The source satisfies :class:`~motui.kernel.events.EventSource`: ``read()``
-returns the next :class:`~motui.kernel.events.Event`, or ``None`` at EOF.
-EOF is sticky -- every later ``read()`` returns ``None`` immediately -- and
-the reader runs :meth:`~motui.terminal.decoder.KeyDecoder.finish` when the stream
-ends, so an unclosed paste or a truncated UTF-8 tail is not lost.  ``start()``
-may be called again after ``close()``: every start resets the EOF flag, the
-decoder and the queue.  ``close()`` makes a best effort to unblock a pending
-``read()``: POSIX waits on stdin and a self-pipe together, while the Windows
-console path polls a closed flag between short sleeps.
-"""
+A daemon reader thread feeds a queue that ``read()`` drains through an
+executor, so the thread never touches asyncio; cooked-line fallback when
+raw mode is impossible."""
 
 from __future__ import annotations
 
@@ -73,31 +60,11 @@ _CONSOLE_INPUT_TYPES = (_KEY_EVENT, _MOUSE_EVENT, _FOCUS_EVENT, _WINDOW_BUFFER_S
 
 
 class RawTerminalKeys:
-    """An event source reading a real terminal in (near) raw mode.
+    """An event source reading a real terminal in near-raw mode.
 
-    ``start()`` switches the terminal to raw-ish mode -- POSIX
-    ``tty.setraw``, or on Windows a console mode with line input and echo
-    cleared and VT input enabled -- and launches a daemon reader thread that
-    decodes input and queues events.  ``read()`` (async) drains that queue
-    through a single-thread executor, so the reader thread never touches an
-    asyncio object.  ``close()`` stops the reader and restores the original
-    terminal mode; it is idempotent and must eventually be called.
-
-    When the terminal cannot be switched to raw mode -- a pipe, a redirected
-    stream, no console -- the source falls back to cooked line mode
-    (:attr:`cooked_fallback` is ``True``): whole lines arrive from the OS and
-    are delivered character by character plus a trailing ``enter``.
-
-    A partial escape/CSI sequence left pending by the decoder is settled
-    after ``_SETTLE_SECONDS`` of input silence, so a lone ESC key press is
-    delivered as the escape key rather than swallowed or deferred forever.
-
-    ``hover`` feeds the Windows console-record path: the record path has no
-    DECSET tracking of its own (the screen writes those bytes on both
-    platforms), so with ``hover`` set a bare pointer move -- the VT path's
-    1003 motion -- becomes a button-free motion report, and with the
-    default off it stays dropped, exactly as under the default 1002.
-    """
+    EOF is sticky, ``start()`` may follow ``close()``, and a partial escape
+    sequence is settled after silence. ``hover`` enables button-free motion
+    on the Windows record path."""
 
     def __init__(self, fd: int | None = None, *, hover: bool = False) -> None:
         self._fd = _stdin_fd() if fd is None else fd
@@ -126,14 +93,8 @@ class RawTerminalKeys:
     # -- lifecycle ------------------------------------------------------------
 
     def start(self) -> None:
-        """Enter raw mode (or fall back) and launch the reader thread.
-
-        Safe to call again after :meth:`close`: every start resets the EOF
-        flag, the decoder, the queue and the platform state, so the source
-        reads a fresh stream.  A start while the source is already running
-        -- including one whose reader has just hit EOF -- is a no-op: one
-        start owns one reader until :meth:`close`.
-        """
+        """Enter raw mode (or fall back) and launch the reader thread; a start
+        while already running is a no-op."""
         if self._started:
             return
         self._started = True
@@ -160,7 +121,7 @@ class RawTerminalKeys:
         self._thread.start()
 
     def close(self) -> None:
-        """Stop the reader thread and restore the terminal mode."""
+        """Stop the reader thread and restore the terminal mode; idempotent."""
         if self._closed:
             return
         self._closed = True
@@ -177,11 +138,7 @@ class RawTerminalKeys:
             self._executor.shutdown(wait=False)
 
     async def read(self) -> Event | None:
-        """The next event, or ``None`` at EOF / after ``close()``.
-
-        EOF is sticky: once the sentinel has been seen, later reads answer
-        ``None`` at once instead of waiting on an empty queue.
-        """
+        """The next event, or ``None`` at EOF / after ``close()``; EOF is sticky."""
         if self._executor is None or self._closed or self._eof:
             return None  # never started, closed, or the stream already ended
         loop = asyncio.get_running_loop()
@@ -265,7 +222,8 @@ class RawTerminalKeys:
         return self._settle_wait() <= 0.0
 
     def _reader(self) -> None:
-        """Daemon thread body: pump terminal input into the queue."""
+        """Daemon thread body: pump terminal input into the queue, flushing the
+        decoder before the EOF sentinel."""
         try:
             if self._console:
                 self._read_console_records()
@@ -278,18 +236,8 @@ class RawTerminalKeys:
             self._queue.put(None)  # EOF sentinel: wakes every pending read()
 
     def _read_console_records(self) -> None:
-        """Windows: poll console records, feed the decoder, settle on silence.
-
-        ``PeekConsoleInputW`` probes for records without blocking: a
-        blocking ``ReadConsoleInputW`` would hold the reader hostage
-        mid-sequence, so a lone ESC could never be settled.  Available
-        records are then pulled in one batch -- key records delivered as VT
-        bytes to the decoder, mouse records synthesized into SGR-1006
-        reports, focus and buffer-size records mapped to
-        :class:`~motui.kernel.events.FocusEvent` /
-        :class:`~motui.kernel.events.ResizeEvent` -- and a pending sequence
-        is settled once the console has been silent for the settle window.
-        """
+        """Windows: poll console records without blocking, feed the decoder and
+        settle a pending sequence once the console has been silent long enough."""
         api = _kernel32()
         handle = self._saved_mode[0]
         records = (_InputRecord * _CONSOLE_BATCH)()
@@ -330,17 +278,8 @@ class RawTerminalKeys:
                 time.sleep(0.005)
 
     def _read_bytes(self) -> None:
-        """POSIX raw mode and every cooked fallback: decode raw bytes.
-
-        While the decoder holds a pending escape/CSI sequence the read waits
-        with a deadline instead of blocking forever: ``select`` reports the
-        fd readable, or the settle window expires and the pending sequence
-        is settled.  Outside a pending state the read blocks as usual.  The
-        POSIX self-pipe joins the wait-set, so ``close()`` can wake a reader
-        blocked with no input; ``select`` supports sockets only on Windows,
-        where the cooked fallback keeps the blocking read and EOF/close back
-        it up.  EOF flushes through the reader's ``finish()``.
-        """
+        """POSIX and cooked paths: decode raw bytes; while a sequence is pending the
+        read waits with a settle deadline instead of blocking forever."""
         while not self._closed:
             pending = self._decoder.pending()
             watch = [self._fd]

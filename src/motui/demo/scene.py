@@ -42,12 +42,8 @@ SceneFactory = Callable[[Theme, "int | None"], "Scene"]
 class Scene:
     """One showcase scene: render a frame, advance, route input.
 
-    ``enter`` is the only reset door: the shell calls it for the initial
-    scene and on every switch, and a scene must leave the same state it
-    would have on a first visit.  Within one entry the phase passed to
-    ``tick``/``render`` is non-decreasing; a seek that rewinds enters the
-    scene again.
-    """
+    ``enter`` is the only reset door and must restore a first-visit state;
+    within one entry the phase is non-decreasing."""
 
     name: ClassVar[str] = ""
 
@@ -74,7 +70,6 @@ class Scene:
 
 @dataclass(frozen=True, slots=True)
 class SceneSpec:
-    """Everything the shell, Home tiles and command palette need about a scene."""
 
     name: str
     title: str

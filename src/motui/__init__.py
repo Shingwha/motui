@@ -1,87 +1,10 @@
 """motui: a layered, full-screen TUI toolkit.
 
-It takes over the terminal on the alternate screen, renders a document of
-addressable blocks one diffed row at a time, owns its own scrollback, and
-keeps pinned bands (fixed top and bottom regions, the frame's own footer)
-that never scroll away.
-
-The layers carry it:
-
-* :mod:`motui.kernel` -- the core and the root of the dependency graph:
-  the frozen :class:`~motui.kernel.document.Component` protocol and the
-  addressable ``Section`` document model, the
-  :class:`~motui.kernel.cell.Line` / :class:`~motui.kernel.cell.Segment`
-  row primitive, :class:`~motui.kernel.style.Style` /
-  :class:`~motui.kernel.theme.Theme`, the measuring helpers, the event
-  model, the render core (:class:`~motui.terminal.screen.Screen`,
-  :class:`~motui.kernel.layout.Viewport`,
-  :class:`~motui.terminal.paint.Painter`), the frame model
-  (:class:`~motui.kernel.frame.Pane`, :class:`~motui.kernel.frame.Rect`),
-  the selection kernel (:class:`~motui.kernel.selection.Selection`,
-  :func:`~motui.kernel.selection.highlight`,
-  :func:`~motui.kernel.selection.extract`), and raw terminal bytes into
-  events: the pure :class:`~motui.kernel.KeyDecoder`, the keymaps and the
-  terminal key sources.
-* :mod:`motui.pixel` -- the optional sub-cell raster medium:
-  :class:`~motui.pixel.Raster`, :class:`~motui.pixel.PixelPalette`,
-  :class:`~motui.pixel.PixelLayer`, :class:`~motui.pixel.Marker` and
-  :func:`~motui.pixel.quantize`.  It imports the kernel only; the
-  :class:`~motui.widgets.PixelCanvas` widget is its adapter.
-* :mod:`motui.widgets` -- the generic component library: the renderers plus
-  the minimal action primitives, the Markdown rule registries under
-  :mod:`motui.widgets.markdown` and the zero-dependency highlighting seam in
-  :mod:`motui.widgets.syntax`.
-* :mod:`motui.app` -- the high-level :class:`~motui.app.application.App`
-  (runtime + default interaction policy) and the strategy tiers it composes:
-  :class:`~motui.app.runtime.Runtime`,
-  :class:`~motui.app.workspace.Workspace`,
-  :class:`~motui.app.focus.FocusManager`,
-  :class:`~motui.app.pointer.Pointer`,
-  :class:`~motui.app.gesture.SelectionGesture` (with
-  :func:`~motui.app.gesture.copy_on_select`),
-  :class:`~motui.app.find.Find`, the blocking layer
-  (:class:`~motui.app.modal.Modal` with
-  :class:`~motui.app.command_palette.CommandPalette`), the overlays
-  (:class:`~motui.app.overlays.Toasts`,
-  :class:`~motui.app.overlays.Tooltip`,
-  :class:`~motui.app.overlays.Stats`), the pane chrome
-  (:class:`~motui.app.scrollbar.Scrollbar`) and the command registry
-  (:class:`~motui.app.commands.Command`,
-  :class:`~motui.app.commands.CommandRegistry`).
-
-The headless helpers :mod:`motui.testing`
-(:func:`~motui.testing.headless_tui`,
-:func:`~motui.testing.snapshot`) sit beside the app layer.
-
-This module is the curated face: the names one application needs to
-start, in one import line.  The root carries :class:`App`; the low-level
-:class:`~motui.app.runtime.Runtime` lives at the app layer.  Beside it sit
-the styling vocabulary (:class:`Theme`, :data:`DEFAULT_THEME`,
-:class:`ColorPalette`, :class:`Color`, :class:`Glyphs`, :class:`Border`,
-:class:`Style`), the component base (:class:`Component`, :class:`Widget`,
-:class:`Styles`), the row primitive (:class:`Line`, :class:`Segment`), the
-event values (the key, mouse, paste, resize and focus events), the common
-content, editing, data and modal components, and the two headless helpers.
-Everything else stays public at its own layer namespace::
-
-    from motui import App, Input, Markdown           # the root: the curated face
-    from motui.widgets import Row, Panel, Diff       # a layer: the whole library
-    from motui.kernel import Style, Line, Selection    # the kernel seam
-    from motui.pixel import Raster, PixelPalette        # the optional pixel medium
-    from motui.kernel import DEFAULT_INPUT_KEYMAP
-    from motui.app import Runtime, Workspace, FocusManager, Pointer, Find
-
-The deep seams stay public at their own module paths -- the painter, the
-viewport layout, the document model, the frame and the selection kernel
-under :mod:`motui.kernel`, the byte decoder beside them, and
-the Markdown rule registries and the highlighter protocol under
-:mod:`motui.widgets` -- for hosts that reach below the layers.
-
-Dependencies point one way: the core depends on nothing outside itself;
-``pixel`` and ``terminal`` build on the core; ``widgets`` builds on the
-kernel and the optional pixel medium; and the app layer and the headless
-helpers compose them from above.
-"""
+The curated face for applications: ``App`` plus the styling vocabulary,
+row primitive, event values and common components. Layers stay public
+at their own namespaces: ``kernel`` (pure values and protocols),
+``pixel`` (optional sub-cell raster), ``widgets``, ``terminal``; the app
+layer composes them from above."""
 
 from importlib.metadata import PackageNotFoundError, version
 
