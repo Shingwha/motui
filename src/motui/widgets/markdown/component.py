@@ -1,11 +1,7 @@
 """The component: a Markdown document rendered as rows.
 
-``Markdown`` owns the one :class:`~.context.RenderContext` of a document --
-the resolved theme, the fenced-code engine, the task marks, the divider cap
-and the two live registries -- and hands it to the shared block loop on every
-``render``.
-Rules themselves stay dep-free singletons, so the component is the only
-place that resolves anything.
+``Markdown`` owns the document's :class:`RenderContext` and hands it to the
+shared block loop; rules stay dep-free singletons.
 """
 
 from __future__ import annotations
@@ -42,14 +38,11 @@ __all__ = ["BLOCK_RULES", "Markdown", "default_block_rules"]
 
 
 def default_block_rules() -> list[BlockRule]:
-    """A fresh built-in block registry, dep-free and in match order.
+    """A fresh built-in block registry, in match order.
 
-    Order is the match priority; :class:`~.blocks.ParagraphRule` is the
-    mandatory catch-all at the end.  Build a custom registry by prepending
-    your own rules: ``[MyRule(), *default_block_rules()]``.  The tuple
-    singleton the component ships with is :data:`BLOCK_RULES`; the factory
-    hands out new instances so a caller can extend one without touching
-    the shared registry.
+    The paragraph catch-all must stay last.  Prepend custom rules; the
+    factory returns new instances so callers can extend without touching
+    :data:`BLOCK_RULES`.
     """
     return [
         HeadingRule(),
@@ -72,13 +65,9 @@ def _first_parse_difference(
 ) -> int:
     """The first character offset below ``limit`` where two parses disagree.
 
-    ``old`` and ``new`` are the segment runs of two texts where the second is
-    the first plus an appended suffix, so both runs cover the common prefix;
-    the walk compares the overlapping pieces -- text, style and payloads --
-    and answers the offset where the first difference starts (``limit`` when
-    the whole prefix parses identically).  The component's append-only
-    paragraph render rebuilds its rows from this offset on and keeps the rows
-    before it; answering too early costs a re-wrap, never a wrong row.
+    ``new`` extends ``old``; the walk compares overlapping runs (text, style
+    and payloads) and answers ``limit`` when the common prefix parses alike.
+    The append-only paragraph render rebuilds rows from this offset on.
     """
     old_at = new_at = 0  # the character offset where the current run starts
     old_i = new_i = 0
@@ -110,15 +99,10 @@ def _first_parse_difference(
 def _word_start(rendered: str, offset: int) -> int:
     """The start of the word the character at ``offset`` belongs to.
 
-    The append-only render's wrap cut: a re-parse can change a word's width,
-    and a word's width is what decides whether the *preceding* row kept it, so
-    every row from the changed word's start on is rebuilt -- plus the one row
-    that tried to keep it, which the caller reserves (the cut is answered for
-    the word, not for the row).  A ``offset`` past the end means "the word
-    appended after the text", a whitespace tail means the word after it does
-    not exist yet: both answer the text's end, so the rows before it are the
-    ones kept.  Offsets are into the **tab-normalized rendered text** the
-    spans live in.
+    The append-only wrap cut: a changed word width can move the break before
+    it, so rows from this word on (plus the preceding row) are rebuilt.
+    Offsets index the tab-normalized rendered text; whitespace-only tails
+    answer the text's end.
     """
     if not rendered:
         return 0
@@ -135,23 +119,10 @@ def _word_start(rendered: str, offset: int) -> int:
 class _Paragraph:
     """One paragraph's last render, plus the append-only growth rule.
 
-    The component's memory of the **tail** block when that block was claimed
-    by the built-in :class:`~.blocks.ParagraphRule`: the joined text, the
-    parsed line's segments, the wrap spans and the fitted rows.  A text that
-    only grew at its end renders a suffix instead of the paragraph -- the
-    parse is a full re-scan (through the candidate-driven loop, so a literal
-    stretch costs one regex pass rather than a Python step per character),
-    but the rows before the changed region are kept as they are:
-    :func:`_first_parse_difference` finds the first character two parses
-    disagree at, :func:`_word_start` walks back to the word that owns it (a
-    changed word width can move the break in front of it), and only the rows
-    from there -- bar the one row that tried the changed word -- are rebuilt.
-
-    The memory is a *renderer* result, never a renderer input: :meth:`render`
-    always builds the rows from the text it is handed.  Every path that is
-    not a pure append -- a different text, a width the memory was not built
-    at, a shrink -- is the caller's full-render decision, and the caller
-    drops the memory when it takes it.
+    Keeps the joined text, parsed segments, wrap spans and rows.  A grown
+    text re-parses, then rebuilds only rows from the changed word onward
+    (the parse is cheap; keeping the prefix is the point).  Never consulted
+    for a different text, width or a shrink.
     """
 
     __slots__ = ("end", "rendered", "rendered_len", "rows", "segs", "spans", "start", "text")
@@ -179,13 +150,7 @@ class _Paragraph:
     def render(
         cls, text: str, width: int, ctx: RenderContext, previous: _Paragraph | None = None
     ) -> tuple[list[Line], _Paragraph]:
-        """The rows for ``text`` and the memory to keep: full or suffix render.
-
-        ``previous`` is the memory of the same paragraph's earlier render
-        (the caller has checked that the block, the width and the growth
-        still line up); an unchanged text answers the very same rows, a
-        grown one answers the suffix render, anything else renders whole.
-        """
+        """The rows for ``text`` and the memory to keep: full or suffix render."""
         if previous is not None:
             if previous.text == text:
                 return list(previous.rows), previous
@@ -198,7 +163,6 @@ class _Paragraph:
     def _grow(
         self, text: str, width: int, ctx: RenderContext
     ) -> tuple[list[Line], _Paragraph] | None:
-        """The appended-text path, or ``None`` when ``text`` is not a growth."""
         if not text.startswith(self.text):
             return None
         line = Line(inline_segments(text, ctx))
@@ -227,33 +191,12 @@ class _Paragraph:
 class _StreamCache:
     """One Markdown render answer, and the append-only reuse rule.
 
-    Holds the last ``(text, width, code_wrap)`` render: its rows, the source
-    lines they came from, ``boundaries`` -- the ``(end, rows so far)`` pair the
-    block loop recorded for every block -- and the claiming rule of each
-    block in the same order.  :meth:`render` answers a new key one of
-    three ways:
-
-    * an unchanged key returns a copy of the cached rows;
-    * a text that only *grew* past its last line re-renders just the tail
-      block and splices the cached prefix on (:meth:`_resume`), which for a
-      tail block claimed by the built-in paragraph rule goes further and
-      re-renders only the paragraph's changed suffix (:class:`_Paragraph`):
-      a paragraph streaming in word by word costs the same per frame whatever
-      landed before it (render-cost W4);
-    * anything else -- a different width, a shrink, a mid-string change --
-      renders the whole document and replaces the entry.
-
-    One entry per component: a streaming working set, not a history.  The
-    rows are the component's private copy -- every hand-out is a copy,
-    because the viewport treats a returned list as its own.
-
-    The reuse is sound because the :class:`~.blocks.BlockRule` protocol has
-    a rule classify from its cursor over the lines it consumes -- it reads
-    nothing before its start and nothing past its end -- so a render that
-    opens mid-buffer at a completed boundary sees for its tail exactly what a
-    whole-buffer render sees.  The boundary and rule of every block before
-    the tail are kept, so the tail block is re-rendered from **its own**
-    start: every earlier block's rows are the very same objects.
+    Holds the last ``(text, width, code_wrap)`` render, its source lines,
+    block boundaries and claiming rules.  An unchanged key returns the rows;
+    a pure growth re-renders only the tail block (a paragraph may re-render
+    only its changed suffix); anything else renders whole.  Reuse is sound
+    because a rule reads only the lines it consumes.  Every hand-out is a
+    copy.
     """
 
     __slots__ = (
@@ -288,7 +231,6 @@ class _StreamCache:
     def render(
         self, text: str, width: int, ctx: RenderContext, gap: int
     ) -> list[Line]:
-        """The rows for ``(text, width)``, reusing the cached prefix when sound."""
         if (
             self._primed
             and self._width == width
@@ -304,7 +246,6 @@ class _StreamCache:
     def _render_whole(
         self, text: str, width: int, ctx: RenderContext, gap: int
     ) -> None:
-        """Render the whole document from scratch and replace the entry."""
         lines = text.split("\n")
         scan = _BlockScan(lines, width, ctx, gap)
         scan.run()
@@ -322,19 +263,10 @@ class _StreamCache:
     def _resume(self, text: str, width: int, ctx: RenderContext, gap: int) -> bool:
         """The append-only path: re-render the tail, keep every earlier block.
 
-        The reuse applies only when ``text`` is the cached text plus more: a
-        shrink, or a change to any line before the last, is the caller's
-        full-render path (``False``).  The tail block -- the last block the
-        block loop recorded, whose start, rows and claiming rule are all kept
-        -- is re-rendered against the new buffer, and every block before it
-        hands back the very row objects of the cached render.  When the tail
-        block ends before the old buffer did, even its own lines did not
-        change and its rows are kept too; when it is the built-in paragraph
-        and only grew at its end, only the paragraph's changed suffix is
-        rebuilt (:meth:`_grow_paragraph`).  Nothing is ever guessed: a growth
-        the incremental paths cannot vouch for falls back to re-rendering the
-        tail block whole, and a rule that needs the lines past its recorded
-        end (an unclosed fence closing later) is simply the tail block.
+        Applies only when ``text`` is the cached text plus more (no shrink or
+        earlier-line change).  Earlier blocks keep their row objects; an
+        unchanged tail keeps its rows too, and a grown built-in paragraph
+        rebuilds only its suffix.
         """
         lines = text.split("\n")
         cached_count = len(self._lines)
@@ -407,14 +339,10 @@ class _StreamCache:
     def _rerender_from(
         self, first: int, lines: list[str], width: int, ctx: RenderContext, gap: int
     ) -> _BlockScan:
-        """Re-run the block loop from block ``first`` on, blocks before it kept.
+        """Re-run the block loop from block ``first`` on, earlier blocks kept.
 
-        The seed is exactly the state the loop had when it finished block
-        ``first - 1``: the rows and boundaries of every earlier block (their
-        lines are unchanged, and a rule classifies and renders from its own
-        slice, so their rows -- the very objects -- stand) and the source line
-        where block ``first`` begins.  ``first <= 0`` re-renders the whole
-        document through the same door.
+        The seed is the loop state after ``first - 1``: earlier rows,
+        boundaries and rules plus the line where ``first`` begins.
         """
         if first <= 0:
             start, rows, boundaries, rules = 0, [], [], []
@@ -441,20 +369,10 @@ class _StreamCache:
     ) -> bool:
         """Re-render the tail paragraph through its memory; ``False`` declines.
 
-        Only reachable through :meth:`_resume`, whose checks have already
-        pinned the buffer: every line before the last is unchanged and the
-        last is a prefix-extension.  The fast path additionally needs the
-        tail block to be the **built-in** paragraph (``type(...) is``, not a
-        subclass) and to end exactly where the buffer did -- the paragraph is
-        then extended from its own start over the new lines, and that extent
-        is *computed here* (blank line or a claim of another rule ends it,
-        the same two checks the block loop makes), not guessed.  With a
-        memory of the same paragraph only the changed suffix re-parses and
-        re-wraps; without one (the first growth after a full render) the
-        paragraph renders whole -- exactly once, and the memory is kept for
-        the next growth.  Any shape that is not a clean extension declines
-        (``False``): the tail block then re-renders whole through the generic
-        path rather than guess.
+        Needs the tail block to be the built-in paragraph ending at the old
+        buffer's end and no rule able to claim the grown line.  With a memory
+        only the changed suffix re-parses; without one the paragraph renders
+        whole once and keeps the memory.  Any other shape declines.
         """
         if not self._rules or type(self._rules[-1]) is not ParagraphRule:
             return False
@@ -559,13 +477,8 @@ class _StreamCache:
 def _span_index(rows: Sequence[Line]) -> list[list[tuple[str, int, int]]]:
     """The action spans of ``rows``: one ``(action, start, end)`` list per row.
 
-    The index :meth:`Markdown.on_click` / :meth:`Markdown.on_hover` read, so the
-    hit testing never re-walks the segments: derived in display columns (the
-    :attr:`~motui.kernel.cell.Segment.width` walk, left-closed and
-    right-open, exactly what :func:`~motui.kernel.cell.action_at` answers
-    per row) from the rows a render just produced.  The rules are not asked:
-    whatever a rule hangs on a segment's ``action`` turns up here, the
-    built-in link rule included.
+    Display-column, left-closed and right-open, matching
+    ``kernel.cell.action_at``; derived once per render for hit testing.
     """
     index: list[list[tuple[str, int, int]]] = []
     for row in rows:
@@ -583,21 +496,10 @@ def _span_index(rows: Sequence[Line]) -> list[list[tuple[str, int, int]]]:
 def _stamp_tasks(rows: list[Line]) -> list[Line]:
     """Stamp each task marker with its flat document ordinal.
 
-    :class:`~.nested.ListRule` hangs the bare :data:`~.nested.TASK_ACTION`
-    placeholder (``"todo:"``) on a task item's box marker; this walks the
-    finished rows -- in draw order, which is the document's own order -- and
-    rewrites every placeholder as ``"todo:<i>"``, counting from zero across
-    the whole document, margins, quotes and nesting included (a task under
-    a quote or a list continuation is stamped where it draws).  The walk is
-    **after** the render cache, on the copy handed out -- the hover
-    transform's rule -- so the cached rows stay unstamped, the ``(text,
-    width)`` key and the streaming splice are untouched, and a resumed tail
-    render stamps into the same sequence a whole render produces.
-
-    The rows are Lines (immutable), so a row holding a placeholder is
-    rebuilt with each placeholder segment replaced (its style and any link
-    riding along); rows without one are the very same objects, and a
-    document with no tasks hands back its list untouched.
+    Rewrites ``TASK_ACTION`` placeholders as ``"todo:<i>"`` in draw order
+    across the whole document.  The walk runs after the cache, on the copy
+    handed out, so cached rows stay unstamped and streaming resumes match a
+    whole render.  Rows without a placeholder are returned unchanged.
     """
     ordinal = 0
     out: list[Line] | None = None
@@ -623,113 +525,17 @@ def _stamp_tasks(rows: list[Line]) -> list[Line]:
 
 
 class Markdown(ResultWidget):
-    """A Markdown document rendered as rows, rule-registry driven.
+    """A Markdown document rendered as rows, driven by a rule registry.
 
-    ``text`` is a mutable attribute (streaming text assigns to it);
-    ``render(c)`` is a pure function of ``text`` and ``c.width`` and, in
-    every mode except ``code_wrap=OVERFLOW``, never returns a row wider than
-    ``width`` (the OVERFLOW document hands its natural width out for a
-    horizontal scroll container).  The last answer lives in one
-    :class:`_StreamCache` entry keyed on the ``(text, width)`` pair, so a
-    document re-rendered every frame (the viewport re-renders an open block
-    on every layout) parses once, not once per frame -- the cache is
-    invisible: a repeated call hands back a copy of the very same rows.  A
-    text that only *grew* does better still: the tail block re-renders and
-    splices onto the cached rows -- for a paragraph, only the suffix that
-    changed re-parses and re-wraps (:class:`_Paragraph`) -- so a reply
-    streaming in line by line renders its new words and nothing else, at a
-    per-frame cost that does not grow with what already landed.  The stamped
-    rows and the span index are remembered with the render they describe, so
-    a hit frame rebuilds neither (:func:`_stamp_tasks` / :func:`_span_index`).
-    Every mutable input touches the widget -- ``text``/``max_width`` and the
-    rest through ``Widget.__setattr__``, ``code_wrap`` and ``hover_at``
-    explicitly -- so a block's
-    row cache follows a max-width change, a task-mark change or a hover on
-    a sealed document.
-    ``block_rules`` / ``inline_rules`` replace the built-in registries
-    (:data:`BLOCK_RULES` / :data:`INLINE_RULES` are immutable tuples; the
-    defaults are copied per component, and the block registry must end with
-    a paragraph-style catch-all; see :class:`~.blocks.ParagraphRule`).
-    ``theme`` (and its ``styles`` group overrides) restyles the built-in
-    rules (headings, code, quotes, list
-    markers, links and the embedded ``Table``/``Divider``); custom rules keep
-    their own styles -- they read what they need off the context they are
-    handed.  ``highlighter`` injects the fenced-code engine (anything with
-    ``highlight(code, lang) -> list[Line]``; the built-in regex highlighter
-    by default, restyled by the effective theme).  ``glyphs`` is the
-    structural
-    vocabulary every built-in rule reads: the task box's ``check_off`` /
-    ``check_on``, the list ``bullets`` and the ``quote`` bar, each seated so
-    the states share one column; empty glyphs turn a mark off (the body
-    takes the marker's seat instead).  ``gap`` sets how many blank rows
-    separate adjacent blocks (default 1, the pi reference's section breathing
-    room; a negative value degrades to 0).  ``divider_max_width`` caps
-    thematic-break rules' dividers at that many columns (default 80, the pi
-    reference's rule width; ``None`` spans the whole width).
-    ``code_wrap`` is the fenced-code row policy (``WrapMode.WORD`` by
-    default, so a long code line wraps instead of losing its tail;
-    ``ELLIPSIS`` / ``CLIP`` keep one row, ``OVERFLOW`` leaves the natural
-    width to the container).  It is a plain mutable attribute: a write
-    replaces the context's mode and drops the stream cache, and the setter touches the
-    widget so a sealed document repaints too.
-    ``max_width`` caps the document's **own** wrap width (``None`` by
-    default, no cap) -- the sibling of ``divider_max_width``, and Textual's
-    ``max-width``: the rows are wrapped at ``min(width, max_width)`` and come
-    out narrower than the painting width, never padded back up to it, since
-    a painter clears the tail past a short row.  It is a plain mutable
-    attribute, so a host can re-cap one document in place; the clamp runs
-    before the stream cache and the cache key carries the width it
-    produced, so a moved cap re-renders instead of serving the other
-    width's rows.  Blank input
-    rows are dropped: the source's own blank lines never add spacing beyond
-    one gap, and ``gap=0`` restores the old direct stacking (no blank rows
-    between blocks).
-
-    **Inline links are clickable spans.**  A ``[label](url)`` run carries the
-    url as its ``Segment.link`` (the terminal gets a real OSC 8 hyperlink)
-    and as its ``Segment.action``, so the component is ``hoverable`` and
-    ``clickable`` over its **last render's** row table:
-    ``on_click(pos)`` leaves the url of the span the cell hit pending
-    (the host reads it once through :meth:`take`) and answers
-    ``True`` -- a cell off every span declines -- and ``on_hover(pos)``
-    remembers the span under the pointer, answering whether the render
-    changed.  The span index (row -> ``(action, start, end)``, columns as
-    :func:`~motui.kernel.cell.action_at` reports them) is derived from
-    the rows once per render, after the cache and never inside it; the hover
-    is a **post-transform of those cached rows** (the hit row is rebuilt with
-    the theme's ``surfaces.hover`` merged onto the span), so the ``(text, width)``
-    cache key and the row cache itself stay hover-free -- and a document with
-    no pointer on it renders byte-for-byte what it always did.
-
-    **Task lists** are the same door with a different payload.  A bullet
-    item whose content opens with ``[ ]`` / ``[x]`` (one space, GFM's rule)
-    renders its bullet as a one-column box -- ``glyphs.check_off`` /
-    ``glyphs.check_on`` -- and the whole
-    ``"\\u2610 "`` seat run is one action span whose
-    payload is ``"todo:<flat index>"``: the index of the task among the
-    document's tasks, counting from zero in draw order across every list,
-    margin and nesting level.  The rule layer is stateless, so it hangs the
-    bare placeholder and :func:`_stamp_tasks` writes the ordinal onto the
-    finished rows after the cache (the hover rule's shape: cache untouched,
-    streaming resume unaffected).  A click on the box leaves the payload
-    pending -- read once through :meth:`take` -- and the *host* owns
-    the rest of the loop, because ``text`` is the host's::
-
-        result = md.take()
-        if result and result.startswith("todo:"):
-            index = int(result.removeprefix("todo:"))
-            md.text = toggle_task(md.text, index)   # the host's own rewrite
-
-    ``toggle_task`` scans the source lines for the task markers in order
-    and flips the ``index``-th one -- the payload's flat index *is* that
-    ordinal, by construction.  The widget never rewrites ``text`` itself.
-
-    **``fences()``** is the document's fenced-code accessor: the
-    ``(lang, code)`` pairs of every top-level fence, parsed from ``text``
-    itself (never from the render cache or the last render's rows), so a
-    host can copy a code block -- ``screen.copy(code)`` -- without walking
-    the rows.  The parse is the block engine's own fence rule (see
-    :func:`~.blocks._scan_fences`).
+    ``render`` is a pure function of ``text``, width and ``code_wrap``; the
+    stream cache reuses the unchanged answer and splices a grown tail (a
+    paragraph rebuilds only its changed suffix), so streaming text costs per
+    frame what its new words cost.  ``block_rules``/``inline_rules`` replace
+    the registries; ``theme``/``styles``, ``glyphs``, ``gap``,
+    ``divider_max_width`` and ``max_width`` configure the built-ins.
+    Links and task boxes are clickable action spans: ``on_click`` leaves
+    their payload pending for :meth:`take`; ``fences()`` reads top-level
+    fences from the source text.
     """
 
     #: Inline links and task boxes take pointer clicks and paint a hover.
@@ -823,14 +629,10 @@ class Markdown(ResultWidget):
 
     @property
     def code_wrap(self) -> WrapMode:
-        """How a fenced-code row wider than the document wrap responds.
+        """How an over-wide fenced-code row responds.
 
-        ``WORD`` (the default) reflows the row, so a long code line stays
-        fully readable; ``ELLIPSIS`` / ``CLIP`` keep one row (marked / hard
-        cut) and ``OVERFLOW`` hands the natural-width row to the container.
-        A write replaces the context's mode, drops the stream cache and the
-        stamp key, and touches the widget; the fence delimiter lines are
-        single-row labels and stay ellipsized in every mode.
+        A write replaces the mode, drops the stream cache and touches the
+        widget; fence delimiter lines stay ellipsized in every mode.
         """
         return self._ctx.code_wrap
 
@@ -844,13 +646,7 @@ class Markdown(ResultWidget):
         self.touch()
 
     def _effective_theme(self) -> Theme:
-        """The theme the rules see: every non-``None`` ``styles`` group merged.
-
-        A group set on :attr:`styles` replaces the theme's whole group; a
-        ``None`` field inherits it.  With no override this is the widget's
-        own theme (``DEFAULT_THEME`` when none was given), so the common
-        path allocates nothing.
-        """
+        """The theme the rules see: every non-``None`` ``styles`` group merged."""
         if self.styles is None:
             return self._theme
         overrides = {
@@ -874,11 +670,8 @@ class Markdown(ResultWidget):
     def _sync_theme(self) -> None:
         """Re-derive the context theme when ``theme``/``styles`` moved.
 
-        The rule layer reads ``ctx.theme``, so a retheme must reach a mounted
-        document: a changed effective theme rebuilds the context (and the
-        default highlighter with it) and drops the stream cache and the
-        stamp key, so the next render parses and paints under the new bands
-        instead of serving the old rows.
+        A changed effective theme rebuilds the context and default
+        highlighter and drops the stream cache.
         """
         effective = self._effective_theme()
         if effective == self._ctx.theme:
@@ -896,47 +689,13 @@ class Markdown(ResultWidget):
         self._stamp_key = None
 
     def render(self, c: Constraints) -> Surface:
-        """The document's rows at the constrained width: a pure function of inputs.
+        """The document's rows at the constrained width.
 
-        The answer comes from
-        the component's one-entry stream cache (:class:`_StreamCache`): an
-        unchanged ``(text, width, code_wrap)`` is served as a copy, a text
-        that only grew past a sealed block boundary re-renders just its tail
-        (for a paragraph, only the suffix that changed) and splices it on,
-        anything else renders from scratch.  The returned sequence is always
-        fresh, the caller's to keep or trash.
-
-        A changed ``theme``/``styles`` effective theme is synced first
-        (:meth:`_sync_theme`): the context theme moves, the stream cache is
-        dropped, and every rule paints the new bands.
-
-        The wrap width is the constrained width clamped to :attr:`max_width`
-        when the cap is set -- ``max(0, min(width, max_width))``, so a
-        degenerate cap (``<= 0``) paints the zero-width answer instead of a
-        negative one -- and the clamp happens **before** the cache: the key,
-        the streaming splice and the three remembered walks all read the
-        clamped width, so a pane wider than the cap still hits the cache.
-        The cap never pads: the rows come out narrower than the painting
-        width and a painter clears the tail past them.  A ``max_height``
-        budget truncates the assembled rows after the hover transform (the
-        cache key stays the width, never the budget).  With
-        ``code_wrap=OVERFLOW`` a row wider than the painting width hands the
-        whole document its natural width (``max(c.width, widest row)``) and
-        the answer is :meth:`~motui.kernel.cell.Surface.of` with
-        ``pad=False``; every other mode -- the default ``WORD`` included --
-        answers :meth:`~motui.kernel.cell.Surface.clipped` and keeps the old
-        bytes.
-
-        Three passes sit **around** the cache, never inside it, and the first
-        two are remembered with the ``(text, width)`` render they describe
-        (render-cost W4: rebuilding them was the frame's cost on every hit):
-        the task markers' flat ordinals are stamped onto the rows
-        (:func:`_stamp_tasks`), the span index of the stamped rows is derived
-        (:func:`_span_index` -- the table ``on_click`` / ``on_hover`` hit-test
-        against), and the hovered span, when the pointer is on one, is merged
-        into its row of the returned copy.  The remembered rows stay
-        hover-free and unstamped by the hover, so the cache's key and the
-        streaming splice are exactly what they were.
+        The width is clamped to :attr:`max_width` before the stream cache,
+        which serves unchanged answers, splices grown tails and otherwise
+        renders whole.  Task ordinals and the span index are derived once
+        per ``(text, width, code_wrap)``; the hovered span is merged into the
+        returned copy.  ``OVERFLOW`` widens the surface to the content.
         """
         self._sync_theme()
         paint = (
@@ -969,25 +728,10 @@ class Markdown(ResultWidget):
     def fences(self) -> list[tuple[str, str]]:
         """The document's top-level fences as ``(lang, code)`` pairs.
 
-        Parsed from :attr:`text` itself -- never from the render cache or the
-        last render's rows -- with the block engine's own fence rule
-        (:class:`~.blocks.FenceRule`; the shared scanner is
-        :func:`~.blocks._scan_fences`): a line whose first non-space run is
-        backticks opens a fence, the next such line closes it, the info
-        string's first word is the language tag (``""`` when the fence
-        carries none), and an unclosed fence runs to the end of the
-        document -- the same streaming-safe shape the rule renders.  A
-        fence inside a quote body (``> ``` ``) or a list continuation is
-        that inner document's, not a top-level line, and is not listed.
-        ``code`` is the body's source lines joined with ``"\\n"`` (no
-        trailing newline) -- exactly what the rule hands the highlighter --
-        and the pairs come in source order.  A host may walk the list for a
-        picker -- each pair is the fence's language and its code.
-
-        The parse is remembered per text value (it is a pure function of the
-        text, and a streaming host may call this on every frame), and the
-        answer is a fresh list of the remembered pairs: the caller owns it,
-        the memory keeps its own.
+        Parsed from :attr:`text` by the block engine's fence rule: info
+        string's first word is the language, an unclosed fence runs to the
+        end, and fences nested in quotes or lists are excluded.  Memoized
+        per text; the caller owns the returned list.
         """
         if self._fences_text != self.text:
             self._fences = _scan_fences(self.text)
@@ -995,13 +739,9 @@ class Markdown(ResultWidget):
         return list(self._fences)
 
     def on_hover(self, pos: Pos | None) -> bool:
-        """Mark the cell under the pointer; answer whether the render changed.
+        """Mark the action span under the pointer; True when the render changed.
 
-        ``None`` (the pointer left) clears the mark.  The cell resolves
-        against the span index of the last render: a column inside a span
-        remembers ``(row, start, end)``, anything else -- plain prose, a
-        column past the row -- clears it.  The answer is whether that span
-        differs from the one remembered, exactly when the frame repaints.
+        ``None`` clears it; cells outside a span clear it too.
         """
         hit = None if pos is None else self._hit(pos.y, pos.x)
         span = None if hit is None else (pos.y, hit[1], hit[2])
@@ -1012,14 +752,7 @@ class Markdown(ResultWidget):
         return changed
 
     def on_click(self, pos: Pos) -> bool:
-        """Leave the span's action under ``pos`` pending; hit?
-
-        A cell on a link (or any other action-carrying run a custom rule
-        renders) leaves that payload pending for the host to read once
-        through :meth:`take`, and answers ``True``; a cell anywhere else --
-        plain prose, a column outside the row -- answers ``False`` and
-        consumes nothing.
-        """
+        """Leave the action under ``pos`` pending; ``False`` off every span."""
         hit = self._hit(pos.y, pos.x)
         if hit is None:
             return False
@@ -1027,7 +760,6 @@ class Markdown(ResultWidget):
         return True
 
     def _hit(self, row: int, col: int) -> tuple[str, int, int] | None:
-        """The action span at ``(row, col)``, off the last render's index."""
         if 0 <= row < len(self._acts):
             for action, start, end in self._acts[row]:
                 if start <= col < end:
