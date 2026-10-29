@@ -28,6 +28,13 @@
   `Tree.nodes` / `TreeNode.open`；`Tabs/MenuBar/NavList.items` 与
   `activate()`/`take()`；`ComboBox.open` 是 bool property，删除
   `is_open`/`open()`/`close()`。
+- W5：`SurfaceStyles` 增加 `control/accent/danger/inactive`；
+  `ControlStyles` 只保留 `hover/focus/active/disabled` 与 `overlay()`；
+  `ButtonKind`（NEUTRAL/PRIMARY/GHOST/DANGER）从 `motui.widgets` 导出；
+  `ButtonSpec.danger` → `ButtonSpec.kind`；Dialog 内部行铺
+  `surfaces.raised`；Input/Editor 每行铺 `surfaces.control`；Link/Tabs/
+  MenuBar 的 focus 可见；`Theme.flat()` 覆盖新 token。semantic golden
+  只改 SGR，9/9 场景行文本不变。
 - 本组 wave 的 handoff 已随分支提交。
 
 

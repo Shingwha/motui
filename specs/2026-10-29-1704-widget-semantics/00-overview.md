@@ -183,7 +183,7 @@ uv run python tools/framebench.py
 - [x] W4a（`617377b` 合并，`ae2e88d` CursorWidget 扩展）
 - [x] W4b（`2eb381f` 合并，`57efe5f` take 契约修正）
 - [x] W4c（`01266d2` 合并）
-- [ ] W5
+- [x] W5（`fcc0108` 合并）
 - [ ] W6
 - [ ] W7
 - [ ] W8
