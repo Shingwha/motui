@@ -43,10 +43,11 @@ CheckboxGroup/ComboBox/ContextMenu/RadioGroup/Tabs/TreeNode 及 facade 镜像）
    band 由 `_cursor_armed` 决定。`select/move/home/end/on_click/index setter`
    先 `_arm()`（首次 arm 会 `touch()`，保证 memo 重建）；`activate` 要求
    armed。行是构造时的副本，`take()` 返回 `table.rows[index]`。
-2. **Select.take 仍返回 Option**，不是 interfaces §5 的 value：禁触的
-   `CommandPalette` 读 `option.value`，`tests/app/test_focus.py` 断言
-   `take() == Option("one")`。RadioGroup 的 `_chosen_of` 返回 value，所以
-   `RadioGroup.take()` 是 payload/label；`selected` 一律 Option。
+2. **Select.take 返回 Option（已被 lead 修正）**：原实现让 `Select.take()`
+   返回 Option，以迁就 `CommandPalette`；lead 按 interfaces §5 改为返回
+   option 的 value（`_chosen_of` → `_option_value`），并同步
+   `command_palette.py` 与相关断言。RadioGroup 的 take 本来就是 value；
+   `selected` 一律 Option。
 3. **ComboBox** 改为 `ResultWidget`；`open` 是可读写 property（`_open`），
    setter 打开时清 pick + 重算窗口 + `set_query`，关闭只隐藏（不吞掉刚 emit
    的 pick）。`toggle()` 恒 True；`activate()` 关闭时打开、打开时 `_take()`。

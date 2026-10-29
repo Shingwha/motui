@@ -174,9 +174,9 @@ def test_a_disabled_row_refuses_selection_and_moves_step_over_it():
 
 def test_movement_clears_a_pending_result_and_activation_writes_one():
     menu = Select(THREE)
-    assert menu.on_action("activate") is True and menu.take() == Option("one")
+    assert menu.on_action("activate") is True and menu.take() == "one"
     assert menu.move(1) is True and menu.take() is None
-    assert menu.on_action("activate") is True and menu.take() == Option("two")
+    assert menu.on_action("activate") is True and menu.take() == "two"
 
     listing = List(["a", "b"])
     assert listing.on_action("activate") is True and listing.take() == "a"
@@ -327,7 +327,7 @@ def test_context_menu_spells_out_the_menu_knobs():
     menu = ContextMenu(THREE)
     assert menu.wrap is True and menu.window is False
     assert not hasattr(menu, "commit")
-    assert menu.on_action("activate") is True and menu.take() == Option("one")
+    assert menu.on_action("activate") is True and menu.take() == "one"
 
 
 def test_the_combo_open_is_an_assignable_bool_state():
@@ -347,7 +347,7 @@ def test_the_autocomplete_tail_and_filter_contract():
     auto = Autocomplete([Option("Alpha"), Option("beta")])
     auto.set_query("AL")
     assert auto.selected == Option("Alpha")
-    assert auto.on_action("activate") is True and auto.take() == Option("Alpha")
+    assert auto.on_action("activate") is True and auto.take() == "Alpha"
     auto.set_query("zzz")
     assert auto.selected is None and auto.is_empty is True
     assert auto.on_action("activate") is False

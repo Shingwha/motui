@@ -245,16 +245,12 @@ class ComboBox(ResultWidget):
 
     def _take(self) -> None:
         """The ``enter``: the highlighted option's value, its label back in the field."""
-        if not self.list.on_action("activate"):
+        option = self.list.selected
+        if option is None or not self.list.on_action("activate"):
             self._clear_result()  # nothing matched: the empty pick
             self.open = False
             return
-        option = self.list.take()  # the menu's one-shot pick is the combo's to carry
-        if not isinstance(option, Option):
-            self._clear_result()
-            self.open = False
-            return
-        self._emit(option.value if option.value is not None else option.label)
+        self._emit(self.list.take())
         self.input.clear()
         self.input.insert(option.label)
         self.list.set_query(self.input.text)  # the filter follows the field's new text

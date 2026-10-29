@@ -405,13 +405,8 @@ class Select(CursorWidget):
         return self.glyphs.check_on, self.glyphs.check_off
 
     def _chosen_of(self, option: Option) -> object:
-        """What a chosen row leaves pending: the :class:`Option` itself.
-
-        The seam :meth:`activate` writes through: a menu carries the whole
-        option, and a variant that speaks values narrows it
-        (:class:`RadioGroup`).
-        """
-        return option
+        """What a chosen row leaves pending: the option's value (label if none)."""
+        return _option_value(option)
 
     def _description_column(self) -> int:
         """The column every description starts at (0 when none is set).

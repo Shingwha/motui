@@ -36,7 +36,7 @@ def _pick_combo(combo: ComboBox) -> bool:
 @pytest.mark.parametrize(
     ("build", "activate", "expected"),
     [
-        (lambda: Select(THREE), lambda widget: widget.on_action("activate"), Option("one")),
+        (lambda: Select(THREE), lambda widget: widget.on_action("activate"), "one"),
         (lambda: List(["a"]), lambda widget: widget.on_action("activate"), "a"),
         (lambda: Form([]), lambda widget: widget.on_action("activate"), {}),
         (lambda: ComboBox(OPTIONS), _pick_combo, "autocomplete"),

@@ -110,7 +110,7 @@ def test_context_menu_is_the_wrap_and_activate_select_preset():
     assert isinstance(menu, Select)
     assert menu.wrap is True and menu.window is False
     assert menu.select(1) is True
-    assert menu.on_action("activate") is True and menu.take() == Option("Save", "save")
+    assert menu.on_action("activate") is True and menu.take() == "save"
     assert menu.take() is None
 
 
@@ -118,7 +118,7 @@ def test_context_menu_renders_its_title_and_moves_over_its_rows():
     menu = ContextMenu([Option("Open"), Option("Quit")], title="File")
     assert texts(menu, 20) == ["File", "\u2192 Open", "  Quit"]
     assert menu.select(1) is True
-    assert menu.on_action("activate") is True and menu.take() == Option("Quit")
+    assert menu.on_action("activate") is True and menu.take() == "Quit"
 
 
 # -- the 2.0 keymap and action surface ----------------------------------------
@@ -171,4 +171,4 @@ def test_the_menubar_declares_its_capabilities():
 def test_the_context_menu_inherits_the_choice_keymap():
     menu = ContextMenu([Option("Open"), Option("Quit")])
     assert menu.on_key(key("down")) is True and menu.index == 1
-    assert menu.on_action("activate") is True and menu.take() == Option("Quit")
+    assert menu.on_action("activate") is True and menu.take() == "Quit"

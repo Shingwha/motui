@@ -183,7 +183,7 @@ def test_activate_leaves_the_cursor_option_pending_once():
     menu = Select(THREE)
     menu.index = 1
     assert menu.on_action("activate") is True
-    assert menu.take() == Option("two")
+    assert menu.take() == "two"
     assert menu.take() is None
 
 
@@ -205,7 +205,7 @@ def test_a_move_or_a_click_does_not_write_a_pick():
     assert menu.take() is None
     assert menu.move(1) is True and menu.take() is None
     assert menu.on_click(Pos(x=0, y=2)) is True and menu.take() is None
-    assert menu.on_action("activate") is True and menu.take() == Option("three")
+    assert menu.on_action("activate") is True and menu.take() == "three"
 
 
 def test_a_disabled_select_refuses_every_gesture_but_still_renders():
@@ -398,7 +398,7 @@ def test_the_choice_keymap_routes_its_keys_through_named_actions():
     assert menu.on_action("nope") is False
     assert menu.on_key(key("right")) is True and menu.index == 1
     assert menu.on_key(key("enter")) is False  # the focus layer owns enter
-    assert menu.on_action("activate") is True and menu.take() == THREE[1]
+    assert menu.on_action("activate") is True and menu.take() == "two"
     assert not hasattr(Select, "handle")
     assert Select.keymap["down"] == "next"
     assert "enter" not in Select.keymap
