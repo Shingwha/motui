@@ -1,7 +1,26 @@
 # 目标接口契约（2.1.2）
 
-> 状态：草案。lead 在每波合并后把本节改成“已落地”并记录偏差。
+> 状态：W1–W3 已落地（main `314c973`，1700 tests / semantic 9/9 / render-hash
+> 不变）。W4a 起按本文件继续；每波合并后 lead 更新“已落地”标记与偏差。
 > 真相优先级：代码与测试 > handoff > 本文件。本文件是意图，不是现状。
+
+## 0. 已落地（W1–W3）
+
+- `Line.overlay(base)` / `Surface.overlay(base)` 已在 `kernel/cell.py`。
+  实现偏差：顶层非透明 cell 压到双宽 glyph 的任一半时，**整个底层 glyph**
+  被擦除，未覆盖列变成该 glyph 样式的单列空白；透明顶层保留整字。
+  `Surface.overlay` 用 `Surface.of` 归一化（行宽恰好为 max）。
+- `Stack(children, *, theme, styles)` / `Align(child, *, horizontal,
+  vertical, theme, styles)` 已从 `motui.widgets` 导出。实现偏差：`Align`
+  的“实际尺寸”取行数 × 最宽行（不是 `Surface.width`），因为 `Text`/`Rows`
+  合法返回短行；`Stack.child_at` 交互优先，全部非交互时回退最顶层。
+- `Drawing` 已在 `widgets/drawing.py`，但**尚未从 `motui.widgets` 导出**；
+  W4a 决定是否公开。`Canvas`/`PixelCanvas` 已继承它；`Canvas.marker` →
+  `plot_marker`；两者不再接受 `styles`；`PixelCanvas.palette=None` 时
+  `PixelPalette.from_theme(theme)`。
+- 本组 wave 的 `handoff/W1-zcode.md`、`W2-zcode.md`、
+  `W3-deepseek-v4.1-flash.md` 已随分支提交。
+
 
 ## 1. 类层次
 

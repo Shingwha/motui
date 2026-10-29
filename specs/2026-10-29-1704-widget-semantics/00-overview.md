@@ -176,9 +176,9 @@ uv run python tools/framebench.py
 ## 状态
 
 - [x] W0 spec 组
-- [ ] W1
-- [ ] W2
-- [ ] W3
+- [x] W1 kernel overlay（`2bda31a` 合并）
+- [x] W2 Stack/Align（`2bda31a` 合并）
+- [x] W3 Drawing（`11a4d28` 合并，`314c973` 对账）
 - [ ] W4a
 - [ ] W4b
 - [ ] W4c
