@@ -405,7 +405,7 @@ attributes are removed. `Table.index` is always an `int` (never `None`),
 | `first` / `last` | `home()` / `end()` |
 | `page_prev` / `page_next` | `move(-_page_size(...))` / `move(+_page_size(...))` |
 | `activate` / `toggle` | the matching verb; the only writers of a pending result |
-| `open` / `close` | set `open` where the state exists; otherwise `False` |
+| `open` / `close` | fold the `Tree` node under the cursor; a widget without that action answers `False` |
 
 A state change (`select`, `move`, `home`, `end`, open/close, a cursor
 click) clears a pending result. A disabled control, a disabled row and an
