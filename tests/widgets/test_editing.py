@@ -10,7 +10,7 @@ from dataclasses import replace
 import pytest
 
 from motui.kernel.geom import Pos
-from motui.kernel.keymap import DEFAULT_EDITOR_KEYMAP
+from motui.kernel.keymap import DEFAULT_EDITOR_KEYMAP, DEFAULT_INPUT_KEYMAP
 from motui.kernel.layout import Constraints
 from motui.kernel.style import Style
 from motui.kernel.text import WrapMode
@@ -762,3 +762,8 @@ def test_a_constructor_keymap_is_copied_too():
     field.keymap["x"] = "newline"
     assert "x" not in custom
     assert field.on_key(key("c-j")) is True and field.text == ""
+
+    rebuilt = Input()
+    rebuilt.keymap["c-j"] = "clear"
+    assert rebuilt.keymap is not DEFAULT_INPUT_KEYMAP
+    assert "c-j" not in DEFAULT_INPUT_KEYMAP

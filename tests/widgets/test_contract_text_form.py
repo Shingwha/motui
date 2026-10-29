@@ -155,6 +155,8 @@ def test_form_selected_is_the_field_and_index_moves_the_focus():
     assert form.selected.name == "b"
     assert form.move(1) is False
     assert form.focus("a") is True and first.focused is True
+    assert form.move(1) is True and form.index == 1
+    assert form.move(-1) is True and form.index == 0
     assert form.focus("missing") is False and form.index == 0
     assert form.index == 0 and form.selected.name == "a"
 
