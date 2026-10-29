@@ -392,6 +392,33 @@ class Line:
             pos = seg_end
         return Line(segments) if spanned else self
 
+    def overlay(self, base: Line) -> Line:
+        """Paint this row on top of ``base``, one cell at a time.
+
+        The 2.0 composition primitive: ``self`` is the top layer and
+        ``base`` the bottom.  A **transparent** cell -- a plain unstyled
+        space carrying neither a link nor an action -- keeps the cell under
+        it; every other cell replaces the base cell, its style merged as
+        ``base_style.merge(top_style)`` (the underlying color shows through,
+        the top layer's attributes win) and its ``link``/``action`` taken
+        from the top.  The answer is as wide as the wider row; the short
+        side is treated as blank, so a top cell past the base's end simply
+        starts from ``Style()``.
+
+        Wide characters are composed as whole clusters, never as columns: a
+        non-transparent top cell overlapping any part of a double-wide base
+        glyph replaces the **entire** glyph, and a cluster that straddles
+        the top cell's span leaves blank cells (in the erased glyph's style)
+        instead of a dangling continuation.  Transparent cells preserve the
+        whole base glyph.  A top row with no visible cell -- ``Line()`` or
+        one made only of transparent cells -- returns ``base`` itself (padded
+        when the top row is wider), so an empty overlay layer costs nothing.
+        """
+        top_cells = _line_cells(self)
+        if not any(not _transparent(cell) for cell in top_cells):
+            return base if base.width >= self.width else base.pad(self.width)
+        return _paint_cells(top_cells, _line_cells(base))
+
     # -- the 2.0 width vocabulary -----------------------------------------
 
     def reflow(self, mode: WrapMode, width: int) -> list[Line]:
@@ -510,6 +537,165 @@ def _fit_prefix(text: str, width: int) -> str:
         else:
             break
     return taken
+
+
+@dataclass(frozen=True, slots=True)
+class _CellRun:
+    """One printing cell of a line: a whole grapheme cluster and its width.
+
+    The overlay walk works in cells, not segments, so a wide glyph is one
+    unit that is replaced or preserved whole.  Zero-width text is folded into
+    the neighbouring cluster's ``text``: it paints nothing, so carrying it
+    along is enough for a rebuild to preserve it.
+    """
+
+    text: str
+    width: int
+    style: Style
+    link: str | None = None
+    action: str | None = None
+
+
+def _line_cells(line: Line) -> list[_CellRun]:
+    """``line`` decomposed into one :class:`_CellRun` per printing cell.
+
+    Segments are split through the kernel's one cluster scanner
+    (:func:`motui.kernel.text._cell_spans`), so the boundaries the overlay
+    composes on are the boundaries the measure and the cut already use.  A
+    run's style and payloads come from its segment; zero-width characters
+    between clusters ride on the preceding cluster of the same segment.  A
+    segment holding only non-printing characters contributes no cell.
+    """
+    cells: list[_CellRun] = []
+    for seg in line.segments:
+        text = seg.text
+        if not text:
+            continue
+        first = len(cells)
+        pos = 0
+        pending = ""
+        for start, end, width in _cell_spans(text):
+            gap = text[pos:start]
+            if len(cells) > first:
+                last = cells[-1]
+                cells[-1] = _CellRun(
+                    last.text + gap,
+                    last.width,
+                    last.style,
+                    last.link,
+                    last.action,
+                )
+            else:
+                pending += gap
+            cells.append(
+                _CellRun(
+                    pending + text[start:end],
+                    width,
+                    seg.style,
+                    seg.link,
+                    seg.action,
+                )
+            )
+            pending = ""
+            pos = end
+        if len(cells) > first and pos < len(text):
+            last = cells[-1]
+            cells[-1] = _CellRun(
+                last.text + text[pos:],
+                last.width,
+                last.style,
+                last.link,
+                last.action,
+            )
+    return cells
+
+
+def _transparent(cell: _CellRun) -> bool:
+    """Whether ``cell`` lets the layer below show through.
+
+    The exact rule from the composition contract: a plain space with the
+    default style and no inline payloads.
+    """
+    return (
+        cell.text == " "
+        and cell.style == Style()
+        and cell.link is None
+        and cell.action is None
+    )
+
+
+def _paint_cells(top: list[_CellRun], base: list[_CellRun]) -> Line:
+    """Compose top cells over base cells into a fresh row.
+
+    Columns are addressed through ``base_slots`` (one base cell index per
+    column).  A non-transparent top cell picks the base style under its
+    first column, removes every base cell it touches -- wide glyphs whole --
+    and keeps its own glyph and payloads.  Leftover columns of an erased
+    wide glyph become one-column blanks in that glyph's style, so no
+    continuation is ever left dangling and an underlying band stays
+    continuous.  The output is fused back into runs by equal style and
+    payload, which keeps an untouched row equal to its input.
+    """
+    starts: list[int] = []
+    slots: list[int] = []
+    for index, cell in enumerate(base):
+        starts.append(len(slots))
+        slots.extend([index] * cell.width)
+    # A base cell with width 0 would occupy no slot; the scanner never
+    # yields one, so ``slots`` and ``base`` stay aligned.
+    total = len(slots)
+    top_width = 0
+    for cell in top:
+        top_width += cell.width
+    if top_width > total:
+        total = top_width
+
+    placements: dict[int, _CellRun] = {}
+    removed: set[int] = set()
+    pos = 0
+    for cell in top:
+        if not _transparent(cell):
+            base_style = (
+                base[slots[pos]].style if pos < len(slots) else Style()
+            )
+            placements[pos] = _CellRun(
+                cell.text,
+                cell.width,
+                base_style.merge(cell.style),
+                cell.link,
+                cell.action,
+            )
+            for col in range(pos, min(pos + cell.width, len(slots))):
+                removed.add(slots[col])
+        pos += cell.width
+
+    out: list[_CellRun] = []
+    col = 0
+    while col < total:
+        placed = placements.get(col)
+        if placed is not None:
+            out.append(placed)
+            col += placed.width
+            continue
+        if col < len(slots):
+            index = slots[col]
+            cell = base[index]
+            if index not in removed:
+                # A surviving cell always starts here: a top cell that
+                # skipped its first column would have removed the whole cell.
+                out.append(cell)
+                col += cell.width
+                continue
+            out.append(_CellRun(" ", 1, cell.style))
+            col += 1
+            continue
+        out.append(_CellRun(" ", 1, Style()))
+        col += 1
+    return Line(fuse(
+        Segment(cell.text, cell.style, link=cell.link, action=cell.action)
+        for cell in out
+        if cell.text
+    ))
 
 
 def rest(row: Line, width: int, band: Style) -> Line:
@@ -727,6 +913,26 @@ class Surface:
     def height(self) -> int:
         """Number of rows in the surface."""
         return len(self.rows)
+
+    def overlay(self, base: Surface) -> Surface:
+        """Paint this surface on top of ``base``, row by row.
+
+        The block form of :meth:`Line.overlay`: the result spans the wider
+        and taller of the two blocks, a missing row counts as an empty one,
+        and each row is composed by the row method.  The answer is
+        normalized through :meth:`Surface.of`, so every row is at most --
+        and, by that builder's contract, exactly -- ``max(width)`` columns
+        and neither input is modified.  ``self`` is the top layer.
+        """
+        width = max(self.width, base.width)
+        height = max(self.height, base.height)
+        rows = [
+            (
+                self.rows[index] if index < self.height else Line()
+            ).overlay(base.rows[index] if index < base.height else Line())
+            for index in range(height)
+        ]
+        return Surface.of(rows, width)
 
     # -- sequence protocol -------------------------------------------------
 

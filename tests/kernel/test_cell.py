@@ -14,6 +14,7 @@ import pytest
 from motui.kernel.cell import (
     Line,
     Segment,
+    Surface,
     action_at,
     cut_line,
     fuse,
@@ -494,3 +495,84 @@ def test_painted_bytes_never_carry_an_injected_sequence():
     Painter(screen).paint(Viewport(doc).layout(80, 6))
     for injected in ("\x1b[?1000l", "\x1b[?1006l", "\x1b]52;", "\x1b]0;"):
         assert injected not in screen.output, injected
+
+
+# -- overlay composition -----------------------------------------------------
+
+
+def test_a_blank_top_row_keeps_the_base_row_unchanged():
+    base = Line((Segment("a", ACCENT), Segment("bc", MUTED)))
+    assert Line().overlay(base) is base
+    assert Line.from_text("   ").overlay(base) == base
+    # A wider blank top pads the base rather than replacing anything.
+    assert Line.from_text("     ").overlay(base) == base.pad(5)
+
+
+def test_a_top_glyph_replaces_the_base_cell_and_merges_styles():
+    base = Line((Segment("ab", ACCENT),))
+    top_style = Style(bg="#000000", underline=True)
+    merged = Line((Segment("X", top_style),)).overlay(base)
+    assert merged.text == "Xb"
+    assert merged.segments == (
+        Segment("X", ACCENT.merge(top_style)),
+        Segment("b", ACCENT),
+    )
+
+
+def test_a_styled_space_covers_the_glyph_and_keeps_the_band():
+    band = Style(bg="#123456")
+    merged = Line((Segment(" ", Style(bold=True)),)).overlay(
+        Line((Segment("ab", band),))
+    )
+    assert merged.text == " b"
+    assert merged.segments == (
+        Segment(" ", band.merge(Style(bold=True))),
+        Segment("b", band),
+    )
+
+
+def test_payloads_ride_on_top_cells_and_transparent_cells_keep_the_base():
+    base = Line((Segment("ab", Style(), link="base", action="open"),))
+    top = Line(
+        (Segment("X", Style(), link="top", action="hit"), Segment(" "))
+    )
+    assert top.overlay(base).segments == (
+        Segment("X", Style(), link="top", action="hit"),
+        Segment("b", Style(), link="base", action="open"),
+    )
+
+
+def test_overlay_width_is_the_wider_row_and_the_short_side_is_blank():
+    assert Line.from_text("abcd").overlay(Line.from_text("X")).text == "abcd"
+    wider_base = Line.from_text("X").overlay(Line.from_text("abcd"))
+    assert (wider_base.text, wider_base.width) == ("Xbcd", 4)
+    wider_top = Line.from_text("abcd").overlay(Line.from_text("X"))
+    assert (wider_top.text, wider_top.width) == ("abcd", 4)
+
+
+def test_wide_characters_are_replaced_or_kept_whole():
+    base = Line.from_text("\u4e2d")
+    # Covering either half replaces the whole glyph: a blank fills the other
+    # column, so no continuation is ever left dangling.
+    lead = Line.from_text("X").overlay(base)
+    assert (lead.text, lead.width) == ("X ", 2)
+    continuation = Line.from_text(" X").overlay(base)
+    assert (continuation.text, continuation.width) == (" X", 2)
+    # A transparent top keeps the whole base glyph.
+    assert Line.from_text("  ").overlay(base) == base
+    # A double-wide top cell covers both columns of two narrow base cells.
+    assert Line.from_text("\u4e2d").overlay(Line.from_text("ab")).text == "\u4e2d"
+
+
+def test_surface_overlay_composes_rows_and_takes_the_max_size():
+    top = Surface(width=2, rows=(Line.from_text("X"),))
+    base = Surface(width=3, rows=(Line.from_text("abc"), Line.from_text("def")))
+    merged = top.overlay(base)
+    assert (merged.width, merged.height) == (3, 2)
+    assert [row.text for row in merged.rows] == ["Xbc", "def"]
+    assert all(row.width == 3 for row in merged.rows)
+    # Missing top rows are blank: the base shows through, padded to width.
+    tall_base = Surface(width=3, rows=(Line.from_text("abc"),))
+    blank_top = Surface(width=3, rows=(Line(), Line.from_text("Y")))
+    assert [row.text for row in blank_top.overlay(tall_base).rows] == ["abc", "Y  "]
+    assert [row.text for row in tall_base.rows] == ["abc"]

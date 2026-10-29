@@ -4,17 +4,28 @@ from dataclasses import replace
 
 import pytest
 
-from motui.widgets.text import Text
 from motui.kernel.cell import Line, Surface
+from motui.kernel.document import descend
 from motui.kernel.geom import Pos
 from motui.kernel.layout import Constraints
 from motui.kernel.style import Style
 from motui.kernel.theme import DEFAULT_THEME, Styles
-from motui.widgets import Collapsible, Column, Divider, Padding, Panel, Row, Spacer
+from motui.widgets import (
+    Align,
+    Button,
+    Canvas,
+    Collapsible,
+    Column,
+    Divider,
+    Padding,
+    Panel,
+    Row,
+    Spacer,
+    Stack,
+)
 from motui.widgets.base import Container, Widget
-
+from motui.widgets.text import Text
 from tests.testing import Rows, texts
-
 
 # -- Divider ------------------------------------------------------------------
 
@@ -67,7 +78,11 @@ def test_a_borderless_panel_style_is_its_ground_under_the_child():
     ).render(Constraints(width=8))[0]
     assert all(seg.style == ground for seg in row.segments)
     themed = Panel(
-        Rows("body"), frame=False, theme=replace(DEFAULT_THEME, borders=replace(DEFAULT_THEME.borders, base=ground))
+        Rows("body"),
+        frame=False,
+        theme=replace(
+            DEFAULT_THEME, borders=replace(DEFAULT_THEME.borders, base=ground)
+        ),
     ).render(Constraints(width=8))[0]
     assert all(seg.style == Style() for seg in themed.segments)
 
@@ -88,6 +103,132 @@ def test_a_column_stacks_children_with_gaps():
 def test_containers_nest_one_level():
     nested = Row([Column([Rows("a"), Rows("b")]), Rows("x")], widths=[2, None], gap=1)
     assert texts(nested, 8) == ["a  x    ", "b       "]
+
+
+# -- Stack --------------------------------------------------------------------
+
+
+def test_a_stack_paints_children_bottom_to_top():
+    assert texts(Stack([Rows("abc"), Rows(" X ")]), 5) == ["aXc  "]
+    # A blank top row is transparent: the layer below shows through.
+    assert texts(Stack([Rows("abc"), Rows("   ")]), 5) == ["abc  "]
+
+
+def test_a_stack_merges_the_lower_style_under_a_top_cell():
+    depth = Style(fg="#123456")
+    tint = Style(bg="#654321")
+    stacked = Stack([Text("abc", style=depth), Text("X", style=tint)])
+    row = stacked.render(Constraints(width=3))[0]
+    assert row.text == "Xbc"
+    assert row.segments[0].style == depth.merge(tint)
+    assert row.segments[1].style == depth
+
+
+def test_a_stack_routes_hits_to_the_first_interactive_layer_top_down():
+    background = Canvas(5, 1)
+    button = Button("go")
+    # A non-interactive Canvas on top is not a click target: the Button
+    # below it takes the cell.
+    under_canvas = Stack([button, background])
+    under_canvas.render(Constraints(width=5, max_height=1))
+    assert under_canvas.child_at(0, 0) == (button, 0, 0)
+    # The same holds with the Button on top (the ordinary z-order case).
+    over_canvas = Stack([background, button])
+    over_canvas.render(Constraints(width=5, max_height=1))
+    assert over_canvas.child_at(0, 0) == (button, 0, 0)
+
+
+def test_a_stack_finds_a_nested_interactive_child_through_padding():
+    button = Button("go")
+    padded = Padding(button, left=1)
+    stack = Stack([padded])
+    stack.render(Constraints(width=8, max_height=1))
+    # The Stack answers the Padding layer (its child_at keeps descending)...
+    assert stack.child_at(0, 1) == (padded, 0, 1)
+    # ...and the chain reaches the Button, which is the interactive node.
+    assert descend(stack, 0, 1) == (button, 0, 0)
+
+
+def test_a_stack_hit_falls_back_to_the_topmost_containing_layer():
+    bottom, top = Rows("abc"), Rows("xyz")
+    stack = Stack([bottom, top])
+    stack.render(Constraints(width=5))
+    assert stack.child_at(0, 0) == (top, 0, 0)
+    assert stack.child_at(1, 0) is None  # below every layer
+    assert stack.child_at(0, 9) is None  # past every layer
+
+
+def test_a_stack_answers_the_blank_frame_and_the_height_budget():
+    empty = Stack([])
+    assert empty.render(Constraints(width=4)).width == 4
+    assert list(empty.render(Constraints(width=4))) == []
+    assert [row.text for row in empty.render(Constraints(width=4, max_height=2))] == [
+        "",
+        "",
+    ]
+    one = Stack([Rows("a", "b")])
+    assert [row.text for row in one.render(Constraints(width=3, max_height=1))] == ["a"]
+    assert list(one.render(Constraints(width=3, max_height=0))) == []
+
+
+def test_a_stack_is_a_container_with_adopted_children():
+    first, second = Text("a"), Text("b")
+    stack = Stack([first, second])
+    assert isinstance(stack, Container)
+    assert stack.children == [first, second]
+    assert first.parent is stack and second.parent is stack
+    assert list(stack.walk()) == [stack, first, second]
+
+
+# -- Align --------------------------------------------------------------------
+
+
+@pytest.mark.parametrize(
+    ("horizontal", "left"), [("left", 0), ("center", 2), ("right", 4)]
+)
+@pytest.mark.parametrize(
+    ("vertical", "top"), [("top", 0), ("middle", 1), ("bottom", 2)]
+)
+def test_align_places_the_child_at_each_anchor(horizontal, left, vertical, top):
+    aligned = Align(Rows("ab", "cd"), horizontal=horizontal, vertical=vertical)
+    rows = aligned.render(Constraints(width=6, max_height=4))
+    expected = [" " * 6] * 4
+    expected[top] = " " * left + "ab" + " " * (6 - left - 2)
+    expected[top + 1] = " " * left + "cd" + " " * (6 - left - 2)
+    assert [row.text for row in rows] == expected
+
+
+def test_align_rejects_unknown_anchors():
+    with pytest.raises(ValueError):
+        Align(Rows("x"), horizontal="middle")
+    with pytest.raises(ValueError):
+        Align(Rows("x"), vertical="center")
+
+
+def test_align_clips_a_child_that_overflows_the_frame():
+    assert texts(Align(Rows("abcdef"), horizontal="center"), 4) == ["abcd"]
+    assert texts(Align(Rows("abcdef"), horizontal="right"), 4) == ["abcd"]
+    # Vertically the frame budget clips the child from the bottom.
+    aligned = Align(Rows("a", "b", "c"), horizontal="left", vertical="bottom")
+    assert [row.text for row in aligned.render(Constraints(width=3, max_height=2))] == [
+        "a  ",
+        "b  ",
+    ]
+
+
+def test_align_forwards_child_at_inside_the_painted_rectangle():
+    child = Rows("ab", "cd")
+    aligned = Align(child, horizontal="right", vertical="bottom")
+    aligned.render(Constraints(width=6, max_height=4))
+    assert aligned.child_at(0, 0) is None
+    assert aligned.child_at(2, 3) is None  # child's own blank padding column
+    assert aligned.child_at(2, 4) == (child, 0, 0)
+    assert aligned.child_at(3, 5) == (child, 1, 1)
+    assert Align(Rows("x")).child_at(0, 0) is None  # nothing rendered yet
+
+
+def test_align_shows_no_effect_for_a_child_that_fills_the_width():
+    assert texts(Align(Rows("abcd"), horizontal="center"), 4) == ["abcd"]
 
 
 # -- Spacer / Padding ---------------------------------------------------------
@@ -282,7 +423,9 @@ def test_a_panel_takes_constraints_and_honours_the_height_budget():
         "\u250c\u2500 T \u2500\u2500\u2500\u2500\u2510",
         "\u2502 body   \u2502",
     ]
-    assert [row.text for row in panel.render(Constraints(width=10))][-1] == "\u2514" + "\u2500" * 8 + "\u2518"
+    assert [row.text for row in panel.render(Constraints(width=10))][-1] == (
+        "\u2514" + "\u2500" * 8 + "\u2518"
+    )
 
 
 # -- the 2.0 tree -------------------------------------------------------------
