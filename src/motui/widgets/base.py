@@ -39,6 +39,7 @@ __all__ = [
     "Container",
     "Cursor",
     "HasResult",
+    "Keymap",
     "MarkSet",
     "ResultWidget",
     "Widget",
@@ -48,6 +49,40 @@ __all__ = [
 #: ``None`` -- so a legal ``None`` result (a cancelled dialog) stays
 #: distinguishable from an empty slot.
 _MISSING: object = object()
+
+
+class Keymap:
+    """A class-level key table every instance shadows with its own copy.
+
+    The class body spells the family default once::
+
+        class List(Widget):
+            keymap = Keymap({"up": "prev", "down": "next"})
+
+    ``List.keymap`` answers that default table.  ``list_widget.keymap``
+    answers the instance's own copy, installed by :meth:`Widget.__init__`
+    from the class table, so a host's rebind -- ``list_widget.keymap["j"] =
+    "next"`` -- only touches that one widget.  Assigning a whole mapping to
+    an instance replaces its copy; the class table is never mutated by an
+    instance operation.
+    """
+
+    __slots__ = ("table",)
+
+    def __init__(self, table: Mapping[str, str]) -> None:
+        self.table = dict(table)
+
+    def __get__(
+        self, instance: object | None, owner: type | None = None
+    ) -> dict[str, str]:
+        """The class default on the class, the instance copy on an instance."""
+        if instance is None:
+            return self.table
+        return instance._keymap  # type: ignore[attr-defined]
+
+    def __set__(self, instance: object, value: Mapping[str, str]) -> None:
+        """Replace one instance's copy (the class table is untouched)."""
+        instance._keymap = dict(value)  # type: ignore[attr-defined]
 
 
 @runtime_checkable
@@ -95,6 +130,7 @@ class Widget:
 
     __slots__ = (
         "_generation",
+        "_keymap",
         "children",
         "focused",
         "hover",
@@ -116,9 +152,9 @@ class Widget:
 
     #: Key -> action names for the widget's own routing.  Empty on the base;
     #: a subclass declares its table and an instance may override entries.
-    #: The merge rule is ``{**type(self).keymap, **instance.keymap}`` at the
-    #: routing site, not in this attribute.
-    keymap: Mapping[str, str] = {}
+    #: :class:`Keymap` answers the class table on the class and the instance
+    #: copy on an instance; :meth:`__init__` installs that copy.
+    keymap = Keymap({})
 
     #: Whether focus routing stays inside this widget's subtree (a ``Form``
     #: routes its fields itself).
@@ -138,6 +174,16 @@ class Widget:
         object.__setattr__(self, "styles", styles)
         object.__setattr__(self, "focused", False)
         object.__setattr__(self, "hover", False)
+        # The instance's own key table: rebinding one entry never reaches
+        # the class default.  ``type(self).keymap`` reads the class table
+        # through :meth:`Keymap.__get__` (the class path), so this copies
+        # and never installs a copy recursively.  A subclass that spells
+        # ``keymap`` as something else -- the text fields expose a property
+        # over their buffer -- keeps its own seam and gets an empty copy.
+        table = type(self).keymap
+        object.__setattr__(
+            self, "_keymap", dict(table) if isinstance(table, Mapping) else {}
+        )
 
     def __setattr__(self, name: str, value: object) -> None:
         """Assign one attribute and touch the tree for a public change.
