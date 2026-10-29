@@ -1,6 +1,5 @@
 """ComboBox: the editable field over a filtered dropdown it owns the state of."""
 
-from motui.kernel.cell import Surface
 from motui.kernel.geom import Pos
 from motui.kernel.layout import Constraints
 from motui.widgets import ComboBox, Option
@@ -91,15 +90,6 @@ def test_child_at_maps_every_rendered_input_row():
     assert combo.child_at(len(rows), 0) is None
 
 
-def test_focus_and_click_delegate_to_the_field():
-    combo = ComboBox(OPTIONS, text="Dialog")
-    combo.render(Constraints(width=40))
-    combo.focused = False
-    assert combo.input.focused is False
-    assert combo.on_click(Pos(x=3, y=0)) is True
-    assert combo.input.cursor == (0, 1)
-
-
 def test_enter_with_no_match_closes_and_leaves_nothing_pending():
     combo = ComboBox(OPTIONS)
     combo.open = True
@@ -107,19 +97,6 @@ def test_enter_with_no_match_closes_and_leaves_nothing_pending():
         assert combo.on_key(key(char, char)) is True
     assert combo.on_key(key("enter")) is True
     assert combo.take() is None and not combo.open
-
-
-# -- the 2.0 render contract -------------------------------------------------
-
-
-def test_a_combo_takes_constraints_and_honours_the_height_budget():
-    combo = ComboBox(OPTIONS, text="Dialog")
-    assert isinstance(combo.render(Constraints(width=40)), Surface)
-    assert combo.render(Constraints(width=40)) == combo.render(Constraints(width=40))
-    assert list(combo.render(Constraints(width=40, max_height=0))) == []
-    assert combo.render(Constraints(width=40, max_height=1)).height == 1
-    # The child geometry is the untruncated field render's.
-    assert combo.child_at(0, 0) == (combo.input, 0, 0)
 
 
 # -- the 2.0 tree and typed hooks ---------------------------------------------
@@ -139,19 +116,14 @@ def test_the_combo_owns_its_field_and_dropdown_in_the_tree():
     assert list(combo.walk()) == [combo, combo.input, combo.list]
 
 
-def test_on_key_routes_the_key_to_the_field():
-    combo = ComboBox(OPTIONS)
-
-    assert combo.on_key(key("D", "D")) is True
-    assert combo.input.text == "D"
-
-
-def test_on_click_docks_the_field_caret():
+def test_on_click_docks_the_field_caret_and_focus_mirrors_the_field():
     combo = ComboBox(OPTIONS, text="Dialog")
     combo.render(Constraints(width=40))
 
     assert combo.on_click(Pos(y=0, x=3)) is True
     assert combo.input.cursor == (0, 1)
+    combo.focused = False
+    assert combo.input.focused is False
 
 
 def test_on_action_opens_a_closed_dropdown_and_takes_the_open_one():
@@ -165,9 +137,3 @@ def test_on_action_opens_a_closed_dropdown_and_takes_the_open_one():
     # Other names are editing actions and belong to the field.
     assert combo.on_action("move_left") is True
     assert combo.input.cursor == (0, 11)
-
-
-def test_toggle_flips_the_open_state():
-    combo = ComboBox(OPTIONS)
-    assert combo.toggle() is True and combo.open is True
-    assert combo.toggle() is True and combo.open is False

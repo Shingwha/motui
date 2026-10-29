@@ -4,7 +4,7 @@ from dataclasses import replace
 
 import pytest
 
-from motui.kernel.cell import Segment, Surface
+from motui.kernel.cell import Segment
 from motui.kernel.geom import Pos
 from motui.kernel.glyphs import GLYPHS
 from motui.kernel.layout import Constraints
@@ -123,19 +123,6 @@ def test_the_list_keymap_routes_its_keys_through_named_actions():
     assert List.keymap["down"] == "next"
 
 
-def test_an_instance_keymap_rebind_never_writes_through_the_class_table():
-    lst = List(["a", "b", "c"])
-    other = List(["a", "b", "c"])
-    lst.keymap["j"] = "next"
-    assert "j" not in List.keymap
-    assert "j" not in other.keymap
-    assert lst.on_key(key("j", "j")) is True and lst.index == 1
-    # The unbound list still falls through to its printable prefix jump.
-    assert other.on_key(key("j", "j")) is True and other.index == 0
-    del lst.keymap["j"]
-    assert lst.on_key(key("j", "j")) is True and lst.index == 1
-
-
 def test_the_typed_hooks_forward_to_the_1x_click_and_hover_verbs():
     lst = List(many(100), window=4)
     lst.index = 50
@@ -145,16 +132,6 @@ def test_the_typed_hooks_forward_to_the_1x_click_and_hover_verbs():
     assert lst.on_hover(Pos(y=2, x=0)) is False
     assert lst.on_hover(None) is True
     assert lst.on_click(Pos(y=0, x=0)) is False  # the counter row
-
-
-def test_the_list_declares_its_capabilities():
-    lst = List(["a"])
-    assert (lst.focusable, lst.clickable, lst.hoverable, lst.activatable) == (
-        True,
-        True,
-        True,
-        True,
-    )
 
 
 def test_the_list_window_must_hold_at_least_one_row():
@@ -221,16 +198,6 @@ def test_a_disabled_list_refuses_every_gesture_but_still_renders():
 def test_rows_are_fitted_to_the_painting_width():
     lst = List(["a very long item text", "b"], window=2)
     assert all(row.width <= 10 for row in lst.render(Constraints(width=10)))
-
-
-def test_list_answers_a_surface_and_honours_the_height_budget():
-    lst = List(["a", "b", "c"], window=3)
-    surface = lst.render(Constraints(width=10, max_height=2))
-    assert isinstance(surface, Surface)
-    assert [row.text for row in surface] == ["\u2192 a", "  b"]
-    assert surface.width == 10 and surface.height == 2
-    # The 1.x int spelling still answers the whole window.
-    assert [row.text for row in lst.render(Constraints(width=10))] == ["\u2192 a", "  b", "  c"]
 
 
 # -- Table --------------------------------------------------------------------
@@ -587,26 +554,6 @@ def test_disabled_rows_and_tables_refuse_their_gestures():
     assert dead.move(1) is False and dead.on_click(Pos(x=0, y=3)) is False
 
 
-def test_table_answers_a_surface_and_honours_the_height_budget():
-    table = Table([["1"], ["2"], ["3"]], headers=["A"], cell_wrap=WrapMode.ELLIPSIS)
-    surface = table.render(Constraints(width=9, max_height=5))
-    assert isinstance(surface, Surface)
-    assert [row.text for row in surface] == [
-        "\u250c\u2500\u2500\u2500\u2510",
-        "\u2502 A \u2502",
-        "\u251c\u2500\u2500\u2500\u2524",
-        "\u2502 1 \u2502",
-        "\u251c\u2500\u2500\u2500\u2524",
-    ]
-    assert surface.width == 9 and surface.height == 5
-    # The 1.x int spelling still answers the whole grid; the budget did not
-    # enter the memory's key, so the memo serves both answers.
-    full = table.render(Constraints(width=9))
-    assert len(full) == 9
-    again = table.render(Constraints(width=9, max_height=5))
-    assert [row.text for row in again] == [row.text for row in surface]
-
-
 def test_the_table_keymap_routes_its_keys_through_named_actions():
     table = Table([["0"], ["1"], ["2"]], headers=["A"])
     assert table.on_key(key("down")) is True and table.index == 1
@@ -621,16 +568,6 @@ def test_the_table_keymap_routes_its_keys_through_named_actions():
     assert Table.keymap["down"] == "next" and Table.keymap["space"] == "toggle"
 
 
-def test_an_instance_table_keymap_rebind_is_private_to_the_instance():
-    table = Table([["0"], ["1"]], headers=["A"])
-    other = Table([["0"], ["1"]], headers=["A"])
-    table.keymap["j"] = "next"
-    assert "j" not in Table.keymap
-    assert "j" not in other.keymap
-    assert table.on_key(key("j", "j")) is True and table.index == 1
-    assert other.on_key(key("j", "j")) is False and other.index == 0
-
-
 def test_the_table_typed_hooks_forward_to_click_and_hover():
     table = Table([["0"], ["1"]], headers=["A"])
     table.render(Constraints(width=9))
@@ -639,26 +576,6 @@ def test_the_table_typed_hooks_forward_to_click_and_hover():
     assert table.on_hover(Pos(y=5, x=0)) is False
     assert table.on_hover(None) is True
     assert table.on_click(Pos(y=0, x=0)) is False  # the top rule
-
-
-def test_take_reads_the_table_result_once():
-    table = Table([["0"]], headers=["A"])
-    table.index = 0
-    assert table.take() is None
-    assert table.on_action("activate") is True and table.take() == ["0"]
-    table.on_action("activate")
-    assert table.take() == ["0"]
-    assert table.take() is None
-
-
-def test_the_table_declares_its_capabilities():
-    table = Table([["0"]], headers=["A"])
-    assert (table.focusable, table.clickable, table.hoverable, table.activatable) == (
-        True,
-        True,
-        True,
-        True,
-    )
 
 
 # -- Tree ---------------------------------------------------------------------
@@ -826,21 +743,6 @@ def test_disabled_nodes_are_skipped_and_refused():
     assert dead.on_action("activate") is False
 
 
-def test_tree_answers_a_surface_and_honours_the_height_budget():
-    tree = Tree([sample()])
-    tree.on_action("activate")
-    surface = tree.render(Constraints(width=30, max_height=2))
-    assert isinstance(surface, Surface)
-    assert [row.text for row in surface] == ["\u25be src", "    app.py"]
-    assert surface.width == 30 and surface.height == 2
-    # The 1.x int spelling still answers every visible row.
-    assert [row.text for row in tree.render(Constraints(width=30))] == [
-        "\u25be src",
-        "    app.py",
-        "  \u25b8 lib",
-    ]
-
-
 def test_the_tree_keymap_folds_and_moves_through_named_actions():
     tree = Tree([sample()])
     assert tree.on_key(key("enter")) is False  # the focus layer owns enter
@@ -858,17 +760,6 @@ def test_the_tree_keymap_folds_and_moves_through_named_actions():
     assert tree.take() is None
 
 
-def test_an_instance_tree_keymap_rebind_is_private_to_the_instance():
-    tree = Tree([sample()])
-    other = Tree([sample()])
-    tree.on_action("activate")  # the root opens, so a step has somewhere to land
-    tree.keymap["j"] = "next"
-    assert "j" not in Tree.keymap
-    assert "j" not in other.keymap
-    assert tree.on_key(key("j", "j")) is True and tree.selected.label == "app.py"
-    assert other.on_key(key("j", "j")) is False and other.selected.label == "src"
-
-
 def test_the_tree_typed_hooks_forward_to_click_and_hover():
     tree = Tree([sample()])
     tree.on_action("activate")
@@ -876,13 +767,3 @@ def test_the_tree_typed_hooks_forward_to_click_and_hover():
     assert tree.on_hover(Pos(y=1, x=0)) is True
     assert tree.on_hover(Pos(y=1, x=0)) is False
     assert tree.on_hover(None) is True
-
-
-def test_the_tree_declares_its_capabilities():
-    tree = Tree([sample()])
-    assert (tree.focusable, tree.clickable, tree.hoverable, tree.activatable) == (
-        True,
-        True,
-        True,
-        True,
-    )

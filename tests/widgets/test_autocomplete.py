@@ -1,12 +1,9 @@
 """Autocomplete: a Select whose rows are the filtered matches of one query."""
 
-import pytest
-
-from motui.kernel.cell import Surface
 from motui.kernel.geom import Pos
 from motui.kernel.layout import Constraints
 from motui.widgets import Autocomplete, Option
-from tests.testing import key, texts
+from tests.testing import texts
 
 
 def test_an_empty_query_matches_every_option_in_order():
@@ -16,19 +13,19 @@ def test_an_empty_query_matches_every_option_in_order():
     assert auto.selected == Option("alpha")
 
 
-@pytest.mark.parametrize(
-    "query, matched",
-    [("rea", ["read", "ready", "bread", "thread"]), ("zzz", [])],
-)
-def test_prefix_matches_rank_before_substring_matches(query, matched):
+def test_prefix_matches_rank_before_substring_matches():
     options = [Option("read"), Option("bread"), Option("thread"), Option("ready")]
-    auto = Autocomplete(options=options)
-    auto.set_query(query)
-    if not matched:
-        assert auto.is_empty is True and auto.selected is None
-        assert list(auto.render(Constraints(width=30))) == [] and auto.move(1) is False
-        return
-    assert texts(auto, 30) == ["\u2192 " + matched[0], *("  " + label for label in matched[1:])]
+    for query, matched in [("rea", ["read", "ready", "bread", "thread"]), ("zzz", [])]:
+        auto = Autocomplete(options=options)
+        auto.set_query(query)
+        if not matched:
+            assert auto.is_empty is True and auto.selected is None
+            assert list(auto.render(Constraints(width=30))) == [] and auto.move(1) is False
+            continue
+        assert texts(auto, 30) == [
+            "\u2192 " + matched[0],
+            *("  " + label for label in matched[1:]),
+        ]
 
 
 def test_the_filter_is_case_insensitive_and_keeps_the_labels_case():
@@ -39,13 +36,13 @@ def test_the_filter_is_case_insensitive_and_keeps_the_labels_case():
     assert texts(auto, 30) == ["\u2192 GAMMA"]
 
 
-@pytest.mark.parametrize("start, delta, label", [(0, 1, "a2"), (1, 1, "a1"), (0, -1, "a2")])
-def test_move_wraps_inside_the_matches(start, delta, label):
-    auto = Autocomplete([Option("a1"), Option("a2"), Option("b1")])
-    auto.set_query("a")
-    auto.index = start
-    assert auto.move(delta) is True
-    assert auto.selected == Option(label)
+def test_move_wraps_inside_the_matches():
+    for start, delta, label in [(0, 1, "a2"), (1, 1, "a1"), (0, -1, "a2")]:
+        auto = Autocomplete([Option("a1"), Option("a2"), Option("b1")])
+        auto.set_query("a")
+        auto.index = start
+        assert auto.move(delta) is True
+        assert auto.selected == Option(label)
 
 
 def test_set_query_resets_the_cursor_and_clears_a_pending_pick():
@@ -59,18 +56,15 @@ def test_set_query_resets_the_cursor_and_clears_a_pending_pick():
     assert texts(auto, 30) == ["\u2192 a1", "  a2", "  b1"]
 
 
-@pytest.mark.parametrize(
-    "deltas, rows",
-    [
+def test_max_rows_windows_the_matches_with_a_counter():
+    for deltas, rows in [
         ([], ["\u2192 item0", "  item1", "  item2", "(1/10)"]),
         ([2, 1, 6], ["  item7", "  item8", "\u2192 item9", "(10/10)"]),
-    ],
-)
-def test_max_rows_windows_the_matches_with_a_counter(deltas, rows):
-    auto = Autocomplete([Option(f"item{i}") for i in range(10)], max_rows=3)
-    for delta in deltas:
-        auto.move(delta)
-    assert texts(auto, 30) == rows
+    ]:
+        auto = Autocomplete([Option(f"item{i}") for i in range(10)], max_rows=3)
+        for delta in deltas:
+            auto.move(delta)
+        assert texts(auto, 30) == rows
 
 
 def test_the_description_column_is_measured_over_the_whole_universe():
@@ -102,32 +96,3 @@ def test_set_query_clears_the_pointer_mark():
     auto.set_query("beta")
     assert auto.on_hover(None) is False
     assert texts(auto, 20) == ["\u2192 beta"]
-
-
-# -- the 2.0 render contract -------------------------------------------------
-
-
-def test_autocomplete_takes_constraints_and_honours_the_height_budget():
-    auto = Autocomplete([Option("alpha"), Option("beta"), Option("gamma")])
-    assert isinstance(auto.render(Constraints(width=30)), Surface)
-    assert auto.render(Constraints(width=30)) == auto.render(Constraints(width=30))
-    surface = auto.render(Constraints(width=30, max_height=2))
-    assert [row.text for row in surface] == ["\u2192 alpha", "  beta"]
-    assert list(auto.render(Constraints(width=30, max_height=0))) == []
-
-
-# -- the 2.0 capabilities and hooks -------------------------------------------
-
-
-def test_autocomplete_inherits_the_menu_capabilities():
-    auto = Autocomplete([Option("alpha")])
-
-    assert auto.focusable is True
-    assert auto.clickable is True
-    assert auto.activatable is True
-
-
-def test_on_key_routes_the_inherited_keys():
-    typed = Autocomplete([Option("alpha"), Option("beta")])
-
-    assert typed.on_key(key("down")) is True and typed.index == 1

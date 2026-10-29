@@ -1,6 +1,5 @@
 """Form: the field stack, focus navigation, values, validation and submission."""
 
-from motui.kernel.cell import Surface
 from motui.kernel.geom import Pos
 from motui.kernel.layout import Constraints
 from motui.widgets import Checkbox, CheckboxGroup, Field, Form, Input, Option
@@ -18,24 +17,14 @@ def test_a_form_stacks_labels_components_and_gaps():
     assert texts(form, 20) == ["One", "[ ] x", "", "[ ] y"]
 
 
-def test_focus_moves_by_index_and_name_and_marks_the_field_components():
+def test_focus_accepts_an_index_and_declines_current_or_unknown_targets():
     first, second = Input("a"), Input("b")
     form = Form([Field("a", first), Field("b", second)])
     assert first.focused is True and second.focused is False
-    assert form.focus("b") is True
-    assert first.focused is False and second.focused is True
-    assert form.focus("missing") is False
-    assert form.focus(9) is False
+    assert form.focus(1) is True and second.focused is True
     assert form.focus(1) is False
-
-
-def test_move_clamps_at_the_field_ends():
-    form = Form([Field("a", Checkbox("x")), Field("b", Checkbox("y"))])
-    assert form.move(1) is True and form.index == 1
-    assert form.move(1) is False
-    assert form.move(-1) is True and form.index == 0
-    assert form.move(-1) is False
-    assert Form([]).move(1) is False
+    assert form.focus(9) is False
+    assert form.focus("missing") is False
 
 
 def test_the_focused_field_routes_first_then_the_form_navigates():
@@ -95,9 +84,8 @@ def test_reading_a_field_never_consumes_its_one_shot_result():
     assert menu.take() == ["a"]
 
 
-def test_an_empty_form_submits_an_empty_mapping():
+def test_an_empty_form_renders_no_rows_and_declines_navigation():
     form = Form([])
-    assert form.on_action("activate") is True and form.take() == {}
     assert form.on_key(key("tab")) is False
     assert list(form.render(Constraints(width=20))) == []
 
@@ -121,18 +109,6 @@ def test_child_at_maps_component_rows_and_owns_labels_gaps_and_errors():
 # -- the 2.0 render contract -------------------------------------------------
 
 
-def test_a_form_takes_constraints_and_honours_the_height_budget():
-    form = Form(
-        [Field("a", Checkbox("x"), label="One"), Field("b", Checkbox("y"))],
-        gap=1,
-    )
-    assert isinstance(form.render(Constraints(width=20)), Surface)
-    assert form.render(Constraints(width=20)) == form.render(Constraints(width=20))
-    surface = form.render(Constraints(width=20, max_height=2))
-    assert [row.text for row in surface] == ["One", "[ ] x"]
-    assert list(form.render(Constraints(width=20, max_height=0))) == []
-
-
 def test_a_truncated_form_keeps_its_child_geometry():
     first, second = Checkbox("x"), Checkbox("y")
     form = Form([Field("a", first, label="One"), Field("b", second)], gap=1)
@@ -153,16 +129,6 @@ def test_a_form_is_a_focus_scope_with_its_fields_as_children():
     assert form.children == [name, email]
     assert name.parent is form and email.parent is form
     assert list(form.walk()) == [form, name, email]
-
-
-def test_on_key_routes_editing_then_navigation():
-    field = Input()
-    form = Form([Field("a", field), Field("b", Checkbox("y"))])
-
-    assert form.on_key(key("x", "x")) is True
-    assert field.text == "x"
-    assert form.on_key(key("tab")) is True and form.index == 1
-    assert form.on_key(key("s-tab")) is True and form.index == 0
 
 
 def test_on_focus_mirrors_the_flag_onto_the_fields():

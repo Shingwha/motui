@@ -10,10 +10,54 @@ from motui.kernel.geom import Pos
 from motui.kernel.layout import Constraints
 from motui.kernel.style import Style
 from motui.kernel.theme import DEFAULT_THEME
-from motui.widgets import Button, Checkbox, ComboBox, Form, Link, List, Option, Select
+from motui.widgets import (
+    Align,
+    Autocomplete,
+    Button,
+    Canvas,
+    Checkbox,
+    CheckboxGroup,
+    Collapsible,
+    Column,
+    ComboBox,
+    ContextMenu,
+    Dialog,
+    Diff,
+    Divider,
+    Editor,
+    Form,
+    Input,
+    Link,
+    List,
+    Markdown,
+    MenuBar,
+    MultiSelect,
+    NavList,
+    Notice,
+    Option,
+    Padding,
+    Panel,
+    ProgressBar,
+    RadioGroup,
+    Row,
+    ScrollPanel,
+    Select,
+    ShortcutBar,
+    Slider,
+    Spacer,
+    Spinner,
+    Stack,
+    StatusLine,
+    Table,
+    Tabs,
+    Text,
+    Tree,
+    TreeNode,
+)
 from motui.widgets.base import (
     CURSOR_KEYMAP,
     ActionWidget,
+    Container,
     CursorWidget,
     Keymap,
     ResultWidget,
@@ -323,3 +367,79 @@ def test_keymap_is_reexported_from_strip():
     from motui.widgets.strip import Keymap as StripKeymap
 
     assert StripKeymap is BaseKeymap
+
+
+# -- Capability flags: one table for every public component ----------------
+#
+# Per-family files used to repeat one ``focusable/clickable/hoverable/
+# activatable`` test each.  The table below is the single source: a
+# component's flags are part of its public contract, not a render detail.
+
+CAPABILITIES = {
+    # Action family: all four doors.
+    "Button": (lambda: Button("x"), (True, True, True, True)),
+    "Checkbox": (lambda: Checkbox("x"), (True, True, True, True)),
+    "Link": (lambda: Link("x"), (True, True, True, True)),
+    # Text fields: focus and pointer, no activation verb.
+    "Input": (lambda: Input(), (True, True, True, False)),
+    "Editor": (lambda: Editor(), (True, True, True, False)),
+    # Choice, navigation and data families: cursor + result.
+    "Select": (lambda: Select(THREE), (True, True, True, True)),
+    "MultiSelect": (lambda: MultiSelect(THREE), (True, True, True, True)),
+    "RadioGroup": (lambda: RadioGroup(["a"]), (True, True, True, True)),
+    "CheckboxGroup": (lambda: CheckboxGroup(["a"]), (True, True, True, True)),
+    "List": (lambda: List(["a"]), (True, True, True, True)),
+    "Table": (lambda: Table([["a"]], headers=["h"]), (True, True, True, True)),
+    "Tree": (lambda: Tree([TreeNode("a")]), (True, True, True, True)),
+    "Tabs": (lambda: Tabs(["a"]), (True, True, True, True)),
+    "MenuBar": (lambda: MenuBar(["a"]), (True, True, True, True)),
+    "NavList": (lambda: NavList(["a"]), (True, True, True, True)),
+    "Autocomplete": (lambda: Autocomplete([Option("a")]), (True, True, True, True)),
+    "ContextMenu": (lambda: ContextMenu([Option("a")]), (True, True, True, True)),
+    # The combo is pointer-driven but has no activation verb of its own.
+    "ComboBox": (lambda: ComboBox([Option("a")]), (True, True, False, True)),
+    # Indicators: only the slider is interactive.
+    "Slider": (lambda: Slider(1), (True, True, True, True)),
+    "ProgressBar": (lambda: ProgressBar(0.5), (False, False, False, False)),
+    "Spinner": (lambda: Spinner("x"), (False, False, False, False)),
+    # Plain text is a pointer target for its spans, not a focus target.
+    "Text": (lambda: Text("hi"), (False, True, True, False)),
+    "Markdown": (lambda: Markdown("# x"), (False, True, True, False)),
+    # Scrollable and foldable: focus + click, no hover/activation.
+    "ScrollPanel": (
+        lambda: ScrollPanel(Text("x"), height=2),
+        (True, True, False, False),
+    ),
+    "Collapsible": (lambda: Collapsible(Text("x")), (True, True, True, True)),
+    # Display-only furniture and containers.
+    "StatusLine": (lambda: StatusLine(left=["a"]), (False, False, False, False)),
+    "ShortcutBar": (lambda: ShortcutBar([("a", "b")]), (False, False, False, False)),
+    "Notice": (lambda: Notice("x"), (False, False, False, False)),
+    "Divider": (lambda: Divider(), (False, False, False, False)),
+    "Spacer": (lambda: Spacer(1), (False, False, False, False)),
+    "Canvas": (lambda: Canvas(width=2, height=2), (False, False, False, False)),
+    "Diff": (lambda: Diff("a", "b"), (False, False, False, False)),
+    "Align": (lambda: Align(Text("x")), (False, False, False, False)),
+    "Stack": (lambda: Stack([Text("x")]), (False, False, False, False)),
+    "Row": (lambda: Row([Text("x")]), (False, False, False, False)),
+    "Column": (lambda: Column([Text("x")]), (False, False, False, False)),
+    "Panel": (lambda: Panel(Text("x")), (False, False, False, False)),
+    "Padding": (lambda: Padding(Text("x")), (False, False, False, False)),
+    "Dialog": (lambda: Dialog(Text("x")), (False, False, False, False)),
+    "Form": (lambda: Form([]), (False, False, False, False)),
+    "Widget": (lambda: Widget(), (False, False, False, False)),
+    "Container": (lambda: Container(), (False, False, False, False)),
+}
+
+
+def test_capability_flags_are_one_table_for_every_component():
+    for name, (build, expected) in CAPABILITIES.items():
+        widget = build()
+        actual = (
+            widget.focusable,
+            widget.clickable,
+            widget.hoverable,
+            widget.activatable,
+        )
+        assert actual == expected, f"{name}: {actual} != {expected}"
+

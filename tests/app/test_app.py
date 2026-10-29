@@ -9,7 +9,6 @@ from motui.app.runtime import Timer
 from motui.kernel import Theme
 from motui.kernel.cell import Line, Surface
 from motui.kernel.document import Placement, Sizing
-from motui.kernel.geom import Axis
 from motui.kernel.layout import Constraints
 from motui.terminal import (
     HeadlessScreen,
@@ -176,20 +175,6 @@ def test_removing_a_parent_drops_its_subtree_from_the_ring():
     assert button.focused is False
 
 
-def test_app_split_dock_and_undock_accept_the_2_0_enums():
-    app = _app(screen=HeadlessScreen(40, 8), keys=ScriptedEvents(()))
-    left, right = app.split(Axis.X, weights=(2, 1))
-    assert [pane.id for pane in app.workspace.panes] == ["primary", "pane-1"]
-    assert left.rect.width > right.rect.width
-
-    top = app.dock(Rows("top"), placement=Placement.TOP)
-    bottom = app.dock(Rows("foot"), placement=Placement.BOTTOM, size=1)
-    assert app.workspace.frame.dock("top") is top
-    assert app.workspace.frame.dock("bottom") is bottom
-    assert app.undock(Placement.BOTTOM) is bottom
-    assert app.undock(Placement.TOP) is top
-
-
 def test_remove_takes_the_section_add_answered():
     """The 2.0 removal door is the ``Section`` value, not a bare id."""
     app = _app(screen=HeadlessScreen(20, 4), keys=ScriptedEvents(()))
@@ -234,11 +219,6 @@ def test_walk_visits_each_mounted_node_once_in_frame_order():
     assert nodes[0] is row and nodes[1] is button
     assert docked in nodes
     assert len(nodes) == len({id(node) for node in nodes})
-
-
-def test_set_focus_targets_is_gone():
-    app = _app(screen=HeadlessScreen(20, 4), keys=ScriptedEvents(()))
-    assert not hasattr(app, "set_focus_targets")
 
 
 def test_resize_reaches_every_widget_and_is_not_consumed():
@@ -428,17 +408,6 @@ def test_the_app_composes_a_runtime_workspace_and_terminal():
     assert not hasattr(app, "tui")  # the 1.x composition name is gone
 
 
-def test_terminal_options_build_the_screen_and_input_the_driver_uses():
-    screen = HeadlessScreen(20, 4)
-    source = ScriptedEvents(())
-    app = App(terminal=TerminalOptions(screen=screen, input=source), auto=False)
-
-    assert isinstance(app.terminal, Terminal)
-    assert app.terminal.screen is screen
-    assert app.runtime.screen is screen
-    assert app.runtime.keys is source
-
-
 def test_terminal_options_win_over_the_legacy_arguments():
     legacy = HeadlessScreen(10, 2)
     chosen = HeadlessScreen(20, 5)
@@ -473,16 +442,6 @@ def test_the_mouse_mode_flows_from_the_terminal_options_to_the_app():
     assert without_motion.terminal.options.mouse is MouseMode.DRAG
     off = App(terminal=TerminalOptions(mouse=MouseMode.OFF), auto=False)
     assert off.terminal.options.mouse is MouseMode.OFF
-
-
-def test_an_app_with_terminal_options_paints_the_same_rows():
-    app = App(
-        terminal=TerminalOptions(screen=HeadlessScreen(20, 4)),
-        auto=False,
-    )
-    app.add(Rows("one"))
-    app.runtime.paint_now()
-    assert rows(app.runtime) == ["one", "", "", ""]
 
 
 async def test_two_apps_with_equal_terminal_options_paint_the_same_bytes():

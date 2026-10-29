@@ -225,6 +225,7 @@ def test_button_spec_kind_is_the_fourth_field_and_drives_the_danger_rule():
         ButtonKind.DANGER,
     )
     assert not hasattr(spec, "danger")
+    assert ButtonSpec("Go").kind is ButtonKind.NEUTRAL
     dialog = Dialog(
         Rows("body"),
         buttons=[ButtonSpec("Cancel", None), spec],
@@ -263,5 +264,7 @@ def test_slider_activation_answers_availability_and_keeps_no_result():
     assert slider.activate() is True
     assert slider.take() is None
     assert slider.on_action("activate") is True and slider.value == 4
+    assert slider.on_action("next") is True and slider.value == 5
+    assert slider.on_action("unknown") is False
     assert slider.take() is None
     assert Slider(4, disabled=True).activate() is False

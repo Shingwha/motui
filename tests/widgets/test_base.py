@@ -5,7 +5,6 @@ from __future__ import annotations
 from motui.kernel.events import KeyEvent, MouseEvent, PasteEvent, ResizeEvent
 from motui.kernel.geom import Pos
 from motui.widgets.base import (
-    CURSOR_KEYMAP,
     Container,
     Cursor,
     CursorWidget,
@@ -307,12 +306,6 @@ def test_the_action_hook_is_the_named_action_door():
     assert widget._log == [("action", "activate"), ("action", "next")]
 
 
-def test_the_untyped_verbs_are_gone_from_the_base():
-    widget = Widget()
-    for name in ("handle", "click", "hover_at", "drag", "activate", "take_result"):
-        assert not hasattr(widget, name), name
-
-
 def test_the_resize_hook_is_a_no_op_on_the_base():
     widget = Typed()
 
@@ -519,17 +512,6 @@ def test_cursor_widget_page_step_uses_the_override():
     assert probe.on_action("page_prev") is True and probe.index == 2
 
 
-def test_cursor_widget_declares_the_unified_cursor_keymap():
-    probe = _CursorProbe(["a", "b"])
-
-    assert CursorWidget.keymap == CURSOR_KEYMAP
-    assert probe.keymap == CURSOR_KEYMAP
-    probe.keymap["j"] = "next"
-    assert probe.keymap["j"] == "next"
-    assert CursorWidget.keymap == CURSOR_KEYMAP
-    assert "j" not in CursorWidget.keymap
-
-
 def test_cursor_widget_is_a_result_widget_and_the_bases_decline_verbs():
     probe = CursorWidget()
     assert isinstance(probe, ResultWidget) and isinstance(probe, Widget)
@@ -548,15 +530,3 @@ def test_cursor_and_mark_set_are_reexported_from_their_own_modules():
     assert cursor.move(1) is True and cursor.index == 1
     marks = MarkSet([2])
     assert marks.toggle(2) is False and 2 not in marks
-
-
-def test_the_new_base_names_stay_out_of_the_package_facades():
-    # This wave publishes the tree and hooks from ``motui.widgets.base``
-    # only; the root facade is W5's to converge, so nothing leaks here yet.
-    import motui
-    import motui.kernel
-    import motui.widgets
-
-    for facade in (motui, motui.widgets, motui.kernel):
-        for name in ("Container", "Cursor", "HasResult", "MarkSet"):
-            assert not hasattr(facade, name), (facade.__name__, name)

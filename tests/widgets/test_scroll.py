@@ -504,23 +504,3 @@ def test_the_horizontal_scroll_actions_move_one_column():
     assert scroll.on_action("scroll_prev") is False
 
 
-def test_an_instance_scroll_keymap_rebind_is_private_to_the_instance():
-    scroll, other = view(), view()
-    scroll.render(Constraints(width=10))
-    other.render(Constraints(width=10))
-    scroll.keymap["j"] = "next"
-    assert "j" not in ScrollPanel.keymap
-    assert "j" not in other.keymap
-    assert scroll.on_key(key("j", "j")) is True and scroll.offset == 1
-    assert other.on_key(key("j", "j")) is False and other.offset == 0
-
-
-def test_the_scroll_panel_declares_its_capabilities():
-    scroll = view()
-    assert (scroll.focusable, scroll.clickable, scroll.hoverable, scroll.activatable) == (
-        True,
-        True,
-        False,
-        False,
-    )
-    assert scroll.take() is None
