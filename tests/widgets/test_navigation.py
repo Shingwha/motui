@@ -4,14 +4,13 @@ from dataclasses import replace
 
 import pytest
 
-from motui.kernel.glyphs import GLYPHS
 from motui.kernel.cell import Surface
 from motui.kernel.geom import Pos
+from motui.kernel.glyphs import GLYPHS
 from motui.kernel.layout import Constraints
 from motui.kernel.style import Style
 from motui.kernel.theme import DEFAULT_THEME, Styles
 from motui.widgets import NavList, Tabs
-
 from tests.testing import key, texts
 
 INDICATOR = Style(underline=True)
@@ -64,7 +63,9 @@ def test_an_unfocused_strip_lowers_the_indicator_hue_and_keeps_the_label():
     plain = Tabs(["a", "b"], styles=styles)
     plain.focused = False
     focused = Tabs(["a", "b"], styles=styles)
-    assert plain.render(Constraints(width=20))[0].segments[1].style != focused.render(Constraints(width=20))[0].segments[1].style
+    plain_style = plain.render(Constraints(width=20))[0].segments[1].style
+    focused_style = focused.render(Constraints(width=20))[0].segments[1].style
+    assert plain_style != focused_style
     assert plain.render(Constraints(width=20))[0].segments[1].text == "a"
 
 
@@ -200,8 +201,12 @@ def test_an_unfocused_navlist_drops_the_bar_hue_and_keeps_the_label():
     focused = NavList(["a"], styles=styles)
     unfocused = NavList(["a"], styles=styles)
     unfocused.focused = False
-    assert focused.render(Constraints(width=20))[0].segments[0].style != unfocused.render(Constraints(width=20))[0].segments[0].style
-    assert focused.render(Constraints(width=20))[0].segments[1].style == unfocused.render(Constraints(width=20))[0].segments[1].style
+    focused_bar = focused.render(Constraints(width=20))[0].segments[0].style
+    unfocused_bar = unfocused.render(Constraints(width=20))[0].segments[0].style
+    focused_label = focused.render(Constraints(width=20))[0].segments[1].style
+    unfocused_label = unfocused.render(Constraints(width=20))[0].segments[1].style
+    assert focused_bar != unfocused_bar
+    assert focused_label == unfocused_label
 
 
 def test_an_empty_rail_glyph_collapses_the_gutter():
@@ -294,8 +299,9 @@ def test_the_tabs_keymap_steps_through_named_actions():
     assert tabs.on_key(key("up")) is True and tabs.index == 0
     assert tabs.on_action("prev") is False  # clamped at the first tab
     assert tabs.on_action("next") is True and tabs.index == 1
-    assert tabs.on_action("activate") is False
+    assert tabs.on_action("activate") is True and tabs.take() == "b"
     assert tabs.on_action("nope") is False
+    assert tabs.on_key(key("enter")) is False  # the focus layer owns enter
     assert not hasattr(Tabs, "handle")
     assert tabs.take() is None
 
@@ -325,7 +331,7 @@ def test_the_tabs_declares_its_capabilities():
         True,
         True,
         True,
-        False,
+        True,
     )
 
 

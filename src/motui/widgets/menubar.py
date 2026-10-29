@@ -44,16 +44,14 @@ and calls ``menu.on_action("activate")`` on the return key.
 
 from __future__ import annotations
 
-from collections.abc import Iterable
-from typing import Any, Sequence
+from collections.abc import Iterable, Sequence
 
-from ..widgets.cursor import Cursor
-from ..kernel.events import KeyEvent
-from ..kernel.glyphs import GLYPHS, Glyphs
 from ..kernel.cell import Line, Segment
+from ..kernel.glyphs import GLYPHS, Glyphs
 from ..kernel.style import Style
-from ..kernel.theme import Styles, Theme
 from ..kernel.text import WrapMode
+from ..kernel.theme import Styles, Theme
+from ..widgets.base import CURSOR_KEYMAP
 from .choice import Option, Select
 from .strip import Keymap, LabelStrip
 
@@ -86,21 +84,14 @@ class MenuBar(LabelStrip):
     table is recorded once per render, so a hit never re-renders the bar.
     """
 
-    __slots__ = ("_pending", "items")
+    __slots__ = ("items",)
 
-    #: A bar activates its active label (unlike a tab strip, which only selects).
+    #: A bar activates its active label.
     activatable = True
 
-    #: The default key table (a per-instance copy backs ``self.keymap``).
-    keymap = Keymap(
-        {
-            "up": "prev",
-            "down": "next",
-            "left": "prev",
-            "right": "next",
-            "enter": "activate",
-        }
-    )
+    #: The cursor family's default table (a per-instance copy backs
+    #: ``self.keymap``).
+    keymap = Keymap(CURSOR_KEYMAP)
 
     def __init__(
         self,
@@ -123,7 +114,6 @@ class MenuBar(LabelStrip):
         self.hover = False
         #: The whole bar refuses every gesture when disabled.
         self.disabled = disabled
-        self._index = 0
         # The label the pointer is on, or ``None``; written by ``on_hover``,
         # read by ``render``.  ``None`` renders byte-for-byte what the bar
         # always did.
@@ -137,83 +127,43 @@ class MenuBar(LabelStrip):
         # label, in paint order -- so a hit reads the table instead of
         # re-rendering the bar.
         self._spans: tuple[tuple[int, int, int], ...] | None = None
-        #: The pending one-shot result: written by activation, read once by
-        #: ``take``.
-        self._pending: str | None = None
-        if self.items:
-            # Clamped like every later request; the disabled rule belongs to
-            # the verbs, not to this explicit constructor value.
-            self._index = Cursor(len(self.items)).clamp(index)
+        # The constructor's explicit index is clamped **without** the
+        # disabled refusal: an explicit request an item rule will refuse is
+        # kept, exactly as the verbs have always behaved.
+        self._sync_cursor()
+        self._cursor.index = self._cursor.clamp(index)
 
     @property
     def _entries(self) -> list[str]:
         """The menu labels every cursor verb and the span walk measure."""
         return self.items
 
-    def move(self, delta: int) -> bool:
-        """Move the active label ``delta`` labels, clamped and never wrapping.
+    # -- the activation verb ----------------------------------------------------
 
-        The cursor rule is :meth:`~motui.widgets.strip.LabelStrip.move`:
-        disabled indices are stepped over, the ends clamp and never wrap.  A
-        moved step clears a stale pending result -- an activation never
-        survives the next keystroke.  A disabled or empty bar moves nowhere.
+    def activate(self) -> bool:
+        """Leave the active label pending; ``False`` on no pick.
+
+        A disabled bar, an empty bar and a disabled active label answer
+        ``False`` and leave nothing pending.  A real pick writes the label
+        through the shared result slot (read once by ``take``).
         """
-        moved = super().move(delta)
-        if moved:
-            self._pending = None
-        return moved
-
-    def take(self) -> str | None:
-        """Read the pending label once and clear it (the ``take`` door)."""
-        value = self._pending
-        self._pending = None
-        return value
-
-    # -- the keyboard -----------------------------------------------------------
-
-    def on_action(self, name: str) -> bool:
-        """Run one named bar action; ``False`` for an unknown name.
-
-        ``prev`` / ``next`` step the active label through :meth:`move` and
-        answer its result (a clamped edge reports ``False``, the old focus
-        router's rule); ``activate`` leaves the active label pending through
-        :meth:`on_action` and answers whether there was one.  An unknown name
-        answers ``False`` without touching the bar.
-        """
-        if name == "prev":
-            return self.move(-1)
-        if name == "next":
-            return self.move(1)
-        if name == "activate":
-            if self.disabled or not self.items or self._index in self._disabled_items:
-                self._pending = None
-                return False
-            self._pending = self.items[self._index]
-            return True
-        return False
-
-    def on_key(self, event: KeyEvent) -> bool:
-        """Route a key through :attr:`keymap` to :meth:`on_action`.
-
-        The default table binds the four arrows and ``enter``; a key no
-        entry names is declined so the host keeps it.  A disabled bar
-        answers ``False``.
-        """
-        if self.disabled or not isinstance(event, KeyEvent):
+        if self.disabled or not self.items:
             return False
-        action = self.keymap.get(event.key)
-        if action is None:
+        index = self.index
+        if index in self._disabled_items:
             return False
-        return self.on_action(action)
+        self._emit(self.items[index])
+        return True
 
     def _style_of(self, index: int) -> Style:
         """The style one label renders with (the stricter state wins)."""
         if index in self._disabled_items:
             return self.group("text").faint
-        if index == self._index:
-            style = self.group("content").accent
-        else:
-            style = self.group("text").faint
+        style = (
+            self.group("content").accent
+            if index == self.index
+            else self.group("text").faint
+        )
         if index == self._hover_index:
             style = style.merge(self.group("surfaces").hover)
         return style
@@ -235,7 +185,7 @@ class MenuBar(LabelStrip):
         return line, self._spans_of(line)
 
     def __repr__(self) -> str:
-        return f"MenuBar({self.items!r}, index={self._index})"
+        return f"MenuBar({self.items!r}, index={self.index})"
 
 
 class ContextMenu(Select):
@@ -243,13 +193,11 @@ class ContextMenu(Select):
 
     ``options`` are :class:`~motui.widgets.choice.Option` values (a payload
     rides through untouched), ``title`` is the optional heading row and
-    ``marker`` the cursor row's glyph (the vocabulary's ``cursor``,
-    ``"\u2192"``).  The preset's knobs are a desktop menu's: ``commit=False``
-    (moving the cursor picks nothing -- only :meth:`~motui.widgets.choice.Select.on_action`
-    settles the option under it), ``wrap=True`` (the ends cycle) and
-    ``window=False`` (a window longer than ``max_rows`` hangs at the top).
-    They may still be overridden through ``**kwargs``, which forwards every
-    other :class:`~motui.widgets.choice.Select` parameter.
+    ``glyphs.cursor`` the cursor row's glyph (the vocabulary's ``"\u2192"``).
+    The preset's knobs are a desktop menu's: ``wrap=True`` (the ends cycle)
+    and ``window=False`` (a window longer than ``max_rows`` hangs at the
+    top).  Every other :class:`~motui.widgets.choice.Select` parameter is
+    spelled out on the preset itself; there is no ``**kwargs`` pass-through.
 
     The menu neither opens nor positions itself: a host mounts it with the
     modal controller at the click cell -- ``Modal(tui, menu, anchor=(y, x))``
@@ -269,15 +217,15 @@ class ContextMenu(Select):
         title: str = "",
         max_rows: int = 8,
         glyphs: Glyphs = GLYPHS,
-        **kwargs: Any,
+        theme: Theme | None = None,
+        styles: Styles | None = None,
     ) -> None:
-        kwargs.setdefault("commit", False)
-        kwargs.setdefault("wrap", True)
-        kwargs.setdefault("window", False)
         super().__init__(
             options,
             title=title,
             max_rows=max_rows,
             glyphs=glyphs,
-            **kwargs,
+            window=False,
+            theme=theme,
+            styles=styles,
         )

@@ -60,15 +60,14 @@ renders exactly the bytes it always did.
 
 from __future__ import annotations
 
-from typing import Iterable
+from collections.abc import Iterable
 
-from ..widgets.cursor import Cursor
-from ..kernel.events import KeyEvent
-from ..kernel.glyphs import GLYPHS, Glyphs
 from ..kernel.cell import Line, Segment
+from ..kernel.glyphs import GLYPHS, Glyphs
 from ..kernel.style import Style
-from ..kernel.theme import Styles, Theme
 from ..kernel.text import WrapMode
+from ..kernel.theme import Styles, Theme
+from ..widgets.base import CURSOR_KEYMAP
 from .strip import Keymap, LabelStrip
 
 __all__ = ["Tabs"]
@@ -107,21 +106,17 @@ class Tabs(LabelStrip):
     always did.
     """
 
-    __slots__ = ("tabs",)
+    __slots__ = ("items",)
 
-    #: The default key table (a per-instance copy backs ``self.keymap``).
-    keymap = Keymap(
-        {
-            "up": "prev",
-            "down": "next",
-            "left": "prev",
-            "right": "next",
-        }
-    )
+    #: A tab strip activates its active label (the host reads it once).
+    activatable = True
+
+    #: The family's cursor table (a per-instance copy backs ``self.keymap``).
+    keymap = Keymap(CURSOR_KEYMAP)
 
     def __init__(
         self,
-        tabs: list[str],
+        items: list[str],
         *,
         index: int = 0,
         glyphs: Glyphs = GLYPHS,
@@ -131,7 +126,7 @@ class Tabs(LabelStrip):
         styles: Styles | None = None,
     ) -> None:
         super().__init__(theme, styles)
-        self.tabs = list(tabs)
+        self.items = list(items)
         self.glyphs = glyphs
         # The old constructor default; FocusManager/App may flip it later.
         self.focused = True
@@ -140,7 +135,6 @@ class Tabs(LabelStrip):
         self.hover = False
         #: The whole strip refuses every selection gesture when disabled.
         self.disabled = disabled
-        self._index = 0
         # The label the pointer is on, or ``None``; written by ``on_hover``,
         # read by ``render``.  ``None`` renders byte-for-byte what the strip
         # always did.
@@ -156,49 +150,39 @@ class Tabs(LabelStrip):
         # re-rendering the strip (the P0).  ``None`` until the first paint:
         # the fallback builds the geometry once, without calling ``render``.
         self._spans: tuple[tuple[int, int, int], ...] | None = None
-        if self.tabs:
-            # Clamped like every later request; the disabled rule belongs to
-            # the verbs, not to this explicit constructor value.
-            self._index = Cursor(len(self.tabs)).clamp(index)
+        # The constructor's explicit index is clamped **without** the
+        # disabled refusal: an explicit request an item rule will refuse is
+        # kept, exactly as the verbs have always behaved.
+        self._sync_cursor()
+        self._cursor.index = self._cursor.clamp(index)
 
     @property
     def _entries(self) -> list[str]:
         """The tab labels every cursor verb and the span walk measure."""
-        return self.tabs
+        return self.items
 
-    # -- the keyboard -----------------------------------------------------------
+    # -- the activation verb ----------------------------------------------------
 
-    def on_action(self, name: str) -> bool:
-        """Run one named strip action; ``False`` for an unknown name.
+    def activate(self) -> bool:
+        """Leave the active label pending; ``False`` on no pick.
 
-        ``prev`` / ``next`` step the selection one tab through
-        :meth:`move` and answer its result -- a clamped edge reports
-        ``False``, the old focus router's rule.  A tab strip selects, it
-        never activates, so no other action is bound.
+        A disabled strip, an empty strip and a disabled active label answer
+        ``False`` and leave nothing pending.  A real pick writes the label
+        through the shared result slot (read once by ``take``).
         """
-        if name == "prev":
-            return self.move(-1)
-        if name == "next":
-            return self.move(1)
-        return False
-
-    def on_key(self, event: KeyEvent) -> bool:
-        """Route a key through :attr:`keymap` to :meth:`on_action`.
-
-        The default table binds the four arrows; a key no entry names is
-        declined so the host keeps it.  A disabled strip answers ``False``.
-        """
-        if self.disabled or not isinstance(event, KeyEvent):
+        if self.disabled or not self.items:
             return False
-        action = self.keymap.get(event.key)
-        if action is None:
+        index = self.index
+        if index in self._disabled_items:
             return False
-        return self.on_action(action)
+        self._emit(self.items[index])
+        return True
 
     def _layout(self, width: int) -> tuple[Line, tuple[tuple[int, int, int], ...]]:
         """The strip's fitted row and the label span table, in one build."""
-        if not self.tabs:
+        if not self.items:
             return Line(), ()
+        index = self.index
         # The focus rule, once per build: an unfocused strip drops the
         # indicator from accent to muted -- the label is never dimmed (D3).
         indicator = (
@@ -210,15 +194,15 @@ class Tabs(LabelStrip):
         hover_style = self.group("surfaces").hover
         divider_style = self.group("text").muted
 
-        def style_of(index: int) -> Style:
-            if index in self._disabled_items:
+        def style_of(row: int) -> Style:
+            if row in self._disabled_items:
                 style = disabled_style
             else:
-                style = active_style if index == self._index else inactive_style
-            return style.merge(hover_style) if index == self._hover_index else style
+                style = active_style if row == index else inactive_style
+            return style.merge(hover_style) if row == self._hover_index else style
 
         segments: list[Segment] = [Segment(" ")]
-        for i, name in enumerate(self.tabs):
+        for i, name in enumerate(self.items):
             if i:
                 segments.append(
                     Segment(f" {self.glyphs.vertical_rule} ", divider_style)
@@ -229,4 +213,4 @@ class Tabs(LabelStrip):
         return line, self._spans_of(line)
 
     def __repr__(self) -> str:
-        return f"Tabs({self.tabs!r}, index={self._index})"
+        return f"Tabs({self.items!r}, index={self.index})"
