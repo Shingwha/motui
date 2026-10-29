@@ -4,7 +4,6 @@ from motui.kernel.cell import Surface
 from motui.kernel.geom import Pos
 from motui.kernel.layout import Constraints
 from motui.widgets import Checkbox, CheckboxGroup, Field, Form, Input, Option
-
 from tests.testing import key, texts
 
 

@@ -28,28 +28,24 @@ cells to the body component and button cells to the corresponding
 
 from __future__ import annotations
 
+from collections.abc import Sequence
 from dataclasses import dataclass, replace
-from typing import Sequence
 
+from ..kernel.cell import Line, Segment, Surface
 from ..kernel.document import Component
 from ..kernel.events import Event, KeyEvent
 from ..kernel.geom import Pos
 from ..kernel.glyphs import GLYPHS, Border, Glyphs
-from ..kernel.cell import Line, Segment, Surface
 from ..kernel.layout import Constraints
-from ..widgets.text import Text
 from ..kernel.style import Style
 from ..kernel.text import WrapMode, ellipsize_tail, visible_width
-from ..kernel.theme import DEFAULT_THEME, Styles, Theme
-from ..widgets.base import Widget
+from ..kernel.theme import Styles, Theme
+from ..widgets.base import _MISSING, CursorWidget
+from ..widgets.text import Text
 from .action import Button
 from .textfield import Input
 
 __all__ = ["ButtonSpec", "Dialog", "confirm_dialog", "prompt_dialog"]
-
-#: "No decision yet" inside the dialog: a legal result may be ``None`` (a
-#: cancel button), so the absence of a result needs its own value.
-_NO_RESULT = object()
 
 
 @dataclass(frozen=True)
@@ -73,7 +69,7 @@ class ButtonSpec:
     danger: bool = False
 
 
-class Dialog(Widget):
+class Dialog(CursorWidget):
     """A titled box with a body component and a row of buttons.
 
     The box is drawn inside the width the render is handed: ``width`` when
@@ -135,8 +131,6 @@ class Dialog(Widget):
         "_border",
         "_buttons",
         "_hit",
-        "_index",
-        "_pending",
         "_specs",
         "align",
         "body",
@@ -153,10 +147,10 @@ class Dialog(Widget):
 
     def __init__(
         self,
-        title: str,
         body,
-        buttons: Sequence[ButtonSpec | tuple | str],
         *,
+        title: str = "",
+        buttons: Sequence[ButtonSpec | tuple | str] = (),
         danger: bool = False,
         width: int | None = None,
         align: str = "center",
@@ -195,16 +189,30 @@ class Dialog(Widget):
         # what ``click`` resolves a cell against.  ``None`` until the first
         # render, so no click lands before the geometry exists.
         self._hit: tuple[int, list[tuple[int, int]]] | None = None
-        #: The pending result: the taken button's value (``None`` is legal --
-        #: a cancel button) or ``escaped`` (see ``_NO_RESULT``).
-        self._pending: object = _NO_RESULT
         # The cursor opens where D3 says: the last non-dangerous button of a
         # dangerous dialog (its cancel, usually), the first button otherwise.
-        self._index = self._default_index()
+        # Installed directly (construction moves nothing and writes no
+        # result), with the button flags driven from it.
+        self._sync_cursor()
+        self._cursor.index = self._default_index()
         self._sync_focus()
         # The explicit tree: the body and every button are the dialog's
         # children, so ``walk()`` covers the whole box without guessing.
         self.children = [self.body, *self._buttons]
+
+    # -- cursor hooks ------------------------------------------------------------
+
+    def _entry_count(self) -> int:
+        return len(self._buttons)
+
+    def _entry_at(self, index: int) -> object | None:
+        return self._buttons[index]
+
+    def _cursor_enabled(self) -> bool:
+        return True
+
+    def _cursor_wraps(self) -> bool:
+        return False
 
     # -- the buttons ------------------------------------------------------------
 
@@ -257,19 +265,21 @@ class Dialog(Widget):
 
     def _sync_focus(self) -> None:
         """Drive the buttons' own ``focused`` flags from the cursor."""
+        current = self.index
         for position, button in enumerate(self._buttons):
-            button.focused = position == self._index
+            button.focused = position == current
 
-    @property
-    def index(self) -> int:
-        """The button cursor (``0`` for a buttonless dialog)."""
-        return self._index
-
-    @index.setter
-    def index(self, value: int) -> None:
-        self._index = min(max(value, 0), len(self._specs) - 1) if self._specs else 0
+    def select(self, index: int) -> bool:
+        """Place the button cursor on ``index`` and mirror the focus flags."""
+        changed = super().select(index)
         self._sync_focus()
-        self.touch()
+        return changed
+
+    def move(self, delta: int) -> bool:
+        """Move the button cursor ``delta`` places and mirror the focus flags."""
+        changed = super().move(delta)
+        self._sync_focus()
+        return changed
 
     @property
     def focused_button(self) -> Button | None:
@@ -280,7 +290,8 @@ class Dialog(Widget):
         button a stray return would take without re-building the row.  The
         name keeps the dialog outside focus ring must not register a modal box as a target.
         """
-        return self._buttons[self._index] if self._buttons else None
+        button = self.selected
+        return button if isinstance(button, Button) else None
 
     # -- the keyboard and the pointer -------------------------------------------
 
@@ -302,20 +313,27 @@ class Dialog(Widget):
             return False
         name = event.key
         if name == "escape":
-            self._pending = None
+            self._emit(None)
             return True
         if not self._buttons:
             return False
         if name == "enter":
-            self._take_button(self._index)
-            return True
+            return self.activate()
         if name in ("tab", "right"):
-            self.index = self._index + 1
-            return True
+            return self.move(1)
         if name in ("s-tab", "left"):
-            self.index = self._index - 1
-            return True
+            return self.move(-1)
         return False
+
+    def activate(self) -> bool:
+        """Take the focused button's value as the dialog's result.
+
+        ``False`` for a buttonless dialog (there is nothing to take).
+        """
+        if not self._buttons:
+            return False
+        self._take_button(self.index)
+        return True
 
     def focus_at(self, row: int, col: int) -> bool:
         """Move the button cursor onto the button under a cell; ``True`` on a hit.
@@ -329,7 +347,7 @@ class Dialog(Widget):
         hit = self._button_at(row, col)
         if hit is None:
             return False
-        self.index = hit
+        self.select(hit)
         return True
 
     def on_click(self, pos: Pos) -> bool:
@@ -345,7 +363,7 @@ class Dialog(Widget):
         hit = self._button_at(pos.y, pos.x)
         if hit is None:
             return False
-        self.index = hit
+        self.select(hit)
         self._take_button(hit)
         return True
 
@@ -355,29 +373,17 @@ class Dialog(Widget):
         The dialog's one activation rule, shared by ``enter`` and a click:
         the button's own ``on_action("activate")`` lands its pending flag,
         :meth:`~motui.widgets.action.Button.take` clears it, and the dialog
-        stores the :class:`ButtonSpec.value` the button stands for -- so the
+        emits the :class:`ButtonSpec.value` the button stands for -- so the
         component and its button never drift.
         """
         button = self._buttons[index]
         button.on_action("activate")
         button.take()
-        self._pending = self._specs[index].value
-        self.touch()
-
-    def take(self) -> object | None:
-        """Read the pending result once and clear it.
-
-        ``None`` means "no decision yet"; a cancel (``escape`` or a
-        ``None``-valued button) is a taken decision whose value is ``None``
-        and is told apart only by the take itself.
-        """
-        value = self._pending
-        self._pending = _NO_RESULT
-        return None if value is _NO_RESULT else value
+        self._emit(self._specs[index].value)
 
     def _arm_result(self) -> None:
         """Discard any pending result (the modal's arm step, before routing)."""
-        self._pending = _NO_RESULT
+        self._clear_result()
 
     def _take_decision(self) -> tuple[bool, object]:
         """Read the routing's decision as ``(made, value)``; clear it.
@@ -387,9 +393,9 @@ class Dialog(Widget):
         that must know whether to close.  Internal: hosts use
         :meth:`take`.
         """
-        value = self._pending
-        self._pending = _NO_RESULT
-        return (False, None) if value is _NO_RESULT else (True, value)
+        value = self._result
+        object.__setattr__(self, "_result", _MISSING)
+        return (False, None) if value is _MISSING else (True, value)
 
     def _button_at(self, row: int, col: int) -> int | None:
         """The button index a rendered cell lands on, or ``None``.
@@ -476,7 +482,11 @@ class Dialog(Widget):
         if self.frame:
             out.append(self._top_row(box, border_style, title_style))
         for row in self._body_rows:
-            out.append(self._interior_row(row.clip(WrapMode.ELLIPSIS, inner), box, lead, border_style))
+            out.append(
+                self._interior_row(
+                    row.clip(WrapMode.ELLIPSIS, inner), box, lead, border_style
+                )
+            )
         button_row = len(out)
         if self._buttons:
             out.append(self._button_row(box, inner, button_row, lead, border_style))
@@ -556,7 +566,8 @@ class Dialog(Widget):
         box's left edge -- are remembered for :meth:`on_click`.
         """
         lines = [
-            button.render(Constraints(width=visible_width(button.label) + 2))[0] for button in self._buttons
+            button.render(Constraints(width=visible_width(button.label) + 2))[0]
+            for button in self._buttons
         ]
         content = Line()
         offsets: list[int] = []
@@ -570,12 +581,15 @@ class Dialog(Widget):
         content = Line.filled(left) + content
         self._hit = (
             row_index,
-            [(lead + left + offset, line.width) for offset, line in zip(offsets, lines)],
+            [
+                (lead + left + offset, line.width)
+                for offset, line in zip(offsets, lines, strict=True)
+            ],
         )
         return self._interior_row(content, box, lead, border_style)
 
     def __repr__(self) -> str:
-        return f"Dialog({self.title!r}, index={self._index}, danger={self.danger})"
+        return f"Dialog({self.title!r}, index={self.index}, danger={self.danger})"
 
 
 def confirm_dialog(
@@ -602,8 +616,7 @@ def confirm_dialog(
     danger band on the confirm button is then the whole cue).
     """
     return Dialog(
-        title="",
-        body=Text(message),
+        Text(message),
         buttons=[
             ButtonSpec(confirm_text, True, danger=danger),
             ButtonSpec(cancel_text, False),
@@ -660,14 +673,14 @@ def prompt_dialog(
     field is the payload, and the text is the host's to read and clear.
     """
     return Dialog(
-        title=title,
-        body=Input(
+        Input(
             placeholder=placeholder,
             mask=mask,
             styles=styles,
             glyphs=glyphs,
             theme=theme,
         ),
+        title=title,
         buttons=[
             ButtonSpec(confirm_text, "ok"),
             ButtonSpec(cancel_text, None),

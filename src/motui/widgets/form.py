@@ -20,7 +20,7 @@ Focus is the form's own: :meth:`Form.focus` and :meth:`Form.move` track
 field (the new one ``True``, all others ``False``).  The keyboard routes
 the focused field first -- its own typed hook wins over navigation -- then
 ``tab``/``down`` step forward, ``s-tab``/``up`` step back and ``enter``
-runs :meth:`Form.on_action`: validate every field, write each error back to
+runs :meth:`Form.activate`: validate every field, write each error back to
 its :class:`Field`, and on success leave ``{name: value}`` pending for
 :meth:`Form.take` and call ``on_submit`` once.  Navigation answers
 ``True`` only when the index moved, so a host keeps Tab at the ends.
@@ -32,14 +32,14 @@ from __future__ import annotations
 from collections.abc import Callable, Sequence
 from dataclasses import dataclass
 
+from ..kernel.cell import Line, Surface
 from ..kernel.document import Component
 from ..kernel.events import Event, KeyEvent, MouseEvent, PasteEvent
-from ..kernel.cell import Line, Surface
 from ..kernel.geom import Pos
 from ..kernel.layout import Constraints
-from ..kernel.theme import Styles, Theme
 from ..kernel.text import WrapMode
-from ..widgets.base import Widget
+from ..kernel.theme import Styles, Theme
+from ..widgets.base import CursorWidget
 
 __all__ = ["Field", "Form"]
 
@@ -64,24 +64,21 @@ class Field:
 
 
 
-class Form(Widget):
+class Form(CursorWidget):
     """A vertical stack of fields with focus, validation and a submit result.
 
     ``fields`` is copied to a tuple at construction; the :class:`Field`
-    values stay live, because ``error`` is form-managed.  ``index`` starts
-    at the requested field (clamped; ``0`` for an empty form) and is
-    read-only -- move it with :meth:`focus` or :meth:`move`, which also
-    mirror the position onto the fields' ``focused`` flags.  A form
-    without fields consumes nothing and submits an empty mapping when
-    activated directly.
+    values stay live, because ``error`` is form-managed.  ``index`` is the
+    shared cursor over the fields (clamped; ``0`` for an empty form);
+    :meth:`focus` and :meth:`move` also mirror the position onto the
+    fields' ``focused`` flags.  A form without fields consumes nothing and
+    submits an empty mapping when activated directly.
     """
 
     __slots__ = (
         "_fields",
         "_gap",
-        "_index",
         "_on_submit",
-        "_pending",
         "_spans",
     )
 
@@ -105,20 +102,33 @@ class Form(Widget):
         # ``walk()`` covers the fields without guessing ``_fields``.
         self.children = [field.component for field in self._fields]
         self._gap = max(0, gap)
-        self._index = max(0, min(index, len(self._fields) - 1)) if self._fields else 0
         self._on_submit = on_submit
-        self._pending: dict[str, object] | None = None
         #: The last render's component-row geometry: ``(start_row, count)``
         #: per field, in field order.
         self._spans: list[tuple[int, int]] = []
+        # The constructor's index is installed directly: construction moves
+        # nothing and writes no result (the W4b precedent).
+        self._sync_cursor()
+        self._cursor.index = (
+            max(0, min(index, len(self._fields) - 1)) if self._fields else 0
+        )
         self._sync_focus()
 
-    # -- state ------------------------------------------------------------------
+    # -- cursor hooks ------------------------------------------------------------
 
-    @property
-    def index(self) -> int:
-        """The focused field's position."""
-        return self._index
+    def _entry_count(self) -> int:
+        return len(self._fields)
+
+    def _entry_at(self, index: int) -> object | None:
+        return self._fields[index]
+
+    def _cursor_enabled(self) -> bool:
+        return True
+
+    def _cursor_wraps(self) -> bool:
+        return False
+
+    # -- state ------------------------------------------------------------------
 
     @property
     def fields(self) -> tuple[Field, ...]:
@@ -130,7 +140,7 @@ class Form(Widget):
         for position, field in enumerate(self._fields):
             component = field.component
             if getattr(component, "focusable", False):
-                component.focused = position == self._index
+                component.focused = position == self.index
 
     def focus(self, target: int | str) -> bool:
         """Focus a field by position or name; ``True`` when the focus moved.
@@ -150,24 +160,19 @@ class Form(Widget):
             position = int(target)
             if not 0 <= position < len(self._fields):
                 return False
-        if position == self._index:
-            return False
-        self._index = position
+        return self.select(position)
+
+    def select(self, index: int) -> bool:
+        """Place the field cursor on ``index`` and mirror the focus flags."""
+        changed = super().select(index)
         self._sync_focus()
-        self.touch()
-        return True
+        return changed
 
     def move(self, delta: int) -> bool:
-        """Move the focused field ``delta`` places, clamped; ``True`` when it moved."""
-        if not self._fields or delta == 0:
-            return False
-        target = max(0, min(self._index + delta, len(self._fields) - 1))
-        if target == self._index:
-            return False
-        self._index = target
+        """Move the field cursor ``delta`` places and mirror the focus flags."""
+        changed = super().move(delta)
         self._sync_focus()
-        self.touch()
-        return True
+        return changed
 
     # -- events -----------------------------------------------------------------
 
@@ -201,7 +206,7 @@ class Form(Widget):
         """
         if not self._fields:
             return False
-        component = self._fields[self._index].component
+        component = self._fields[self.index].component
         handler = self._event_handler(component, event)
         if handler is not None and handler(event):
             return True
@@ -213,7 +218,7 @@ class Form(Widget):
         if key in ("s-tab", "up"):
             return self.move(-1)
         if key == "enter":
-            self.on_action("activate")
+            self.activate()
             return True
         return False
 
@@ -254,17 +259,14 @@ class Form(Widget):
                 return attribute() if callable(attribute) else attribute
         return None
 
-    def on_action(self, name: str) -> bool:
-        """Run the form's one action (``"activate"``): validate and submit.
+    def activate(self) -> bool:
+        """Validate every field and submit: the form's one action.
 
         Each field's error is written back (``None`` clears it).  Any
-        error answers ``False`` and leaves nothing pending.  Otherwise the
+        error answers ``False`` and leaves no pending result.  Otherwise the
         ``{name: value}`` mapping becomes the one-shot result and
-        ``on_submit`` runs once, with the same mapping.  Other names decline.
+        ``on_submit`` runs once, with the same mapping.
         """
-        if name != "activate":
-            return False
-        self._pending = None
         values: dict[str, object] = {}
         failed = False
         for field in self._fields:
@@ -276,17 +278,12 @@ class Form(Widget):
                 failed = True
         self.touch()  # the errors are row inputs; the fields are not widgets
         if failed:
+            self._clear_result()
             return False
-        self._pending = values
+        self._emit(values)
         if self._on_submit is not None:
             self._on_submit(values)
         return True
-
-    def take(self) -> dict[str, object] | None:
-        """Read the submitted mapping once and clear it."""
-        result = self._pending
-        self._pending = None
-        return result
 
     # -- rendering ----------------------------------------------------------------
 
@@ -353,9 +350,7 @@ class Form(Widget):
         if hit is None:
             return False
         position, _local = hit
-        if position != self._index:
-            self._index = position
-            self._sync_focus()
+        self.select(position)
         return True
 
     def on_click(self, pos: Pos) -> bool:
@@ -378,6 +373,6 @@ class Form(Widget):
 
     def __repr__(self) -> str:
         return (
-            f"Form({len(self._fields)} fields, index={self._index}, "
+            f"Form({len(self._fields)} fields, index={self.index}, "
             f"gap={self._gap})"
         )

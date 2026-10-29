@@ -4,7 +4,6 @@ from motui.kernel.cell import Surface
 from motui.kernel.geom import Pos
 from motui.kernel.layout import Constraints
 from motui.widgets import Button, ButtonSpec, Dialog, confirm_dialog, prompt_dialog
-
 from tests.testing import Rows, key, texts
 
 
@@ -39,9 +38,9 @@ def test_tab_and_the_arrows_step_the_button_row_without_wrapping():
     dialog = confirm_dialog("Continue?")
     assert dialog.index == 0
     assert dialog.on_key(key("tab")) is True and dialog.index == 1
-    assert dialog.on_key(key("tab")) is True and dialog.index == 1
+    assert dialog.on_key(key("tab")) is False and dialog.index == 1
     assert dialog.on_key(key("left")) is True and dialog.index == 0
-    assert dialog.on_key(key("left")) is True and dialog.index == 0
+    assert dialog.on_key(key("left")) is False and dialog.index == 0
     assert dialog.on_key(key("x", "x")) is False
 
 
@@ -82,7 +81,7 @@ def test_a_borderless_dialog_keeps_the_body_and_the_buttons():
 
 
 def test_a_pinned_width_sets_the_box_width():
-    dialog = Dialog("T", Rows("body"), ["OK"], width=30)
+    dialog = Dialog(Rows("body"), title="T", buttons=["OK"], width=30)
     assert len(texts(dialog, 40)[0]) == 30
 
 
@@ -98,7 +97,7 @@ def test_child_at_maps_the_body_and_the_buttons():
 
 
 def test_button_specs_supply_labels_values_and_the_focused_action():
-    dialog = Dialog("T", Rows("body"), [ButtonSpec("Go", 7), ("Stop", 0)])
+    dialog = Dialog(Rows("body"), title="T", buttons=[ButtonSpec("Go", 7), ("Stop", 0)])
     assert dialog.focused_button.label == "Go"
     assert dialog.on_key(key("enter")) is True
     assert dialog.take() == 7
