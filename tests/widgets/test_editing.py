@@ -318,7 +318,7 @@ def test_the_placeholder_is_dim_and_carries_no_cursor_cell(make, expected):
     theme = replace(DEFAULT_THEME, text=replace(DEFAULT_THEME.text, faint=INJECTED))
     row = make(placeholder="hint", theme=theme).render(Constraints(width=10))[0]
     assert row.text == expected
-    assert row.segments[-1].style == INJECTED
+    assert row.segments[-1].style == DEFAULT_THEME.surfaces.control.merge(INJECTED)
     assert all(seg.style.reverse is False for seg in row.segments)
 
 
@@ -328,7 +328,7 @@ def test_unfocused_fields_render_without_a_cursor(make, expected):
     field.focused = False
     row = field.render(Constraints(width=20))[0]
     assert row.text == expected
-    assert row.segments[-1].style == INJECTED
+    assert row.segments[-1].style == DEFAULT_THEME.surfaces.control.merge(INJECTED)
 
 
 def test_the_cursor_block_restyles_the_character_under_it():
@@ -336,7 +336,7 @@ def test_the_cursor_block_restyles_the_character_under_it():
     park(field, 1)
     segments = field.render(Constraints(width=10))[0].segments
     assert [seg.text for seg in segments] == ["a", "b", "c"]
-    assert segments[1].style == Style().merge(INJECTED)
+    assert segments[1].style == DEFAULT_THEME.surfaces.control.merge(INJECTED)
 
 
 def test_a_row_end_cursor_is_a_space_unless_the_row_is_full():
@@ -404,16 +404,63 @@ def test_a_theme_assignment_repaints_the_memoized_rows():
     assert any(seg.style.underline for seg in repainted[0].segments)
 
 
-def test_the_hover_flag_merges_the_theme_band_over_the_whole_row():
-    theme = replace(DEFAULT_THEME, surfaces=replace(DEFAULT_THEME.surfaces, hover=Style(reverse=True)))
+def test_the_hover_flag_merges_the_hover_overlay_over_the_whole_row():
+    theme = replace(
+        DEFAULT_THEME,
+        controls=replace(DEFAULT_THEME.controls, hover=Style(reverse=True)),
+    )
     field = Input("ab", theme=theme)
     plain = field.render(Constraints(width=10))
     field.hover = True
     marked = field.render(Constraints(width=10))
     assert marked != plain
+    floor = DEFAULT_THEME.surfaces.control.merge(Style(reverse=True))
+    assert all(seg.style.bg == floor.bg for seg in marked[0].segments)
     assert all(seg.style.reverse for seg in marked[0].segments)
     field.hover = False
     assert field.render(Constraints(width=10)) == plain
+
+
+def test_every_field_row_sits_on_the_control_floor():
+    for field in (Input("ab"), Editor("ab"), Editor("ab", wrap=WrapMode.OVERFLOW)):
+        field.focused = False
+        row = field.render(Constraints(width=10))[0]
+        assert row.segments[0].style.bg == DEFAULT_THEME.surfaces.control.bg
+        assert all(
+            seg.style.bg == DEFAULT_THEME.surfaces.control.bg for seg in row.segments
+        )
+
+
+def test_read_only_fields_merge_faint_and_the_disabled_overlay():
+    faint = Style(fg="#abcdef")
+    theme = replace(
+        DEFAULT_THEME,
+        text=replace(DEFAULT_THEME.text, faint=faint),
+        controls=replace(DEFAULT_THEME.controls, disabled=Style(dim=True)),
+    )
+    field = Input("keep", theme=theme, read_only=True)
+    field.hover = True  # the read-only floor wins over the pointer's overlay
+    row = field.render(Constraints(width=20))[0]
+    expected = DEFAULT_THEME.surfaces.control.merge(faint).merge(Style(dim=True))
+    assert row.segments[0].style == expected.merge(theme.content.accent)
+    assert row.segments[-1].style == expected
+    assert all(not seg.style.bold and not seg.style.underline for seg in row.segments)
+
+    editor = Editor("keep", theme=theme, read_only=True, wrap=WrapMode.OVERFLOW)
+    row = editor.render(Constraints(width=20))[0]
+    assert row.segments[-1].style == expected
+
+
+def test_focus_does_not_change_the_field_floor():
+    field = Input("ab")
+    field.focused = False
+    plain = field.render(Constraints(width=10))
+    field.focused = True
+    focused = field.render(Constraints(width=10))
+    assert all(
+        seg.style.bg == DEFAULT_THEME.surfaces.control.bg
+        for seg in plain[0].segments + focused[0].segments
+    )
 
 
 # -- clicks and the public input surface -------------------------------------
@@ -641,7 +688,7 @@ def test_the_input_cursor_at_the_end_stays_visible():
     park(field, 10)
     row = field.render(Constraints(width=5))[0]
     assert row.text == "ghij "
-    caret = DEFAULT_THEME.text.base.merge(INJECTED)
+    caret = DEFAULT_THEME.surfaces.control.merge(INJECTED)
     assert row.segments[-1].text == " " and row.segments[-1].style == caret
     assert field.cursor_position(5) == (0, 4)
 
@@ -687,7 +734,7 @@ def test_newlines_paint_one_cell_and_keep_the_character_offsets():
     row = field.render(Constraints(width=4))[0]
     assert row.text == "b cd"
     assert field.cursor == (0, 4)
-    caret = DEFAULT_THEME.text.base.merge(INJECTED)
+    caret = DEFAULT_THEME.surfaces.control.merge(INJECTED)
     assert row.segments[1].text == "d" and row.segments[1].style == caret
 
 
