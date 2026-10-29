@@ -2,10 +2,10 @@
 
 import pytest
 
-from motui.kernel.geom import Pos
 from motui.kernel.cell import Line, Surface
 from motui.kernel.document import descend_chain
 from motui.kernel.events import KeyEvent
+from motui.kernel.geom import Pos
 from motui.kernel.glyphs import GLYPHS
 from motui.kernel.layout import Constraints, Scroll
 from motui.widgets import Input, ScrollPanel
@@ -124,8 +124,8 @@ def test_the_bar_thumb_drags_and_the_track_pages():
     assert scroll.on_drag(Pos(x=9, y=1), "motion") is False
 
     scroll.scroll_to(0)
-    assert scroll.on_drag(Pos(x=9, y=3), "press") is True and scroll.offset == 4  # below: a page down
-    assert scroll.on_drag(Pos(x=9, y=0), "press") is True and scroll.offset == 0  # above: a page up
+    assert scroll.on_drag(Pos(x=9, y=3), "press") is True and scroll.offset == 4
+    assert scroll.on_drag(Pos(x=9, y=0), "press") is True and scroll.offset == 0
     assert scroll.on_drag(Pos(x=8, y=0), "press") is False  # content column, not the bar
     assert scroll.on_click(Pos(x=8, y=0)) is False
     assert scroll.on_click(Pos(x=9, y=0)) is True
@@ -163,7 +163,13 @@ def test_a_natural_height_view_honours_the_height_budget():
     assert [row.text for row in surface] == ["r0", "r1"]
     assert surface.width == 10 and surface.height == 2
     # The 1.x int spelling still shows every child row.
-    assert [row.text for row in scroll.render(Constraints(width=10))] == ["r0", "r1", "r2", "r3", "r4"]
+    assert [row.text for row in scroll.render(Constraints(width=10))] == [
+        "r0",
+        "r1",
+        "r2",
+        "r3",
+        "r4",
+    ]
 
 
 def test_an_explicit_height_wins_over_the_height_budget():

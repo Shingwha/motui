@@ -44,9 +44,8 @@ def _keyword_names(cls) -> list[str]:
     ]
 
 
-@pytest.mark.parametrize(
-    "cls, main",
-    [
+def test_the_main_content_is_the_only_positional_parameter():
+    for cls, main in [
         (Text, "text"),
         (Input, "text"),
         (Editor, "text"),
@@ -55,10 +54,8 @@ def _keyword_names(cls) -> list[str]:
         (Collapsible, "body"),
         (ProgressBar, "value"),
         (Slider, "value"),
-    ],
-)
-def test_the_main_content_is_the_only_positional_parameter(cls, main):
-    assert _positional_names(cls) == [main]
+    ]:
+        assert _positional_names(cls) == [main], cls.__name__
 
 
 def test_the_keyword_tail_follows_the_shared_order():

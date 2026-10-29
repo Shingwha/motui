@@ -225,6 +225,10 @@ def test_ellipsis_clip_postcondition_holds_for_nasty_rows():
 
 #: Width/character matrix for the five modes: ASCII, CJK, emoji, combining
 #: marks, a ZWJ family, whitespace and the empty row.
+#:
+#: The matrix stays parametrized by mode and width; every REFLOW_TEXT is
+#: asserted inside each case.  The former text axis repeated the same row
+#: contract eight times per (mode, width) pair.
 REFLOW_TEXTS = [
     "abcdef",
     "hello world and more",
@@ -242,23 +246,23 @@ MULTI_ROW_MODES = (WrapMode.WORD, WrapMode.CHAR)
 
 @pytest.mark.parametrize("mode", tuple(WrapMode))
 @pytest.mark.parametrize("width", [0, 1, 2, 3, 7])
-@pytest.mark.parametrize("text", REFLOW_TEXTS)
-def test_reflow_obeys_the_row_contract(mode: WrapMode, width: int, text: str) -> None:
-    rows = Line.from_text(text).reflow(mode, width)
-    assert rows
-    if mode in MULTI_ROW_MODES:
-        assert len(rows) >= 1
-    else:
-        assert len(rows) == 1
-    if mode is WrapMode.OVERFLOW:
-        assert rows == [Line.from_text(text)]
-    else:
-        assert all(row.width <= width for row in rows), (
-            text,
-            width,
-            mode,
-            [row.text for row in rows],
-        )
+def test_reflow_obeys_the_row_contract(mode: WrapMode, width: int) -> None:
+    for text in REFLOW_TEXTS:
+        rows = Line.from_text(text).reflow(mode, width)
+        assert rows
+        if mode in MULTI_ROW_MODES:
+            assert len(rows) >= 1
+        else:
+            assert len(rows) == 1
+        if mode is WrapMode.OVERFLOW:
+            assert rows == [Line.from_text(text)]
+        else:
+            assert all(row.width <= width for row in rows), (
+                text,
+                width,
+                mode,
+                [row.text for row in rows],
+            )
 
 
 def test_reflow_word_matches_the_shared_break_rule() -> None:

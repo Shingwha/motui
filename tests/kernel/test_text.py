@@ -11,8 +11,6 @@ from __future__ import annotations
 
 from dataclasses import replace
 
-import pytest
-
 from motui.kernel.cell import Line, Segment
 from motui.kernel.geom import Pos
 from motui.kernel.style import Style
@@ -101,19 +99,16 @@ def test_regional_indicators_pair_into_one_flag_cell():
     assert visible_width("\U0001F1EF\U0001F1F5\U0001F1E8\U0001F1F3") == 4
 
 
-@pytest.mark.parametrize(
-    "text, expected",
-    [
+def test_visible_width_measures_the_mixed_corpus():
+    for text, expected in [
         ("\u26a0\ufe0f Blocked", 10),
         ("\U0001F468\u200D\U0001F469\u200D\U0001F467\u200D\U0001F466", 2),
         ("e\u0301e\u0301e\u0301", 3),
         ("\u65e5\u672c\u8a9e\u306e\u30c6\u30b9\u30c8", 14),
         ("a\tb\tc", 5),
         ("caf\u00e9 \U0001F600 \u4e2d\u6587", 12),
-    ],
-)
-def test_visible_width_measures_the_mixed_corpus(text: str, expected: int):
-    assert visible_width(text) == expected
+    ]:
+        assert visible_width(text) == expected, text
 
 
 def test_wrap_text_empty_and_nonpositive_width():
@@ -285,6 +280,7 @@ def test_plain_text_rows_decline_clicks_and_hovers():
     field = Text("hello")
     field.render(Constraints(width=10))
     assert field.on_hover(Pos(x=0, y=0)) is False
+    assert field.on_hover(None) is False
     assert field.on_click(Pos(x=0, y=0)) is False
     assert field.take() is None
 

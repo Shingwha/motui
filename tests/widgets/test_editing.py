@@ -57,12 +57,12 @@ def test_enter_is_the_editors_newline_and_the_inputs_submit_gesture():
         assert field.text == expected
 
 
-@pytest.mark.parametrize("name", ["escape", "page_up"])
-def test_unbound_keys_are_declined_and_change_nothing(name):
-    field = Input("ab")
-    park(field, 2)
-    assert field.on_key(key(name)) is False
-    assert field.text == "ab" and flat(field) == 2
+def test_unbound_keys_are_declined_and_change_nothing():
+    for name in ["escape", "page_up"]:
+        field = Input("ab")
+        park(field, 2)
+        assert field.on_key(key(name)) is False
+        assert field.text == "ab" and flat(field) == 2
 
 
 def test_a_custom_keymap_rebinds_and_drops_a_key():
@@ -280,16 +280,13 @@ def test_the_selection_outranks_the_cursor_on_a_shared_cell():
 # -- rendering ---------------------------------------------------------------
 
 
-@pytest.mark.parametrize(
-    "make, width, text, expected",
-    [
+def test_render_rows():
+    for make, width, text, expected in [
         (Input, 10, "ab", ["\u276f ab"]),
         (Input, 6, "a\nbb\nccc", ["\u276f a bb"]),
         (Editor, 4, "abcdefgh", ["abcd", "efgh"]),
-    ],
-)
-def test_render_rows(make, width, text, expected):
-    assert texts(make(text), width) == expected
+    ]:
+        assert texts(make(text), width) == expected, (make, width)
 
 
 def test_an_empty_focused_field_renders_the_cursor_cell():
@@ -364,17 +361,14 @@ def test_max_rows_windows_the_rows_around_the_cursor():
     assert texts(windowed, 20) == ["line7", "line8", "line9 "]
 
 
-@pytest.mark.parametrize(
-    "make, width, text, cursor, cell",
-    [
+def test_cursor_position_reports_the_block_cursor_cell():
+    for make, width, text, cursor, cell in [
         (Input, 6, "abcdefgh", 5, (0, 5)),
         (Editor, 4, "abcdefgh", 5, (1, 1)),
-    ],
-)
-def test_cursor_position_reports_the_block_cursor_cell(make, width, text, cursor, cell):
-    field = make(text)
-    park(field, cursor)
-    assert field.cursor_position(width) == cell
+    ]:
+        field = make(text)
+        park(field, cursor)
+        assert field.cursor_position(width) == cell, (make, width)
 
 
 def test_a_theme_assignment_repaints_the_memoized_rows():
@@ -628,14 +622,14 @@ def test_input_defaults_to_the_overflow_single_line_guard():
 # -- single-line overflow: the W2.5b default ---------------------------------
 
 
-@pytest.mark.parametrize("width", [20, 40])
-def test_a_long_input_stays_one_row(width):
-    field = Input("x" * 200)
-    assert field.render(Constraints(width=width)).height == 1
-    park(field, 200)
-    surface = field.render(Constraints(width=width))
-    assert surface.height == 1
-    assert all(len(row.text) <= width for row in surface)
+def test_a_long_input_stays_one_row():
+    for width in [20, 40]:
+        field = Input("x" * 200)
+        assert field.render(Constraints(width=width)).height == 1
+        park(field, 200)
+        surface = field.render(Constraints(width=width))
+        assert surface.height == 1
+        assert all(len(row.text) <= width for row in surface)
 
 
 def test_the_input_cursor_at_the_end_stays_visible():

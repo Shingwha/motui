@@ -2,8 +2,6 @@
 
 from __future__ import annotations
 
-import pytest
-
 from motui.demo.registry import TILES
 from motui.demo.sections import ComponentsScene, LayoutScene, TerminalScene
 from motui.demo.sections.menu import MenuScene
@@ -87,15 +85,15 @@ def test_randomized_transition_replays_and_lands_on_the_static_frame():
     assert first[-1] == _frame(static)
 
 
-@pytest.mark.parametrize("name", [spec.name for spec in TILES])
-def test_every_experiment_enters_renders_and_returns_home(name):
-    showcase = Showcase(name)
-    assert _frame(showcase).strip()
-    showcase.on_key(KeyEvent("escape"))
-    assert showcase.scene == "menu"
-    for _ in range(20):
-        showcase.tick()
-    assert "SIGNAL LAB" in _frame(showcase)
+def test_every_experiment_enters_renders_and_returns_home():
+    for spec in TILES:
+        showcase = Showcase(spec.name)
+        assert _frame(showcase).strip()
+        showcase.on_key(KeyEvent("escape"))
+        assert showcase.scene == "menu"
+        for _ in range(20):
+            showcase.tick()
+        assert "SIGNAL LAB" in _frame(showcase)
 
 
 def test_help_calm_and_global_theme_shortcuts_work_from_any_scene():

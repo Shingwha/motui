@@ -9,6 +9,7 @@ from motui.app.runtime import Timer
 from motui.kernel import Theme
 from motui.kernel.cell import Line, Surface
 from motui.kernel.document import Placement, Sizing
+from motui.kernel.events import KeyEvent
 from motui.kernel.layout import Constraints
 from motui.terminal import (
     HeadlessScreen,
@@ -16,7 +17,6 @@ from motui.terminal import (
     Terminal,
     TerminalOptions,
 )
-from motui.kernel.events import KeyEvent
 from motui.widgets import Button, Field, Form, Input, Panel, Row, ScrollPanel
 from motui.widgets.base import Widget
 from tests.testing import (

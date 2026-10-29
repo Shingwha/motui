@@ -183,19 +183,15 @@ def test_a_stack_is_a_container_with_adopted_children():
 # -- Align --------------------------------------------------------------------
 
 
-@pytest.mark.parametrize(
-    ("horizontal", "left"), [("left", 0), ("center", 2), ("right", 4)]
-)
-@pytest.mark.parametrize(
-    ("vertical", "top"), [("top", 0), ("middle", 1), ("bottom", 2)]
-)
-def test_align_places_the_child_at_each_anchor(horizontal, left, vertical, top):
-    aligned = Align(Rows("ab", "cd"), horizontal=horizontal, vertical=vertical)
-    rows = aligned.render(Constraints(width=6, max_height=4))
-    expected = [" " * 6] * 4
-    expected[top] = " " * left + "ab" + " " * (6 - left - 2)
-    expected[top + 1] = " " * left + "cd" + " " * (6 - left - 2)
-    assert [row.text for row in rows] == expected
+def test_align_places_the_child_at_each_anchor():
+    for horizontal, left in [("left", 0), ("center", 2), ("right", 4)]:
+        for vertical, top in [("top", 0), ("middle", 1), ("bottom", 2)]:
+            aligned = Align(Rows("ab", "cd"), horizontal=horizontal, vertical=vertical)
+            rows = aligned.render(Constraints(width=6, max_height=4))
+            expected = [" " * 6] * 4
+            expected[top] = " " * left + "ab" + " " * (6 - left - 2)
+            expected[top + 1] = " " * left + "cd" + " " * (6 - left - 2)
+            assert [row.text for row in rows] == expected, (horizontal, vertical)
 
 
 def test_align_rejects_unknown_anchors():

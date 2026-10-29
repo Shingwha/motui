@@ -36,9 +36,8 @@ def test_button_renders_one_fitted_row_on_the_control_floor():
     assert button.render(Constraints(width=3))[0].text == " R\u2026"
 
 
-@pytest.mark.parametrize(
-    "kind, expected",
-    [
+def test_the_four_button_kinds_paint_their_own_floors():
+    for kind, expected in [
         (
             ButtonKind.NEUTRAL,
             DEFAULT_THEME.surfaces.control.merge(DEFAULT_THEME.text.base),
@@ -52,11 +51,9 @@ def test_button_renders_one_fitted_row_on_the_control_floor():
             ButtonKind.DANGER,
             DEFAULT_THEME.surfaces.danger.merge(DEFAULT_THEME.text.inverse),
         ),
-    ],
-)
-def test_the_four_button_kinds_paint_their_own_floors(kind, expected):
-    button = Button("Run", kind=kind)
-    assert button.render(Constraints(width=20))[0].segments[0].style == expected
+    ]:
+        button = Button("Run", kind=kind)
+        assert button.render(Constraints(width=20))[0].segments[0].style == expected
 
 
 def test_button_accepts_a_string_kind_and_normalizes_it():
@@ -243,33 +240,30 @@ def test_checkbox_hover_focus_and_disabled_use_the_shared_overlay():
     )
 
 
-@pytest.mark.parametrize(
-    "build, row, col",
-    [
-        (lambda theme: Select([Option("one"), Option("two"), Option("three")], theme=theme), 2, 0),
-        (lambda theme: Tabs(["one", "two"], theme=theme), 0, 8),
-        (lambda theme: Tree([TreeNode("a"), TreeNode("b")], theme=theme), 1, 0),
-        (lambda theme: Table([["a"], ["b"]], headers=["h"], theme=theme), 5, 0),
-    ],
-)
-def test_hover_at_marks_and_clears_one_row_across_components(build, row, col):
+def test_hover_at_marks_and_clears_one_row_across_components():
     hover = Style(underline=True)
     theme = replace(
         DEFAULT_THEME,
         surfaces=replace(DEFAULT_THEME.surfaces, hover=hover),
         rows=replace(DEFAULT_THEME.rows, hover=hover),
     )
-    component = build(theme)
-    plain = texts(component, 30)
-    assert component.on_hover(Pos(x=col, y=row)) is True
-    assert any(
-        seg.style.underline
-        for line in component.render(Constraints(width=30))
-        for seg in line.segments
-    )
-    assert component.on_hover(Pos(x=col, y=row)) is False
-    assert component.on_hover(None) is True
-    assert texts(component, 30) == plain
+    for build, row, col in [
+        (lambda theme: Select([Option("one"), Option("two"), Option("three")], theme=theme), 2, 0),
+        (lambda theme: Tabs(["one", "two"], theme=theme), 0, 8),
+        (lambda theme: Tree([TreeNode("a"), TreeNode("b")], theme=theme), 1, 0),
+        (lambda theme: Table([["a"], ["b"]], headers=["h"], theme=theme), 5, 0),
+    ]:
+        component = build(theme)
+        plain = texts(component, 30)
+        assert component.on_hover(Pos(x=col, y=row)) is True
+        assert any(
+            seg.style.underline
+            for line in component.render(Constraints(width=30))
+            for seg in line.segments
+        )
+        assert component.on_hover(Pos(x=col, y=row)) is False
+        assert component.on_hover(None) is True
+        assert texts(component, 30) == plain
 
 
 def test_the_action_hints_default_to_no_tooltip():

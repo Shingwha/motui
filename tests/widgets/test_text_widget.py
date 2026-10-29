@@ -9,7 +9,6 @@ from motui.kernel.style import Style
 from motui.kernel.text import WrapMode
 from motui.kernel.theme import DEFAULT_THEME
 from motui.widgets import Column, Text
-from motui.widgets.base import Widget
 
 
 class SpanText(Text):
@@ -21,20 +20,6 @@ class SpanText(Text):
                 (Segment("see ", Style()), Segment("docs", Style(), action="open"))
             ).clip(WrapMode.ELLIPSIS, width)
         ]
-
-
-def test_text_is_a_widget_with_no_children_and_pointer_capabilities():
-    text = Text("hi")
-
-    assert isinstance(text, Widget)
-    assert text.parent is None and text.children == []
-    assert list(text.walk()) == [text]
-    assert (text.focusable, text.clickable, text.hoverable, text.activatable) == (
-        False,
-        True,
-        True,
-        False,
-    )
 
 
 def test_a_container_adopts_text_and_sets_its_parent():
@@ -80,16 +65,6 @@ def test_on_hover_marks_the_span_and_none_clears_it():
     assert text.on_hover(None) is True
     assert text.on_hover(None) is False
     assert text.render(Constraints(width=40))[0].segments[1].style == Style()
-
-
-def test_plain_text_declines_both_pointer_hooks():
-    text = Text("hello")
-    text.render(Constraints(width=10))
-
-    assert text.on_click(Pos(y=0, x=0)) is False
-    assert text.take() is None
-    assert text.on_hover(Pos(y=0, x=0)) is False
-    assert text.on_hover(None) is False
 
 
 def test_text_has_no_action_verb():

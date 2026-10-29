@@ -44,28 +44,20 @@ TOKEN_CLASSES = (
 )
 
 
-@pytest.mark.parametrize("cls", TOKEN_CLASSES, ids=lambda cls: cls.__name__)
-def test_token_values_are_frozen_slotted_keyword_only(cls):
-    assert is_dataclass(cls)
-    params = cls.__dataclass_params__
-    assert params.frozen is True
-    assert params.slots is True
-    assert all(field.kw_only for field in fields(cls))
-
-
-@pytest.mark.parametrize("cls", TOKEN_CLASSES, ids=lambda cls: cls.__name__)
-def test_every_token_field_has_a_default_and_the_value_constructs(cls):
-    for field in fields(cls):
-        assert field.default is not MISSING or field.default_factory is not MISSING, (
-            f"{cls.__name__}.{field.name} has no default"
-        )
-    assert isinstance(cls(), cls)
-
-
-@pytest.mark.parametrize("cls", TOKEN_CLASSES, ids=lambda cls: cls.__name__)
-def test_token_values_reject_positional_arguments(cls):
-    with pytest.raises(TypeError):
-        cls(Style(fg="#ff0000"))  # type: ignore[misc]
+def test_token_values_are_frozen_slotted_keyword_only_with_defaults():
+    for cls in TOKEN_CLASSES:
+        assert is_dataclass(cls)
+        params = cls.__dataclass_params__
+        assert params.frozen is True, cls.__name__
+        assert params.slots is True, cls.__name__
+        assert all(field.kw_only for field in fields(cls)), cls.__name__
+        for field in fields(cls):
+            assert field.default is not MISSING or field.default_factory is not MISSING, (
+                f"{cls.__name__}.{field.name} has no default"
+            )
+        assert isinstance(cls(), cls)
+        with pytest.raises(TypeError):
+            cls(Style(fg="#ff0000"))  # type: ignore[misc]
 
 
 def test_every_theme_field_is_a_role_group():
@@ -137,9 +129,8 @@ def test_from_palette_is_a_pure_derivation():
     assert DARK_PALETTE != LIGHT_PALETTE
 
 
-@pytest.mark.parametrize(
-    ("env", "expected"),
-    [
+def test_auto_reads_only_the_passed_environment():
+    for env, expected in [
         ({}, Theme.dark),
         ({"TERM_BACKGROUND": "light"}, Theme.light),
         ({"TERM_BACKGROUND": "white"}, Theme.light),
@@ -152,10 +143,8 @@ def test_from_palette_is_a_pure_derivation():
         ({"COLORFGBG": "0;15"}, Theme.light),
         ({"TERM_BACKGROUND": "unknown"}, Theme.dark),
         ({"COLORFGBG": "no-color"}, Theme.dark),
-    ],
-)
-def test_auto_reads_only_the_passed_environment(env, expected):
-    assert Theme.auto(env) == expected()
+    ]:
+        assert Theme.auto(env) == expected(), env
 
 
 def test_row_band_precedence_is_exact():

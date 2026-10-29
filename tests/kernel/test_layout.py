@@ -93,15 +93,16 @@ _THUMB_TABLE = [
 ]
 
 
-@pytest.mark.parametrize(
-    ("offset", "content", "viewport", "track", "min_length", "expected"),
-    _THUMB_TABLE,
-)
-def test_thumb_matches_the_1x_table(
-    offset: int, content: int, viewport: int, track: int, min_length: int, expected
-):
-    axis = ScrollAxis(offset=offset, content=content, viewport=viewport)
-    assert axis.thumb(track, min_length) == expected
+def test_thumb_matches_the_1x_table():
+    for offset, content, viewport, track, min_length, expected in _THUMB_TABLE:
+        axis = ScrollAxis(offset=offset, content=content, viewport=viewport)
+        assert axis.thumb(track, min_length) == expected, (
+            offset,
+            content,
+            viewport,
+            track,
+            min_length,
+        )
 
 
 def test_viewport_exposes_an_immutable_scroll_value():

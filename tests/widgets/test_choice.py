@@ -35,13 +35,6 @@ def test_a_non_wrapping_select_clamps_at_the_ends():
         assert select.index == index
 
 
-def test_an_empty_list_has_no_selection_and_cannot_move():
-    empty = Select([])
-    assert empty.selected is None
-    assert empty.move(1) is False
-    assert list(empty.render(Constraints(width=20))) == []
-
-
 def test_assigning_the_index_clamps_into_the_rows():
     menu = Select(THREE)
     menu.index = 99
@@ -171,12 +164,6 @@ def test_click_ignores_the_column_and_maps_through_the_window():
     assert menu.on_click(Pos(x=0, y=2)) is True and menu.index == 5
     menu.index = 5
     assert menu.on_click(Pos(x=0, y=3)) is False and menu.index == 5
-
-
-def test_an_empty_menu_activates_to_nothing():
-    empty = Select([])
-    assert empty.on_action("activate") is False
-    assert empty.take() is None
 
 
 def test_a_disabled_select_refuses_every_gesture_but_still_renders():

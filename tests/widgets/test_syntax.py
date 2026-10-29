@@ -5,6 +5,7 @@ from dataclasses import replace
 import pytest
 
 from motui.kernel.cell import Line
+from motui.kernel.layout import Constraints
 from motui.kernel.style import Style
 from motui.kernel.theme import DEFAULT_THEME
 from motui.widgets import Markdown
@@ -14,27 +15,22 @@ from motui.widgets.syntax import (
     default_highlighter,
     highlight,
 )
-from motui.kernel.layout import Constraints
 
 
-
-@pytest.mark.parametrize(
-    "lang, code, kind, token",
-    [
+def test_the_highlighter_colors_the_matching_tokens():
+    for lang, code, kind, token in [
         ("python", "x = 1", "number", "1"),
         ("python", "# note", "comment", "# note"),
         ("py", '"text"', "string", '"text"'),
         ("bash", "# note", "comment", "# note"),
         ("unknown", "x = 1", None, "x = 1"),
-    ],
-)
-def test_the_highlighter_colors_the_matching_tokens(lang, code, kind, token):
-    row = highlight(code, lang)[0]
-    if kind is None:
-        assert all(seg.style == DEFAULT_THEME.content.code for seg in row.segments)
-        return
-    matched = [seg for seg in row.segments if seg.text == token]
-    assert matched and matched[0].style != DEFAULT_THEME.content.code
+    ]:
+        row = highlight(code, lang)[0]
+        if kind is None:
+            assert all(seg.style == DEFAULT_THEME.content.code for seg in row.segments)
+            continue
+        matched = [seg for seg in row.segments if seg.text == token]
+        assert matched and matched[0].style != DEFAULT_THEME.content.code
 
 
 def test_python_keywords_carry_the_accent_hue():

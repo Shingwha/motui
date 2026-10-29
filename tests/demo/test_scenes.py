@@ -2,8 +2,6 @@
 
 from __future__ import annotations
 
-import pytest
-
 from motui.demo import PAGE_PHASE, render_scene
 from motui.demo.minis import mini_layout
 from motui.demo.sections import DashboardScene, GalleryScene
@@ -80,12 +78,9 @@ def test_splash_keyboard_launches_and_remixes():
     assert scene.on_key(KeyEvent("q")) == "quit"
 
 
-@pytest.mark.parametrize(
-    "factory",
-    [lambda: DashboardScene(Theme.dark()), lambda: GalleryScene(Theme.dark())],
-)
-def test_sections_return_to_the_menu(factory):
-    assert factory().on_key(KeyEvent("escape")) == "menu"
+def test_sections_return_to_the_menu():
+    for factory in (lambda: DashboardScene(Theme.dark()), lambda: GalleryScene(Theme.dark())):
+        assert factory().on_key(KeyEvent("escape")) == "menu"
 
 
 def test_dashboard_samples_at_four_hz_and_runs_a_causal_mission():

@@ -306,13 +306,6 @@ def test_the_action_hook_is_the_named_action_door():
     assert widget._log == [("action", "activate"), ("action", "next")]
 
 
-def test_the_resize_hook_is_a_no_op_on_the_base():
-    widget = Typed()
-
-    assert widget.on_resize(ResizeEvent(80, 24)) is None
-    assert widget._log == []
-
-
 def test_the_focus_hook_flips_the_focused_flag():
     widget = Typed()
 

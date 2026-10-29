@@ -9,7 +9,6 @@ from motui.kernel.layout import Constraints
 from motui.kernel.style import Style
 from motui.kernel.theme import DEFAULT_THEME, Styles
 from motui.widgets import Notice, ShortcutBar, StatusLine
-
 from tests.testing import texts
 
 
@@ -49,18 +48,15 @@ def test_shortcut_bar_renders_key_label_pairs_with_a_separator():
     assert texts(ShortcutBar([]), 20) == [""]
 
 
-@pytest.mark.parametrize(
-    "level, expected",
-    [
+def test_a_notice_leads_with_its_level_glyph():
+    for level, expected in [
         ("info", "i hello"),
         ("success", "\u2713 hello"),
         ("warn", "! hello"),
         ("error", "\u00d7 hello"),
         ("odd", "i hello"),
-    ],
-)
-def test_a_notice_leads_with_its_level_glyph(level, expected):
-    assert texts(Notice("hello", level=level), 30) == [expected]
+    ]:
+        assert texts(Notice("hello", level=level), 30) == [expected], level
 
 
 def test_a_leveled_notice_prefix_carries_the_level_style():
