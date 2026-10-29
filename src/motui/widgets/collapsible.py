@@ -5,7 +5,7 @@ while the section is open, ``\u25b8 `` while it is folded -- and the
 :attr:`Collapsible.body` component's rows follow, inset by the marker's
 width, only while :attr:`Collapsible.open` is ``True``.  The whole title
 row is the control: :meth:`Collapsible.on_click` and
-:meth:`Collapsible.on_action` are the same flip, and each leaves the new
+:meth:`Collapsible.activate` are the same flip, and each leaves the new
 state pending for :meth:`Collapsible.take` (D15 -- a state plus
 controller methods, no callbacks)::
 
@@ -37,27 +37,27 @@ flip doors and renders its title in ``text.faint``.
 
 from __future__ import annotations
 
+from ..kernel.cell import Line, Segment, Surface
 from ..kernel.document import Component
 from ..kernel.geom import Pos
 from ..kernel.glyphs import GLYPHS, Glyphs, seat
-from ..kernel.cell import Line, Segment, Surface
 from ..kernel.layout import Constraints
 from ..kernel.text import WrapMode, visible_width
 from ..kernel.theme import Styles, Theme
-from ..widgets.base import Widget
+from .base import ActionWidget
 
 __all__ = ["Collapsible"]
 
 
-class Collapsible(Widget):
+class Collapsible(ActionWidget):
     """A titled section whose body folds away under its title row.
 
-    ``open`` is a read-write attribute: :meth:`on_click` and
-    :meth:`on_action` flip it and leave the new value pending -- the host
-    reads it once through :meth:`take` -- and a host may also set it
-    directly (nothing renders stale: the body is re-rendered per call).
-    ``body`` is a read-write attribute too, the component whose rows follow
-    the title while open.
+    ``open`` is a read-write attribute: :meth:`activate` / :meth:`toggle`
+    flip it and leave the new value pending -- the host reads it once
+    through :meth:`take` -- and a host may also set it directly (nothing
+    renders stale: the body is re-rendered per call).  ``body`` is a
+    read-write attribute too, the component whose rows follow the title
+    while open.
 
     The title row renders ``"\u25be title"`` / ``"\u25b8 title"`` in
     ``content.accent``; the pointer's row marking
@@ -81,9 +81,7 @@ class Collapsible(Widget):
         "_body_count",
         "_body_memo",
         "_marked",
-        "_pending",
         "body",
-        "disabled",
         "glyphs",
         "open",
         "title",
@@ -98,16 +96,16 @@ class Collapsible(Widget):
 
     def __init__(
         self,
-        title: str,
         body: Component,
         *,
+        title: str = "",
         open: bool = True,
         glyphs: Glyphs = GLYPHS,
         disabled: bool = False,
         theme: Theme | None = None,
         styles: Styles | None = None,
     ) -> None:
-        super().__init__(theme, styles)
+        super().__init__(disabled=disabled, theme=theme, styles=styles)
         self.title = title
         self.body = body
         # The explicit tree: the folded content is this section's child, and
@@ -115,15 +113,10 @@ class Collapsible(Widget):
         self.children = [body]
         self.open = open
         self.glyphs = glyphs
-        #: Refuse both flip doors and paint the disabled title band.
-        self.disabled = disabled
         # The title row is marked while the pointer is on it; written by
         # ``on_hover``, read by ``render``.  Unmarked renders byte-for-byte
         # the same rows.
         self._marked = False
-        #: The pending toggle: written by ``on_click`` / ``activate`` (the
-        #: new ``open`` state), read once through :meth:`take`.
-        self._pending: bool | None = None
         #: The body memo: ``(body-row identity tuple, width, marker indent)``
         #: -> ``(inset rows, the body rows that key it)`` -- ``None`` until
         #: the first open render.
@@ -140,29 +133,23 @@ class Collapsible(Widget):
         ``pos.y == 0`` is the title row -- the control -- and any other row
         (a body row, a cell past the render) answers ``False``: the body is
         the body's own business.  ``pos.x`` is ignored: the title row owns
-        the whole width.  A hit flips the state and leaves it pending (even
-        when the state already read that way -- a hit is a hit, and the
-        flip is deterministic).  A disabled section refuses the click.
+        the whole width.  A disabled section refuses the click.
         """
         if pos.y != 0:
             return False
-        return self.on_action("activate")
+        return self.activate()
 
-    def on_action(self, name: str) -> bool:
-        """Run the section's action: ``"toggle"`` (or ``"activate"``) folds it."""
-        if name not in ("activate", "toggle"):
-            return False
+    def activate(self) -> bool:
+        """Fold or unfold the section; the same flip as :meth:`toggle`."""
+        return self.toggle()
+
+    def toggle(self) -> bool:
+        """Flip :attr:`open` and leave the new state pending; disabled refuses."""
         if self.disabled:
             return False
         self.open = not self.open
-        self._pending = self.open
+        self._emit(self.open)
         return True
-
-    def take(self) -> bool | None:
-        """Read the pending flip (the new ``open`` state) once and clear it."""
-        value = self._pending
-        self._pending = None
-        return value
 
     def child_at(self, row: int, col: int) -> tuple[Component, int, int] | None:
         """Map a cell to the body while open; the title belongs to the wrapper.
@@ -224,7 +211,11 @@ class Collapsible(Widget):
         mark = seat(
             self.glyphs.fold_open if self.open else self.glyphs.fold_closed
         )
-        out = [Line((Segment(mark, style), Segment(self.title, style))).clip(WrapMode.ELLIPSIS, width)]
+        out = [
+            Line((Segment(mark, style), Segment(self.title, style))).clip(
+                WrapMode.ELLIPSIS, width
+            )
+        ]
         if self.open:
             indent = visible_width(mark)
             body_rows = list(self.body.render(Constraints(width=max(0, width - indent))))

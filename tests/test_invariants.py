@@ -107,13 +107,13 @@ CASES = {
     ),
     "CheckboxGroup": lambda: CheckboxGroup(["one", _WIDE]),
     "Collapsible": lambda: Collapsible(
-        "foldable", Text(_WIDE), glyphs=replace(GLYPHS, fold_open="+", fold_closed="-")
+        Text(_WIDE), title="foldable", glyphs=replace(GLYPHS, fold_open="+", fold_closed="-")
     ),
     "Column": lambda: Column([Text("a"), Text("b")], gap=1),
     "ComboBox": lambda: ComboBox([Option("alpha"), Option("beta")]),
     "ContextMenu": lambda: ContextMenu([Option("alpha"), Option("beta")]),
     "Dialog": lambda: Dialog(
-        "Proceed?", Text("body"), ["OK", "Cancel"], border=Border.rounded()
+        Text("body"), title="Proceed?", buttons=["OK", "Cancel"], border=Border.rounded()
     ),
     "Diff": lambda: Diff("a\nb\nc\nd", "a\nB\nc\nd\ne"),
     "Divider": lambda: Divider(label="section", char="="),

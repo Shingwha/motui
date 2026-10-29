@@ -3,13 +3,13 @@
 from __future__ import annotations
 
 from motui.app import FocusManager, Modal
+from motui.kernel.cell import Line, Surface
 from motui.kernel.events import KeyEvent, MouseEvent, PasteEvent
 from motui.kernel.geom import Pos
-from motui.kernel.cell import Line, Surface
 from motui.kernel.layout import Constraints
-from motui.widgets.text import Text
 from motui.kernel.style import Style
 from motui.widgets import Button, ButtonSpec, Dialog
+from motui.widgets.text import Text
 from tests.testing import headless_tui, key, many, press
 
 
@@ -244,7 +244,7 @@ def test_escape_nobody_takes_cancels_and_other_keys_are_consumed():
 
 def test_a_none_valued_decision_still_closes_the_modal():
     tui = framed("hello")
-    dialog = Dialog("", Text("body"), [ButtonSpec("No", None)])
+    dialog = Dialog(Text("body"), buttons=[ButtonSpec("No", None)])
     modal = Modal(tui, dialog)
     modal.open()
     assert modal.handle(key("escape")) is True

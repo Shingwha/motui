@@ -143,7 +143,7 @@ class DashboardScene(Scene):
         self.spark.style = (
             self.theme.status.danger if strength > 0.65 else self.theme.status.success
         )
-        self.signal_bar.fraction = signal
+        self.signal_bar.value = signal
         rows = []
         for index in range(3):
             active = index == self._channel

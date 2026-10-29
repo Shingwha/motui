@@ -102,9 +102,9 @@ class ComponentsScene(Scene):
         self.save = Button("save preset", theme=theme)
         self.confirm = Button("arm uplink\u2026", theme=theme)
         self.dialog = Dialog(
-            "arm the uplink?",
             Text("route DSN-07 through relay-04?", theme=theme),
-            [("arm signal", "ok"), ("cancel", None)],
+            title="arm the uplink?",
+            buttons=[("arm signal", "ok"), ("cancel", None)],
             theme=theme,
         )
 
