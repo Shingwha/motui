@@ -1,29 +1,23 @@
 """Tabs: the horizontal content strip -- one row, one underline indicator.
 
 :class:`Tabs` is the strip a content view switch wears: exactly one row of
-``" a \\u2502 b \\u2502 c "`` -- one space of breathing room at both ends,
+``" a \u2502 b \u2502 c "`` -- one space of breathing room at both ends,
 the labels joined by ``" " + glyphs.vertical_rule + " "``, the whole row ``fit`` to the
 painting width so a narrow screen truncates with an ellipsis instead of
 wrapping.  The active label is the strip's **indicator**: it carries
-``content.accent`` merged with the indicator role (``controls.focus``,
-whose default underline is one hue with the mark) **and the underline
-mark** -- the indicator's shape, which survives every color mode as an SGR
-attribute, so an active label reads as active even with the colors off.
+``content.accent`` **and the underline mark** -- the indicator's shape, which
+survives every color mode as an SGR attribute, so an active label reads as
+active even with the colors off -- and the shared
+``controls.overlay(focused=...)`` on top, so the strip's focus is visible.
 The other labels wear ``text.faint``, the
 dividers ``text.muted`` -- a separator is never
-accent -- and the label under the pointer merges ``surfaces.hover``.
+accent -- and the label under the pointer merges ``surfaces.hover``;
+a disabled label wears ``text.faint`` plus the disabled overlay.
 
-``focused`` is the focus flag the focus tier sets
-The focus tier's flag.  While it is ``False`` the
-indicator **drops from accent to muted** -- the label is *not* dimmed (the
-old reverse-video recipe dimmed it; that behaviour is gone).  The color
-rule is worth spelling out because :meth:`~motui.kernel.style.Style.merge`
-cannot take "just the foreground": the default indicator is the theme's
-``accent`` whole (its ``fg`` *and* its bold flag), so an unfocused strip
-composes ``content.accent.merge(text.muted)`` -- ``muted`` whole, the same
-rule the ``NavList`` bar follows -- rather than merging something onto
-``accent`` and hoping to lower its weight.  The underline mark stays: an
-unfocused strip loses the indicator's hue, never the indicator.
+``focused`` is the focus flag the focus tier sets.  The active label keeps
+its accent hue whether or not the strip is focused; the focus overlay adds
+the extra emphasis (bold, underline, reverse by default), so an unfocused
+strip is still readable as the selected strip.
 
 ``disabled_items`` names the indices that are visible but not selectable:
 their label renders in ``text.faint``, so a
@@ -92,17 +86,16 @@ class Tabs(LabelStrip):
     override): ``content.accent`` paints the active label,
     ``text.faint`` the inactive and disabled ones,
     ``surfaces.hover`` the label under the pointer, ``text.muted`` the
-    dividers and the separator glyph is ``glyphs.vertical_rule``; the
-    indicator's color is ``controls.focus`` -- so the default active label
-    is one hue, marked by the underline.  While ``focused`` is ``False`` the
-    indicator composes ``text.muted`` (whole) instead; the label's own
-    style is untouched.  ``focused`` starts ``True``, the old default.
-
-    ``_last_width`` is the width the last :meth:`render` painted at -- the
-    geometry :meth:`on_click` maps a column against; until the first paint it
-    is 80, the same convention as ``TextBuffer.last_width``.  The marking
-    starts ``None``, so an un-hovered strip renders exactly the bytes it
-    always did.
+    dividers and the separator glyph is ``glyphs.vertical_rule``.  The
+    active label always carries the underline mark and merges
+    ``controls.overlay(focused=...)`` (bold+underline+reverse by default)
+    while the strip is focused; a disabled label merges
+    ``controls.overlay(disabled=True)``.  ``focused`` starts ``True``, the
+    old default.  ``_last_width`` is the width the last :meth:`render`
+    painted at -- the geometry :meth:`on_click` maps a column against;
+    until the first paint it is 80, the same convention as
+    ``TextBuffer.last_width``.  The marking starts ``None``, so an
+    un-hovered strip renders exactly the bytes it always did.
     """
 
     __slots__ = ("items",)
@@ -182,14 +175,16 @@ class Tabs(LabelStrip):
         if not self.items:
             return Line(), ()
         index = self.index
-        # The focus rule, once per build: an unfocused strip drops the
-        # indicator from accent to muted -- the label is never dimmed (D3).
-        indicator = (
-            self.group("controls").focus if self.focused else self.group("text").muted
+        controls = self.group("controls")
+        active_style = (
+            self.group("content")
+            .accent.merge(UNDERLINE)
+            .merge(controls.overlay(focused=self.focused))
         )
-        active_style = self.group("content").accent.merge(indicator).merge(UNDERLINE)
         inactive_style = self.group("text").faint
-        disabled_style = self.group("text").faint
+        disabled_style = self.group("text").faint.merge(
+            controls.overlay(disabled=True)
+        )
         hover_style = self.group("surfaces").hover
         divider_style = self.group("text").muted
 
