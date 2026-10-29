@@ -1,48 +1,8 @@
-"""Find: the search tier -- its own query row over the document, and its matches.
+"""Find: the search tier -- a query row over the document and its matches.
 
-:class:`Find` packages the whole incremental search the way
-:class:`~motui.app.command_palette.CommandPalette` packages its command list: a query
-:class:`~motui.widgets.textfield.Input` row the tier owns (no host editor
-feeds it), the **matches** that row's text finds in a document, a cursor over
-them, and an overlay that paints them over the composed frame.  Opening
-resets the query; typing re-addresses the matches; ``enter``/``down`` step to
-the next match and ``up`` to the previous one -- the ends wrap -- and
-``escape`` closes.  Every change **reveals** the current match through the
-workspace (:meth:`~motui.app.Workspace.reveal`), so the tier owns no scrolling of
-its own; "bring this address on screen" is the kernel-side ability
-(``Viewport.scroll_to``), not a hole opened for search.
-
-**What is searched.**  The document of the pane **focused** when the query
-changed -- the same resolution ``workspace.reveal`` scrolls -- every block in
-document order, fixed-region blocks included (they are part of the document:
-they highlight in place, and revealing one moves nothing because a
-fixed-region block never scrolls away).  A match is a document address
-``(bid, row, start, end)``: the block id, the 0-based row within that block
-at the width the pane was last laid out at, and the hit's display-column
-range.  The width travels with the address -- another width wraps other
-rows -- so a frame laid out at a different width paints **no** highlight
-until the next query change re-addresses the matches, the stance the
-selection overlay takes for a reflow.  Matching is a case-insensitive
-substring (lower-case comparison) and non-overlapping, in document order.
-
-**The contract.**  Like every controller of the assembly tier, the host
-drives it: ``handle(event) -> bool`` consumes one event while the tier is
-open (``escape`` closes it) and answers whether the event was the tier's, so
-the host routes it between the chrome and the gestures and repaints on a
-``True`` (the ``CommandPalette`` reading).  A closed tier consumes nothing and
-paints nothing; the overlay stays **registered** for the controller's life
-(the ``Toasts`` rule -- ``detach()`` unregisters *and* goes inert), so open
-and close only flip the state the paint and the routing read.  There is
-**no ``chosen``**: search is a continuing state, not a pick.  The host reads
-:attr:`matches`/:attr:`index` for a status readout of its own.
-
-The paint is the pure half: the query row lands on the frame's **bottom
-row** on the theme's ``overlays.toast`` band, with an ``(i/n)`` counter at
-its right end, and every match is cut out of its row and merged under
-:attr:`~motui.kernel.theme.TextStyles.selection` -- the current one under
-:attr:`~motui.kernel.theme.SurfaceStyles.hover` again.  Closed, the composed
-layout comes back exactly as it stands.
-"""
+Matches are document addresses with the width they were laid out at, so
+another width paints no highlight until re-addressed. Every change
+reveals through the workspace."""
 
 from __future__ import annotations
 
@@ -72,23 +32,10 @@ COUNT_EMPTY = "(0/0)"
 
 
 class Find:
-    """A self-contained search: one query row, its matches, and the overlay.
+    """A self-contained search: one query row, its matches and the overlay.
 
-    ``workspace`` is the state owner whose focused pane's document is
-    searched and whose frame the overlay registers on (at construction -- the ``Toasts``
-    lifecycle, so ``detach()`` is the one unmount) and whose
-    :meth:`~motui.app.Workspace.reveal` puts the current match on screen.
-    ``theme`` (default :data:`~motui.kernel.theme.DEFAULT_THEME`) skins
-    the query row and the highlight bands; ``set_theme`` rebuilds the row on
-    a new one, carrying an open query's text over.
-
-    :attr:`input` is the query row itself (a host may restyle its prompt or
-    read ``input.text``; :attr:`query` is the same text),
-    :attr:`matches` the read-only snapshot of the last query's hits -- a
-    fresh list of ``(bid, row, start, end)`` tuples, replaced whole on every
-    recompute -- and :attr:`index` the cursor over them.  The tier starts
-    closed.
-    """
+    The overlay registers at construction; ``detach`` unregisters and goes
+    inert. ``matches`` is a fresh list of ``(bid, row, start, end)``."""
 
     __slots__ = (
         "_detached",
@@ -155,49 +102,25 @@ class Find:
         return self.input.text
 
     def open(self) -> None:
-        """Show a fresh query row: the query and the matches reset.
-
-        An open tier consumes the keys the host hands it and paints its row
-        and highlights; the frame is invalidated so the row lands.  Reopening
-        a closed tier always starts from the empty query, exactly as
-        :meth:`~motui.app.command_palette.CommandPalette.open` does.
-        """
+        """Show a fresh query row: the query and the matches reset."""
         self.input.clear()
         self._recompute()
         self._open = True
         self.workspace.refresh()
 
     def close(self) -> None:
-        """Hide the tier: it consumes nothing and paints nothing.
-
-        The matches stay readable (their addresses are the query's, not the
-        visibility's); the next :meth:`open` starts over from an empty query.
-        """
+        """Hide the tier: it consumes and paints nothing; the matches stay readable."""
         self._open = False
         self.workspace.refresh()
 
     def detach(self) -> None:
-        """Unregister the overlay and go inert (the controller convention).
-
-        The registration is the constructor's, for the frame's life; a
-        detached tier stops painting **and** stops consuming keys --
-        :meth:`handle` answers ``False`` to everything, whatever the tier's
-        open state.  Idempotent: a second detach keeps the flag and touches
-        no registry.  This is the unmount, distinct from :meth:`close`,
-        which only hides an attached tier.
-        """
+        """Unregister the overlay and go inert; idempotent."""
         self._detached = True
         if self in self.workspace.frame.overlays:
             self.workspace.frame.remove_overlay(self)
 
     def set_theme(self, theme: Theme) -> None:
-        """Rebuild the query row on ``theme``, the rest of the skin following.
-
-        Only the row bakes styles at construction (the bands are read off the
-        theme at paint time), so the row is rebuilt and a query in progress
-        keeps its text -- the caret ends at the text's end.  The overlay
-        registration rides untouched.
-        """
+        """Rebuild the query row on ``theme``, carrying an open query's text over."""
         text = self.input.text
         self._theme = theme
         self.input = Input(
@@ -209,16 +132,8 @@ class Find:
     # -- routing ---------------------------------------------------------------
 
     def handle(self, event: Event) -> bool:
-        """Consume one event while open; see the module docstring.
-
-        ``enter`` and ``down`` step to the next match and ``up`` to the
-        previous one -- wrapping around the ends, and doing nothing (but
-        still consuming) when there are no matches; ``escape`` closes the
-        tier.  Everything else is the query row's: an event it consumes
-        re-addresses the matches, resets the cursor to the first, and
-        reveals it.  A closed tier consumes nothing; a detached one is
-        inert -- whatever the key, the answer is ``False``.
-        """
+        """Consume one event while open; enter/down/up step matches, escape
+        closes, and anything else is the query row's."""
         if self._detached or not self._open:
             return False
         if isinstance(event, KeyEvent):
@@ -250,13 +165,8 @@ class Find:
         self._reveal_current()
 
     def _reveal_current(self) -> None:
-        """Put the current match on screen through the workspace's own reveal.
-
-        The one road to visibility (D10): the tier never touches a viewport.
-        ``workspace.reveal`` invalidates the frame when the window moved, so a step
-        or a query change repaints through it; a caller that wants the host's
-        own repaint cue reads :meth:`handle`'s answer.
-        """
+        """Put the current match on screen through the workspace's own reveal; the
+        tier never touches a viewport."""
         if not self.matches:
             return
         bid, row, _, _ = self.matches[self.index]
@@ -265,20 +175,8 @@ class Find:
     # -- matching --------------------------------------------------------------
 
     def _recompute(self) -> None:
-        """Re-address the matches for the current query and reset the cursor.
-
-        The document of the pane focused **now** -- the pane ``workspace.reveal``
-        would scroll -- walked in document order; each match keeps the width
-        it was rendered at in :attr:`_width`, and the pane id in
-        :attr:`_pane_id`, so the paint can tell a frame its addresses still
-        fit from one they do not.  The rows come from each block's own
-        cache (:meth:`~motui.kernel.document.Section.rows_view`): a new query over a
-        long document reads what the blocks already hold -- the cached lists
-        themselves, this walk never mutating them -- instead of
-        re-wrapping every block, and a block whose content moved carries a
-        moved generation, so a hit is never stale.  The cursor restarts at
-        the first match: a new query addresses a new set (D10).
-        """
+        """Re-address the matches for the current query and reset the cursor; the
+        rows come from the blocks' own caches."""
         pane = self.workspace.frame.focused_pane
         self._pane_id = None if pane is None else pane.id
         self._width = self._pane_width()
@@ -307,13 +205,8 @@ class Find:
                     found = lowered.find(needle, found + span)
 
     def _pane_width(self) -> int:
-        """The width the focused pane's viewport was last laid out at.
-
-        The pane's placement rectangle -- chrome subtracted -- which is the
-        width its on-screen rows are in; before the first composition (no
-        placement yet) the screen width stands in, the best a frame that was
-        never laid out has.
-        """
+        """The width the focused pane's viewport was last laid out at, else the
+        screen width."""
         pane = self.workspace.frame.focused_pane
         if pane is not None:
             region = self.workspace.frame.region(pane.id)
@@ -330,22 +223,8 @@ class Find:
     # -- the paint -------------------------------------------------------------
 
     def paint(self, frame) -> ScreenLayout:
-        """The matches over their rows and the query row at the frame's bottom.
-
-        The highlight half is the kernel's range-cut shape
-        (:func:`~motui.kernel.selection.highlight`) applied per match:
-        each row the matches own is cut at their column boundaries and the
-        hit runs merge ``theme.text.selection``, the current match merging
-        ``theme.surfaces.hover`` on top.  The marks are only painted when the
-        frame's pane and width are the ones the addresses were made in --
-        they are read off that pane's own laid-out rows and spliced back
-        through :meth:`~motui.kernel.frame.Frame.with_pane_rows`, so a
-        match is marked exactly where its glyphs are.  The query row lands on
-        the frame's bottom row, on the theme's ``overlays.toast`` band, the
-        counter at its right end.  Closed -- or with nothing to mark -- the
-        composed rows are only ever gained the query row, or handed back
-        exactly as they stand.
-        """
+        """The matches over their rows and the query row at the frame's bottom; a
+        closed tier returns the layout as it stands."""
         layout = frame.layout
         if layout is None or not self._open:
             return layout
@@ -363,13 +242,8 @@ class Find:
         return region is not None and region.width == self._width
 
     def _marked_rows(self, frame) -> list[Line] | None:
-        """The matched pane's rows with every match marked, or ``None``.
-
-        Walks the pane's own laid-out rows and their ownership table (its
-        :meth:`~motui.kernel.frame.Frame.pane_layout`), so an address is
-        marked only where the row it names actually sits; ``None`` when no
-        painted row carries a match (all of them scrolled away).
-        """
+        """The pane's rows with every match marked, or ``None`` when none is
+        painted; the current match merges hover on top."""
         layout = frame.pane_layout(self._pane_id)
         if layout is None:
             return None
@@ -403,15 +277,8 @@ class Find:
         return rows if marked else None
 
     def _with_query_row(self, layout: ScreenLayout, frame) -> ScreenLayout:
-        """Splice the query row over the frame's bottom row, banded.
-
-        The row renders the query at the width left of the counter's cells
-        (so the two never overlap), pads the gap, and paints the whole strip
-        over the theme's ``toast`` band -- the colored-vs-attribute rule the
-        palette's own panel follows.  A frame too short for the row (or one
-        that never composed) keeps its rows: the query row is the last of
-        them, and a screen with none has none to give.
-        """
+        """Splice the query row over the frame's bottom row, banded and with the
+        counter at its right end."""
         rect = frame.rect
         if rect is None or rect.width <= 0 or not layout.rows:
             return layout

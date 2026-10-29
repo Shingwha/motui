@@ -1,50 +1,8 @@
 """The runtime: the session lifecycle, the pump, the clock and the painter.
 
-:class:`Runtime` owns the pieces a full-screen session needs around the
-:class:`~motui.app.workspace.Workspace`: the
-:class:`~motui.terminal.terminal.Terminal` it enters, leaves and reads
-through, the :class:`~motui.terminal.paint.Painter` that writes the diff,
-the :class:`Timer` schedule, the dirty flag and the run lifecycle.  It owns
-no document, frame, pane, selection or dock of its own -- those live on
-:attr:`workspace` -- and its paint step is one composition of that
-workspace::
-
-    layout = workspace.frame.compose(width, height)
-    layout = workspace.frame.apply_overlays(layout)
-    painter.paint(layout.surface)
-
-**The clock and the pump.**  :meth:`clock` is the one seam time enters
-through; :meth:`advance` moves a virtual offset over it so a replay is
-deterministic.  :meth:`tick` runs due timers first (they may invalidate the
-frame), then paints at most one frame when the workspace is dirty and the
-throttle has elapsed.  A timer's deadline advances by whole periods
-(``next_run += period``), so a late tick never shifts the phase; the
-``catch_up`` posture decides whether missed deadlines are skipped or
-coalesced.  The library never sleeps and never builds an event loop of its
-own.
-
-**The protocol surface.**  :meth:`set_title` (OSC 2),
-:meth:`set_cursor_shape` (DECSCUSR) and :meth:`copy_to_clipboard` (OSC 52)
-are the three host-owned terminal gestures, written through the terminal;
-the library declares, the host decides.
-
-:meth:`read_event` is a **pure read**: it returns the next event or
-``None`` and owns no scroll or focus policy.  The default orchestration
-lives one level up in :class:`~motui.app.application.App`; a host driving
-``Runtime`` directly keeps its own loop.
-
-:meth:`run_session` / :meth:`run_async` / :meth:`run` bracket
-``enter``/``leave`` around the body (even on exceptions and ``exit()``),
-stay completely silent on a non-live screen, and dump the final screen as
-plain text when piped.
-
-**The dispatch order**, one rule everywhere: a composition paints each
-pane's chrome budget first, then that pane's content rows, then the granted
-chrome strips over them, then the docks, then the overlay registry over
-everything (:mod:`motui.kernel.frame`); a host routes an event the same way
--- chrome, then overlays, then the panes' content, then its own dispatch
-(:mod:`motui.app.overlays`).
-"""
+It owns the terminal, the timers and the dirty flag; the document, frame
+and panes live on :attr:`workspace`. A paint is one composition plus the
+frame's overlays."""
 
 from __future__ import annotations
 
@@ -66,22 +24,11 @@ __all__ = ["Runtime"]
 
 
 class Timer:
-    """One periodic callback scheduled on the driver's clock.
+    """One periodic callback on the driver's clock.
 
-    ``next_run`` is an **absolute deadline**, not a delay: each firing adds
-    exactly one ``period`` to it, so a callback that takes time to run does
-    not push the schedule out.  When a tick arrives late, ``catch_up`` picks
-    the posture -- ``"skip"`` runs the callback once and realigns the next
-    deadline to ``now + period`` when the deadline already passed, while
-    ``"coalesce"`` runs once and advances the deadline by whole periods until
-    it is in the future, preserving the phase.  Either way one tick invokes a
-    callback at most once.
-
-    The value is its own cancellable handle: ``cancelled`` answers whether
-    :meth:`cancel` has run, and a cancelled timer never fires again.  The
-    1.x separate handle class is gone; ``every`` is the only constructor a
-    host needs.
-    """
+    ``next_run`` is an absolute deadline advanced by whole periods, so a late
+    tick never shifts the phase; ``catch_up`` chooses skip or coalesce. The
+    timer is its own cancellable handle."""
 
     __slots__ = ("_cancelled", "catch_up", "fn", "next_run", "period")
 
@@ -133,27 +80,9 @@ def _stdin_isatty() -> bool:
 class Runtime:
     """A full-screen session driver over one workspace.
 
-    ``terminal`` is the one configuration door: a
-    :class:`~motui.terminal.terminal.Terminal` brings its own screen (with
-    the mouse mode already mapped), input source and clipboard, and the
-    driver enters, leaves and reads through it.  The input source defaults
-    to none (``read_event`` then returns ``None``); a screen's tracking
-    switches live on its :class:`~motui.terminal.screen.TerminalOptions`,
-    never here.
-
-    ``interactive`` says whether :meth:`run` may attach a
-    :class:`RawTerminalKeys` source when the session is live and no source
-    was supplied; it is off by default, so a test-driven runtime never
-    touches the real input.  ``throttle`` is the pump's flush interval.
-    ``theme`` is handed to the workspace (its chrome and the selection
-    highlight); widgets are never themed from here, they each take
-    ``theme=`` themselves.
-
-    The workspace -- its document, viewport, frame, panes, selection and
-    docks -- is constructed here and exposed as :attr:`workspace`; every
-    content mutation goes through it, while the runtime keeps the session
-    around it.
-    """
+    ``terminal`` is the one configuration door (screen, input, clipboard).
+    The workspace -- document, frame, panes, selection and docks -- is
+    constructed here."""
 
     def __init__(
         self,
@@ -207,51 +136,27 @@ class Runtime:
 
     @property
     def terminal(self) -> Terminal:
-        """The terminal endpoint this runtime enters, leaves and reads through.
-
-        The one configuration door: the terminal owns the screen, its input
-        source and its clipboard, so the runtime never builds or replaces a
-        screen by itself.
-        """
+        """The terminal endpoint this runtime enters, leaves and reads through."""
         return self._terminal
 
     # -- clipboard ---------------------------------------------------------------
 
     def copy_to_clipboard(self, text: str) -> bool:
-        """Put ``text`` on the terminal's clipboard through the terminal (OSC 52).
-
-        The terminal's :class:`~motui.terminal.clipboard.ScreenClipboard`
-        writes the bytes; a non-live screen answers ``False`` without
-        touching the stream, exactly as :meth:`Screen.copy_to_clipboard
-        <motui.terminal.screen.Screen.copy_to_clipboard>` does.
-        """
+        """Put ``text`` on the terminal's clipboard (OSC 52); a non-live screen
+        answers ``False`` without touching the stream."""
         return self._terminal.clipboard.copy(text)
 
     # -- protocol surface ---------------------------------------------------------
 
     def set_title(self, text: str) -> None:
-        """Set the terminal window title (OSC 2), control bytes scrubbed.
-
-        A host-owned gesture -- the driver never titles a window by itself
-        (the demo titles one per page in its ``show``).  The bytes go
-        through ``screen.write`` and a flush, and they are **not** gated on
-        liveness: a headless screen or a test double records them, so the
-        call is assertable without a terminal (only the session bracket and
-        :meth:`Screen.copy` are live-gated).
-        """
+        """Set the terminal window title (OSC 2); not gated on liveness, so a
+        headless screen records it."""
         self.screen.write(set_window_title(text))
         self.screen.flush()
 
     def set_cursor_shape(self, shape: str) -> None:
-        """Ask the terminal for a cursor shape (DECSCUSR).
-
-        ``block`` / ``beam`` / ``underline`` / ``default``; an unknown shape
-        raises ``KeyError``.  The library only *declares* which shape a
-        component wants -- ``Input`` and ``Editor`` carry
-        ``cursor_shape="beam"`` -- and the host reads the focused leaf
-        (``getattr(leaf, "cursor_shape", "block")``) and calls this; written
-        like :meth:`set_title`, non-live screens included.
-        """
+        """Ask the terminal for a cursor shape (DECSCUSR); an unknown shape raises
+        ``KeyError``."""
         self.screen.write(cursor_shape(shape))
         self.screen.flush()
 
@@ -273,27 +178,16 @@ class Runtime:
         *,
         catch_up: str = "skip",
     ) -> Timer:
-        """Call ``fn`` every ``period`` seconds until the timer is cancelled.
-
-        The schedule is deadline-based: the first run is one ``period``
-        after registration and every run adds exactly one ``period`` to
-        ``next_run`` (see :class:`Timer`).  ``fn`` takes no arguments and
-        decides for itself whether to invalidate the frame; the pump invokes
-        it from :meth:`tick`.  ``catch_up`` selects the missed-deadline
-        posture (``"skip"`` or ``"coalesce"``).
-        """
+        """Call ``fn`` every ``period`` seconds from a deadline-based schedule;
+        ``catch_up`` is ``skip`` or ``coalesce``."""
         timer = Timer(period, fn, self.clock() + period, catch_up=catch_up)
         self._timers.append(timer)
         self._wake()
         return timer
 
     def animation(self, hz: float, draw: Callable[[], object]) -> Timer:
-        """Call ``draw`` at ``hz`` frames per second, deadline-based.
-
-        The convenience over :meth:`every` an animated host wants: one
-        callback per frame, with the same cancellation handle and catch-up
-        policy.  A non-positive rate raises ``ValueError``.
-        """
+        """Call ``draw`` at ``hz`` frames per second, deadline-based; a
+        non-positive rate raises ``ValueError``."""
         if hz <= 0:
             raise ValueError(f"animation rate must be positive, got {hz!r}")
         return self.every(1.0 / hz, draw)
@@ -309,21 +203,8 @@ class Runtime:
     async def read_event(self) -> Event | None:
         """Read the next event, or ``None``.
 
-        A **pure read**: the event comes back exactly as the source
-        reported it -- a wheel report, a page key and a button press are
-        all the host's to route.  The driver runs no scroll or focus policy
-        here (the default orchestration is
-        :class:`~motui.app.application.App`'s; a host driving ``Runtime`` directly owns
-        its loop).  The result is ``None`` when there is no key source,
-        when the source reports EOF, and -- per the toolkit's non-live
-        contract -- always on a non-live screen, even when a source is
-        attached.
-
-        Escape hatch: ``await runtime.keys.read()`` reads the raw source
-        directly, bypassing the non-live guard.  A pending read returns
-        ``None`` immediately when :meth:`exit` runs: the read task is
-        cancelled and the source itself is closed by teardown.
-        """
+        A pure read with no scroll or focus policy. ``None`` on a non-live
+        screen, with no source, at EOF, and when :meth:`exit` runs."""
         if not self.screen.live:
             return None
         if self._terminal.input is None:
@@ -355,12 +236,7 @@ class Runtime:
             return read_task.result()
 
     def exit(self) -> None:
-        """End the session now: unblock reads, stop the pump, let teardown run.
-
-        Safe from any task: :meth:`read_event` returns ``None`` immediately,
-        the pump wakes and leaves, and the run's teardown closes an owned
-        source and leaves the screen.
-        """
+        """End the session now: unblock reads, stop the pump and let teardown run."""
         self._stopped = True
         if self._exit_event is None:
             self._exit_event = asyncio.Event()
@@ -370,27 +246,13 @@ class Runtime:
     # -- pump -----------------------------------------------------------------
 
     def clock(self) -> float:
-        """The driver's monotonic clock: the one seam time enters through.
-
-        It answers ``_clock() + offset``: ``_clock`` is
-        :func:`time.monotonic` unless a host replaces it, and the offset is
-        the virtual time :meth:`advance` has added, so a replay script can
-        move time without touching the system clock.  Timestamps (``every``
-        schedules, toast expiries, double-click windows) read it, and a host
-        or a test may also replace this method with its own reading.
-        """
+        """The driver's monotonic clock -- the one seam time enters through;
+        :meth:`advance` adds a virtual offset."""
         return self._clock() + self._clock_offset
 
     def advance(self, dt: float) -> None:
-        """Move the virtual clock by ``dt`` and run every deadline it crosses.
-
-        The driver steps from due deadline to due deadline, running
-        :meth:`tick` at each one -- timers fire exactly as they would have
-        under a pump that never slept -- and lands on the target time with a
-        final tick.  No real time is sampled between the steps and nothing
-        sleeps, so a scripted interval replays deterministically.  A
-        non-positive ``dt`` does nothing.
-        """
+        """Move the virtual clock by ``dt``, running a tick at every deadline
+        crossed, so a replay is deterministic and never sleeps."""
         if dt <= 0:
             return
         target = self.clock() + dt
@@ -415,28 +277,11 @@ class Runtime:
         return min(deadlines) if deadlines else None
 
     def _paint_at(self, now: float) -> None:
-        """Paint one frame and record ``now`` as the last flush time.
+        """Paint one frame: sample the size, retile, compose, run the overlays and
+        paint the diff.
 
-        Sample the screen size, retile the workspace to it (the pane area
-        minus the docks' rows, the docks at their edges), compose the
-        workspace's frame, run the frame's overlay pipeline over the
-        composition (the selection highlight is overlay #1), and paint the
-        diff.  A retile re-divides the recorded split tree instead of
-        rebuilding the panes, so every pane keeps its viewport, its chrome
-        registry and its scroll state, the frame keeps its overlays and its
-        focus, and nothing has to be carried across.  A single-pane frame
-        with no dock composes to its pane's own layout, so the row stream is
-        the one the viewport laid out -- not a re-derivation of it.  A new
-        width clears the selection (reflow), a new height does not.
-
-        The sampling here is the driver's own: the retile and the reflow
-        test both need the size *before* the composition runs, while
-        :meth:`~motui.terminal.paint.Painter.paint` samples again for
-        its full-repaint test, per the :class:`~motui.terminal.screen.Screen`
-        protocol's "the painter calls it before every frame".  Neither
-        sample can move to the other side without composing one frame at a
-        stale size.
-        """
+        The retile re-divides in place, so panes keep their viewports and scroll
+        state. A new width clears the selection (reflow); a new height does not."""
         self.screen.refresh_size()
         width, height = self.screen.width, self.screen.height
         workspace = self.workspace
@@ -452,7 +297,7 @@ class Runtime:
         self._dirty = False
 
     def _wake(self) -> None:
-        """Wake the pump, from the loop thread or (safely) from another one."""
+        """Wake the pump, from the loop thread or safely from another one."""
         event, loop = self._wake_event, self._wake_loop
         if event is None or loop is None:
             return  # no pump is waiting yet; the next tick sees the flags
@@ -477,17 +322,11 @@ class Runtime:
         return self._wake_event
 
     def tick(self, now: float) -> float | None:
-        """Advance the pump one step; return the seconds until the next wake.
+        """Advance the pump one step; return seconds until the next wake, or
+        ``None``.
 
-        The pump's manual seam: due timers run first (they may invalidate the
-        frame), then at most one frame is painted -- only when the document
-        is dirty *and* the throttle has elapsed since the last flush.  Each
-        due timer fires at most once and reschedules from its own deadline
-        (see :class:`Timer`), so a late tick never shifts the phase.  The
-        return value is the delay until the pump next needs to run, or
-        ``None`` when nothing is pending and the pump should sleep until
-        woken.
-        """
+        Due timers run first, then at most one frame when dirty and the throttle
+        has elapsed. Each due timer fires once from its own deadline."""
         if self._timers:
             alive: list[Timer] = []
             for timer in self._timers:
@@ -513,14 +352,8 @@ class Runtime:
 
     @staticmethod
     def _reschedule(timer: Timer, now: float) -> None:
-        """Move ``timer`` past ``now`` according to its catch-up posture.
-
-        The deadline advances by whole periods in both postures.  ``skip``
-        gives up on the missed ones and realigns to ``now + period`` as soon
-        as the next deadline is still in the past; ``coalesce`` keeps
-        stepping by periods until the deadline is in the future, so the
-        schedule's phase survives a late tick.
-        """
+        """Move ``timer`` past ``now`` by whole periods according to its catch-up
+        posture, preserving the phase for ``coalesce``."""
         timer.next_run += timer.period
         if timer.catch_up == "skip":
             if timer.next_run <= now:
@@ -553,14 +386,7 @@ class Runtime:
     # -- lifecycle ------------------------------------------------------------
 
     def _reset_run(self) -> None:
-        """Reset per-run state, keeping timers registered before the run.
-
-        A host builds its shell before it calls ``run_session`` -- the demo
-        registers its animation beat there -- so ``every`` callbacks made
-        before entering survive the reset and are rescheduled from this
-        run's clock.  Only cancelled timers are dropped; a timer lasts
-        until its handle is cancelled, across runs.
-        """
+        """Reset per-run state, keeping timers registered before the run."""
         self._stopped = False
         self._exit_event = asyncio.Event()
         now = self.clock()
@@ -586,16 +412,8 @@ class Runtime:
         self.painter.reset()
 
     async def _run(self, body: Callable[[], Awaitable[None]]) -> None:
-        """Enter, pump, await ``body``, and tear down exactly once.
-
-        The one lifecycle both public entries share: ``_enter_run`` resets the
-        per-run state and enters the screen, the pump task starts, and
-        ``body`` runs inside the bracket.  ``KeyboardInterrupt`` from the body
-        is a session end (:meth:`exit`), any other ``BaseException`` is
-        recorded and re-raised **after** teardown, and a pump error is
-        re-raised only when the body finished cleanly -- teardown runs once,
-        whatever path ended the session.
-        """
+        """Enter, pump, await ``body`` and tear down once, re-raising a body error
+        after teardown."""
         pump_task: asyncio.Task[None] | None = None
         body_error: BaseException | None = None
         try:
@@ -615,23 +433,8 @@ class Runtime:
             raise pump_error
 
     async def run_session(self, body: Callable[["Runtime"], Awaitable[None]]) -> None:
-        """Run ``body(self)`` inside a full-screen session.
-
-        The body is an ordinary coroutine function -- the library never
-        builds an event loop of its own, so the caller owns ``asyncio.run``
-        (or any other driver).  ``enter``/``leave`` bracket the session on a
-        live screen (an exception or :meth:`exit` still leaves), a non-live
-        screen sees neither and stays silent for the whole run, and a
-        non-live run ends by dumping the final screen as plain text -- on the
-        exception path too, before the error is re-raised.  A
-        ``KeyboardInterrupt`` raised by the body is treated as :meth:`exit`.
-
-        Entering **resets the painter's diff base**: the alternate screen
-        starts blank, so a host that painted before the session (the demo
-        builds its shell, then runs it) would otherwise see the first frames
-        diffed against rows that are no longer anywhere -- an empty screen
-        until some row happens to change.
-        """
+        """Run ``body(self)`` inside a full-screen session; entering resets the
+        painter's diff base because the alternate screen starts blank."""
         await self._run(lambda: body(self))
 
     async def run_async(self) -> None:
@@ -639,24 +442,16 @@ class Runtime:
         await self._run(lambda: self._exit_event.wait())
 
     def run(self) -> None:
-        """The synchronous entry: own an event loop around :meth:`run_async`.
-
-        A Ctrl+C interrupt is a quit, not a crash: the cancelled session has
-        already unwound through ``_teardown`` (source close, screen leave,
-        final frame), and the ``KeyboardInterrupt`` ``asyncio.run`` raises
-        afterwards is swallowed here.
-        """
+        """The synchronous entry: own an event loop around :meth:`run_async`; a
+        Ctrl+C interrupt is a quit, not a crash."""
         try:
             asyncio.run(self.run_async())
         except KeyboardInterrupt:
             pass
 
     async def _teardown(self, pump_task: asyncio.Task[None] | None) -> BaseException | None:
-        """Stop the pump and the keyboard, bracket the screen, dump if piped.
-
-        Returns the pump's exception, if any, so the run methods can re-raise
-        it when the body itself finished cleanly.
-        """
+        """Stop the pump and keyboard, bracket the screen and dump the final screen
+        when piped; returns any pump error."""
         self.exit()
         pump_error: BaseException | None = None
         if pump_task is not None:
@@ -685,15 +480,8 @@ class Runtime:
         return pump_error
 
     def _dump_final_screen(self) -> None:
-        """Write the final screen as plain text (non-live runs only).
-
-        A frame carries box characters the stream's codepage may not hold --
-        a legacy-codepage Windows console, a pipe opened in the locale's
-        encoding -- and a run that worked all the way to its last line must
-        not fail on the way out.  Such a character degrades to the stream's
-        own replacement instead; a host that wants the frames intact puts
-        the stream in UTF-8 (the demo does).
-        """
+        """Write the final screen as text for non-live runs, degrading unencodable
+        glyphs to the stream's replacement instead of failing on exit."""
         lines = [row.text for row in self.painter.rows]
         while lines and not lines[-1].strip():
             lines.pop()  # trailing all-blank rows are not content

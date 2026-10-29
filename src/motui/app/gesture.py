@@ -1,75 +1,8 @@
-"""gesture: the mouse-gesture policy tier of document-space selection.
+"""The mouse-gesture policy tier of document-space selection.
 
-This module is the assembly tier (D3) -- the peer of :mod:`motui.app`
-and :mod:`motui.testing`: it imports kernel and app, and it is where every
-selection *behavior* lands.  Above it sit the mechanisms it drives, none of
-which it may extend downward: the kernel
-(:mod:`motui.kernel.selection`) stays pure, timeless and side-effect-free
-(the :class:`~motui.kernel.selection.Selection` model, the
-:func:`~motui.kernel.selection.highlight` overlay, the
-:func:`~motui.kernel.selection.extract` text), and the driver
-(:class:`~motui.app.Runtime`) exposes the minimal imperative surface the
-gesture needs: :attr:`~motui.app.Runtime.selection` (read),
-:meth:`~motui.app.Runtime.set_selection` (write + invalidate), the
-:meth:`~motui.app.Runtime.hit` cell resolution, the
-:meth:`~motui.app.Runtime.visible_range` edge zone, the scroll facades
-and the pump's :meth:`~motui.app.Runtime.every` handles.
-
-:class:`SelectionGesture` turns mouse reports into that state.  A host opts
-in with one explicit line -- ``Runtime`` never attaches a gesture itself, the
-same explicit-mounting rule the other controllers follow -- and dispatches
-every event through it::
-
-    gesture = SelectionGesture(tui)       # copy_on_select is the default
-    event = await tui.read_event()
-    if not gesture.handle(event):
-        ...                               # the host's own dispatch
-
-``handle`` follows the established consume-a-key contract
-(:meth:`~motui.widgets.textfield.Input.handle` /
-:meth:`~motui.widgets.textfield.Editor.handle`): it returns ``True`` when the
-event advanced the gesture, ``False`` when the host should see it.  The
-gesture consumes the left button -- a press anchors the cell the hit test
-resolves, motion while dragging extends the head, a release finalizes -- and
-passes every other event (and every non-left button) straight through.
-
-The lifecycle rules are policy, and they live here (D8): a zero-width
-press-release at one cell *clears* the selection and never fires ``on_end``
-(never clobber the clipboard with a click); a completed drag fires
-``on_end`` exactly once and the highlight stays until the next press, so the
-user can verify what was copied.  ``on_end=None`` selects without any
-effect; :func:`copy_on_select` is the shipped default, and its whole body is
-``extract`` + :meth:`Screen.copy <motui.terminal.screen.Screen.copy>` -- the
-smallness is the proof that the mechanism/policy split held (D3/D6).
-
-The two time-driven behaviors ride the pump instead of adding any mechanism
-of their own.  Drag-to-edge auto-scroll (D4/D5): a motion that lands on the
-first or last row of the *viewport region* -- the scrolling window, never the
-pinned rows -- arms a
-:meth:`~motui.app.Runtime.every` ticker that scrolls ``scroll_rows`` rows per
-``scroll_tick`` and extends the head by the same number of **document** rows.
-The head arithmetic is one identity: scrolling ``n`` rows shifts the content
-under a fixed screen row by exactly ``n`` document rows, so the ticker moves
-the head by the offset the viewport actually travelled -- it never re-hit-tests,
-which would read the previous frame's ownership table and form a latency
-feedback loop.  The same walk (block boundaries, clamping at the document's
-first and last row) serves the wheel: a wheel report during a drag scrolls the
-viewport by the gesture's own ``scroll_rows`` (``wheel_down`` positive,
-``wheel_up`` negative) and co-extends the head by exactly that much.  The
-ticker stands down on edge-exit, release, detach, a reflow that cleared the
-overlay underneath it, and the document end.
-
-The click-count rule is the last policy here, and it stays a controller
-concern: the gesture tracks the last press's cell, its ``clock()`` reading and
-how many presses in a row landed there (``double_click_seconds`` apart).  A
-second press selects the maximal non-whitespace run around it on that row
-(the word), a third the row's whole visible line, and a fourth starts the
-count over -- click, word, line, click.  Timestamps live in the controller --
-the event model stays timeless -- and both spans are display columns through
-the same measure the kernel cuts by, so a CJK character is selected whole.
-A press at a cell *not* seen before, or later than the window, is a plain
-press: a double-click between words behaves like a click.
-"""
+Press anchors, motion extends, release finalizes; a zero-width click
+clears and never fires ``on_end``. Auto-scroll rides the pump, and the
+head moves by the offset the viewport actually travelled."""
 
 from __future__ import annotations
 
@@ -96,20 +29,8 @@ _OnEnd = Callable[["Runtime", Selection], object] | None
 
 
 def copy_on_select(tui: Runtime, selection: Selection) -> bool:
-    """The shipped ``on_end`` default: extract the range and OSC 52 it (D6).
-
-    Still three lines -- every mechanism (the range walk of
-    :func:`~motui.kernel.selection.extract`, the clipboard primitive
-    :meth:`Screen.copy <motui.terminal.screen.Screen.copy>`) lives in the
-    kernel, and the whole policy is "which text, which screen, once".  The
-    text comes from the pane the selection lives in (:attr:`Runtime.selection_pane`
-    -- D7: selection is single-document, and block ids are numbered per
-    document), read at the pane's own laid-out width -- the width its rows
-    were wrapped at, chrome budget and split half included -- because a
-    selection's row numbers address that wrapping.  The write is
-    best-effort (a non-live screen returns ``False`` without touching the
-    stream); a host with stronger needs passes its own ``on_end``.
-    """
+    """The shipped ``on_end``: extract the range at the pane's laid-out width
+    and OSC 52 it (best effort)."""
     pane = tui.selection_pane
     if pane is None:
         pane = tui.frame.focused_pane
@@ -120,41 +41,12 @@ def copy_on_select(tui: Runtime, selection: Selection) -> bool:
 
 
 class SelectionGesture:
-    """Mouse selection policy over the block document: anchor, drag, end.
+    """Mouse selection policy: anchor, drag, end.
 
-    ``tui`` is the driver whose selection surface, hit test, scroll facades
-    and pump the gesture drives.  ``on_end`` is the selection-end action
-    (:func:`copy_on_select` by default, ``None`` for selection without any
-    effect) -- a default *function argument*, never a kernel ``if`` (D3).
-    ``scroll_rows`` / ``scroll_tick`` are the edge auto-scroll knobs (D4/D5):
-    how many document rows one tick scrolls the viewport -- and extends the
-    head -- and how often the ticker runs.  Both are the seam a host retunes
-    (an acceleration ramp would grow on top of them; v1 ships the constant).
-    ``double_click_seconds`` is the click-count window: the last press's cell
-    is remembered for that long, and a press at it again selects the word
-    around that cell on its row -- a third press, the row's whole line --
-    while a fourth restarts the count at one.
-
-    The gesture owns its own anchor and head addresses (document space, D1)
-    and mirrors the drag into the driver through
-    :meth:`~motui.app.Runtime.set_selection`; it keeps no copy of the text,
-    the rows, or the layout.  It is single-pointer by construction: the left
-    button anchors and extends, and a second press while a drag is in flight
-    re-anchors from the new cell.
-
-    A drag is **one document wide** (the frame group's D7).  The press anchors
-    it in the pane the hit test names, and every later step -- the motion that
-    extends the head, the edge auto-scroll, the head walk, the extraction --
-    runs through that pane's viewport and document.  Section ids are numbered
-    per document, so a split's second child holds a ``b0`` exactly as the
-    first does: a drag that let its head wander into a neighbour's pane would
-    build a range of two documents' addresses, and the overlay would then
-    mark the anchored pane's own ``b0`` at rows the user never selected.  A
-    pointer that crosses the divider simply stops extending.  The pane is
-    held by id and re-resolved through the frame, so an in-place retile rides
-    along, a collapse keeps the survivor's id, and a pane that actually leaves
-    the tiling ends the drag.
-    """
+    The gesture owns document-space anchors and mirrors the drag into the
+    driver. A drag stays in one document (block ids repeat per pane), held by
+    pane id. Click counting (click, word, line, click) lives here with its
+    timestamps."""
 
     __slots__ = (
         "_anchor",
@@ -194,15 +86,8 @@ class SelectionGesture:
     # -- the event contract -------------------------------------------------
 
     def handle(self, event: Event) -> bool:
-        """Advance the gesture with ``event``; ``True`` when it was consumed.
-
-        The consume-a-key contract (:meth:`~motui.widgets.textfield.Input.handle`
-        / :meth:`~motui.widgets.textfield.Editor.handle`): the host's dispatch is
-        ``if not gesture.handle(event): ...``.  The left button -- press,
-        motion while dragging, release -- is consumed; a wheel report during a
-        drag is consumed and co-extends the head; every other event is passed
-        through untouched.
-        """
+        """Advance the gesture; ``True`` when consumed. The left button, and a wheel
+        during a drag, are the gesture's."""
         if not isinstance(event, MouseEvent):
             return False
         if event.kind == "wheel" and self._anchor is not None:
@@ -235,13 +120,8 @@ class SelectionGesture:
         return False
 
     def detach(self) -> None:
-        """End the gesture cleanly (the timer-handle convention).
-
-        Cancels the edge ticker -- the one thing the pump may still be holding
-        -- and drops the in-flight drag so a later release cannot finalize it.
-        The stored selection is the driver's overlay, not the gesture's state,
-        and stays as the last frame painted it.
-        """
+        """Cancel the edge ticker and drop the in-flight drag; the stored selection
+        stays as the last frame painted it."""
         self._cancel_autoscroll()
         self._anchor = None
         self._head = None
@@ -254,16 +134,7 @@ class SelectionGesture:
     # -- gesture internals -----------------------------------------------------
 
     def _press(self, event: MouseEvent) -> None:
-        """Count the press, then anchor, select the word or select the line.
-
-        The timestamps live here, in the controller: the last press's cell is
-        remembered with its ``clock()`` reading and the count of presses that
-        landed there in a row, and the event model stays timeless.  A press at
-        that same cell, within ``double_click_seconds``, is a word select on
-        the second and a line select on the third (D7's vocabulary: one
-        gesture family, its own mechanism); the fourth restarts the count, so
-        the cycle is click, word, line, click.
-        """
+        """Count the press and route to click, word or line selection."""
         self._cancel_autoscroll()
         now = self._tui.clock()
         last = self._last_press
@@ -285,7 +156,8 @@ class SelectionGesture:
             self._plain_press(event)
 
     def _plain_press(self, event: MouseEvent) -> None:
-        """Anchor at the pressed cell; a press ends the previous highlight."""
+        """Anchor at the pressed cell; a press retires the previous highlight, and an
+        edge press arms auto-scroll."""
         hit = self._tui.hit(event.x, event.y)
         if hit is None:
             # No block owns the cell (blank fill, out of range, removed since
@@ -315,15 +187,8 @@ class SelectionGesture:
                 self._start_autoscroll(-1)
 
     def _word_select(self, event: MouseEvent) -> None:
-        """Select the maximal non-whitespace run around the pressed cell.
-
-        A completed selection, so it fires ``on_end`` exactly once -- at the
-        press, like a drag fires it at the release -- and the release that
-        follows finalizes nothing: no drag was ever anchored, so the word
-        stays selected until the next press.  A cell the word rule cannot
-        resolve (whitespace, an empty or vanished row) degrades to a plain
-        press, which is what a double-click between words should do.
-        """
+        """Select the maximal non-whitespace run around the pressed cell; a cell on
+        whitespace degrades to a plain press."""
         hit = self._tui.hit(event.x, event.y)
         run = self._word_run(hit) if hit is not None else None
         if hit is None or run is None:
@@ -332,16 +197,7 @@ class SelectionGesture:
         self._select_span(hit, *run)
 
     def _line_select(self, event: MouseEvent) -> None:
-        """Select the pressed row's whole visible line (the third press).
-
-        The word rule's completed-selection shape, one row wide: ``on_end``
-        fires at the press and the release finalizes nothing.  The line is the
-        hit block's own display row at the width the pane laid it out at --
-        address and span are the same block's, so it never runs past the
-        block into its neighbour (block ids are numbered per document).  A row
-        with no cells (an empty block, a document that moved since the layout)
-        degrades to a plain press, exactly as the word rule's whitespace does.
-        """
+        """Select the pressed row's whole visible line (the third press)."""
         hit = self._tui.hit(event.x, event.y)
         span = self._line_run(hit) if hit is not None else None
         if hit is None or span is None:
@@ -350,13 +206,7 @@ class SelectionGesture:
         self._select_span(hit, *span)
 
     def _select_span(self, hit: Hit, start: int, end: int) -> None:
-        """Complete a non-drag span on ``hit``'s row and fire ``on_end`` once.
-
-        The word rule's and the line rule's shared tail: no anchor is left
-        behind (the release that follows must neither extend the head nor
-        clear the highlight), the pane is recorded for the host's extraction,
-        and the end hook fires here, at the press.
-        """
+        """Complete a non-drag span and fire ``on_end`` once, at the press."""
         self._anchor = None  # not a drag: the release must neither extend nor clear
         self._head = None
         self._pane_id = hit.pane_id
@@ -368,15 +218,7 @@ class SelectionGesture:
             self._on_end(self._tui, selection)
 
     def _display_row(self, hit: Hit) -> Line | None:
-        """``hit``'s row as the blocks render it now, or ``None`` when it moved.
-
-        Measured at the pane's own width -- the width its rows were laid out
-        at -- and read back from the block's own rows
-        (:meth:`~motui.kernel.document.Section.rows_view`, the cached lists the
-        layout just filled, borrowed uncopied), so a document edited since
-        the layout resolves to nothing rather than to a stale row and an
-        unchanged one costs no copy at all.
-        """
+        """``hit``'s row as the block renders it now, or ``None`` when it moved."""
         pane = self._tui.frame.pane(hit.pane_id)
         width = self._pane_width(pane) if pane is not None else self._tui.screen.width
         rows = hit.block.rows_view(Constraints(width=width))
@@ -385,31 +227,16 @@ class SelectionGesture:
         return rows[hit.row]
 
     def _line_run(self, hit: Hit) -> tuple[int, int] | None:
-        """The ``(0, width)`` display-column span of the row at ``hit``.
-
-        The line rule's measure, on the same row :meth:`_word_run` reads: the
-        hit block's own display row, its whole width -- a row with no cells
-        has no line to select.
-        """
+        """The ``(0, width)`` span of the row at ``hit``, or ``None`` for an empty
+        row."""
         row = self._display_row(hit)
         if row is None or row.width <= 0:
             return None
         return (0, row.width)
 
     def _word_run(self, hit: Hit) -> tuple[int, int] | None:
-        """The ``(start, end)`` display columns of the word run at ``hit``.
-
-        The row's text is measured once in display columns -- the same measure
-        :func:`~motui.kernel.cell.cut_line` cuts by -- into one span per
-        character; the cell's character is the one whose span contains the
-        probed column, and the run grows from it in *both* directions across
-        every neighbouring non-whitespace character.  CJK needs no special
-        case: a wide character is an ordinary non-whitespace character
-        contributing its whole width, so a double-click on one selects it
-        whole.  A cell on whitespace has no run; a cell past the row's text
-        probes its last column, exactly where the kernel clamps (D8).  The
-        columns are the pane's own, at the width its rows were laid out at.
-        """
+        """The display-column span of the maximal non-whitespace run at ``hit``;
+        wide characters contribute their whole width."""
         row = self._display_row(hit)
         if row is None or row.width <= 0:
             return None
@@ -435,17 +262,8 @@ class SelectionGesture:
         return (spans[first][0], spans[last][1])
 
     def _motion(self, event: MouseEvent) -> None:
-        """Extend the head to the cell under the pointer, or end the drag.
-
-        Called only while dragging.  A cleared overlay underneath the drag
-        (a reflow, D8, or a host write) ends the drag cleanly rather than
-        dragging addresses that no longer point at the same glyphs.  A hit in
-        another pane is not a cell this drag can extend into -- block ids are
-        numbered per document, so a neighbour's ``b0`` is a different block
-        wearing the same name -- and the head holds where it was until the
-        pointer comes back.  Landing on the viewport region's edge row arms
-        the auto-scroll ticker; every other cell disarms it (D4/D5).
-        """
+        """Extend the head to the hit cell, staying in the anchored pane, and arm or
+        disarm the edge ticker."""
         anchor, head = self._anchor, self._head
         if self._tui.selection is None:
             self._cancel_autoscroll()
@@ -491,15 +309,7 @@ class SelectionGesture:
     # -- the anchored pane ---------------------------------------------------------
 
     def _pane(self) -> Pane | None:
-        """The pane the drag lives in, or ``None`` when it left the frame.
-
-        Held by id and re-resolved through the frame, because that is the
-        identity the frame itself honours: an in-place retile rewrites
-        rectangles under the same ids, a collapse keeps the survivor's id on
-        the parent that took its window, and only a pane that actually leaves
-        the tiling stops resolving -- which ends the drag rather than letting
-        it walk a document the frame no longer shows.
-        """
+        """The pane the drag lives in, or ``None`` when it left the frame."""
         return None if self._pane_id is None else self._tui.frame.pane(self._pane_id)
 
     def _pane_width(self, pane: Pane) -> int:
@@ -510,17 +320,8 @@ class SelectionGesture:
     # -- edge auto-scroll ------------------------------------------------------
 
     def _visible_range(self):
-        """The drag's pane window as screen rows (D5).
-
-        The rows that pane's window occupies in the *frame* -- chrome
-        subtracted and the top-pin offset included -- as
-        :meth:`~motui.app.Runtime.visible_range` reports them.  Asking the
-        driver rather than walking the ownership table keeps every fixed
-        region out of the edge zone: the pinned rows a host still pins in
-        its document, and the frame's docks (pinned footers), which live
-        outside the pane area -- dragging into a dock must not scroll the
-        document.
-        """
+        """The drag's pane window as screen rows, so fixed regions and docks stay
+        out of the edge zone."""
         return self._tui.visible_range(self._pane_id)
 
     def _start_autoscroll(self, direction: int) -> None:
@@ -540,15 +341,8 @@ class SelectionGesture:
             self._dir = 0
 
     def _tick_scroll(self) -> None:
-        """One edge tick (pump callback): scroll and extend, or stand down.
-
-        The two stop conditions that live inside the tick: the drag ended
-        underneath it (a reflow cleared the overlay, a press/detach dropped
-        the anchor, or the pane it lives in left the frame), and the document
-        end -- a scroll that could not move the viewport means the content
-        under the pointer is frozen too, so the tick stands down instead of
-        dragging the head past the range.
-        """
+        """One edge tick: scroll and extend, or stand down when the drag ended or
+        the document end froze the content."""
         if self._anchor is None or self._tui.selection is None or self._pane() is None:
             self._cancel_autoscroll()
             return
@@ -559,19 +353,8 @@ class SelectionGesture:
             self._cancel_autoscroll()  # pinned at the document's end
 
     def _scroll_and_extend(self, rows: int) -> None:
-        """Scroll the drag's pane ``rows`` rows (signed) and move the head with it.
-
-        The one walk the ticker and the wheel share (D4): the viewport moves
-        ``rows`` rows, the content under a fixed screen row moves by exactly
-        that many document rows, and the head -- which sits at a fixed screen
-        row -- follows.  So the head is extended by the offset the viewport
-        *actually* travelled, which is what folds the document-end clamp and
-        the block-boundary crossing into a single arithmetic walk.
-
-        The pane is the drag's own, not the frame's focused one: a drag in an
-        unfocused pane (a host may focus nothing) must still scroll and extend
-        in the document it started in.
-        """
+        """Scroll the drag's pane and move the head by the rows the viewport
+        actually travelled -- the one walk the ticker and the wheel share."""
         pane = self._pane()
         if self._head is None or rows == 0 or pane is None:
             return
@@ -588,20 +371,8 @@ class SelectionGesture:
     def _advance_head(
         self, anchor: SelectionAnchor, rows: int, pane: Pane
     ) -> SelectionAnchor:
-        """Move ``anchor`` ``rows`` rows through ``pane``'s document (signed).
-
-        The document-space half of the identity: a document row lives inside
-        some block, so the advance consumes rows block by block -- crossing a
-        boundary by entering the next block's row 0 (or the previous block's
-        last row) -- and clamps at the document's first and last row.  An
-        address whose block left the document resolves to itself (D8:
-        defensive, never an error).  The rows are measured at the width the
-        pane laid its rows out at, the same width the overlay marked and the
-        extract reads, and their counts come from each block's own cache
-        (:meth:`~motui.kernel.document.Section.row_count`): a drag across a long
-        document counts what the layout already filled instead of
-        re-wrapping every block it crosses.
-        """
+        """Move a document address ``rows`` rows through the pane's blocks, crossing
+        block boundaries and clamping at the document ends."""
         blocks = pane.document.blocks()
         positions = {block.id: index for index, block in enumerate(blocks)}
         index = positions.get(anchor[0])

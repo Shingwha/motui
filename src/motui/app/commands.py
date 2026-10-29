@@ -1,19 +1,8 @@
 """Commands: the named actions a host binds to keys and a palette.
 
-A :class:`Command` is a value: a stable name, a human description, an
-optional handler, the key names it answers to and an enabled flag.  The
-:class:`CommandRegistry` is the ordered collection a host fills once and
-then resolves by name, by key press or by a palette query.  It owns no
-screen and no widget: the composition root calls ``invoke`` from its own
-dispatch and hands ``options()`` to a :class:`~motui.app.command_palette.CommandPalette`.
-
-The registry keeps insertion order throughout -- iteration, matching and
-``options()`` -- so a palette's rows are stable and a host controls their
-priority.  Matching is a case-insensitive substring over the name and the
-description; disabled commands stay registered (a host may still invoke
-them explicitly) but are filtered out of ``match`` by default and
-``invoke`` refuses them.
-"""
+Insertion order is stable throughout; matching is a case-insensitive
+substring. Disabled commands stay registered but are filtered and
+refused."""
 
 from __future__ import annotations
 
@@ -31,17 +20,8 @@ __all__ = ["Command", "CommandRegistry"]
 
 @dataclass(frozen=True, slots=True, kw_only=True)
 class Command:
-    """One named action: group, description, handler, keys and enabled flag.
-
-    ``group`` is the first-class palette grouping; the palette still renders
-    the description this wave, so a host that wants its group label in the
-    row passes the same text to both.  ``keys`` is normalized to a tuple at
-    construction (a list argument is copied), so the value is hashable and
-    cannot be mutated behind the registry's back.  ``handler`` receives
-    whatever the caller passes to :meth:`CommandRegistry.invoke`; ``None``
-    means the command is declarative -- it matches and lists, but invocation
-    is a no-op.
-    """
+    """One named action: name, description, group, handler, keys and enabled
+    flag; ``keys`` is normalized to a tuple at construction."""
 
     name: str
     description: str = ""
@@ -57,12 +37,8 @@ class Command:
 class CommandRegistry:
     """An ordered, name-addressed command collection.
 
-    Adding a name twice raises :class:`ValueError` (names are the registry's
-    identity, like block ids); removing or looking up a missing name raises
-    :class:`KeyError`.  A key bound by more than one command resolves to the
-    first command added, so a host presses a key and gets one action --
-    later duplicates never silently shadow the original.
-    """
+    Duplicate names raise ``ValueError``; a key bound twice resolves to the
+    first command added."""
 
     __slots__ = ("_commands",)
 
@@ -86,7 +62,8 @@ class CommandRegistry:
         self._commands[command.name] = command
 
     def remove(self, name: str) -> Command:
-        """Detach and return the command ``name``; a missing one raises ``KeyError``."""
+        """Detach and return the command ``name``; a missing one raises
+        :class:`KeyError`."""
         try:
             return self._commands.pop(name)
         except KeyError:
@@ -102,12 +79,8 @@ class CommandRegistry:
     # -- resolution -------------------------------------------------------------
 
     def match(self, query: str, *, include_disabled: bool = False) -> list[Command]:
-        """Commands whose name or description contains ``query``, in order.
-
-        Case-insensitive and substring-based; the empty query matches every
-        candidate.  Disabled commands are left out unless
-        ``include_disabled`` is true.
-        """
+        """Commands whose name or description contains ``query``, in order;
+        case-insensitive and substring-based."""
         needle = query.lower()
         return [
             command
@@ -120,48 +93,31 @@ class CommandRegistry:
         ]
 
     def by_key(self, key: str) -> Command | None:
-        """The first command bound to ``key``, enabled or not; ``None`` when unbound.
-
-        The raw command comes back even when disabled so a host can explain
-        why the key did nothing; :meth:`invoke` is the enforcement point.
-        """
+        """The first command bound to ``key``, enabled or not; ``None`` when
+        unbound."""
         for command in self._commands.values():
             if key in command.keys:
                 return command
         return None
 
     def invoke(self, name: str, *args, **kwargs) -> object | None:
-        """Call the command's handler; ``None`` when disabled or handler-less.
-
-        A missing name raises :class:`KeyError` (the registry's lookup
-        contract).  The handler's own return value is passed back unchanged.
-        """
+        """Call the command's handler; ``None`` when disabled or handler-less, and
+        a missing name raises :class:`KeyError`."""
         command = self.get(name)
         if not command.enabled or command.handler is None:
             return None
         return command.handler(*args, **kwargs)
 
     def bind(self, app: App) -> None:
-        """Route every command key to an invoke of that command on ``app``.
-
-        One binding per key, in registry order, so the first command added
-        wins a key exactly as :meth:`by_key` resolves it.  The callback is
-        closed over the name (not the loop variable), so ``invoke`` reads
-        the registry's current command -- a later ``remove``/``add`` is
-        seen.  Disabled commands stay bound; ``invoke`` is the enforcement
-        point.
-        """
+        """Route every command key to an invoke of that command on ``app``, closing
+        over the name so later edits are seen."""
         for command in self._commands.values():
             for key in command.keys:
                 app.bind(key, lambda name=command.name: self.invoke(name))
 
     def options(self) -> list[Option]:
-        """The registry as palette options: label=name, value=command, description.
-
-        Every registered command is included, in insertion order; filtering
-        is :meth:`match`'s job.  The command itself is the option's payload,
-        so a palette's pick invokes the value the host already holds.
-        """
+        """The registry as palette options: label=name, value=command,
+        description."""
         return [
             Option(command.name, command, command.description)
             for command in self._commands.values()
