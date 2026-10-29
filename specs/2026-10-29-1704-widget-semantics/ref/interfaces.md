@@ -4,7 +4,7 @@
 > 不变）。W4a 起按本文件继续；每波合并后 lead 更新“已落地”标记与偏差。
 > 真相优先级：代码与测试 > handoff > 本文件。本文件是意图，不是现状。
 
-## 0. 已落地（W1–W3）
+## 0. 已落地（W1–W4b）
 
 - `Line.overlay(base)` / `Surface.overlay(base)` 已在 `kernel/cell.py`。
   实现偏差：顶层非透明 cell 压到双宽 glyph 的任一半时，**整个底层 glyph**
@@ -18,8 +18,17 @@
   W4a 决定是否公开。`Canvas`/`PixelCanvas` 已继承它；`Canvas.marker` →
   `plot_marker`；两者不再接受 `styles`；`PixelCanvas.palette=None` 时
   `PixelPalette.from_theme(theme)`。
-- 本组 wave 的 `handoff/W1-zcode.md`、`W2-zcode.md`、
-  `W3-deepseek-v4.1-flash.md` 已随分支提交。
+- W4a：`ResultWidget`/`ActionWidget`/`CursorWidget`/`Keymap` 在
+  `widgets/base.py`；`index` 可赋值（委托 `select`），`selected` 只读；
+  焦点层 enter/space 回退。
+- W4b：Choice/Navigation 已迁移。`Select.take()` 返回 option 的 value
+  （label 当 payload 为 None）；`selected` 返回 Option。`commit` 参数删除，
+  `window` 保留。`Table(rows, headers=...)`；`Table.index` 为 int（空表 0），
+  `_cursor_armed` 保留 fresh table 不画 cursor 的渲染；`take` 返回行对象。
+  `Tree.nodes` / `TreeNode.open`；`Tabs/MenuBar/NavList.items` 与
+  `activate()`/`take()`；`ComboBox.open` 是 bool property，删除
+  `is_open`/`open()`/`close()`。
+- 本组 wave 的 handoff 已随分支提交。
 
 
 ## 1. 类层次

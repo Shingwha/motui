@@ -180,8 +180,8 @@ uv run python tools/framebench.py
 - [x] W1 kernel overlay（`2bda31a` 合并）
 - [x] W2 Stack/Align（`2bda31a` 合并）
 - [x] W3 Drawing（`11a4d28` 合并，`314c973` 对账）
-- [ ] W4a
-- [ ] W4b
+- [x] W4a（`617377b` 合并，`ae2e88d` CursorWidget 扩展）
+- [x] W4b（`2eb381f` 合并，`57efe5f` take 契约修正）
 - [ ] W4c
 - [ ] W5
 - [ ] W6
