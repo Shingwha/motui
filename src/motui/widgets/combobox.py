@@ -23,14 +23,14 @@ from __future__ import annotations
 
 from collections.abc import Sequence
 
+from ..kernel.cell import Surface
 from ..kernel.document import Component
 from ..kernel.events import Event, KeyEvent, MouseEvent, PasteEvent
 from ..kernel.geom import Pos
 from ..kernel.glyphs import GLYPHS, Glyphs
-from ..kernel.cell import Surface
 from ..kernel.layout import Constraints
 from ..kernel.theme import Styles, Theme
-from ..widgets.base import Widget
+from ..widgets.base import ResultWidget
 from .autocomplete import Autocomplete
 from .choice import Option
 from .textfield import Input
@@ -38,7 +38,7 @@ from .textfield import Input
 __all__ = ["ComboBox"]
 
 
-class ComboBox(Widget):
+class ComboBox(ResultWidget):
     """An editable Input over a filtered dropdown -- the form's pick-or-type.
 
     ``options`` are the candidate :class:`~motui.widgets.choice.Option` rows;
@@ -95,11 +95,10 @@ class ComboBox(Widget):
     __slots__ = (
         "_last_count",
         "_last_width",
-        "_pending",
+        "_open",
         "_skin_styles",
         "_skin_theme",
         "input",
-        "is_open",
         "list",
         "max_drop_rows",
         "max_rows",
@@ -143,11 +142,9 @@ class ComboBox(Widget):
         if text:
             self.input.insert(text)
         self.list.set_query(self.input.text)
-        #: The pending pick: the taken option's value, read once through
-        #: :meth:`take`.
-        self._pending: object | None = None
         #: Whether the dropdown is showing (the host's modal mirrors it).
-        self.is_open = False
+        #: Assignment drives the open/close policy through the property.
+        self._open = False
         # The field's last render: its width and row count are the geometry
         # :meth:`child_at` maps a cell through (the Container precedent).
         self._last_width = 0
@@ -155,23 +152,35 @@ class ComboBox(Widget):
 
     # -- the dropdown's lifecycle -----------------------------------------------
 
-    def open(self) -> None:
-        """Show the dropdown: a fresh pick, the list filtered on the field.
+    @property
+    def open(self) -> bool:
+        """Whether the dropdown is showing (assignable state, no methods)."""
+        return self._open
 
-        The stale result goes with it, so a fresh visit never inherits an
-        earlier pick; the list's window becomes the dropdown's budget (see
-        the class docstring) and its matches are recomputed from whatever
-        the field holds now.
+    @open.setter
+    def open(self, value: bool) -> None:
+        """Show or hide the dropdown.
+
+        Opening is a fresh visit: the stale result goes, the list's window
+        becomes the dropdown's budget and its matches are recomputed from
+        whatever the field holds now.  Closing only hides: a pick already
+        landed stays pending (the ``enter`` path emits first and closes
+        after), and the list returns to its own cap.
         """
-        self._pending = None
-        self.list.max_rows = self._drop_rows()
-        self.list.set_query(self.input.text)
-        self.is_open = True
+        opened = bool(value)
+        if opened:
+            self._clear_result()
+            self.list.max_rows = self._drop_rows()
+            self.list.set_query(self.input.text)
+        else:
+            self.list.max_rows = self.max_rows
+        self._open = opened
+        self.touch()
 
-    def close(self) -> None:
-        """Hide the dropdown; a pick already landed stays pending."""
-        self.is_open = False
-        self.list.max_rows = self.max_rows
+    def toggle(self) -> bool:
+        """Flip the dropdown's open state; ``True`` (the state always moves)."""
+        self.open = not self.open
+        return True
 
     def _drop_rows(self) -> int | None:
         """The window the dropdown renders: the two budgets' smaller.
@@ -207,7 +216,7 @@ class ComboBox(Widget):
         """
         if isinstance(event, MouseEvent):
             return False  # the pointer tiers' door, never an editing key
-        if self.is_open and isinstance(event, KeyEvent):
+        if self.open and isinstance(event, KeyEvent):
             name = event.key
             if name == "down":
                 self.list.move(1)
@@ -219,8 +228,8 @@ class ComboBox(Widget):
                 self._take()
                 return True
             if name == "escape":
-                self._pending = None
-                self.close()
+                self._clear_result()
+                self.open = False
                 return True
         if self.input.on_key(event):
             self.list.set_query(self.input.text)
@@ -237,25 +246,19 @@ class ComboBox(Widget):
     def _take(self) -> None:
         """The ``enter``: the highlighted option's value, its label back in the field."""
         if not self.list.on_action("activate"):
-            self._pending = None  # nothing matched: the empty pick
-            self.close()
+            self._clear_result()  # nothing matched: the empty pick
+            self.open = False
             return
         option = self.list.take()  # the menu's one-shot pick is the combo's to carry
         if not isinstance(option, Option):
-            self._pending = None
-            self.close()
+            self._clear_result()
+            self.open = False
             return
-        self._pending = option.value if option.value is not None else option.label
+        self._emit(option.value if option.value is not None else option.label)
         self.input.clear()
         self.input.insert(option.label)
         self.list.set_query(self.input.text)  # the filter follows the field's new text
-        self.close()
-
-    def take(self) -> object | None:
-        """Read the pending pick once and clear it."""
-        value = self._pending
-        self._pending = None
-        return value
+        self.open = False
 
     # -- the container surface ---------------------------------------------------
 
@@ -272,19 +275,23 @@ class ComboBox(Widget):
         """Place the field's caret at a rendered cell (the click door)."""
         return self.input.on_click(pos)
 
-    def on_action(self, name: str) -> bool:
-        """Run one action: ``"activate"`` takes the highlighted option.
+    def activate(self) -> bool:
+        """Open a closed dropdown, or take the open one's highlighted option."""
+        if not self.open:
+            self.open = True
+            return True
+        self._take()
+        return True
 
-        While the dropdown is open, activation is exactly the ``enter`` key
-        (:meth:`_take`); closed, there is nothing to take and the action
-        declines.  Any other name is an editing action and belongs to the
-        field.
+    def on_action(self, name: str) -> bool:
+        """Run one action: ``"activate"`` opens or takes the dropdown.
+
+        Closed, activation opens the dropdown; open, it is exactly the
+        ``enter`` key (:meth:`_take`).  Any other name is an editing action
+        and belongs to the field.
         """
         if name == "activate":
-            if not self.is_open:
-                return False
-            self._take()
-            return True
+            return self.activate()
         return self.input.on_action(name)
 
     def child_at(self, row: int, col: int) -> tuple[Component, int, int] | None:
@@ -321,7 +328,8 @@ class ComboBox(Widget):
     def render(self, c: Constraints) -> Surface:
         """The field's rows -- the dropdown paints through the host's modal.
 
-        The field renders at the constraint's width.  ``_last_count`` keeps the untruncated row count
+        The field renders at the constraint's width.  ``_last_count`` keeps
+        the untruncated row count
         :meth:`child_at` maps through (the W2a container precedent), while a
         ``max_height`` budget truncates only the returned rows.  The surface
         is clipped, not padded.
@@ -336,6 +344,6 @@ class ComboBox(Widget):
 
     def __repr__(self) -> str:
         return (
-            f"ComboBox({len(self.list.options)} options, open={self.is_open}, "
+            f"ComboBox({len(self.list.options)} options, open={self.open}, "
             f"text={self.input.text!r})"
         )

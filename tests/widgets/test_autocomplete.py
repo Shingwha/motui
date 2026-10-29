@@ -2,11 +2,10 @@
 
 import pytest
 
-from motui.kernel.geom import Pos
 from motui.kernel.cell import Surface
+from motui.kernel.geom import Pos
 from motui.kernel.layout import Constraints
 from motui.widgets import Autocomplete, Option
-
 from tests.testing import key, texts
 
 
@@ -17,7 +16,10 @@ def test_an_empty_query_matches_every_option_in_order():
     assert auto.selected == Option("alpha")
 
 
-@pytest.mark.parametrize("query, matched", [("rea", ["read", "ready", "bread", "thread"]), ("zzz", [])])
+@pytest.mark.parametrize(
+    "query, matched",
+    [("rea", ["read", "ready", "bread", "thread"]), ("zzz", [])],
+)
 def test_prefix_matches_rank_before_substring_matches(query, matched):
     options = [Option("read"), Option("bread"), Option("thread"), Option("ready")]
     auto = Autocomplete(options=options)

@@ -4,14 +4,13 @@ from dataclasses import replace
 
 import pytest
 
-from motui.kernel.glyphs import GLYPHS
 from motui.kernel.cell import Surface
 from motui.kernel.geom import Pos
+from motui.kernel.glyphs import GLYPHS
 from motui.kernel.layout import Constraints
 from motui.kernel.style import Style
 from motui.kernel.theme import DEFAULT_THEME, Styles
 from motui.widgets import CheckboxGroup, MultiSelect, Option, RadioGroup, Select
-
 from tests.testing import key, texts
 
 THREE = [Option("one"), Option("two"), Option("three")]
@@ -201,11 +200,12 @@ def test_moving_the_cursor_clears_a_pending_pick():
     assert menu.take() is None
 
 
-def test_a_committing_select_writes_the_row_it_landed_on():
-    form = Select(THREE, commit=True)
-    assert form.take() is None
-    assert form.move(1) is True and form.take() == Option("two")
-    assert form.on_click(Pos(x=0, y=2)) is True and form.take() == Option("three")
+def test_a_move_or_a_click_does_not_write_a_pick():
+    menu = Select(THREE)
+    assert menu.take() is None
+    assert menu.move(1) is True and menu.take() is None
+    assert menu.on_click(Pos(x=0, y=2)) is True and menu.take() is None
+    assert menu.on_action("activate") is True and menu.take() == Option("three")
 
 
 def test_a_disabled_select_refuses_every_gesture_but_still_renders():
@@ -227,7 +227,10 @@ def test_disabled_items_are_skipped_refused_and_painted_dim():
     assert menu.render(Constraints(width=20))[1].segments[1].style == Style(italic=True)
     assert menu.on_click(Pos(x=0, y=1)) is False
     menu.index = 1
-    assert menu.on_action("activate") is False
+    # The assignment is a cursor gesture too: a disabled row refuses it.
+    assert menu.index == 0
+    menu.disabled_items = frozenset({0})
+    assert menu.on_action("activate") is False and menu.take() is None
 
 
 # -- RadioGroup ---------------------------------------------------------------
@@ -241,47 +244,51 @@ def test_radio_renders_one_marked_row_per_label():
     assert row.segments[1].style == DEFAULT_THEME.text.base
 
 
-def test_radio_index_clamps_and_selected_reads_the_label():
+def test_radio_index_clamps_and_selected_reads_the_option():
     group = RadioGroup(["a", "b", "c"], index=7)
-    assert group.index == 2 and group.selected == "c"
+    assert group.index == 2 and group.selected is not None
+    assert group.selected.label == "c"
     group.index = -4
-    assert group.index == 0 and group.selected == "a"
+    assert group.index == 0 and group.selected.label == "a"
     assert texts(group, 20)[0] == "(\u2022) a"
     empty = RadioGroup([])
     assert empty.index == 0 and empty.selected is None
     assert list(empty.render(Constraints(width=20))) == []
 
 
-def test_radio_move_clamps_and_leaves_the_new_selection_pending():
+def test_radio_move_clamps_without_writing_a_pick():
     group = RadioGroup(["one", "two", "three"])
     assert group.take() is None
     assert group.move(1) is True
-    assert (group.index, group.take()) == (1, "two")
+    assert (group.index, group.take()) == (1, None)
     assert group.move(-9) is True
-    assert (group.index, group.take()) == (0, "one")
-    assert group.move(-1) is False and group.take() is None
+    assert (group.index, group.take()) == (0, None)
+    assert group.move(-1) is False
+    assert group.on_action("activate") is True and group.take() == "one"
 
 
 def test_radio_click_selects_the_row_and_ignores_the_column():
     group = RadioGroup(["one", "two", "three"])
     for col in (0, 3, 40):
-        assert group.on_click(Pos(x=col, y=2)) is True and group.take() == "three"
-    assert group.on_click(Pos(x=0, y=2)) is True and group.take() == "three"
+        assert group.on_click(Pos(x=col, y=2)) is True and group.index == 2
+    assert group.on_action("activate") is True and group.take() == "three"
     for row in (-1, 3, 9):
         assert group.on_click(Pos(x=0, y=row)) is False and group.take() is None
 
 
 def test_radio_takes_option_payloads_and_falls_back_to_the_label():
     group = RadioGroup([Option("alpha", 1), Option("beta", 2), Option("plain")])
-    assert group.labels == ["alpha", "beta", "plain"]
-    assert group.on_click(Pos(x=0, y=1)) is True and group.take() == 2
-    assert group.on_click(Pos(x=0, y=2)) is True and group.take() == "plain"
+    assert [option.label for option in group.options] == ["alpha", "beta", "plain"]
+    assert group.on_click(Pos(x=0, y=1)) is True and group.on_action("activate") is True
+    assert group.take() == 2
+    assert group.on_click(Pos(x=0, y=2)) is True and group.on_action("activate") is True
+    assert group.take() == "plain"
 
 
 def test_radio_skips_and_refuses_disabled_items():
     radio = RadioGroup(["one", "two", "three"], disabled_items=(1,))
     assert radio.move(1) is True and radio.index == 2
-    assert radio.take() == "three"
+    assert radio.on_action("activate") is True and radio.take() == "three"
     assert radio.on_click(Pos(x=0, y=1)) is False and radio.take() is None
 
 
@@ -290,8 +297,13 @@ def test_the_focused_group_carries_the_active_band_under_its_pick():
     focused = RadioGroup(["one", "two"], styles=styles)
     focused.focused = True
     unfocused = RadioGroup(["one", "two"], styles=styles)
-    assert all(seg.style.underline for seg in focused.render(Constraints(width=20))[0].segments)
-    assert not any(seg.style.underline for seg in unfocused.render(Constraints(width=20))[0].segments)
+    assert all(
+        seg.style.underline for seg in focused.render(Constraints(width=20))[0].segments
+    )
+    assert not any(
+        seg.style.underline
+        for seg in unfocused.render(Constraints(width=20))[0].segments
+    )
 
 
 # -- CheckboxGroup ------------------------------------------------------------
@@ -385,9 +397,11 @@ def test_the_choice_keymap_routes_its_keys_through_named_actions():
     assert menu.on_action("toggle") is False  # a plain Select has no marks
     assert menu.on_action("nope") is False
     assert menu.on_key(key("right")) is True and menu.index == 1
-    assert menu.on_key(key("enter")) is True and menu.take() == THREE[1]
+    assert menu.on_key(key("enter")) is False  # the focus layer owns enter
+    assert menu.on_action("activate") is True and menu.take() == THREE[1]
     assert not hasattr(Select, "handle")
-    assert Select.keymap["down"] == "next" and Select.keymap["enter"] == "activate"
+    assert Select.keymap["down"] == "next"
+    assert "enter" not in Select.keymap
 
 
 def test_a_non_wrapping_choice_action_reports_an_edge_as_unhandled():
