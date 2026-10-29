@@ -8,11 +8,11 @@ import pytest
 
 from motui.app import Scrollbar, ScrollbarStyles
 from motui.kernel import Axis, Style, Theme
+from motui.kernel.cell import Line, Surface
 from motui.kernel.document import Placement
 from motui.kernel.events import MouseEvent, PasteEvent
 from motui.kernel.frame import SEPARATOR_CHROME_NAME, Chrome
 from motui.kernel.glyphs import GLYPHS
-from motui.kernel.cell import Line, Surface
 from motui.widgets import ScrollPanel
 from motui.widgets.text import Text
 from tests.testing import (
@@ -247,7 +247,8 @@ def test_the_bar_rides_a_resize():
     tui, strip, _ = driven(100, 10, 45)
     tui.screen.width = 30
     tui.paint()
-    assert "".join(strip_texts(tui)) == "\u2591\u2591\u2591\u2591\u2588\u2591\u2591\u2591\u2591\u2591"
+    expected = "\u2591\u2591\u2591\u2591\u2588\u2591\u2591\u2591\u2591\u2591"
+    assert "".join(strip_texts(tui)) == expected
     assert strip.handle(press(29, 4)) is True
     strip.handle(motion(29, 6, "left"))
     tui.paint()

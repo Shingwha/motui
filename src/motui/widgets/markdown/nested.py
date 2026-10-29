@@ -10,8 +10,8 @@ from __future__ import annotations
 import re
 from typing import TYPE_CHECKING
 
-from ...kernel.glyphs import pair_seat
 from ...kernel.cell import Line, Segment, wrap_line
+from ...kernel.glyphs import pair_seat
 from ...kernel.text import WrapMode, visible_width
 from .blocks import _run_blocks
 from .inline import inline_segments
@@ -88,7 +88,9 @@ class QuoteRule:
                 for seg in row.segments
             )
             out.append(
-                (Line((Segment(f"{ctx.glyphs.quote} ", theme.text.muted),)) + body).clip(WrapMode.ELLIPSIS, width)
+                (Line((Segment(f"{ctx.glyphs.quote} ", theme.text.muted),)) + body).clip(
+                    WrapMode.ELLIPSIS, width
+                )
             )
         return out
 
@@ -172,7 +174,8 @@ class ListRule:
                 inner.append(line[drop:])
             inner_rows = _run_blocks(inner, budget, ctx, gap=0)
             out.extend(
-                (Line.from_text(" " * prefix_w) + row).clip(WrapMode.ELLIPSIS, width) for row in inner_rows
+                (Line.from_text(" " * prefix_w) + row).clip(WrapMode.ELLIPSIS, width)
+                for row in inner_rows
             )
         return out
 
@@ -229,6 +232,7 @@ class ListRule:
                 inner.append(line[drop:])
             inner_rows = _run_blocks(inner, budget, ctx, gap=0)
             out.extend(
-                (Line.from_text(" " * prefix_w) + row).clip(WrapMode.ELLIPSIS, width) for row in inner_rows
+                (Line.from_text(" " * prefix_w) + row).clip(WrapMode.ELLIPSIS, width)
+                for row in inner_rows
             )
         return out

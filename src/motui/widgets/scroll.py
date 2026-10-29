@@ -12,8 +12,8 @@ from dataclasses import replace
 
 from ..kernel.cell import Line, Segment, Surface, cut_line
 from ..kernel.document import Component
-from ..kernel.geom import Pos
 from ..kernel.events import KeyEvent, MouseEvent
+from ..kernel.geom import Pos
 from ..kernel.glyphs import GLYPHS, Glyphs
 from ..kernel.layout import Constraints, Scroll, ScrollAxis
 from ..kernel.text import WrapMode

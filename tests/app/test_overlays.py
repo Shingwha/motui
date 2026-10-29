@@ -9,10 +9,9 @@ import pytest
 from motui import Button
 from motui.app import Pointer, Stats, Toasts, Tooltip
 from motui.kernel import Constraints, Style, Surface, Theme
-from motui.kernel.events import KeyEvent, MouseEvent, PasteEvent
 from motui.kernel.cell import Line
+from motui.kernel.events import KeyEvent, MouseEvent, PasteEvent
 from tests.testing import Clock, Rows, headless_tui, key, many, press
-
 
 # === Stats ==================================================================
 
@@ -369,9 +368,18 @@ def test_the_band_resolves_a_toasts_style_then_the_controllers():
     cases = (
         ({"style": Style(fg="#111111")}, None, Style(fg="#111111")),
         ({}, Style(fg="#222222"), Style(fg="#222222")),
-        ({"theme": Theme(overlays=replace(Theme().overlays, toast=Style(fg="#333333")))}, None, Style(fg="#333333")),
         (
-            {"style": Style(fg="#111111"), "theme": Theme(overlays=replace(Theme().overlays, toast=Style(fg="#333333")))},
+            {"theme": Theme(overlays=replace(Theme().overlays, toast=Style(fg="#333333")))},
+            None,
+            Style(fg="#333333"),
+        ),
+        (
+            {
+                "style": Style(fg="#111111"),
+                "theme": Theme(
+                    overlays=replace(Theme().overlays, toast=Style(fg="#333333"))
+                ),
+            },
             None,
             Style(fg="#111111"),
         ),

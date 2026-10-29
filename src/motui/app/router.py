@@ -14,7 +14,6 @@ from ..kernel.geom import Pos
 from ..kernel.hit import Hit
 from ..kernel.layout import Scrollable, ScrollableX
 from ..widgets.base import Widget
-from .focus import iter_widgets
 
 if TYPE_CHECKING:
     from .application import App
@@ -39,10 +38,7 @@ _BUTTONS = ("left", "middle", "right")
 
 def palette(app: App, event: Event) -> bool:
     """The open command palette owns the keyboard until it closes."""
-    if app._palette is not None and app._palette.is_open:
-        if app._palette.handle(event):
-            return True
-    return False
+    return bool(app._palette is not None and app._palette.is_open and app._palette.handle(event))
 
 
 def modal(app: App, event: Event) -> bool:
@@ -56,10 +52,7 @@ def modal(app: App, event: Event) -> bool:
 
 def find(app: App, event: Event) -> bool:
     """The open find bar owns the keys it consumes."""
-    if app._find is not None and app._find.is_open:
-        if app._find.handle(event):
-            return True
-    return False
+    return bool(app._find is not None and app._find.is_open and app._find.handle(event))
 
 
 def toast(app: App, event: Event) -> bool:
@@ -98,12 +91,13 @@ def drag(app: App, event: Event) -> bool:
     # A drag goes first: a press on a bar must never anchor the
     # selection gesture under it (the pane Scrollbar's own rule,
     # now for widgets inside the content).
-    if app._drag_target is not None and event.kind in ("motion", "release"):
-        if _drag_event(app, event):
-            return True
-    if event.kind == "press" and _drag_press(app, event):
+    if (
+        app._drag_target is not None
+        and event.kind in ("motion", "release")
+        and _drag_event(app, event)
+    ):
         return True
-    return False
+    return bool(event.kind == "press" and _drag_press(app, event))
 
 
 def mouse(app: App, event: Event) -> bool:

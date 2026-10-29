@@ -160,7 +160,7 @@ def test_closing_one_of_two_collapses_the_parent_and_strips_the_divider():
     assert pane.viewport is left.viewport
     assert frame.panes == (pane,) and frame.focused_pane is pane
     assert frame.pane("pane-1") is None
-    assert [row.text for row in frame.compose(20, 4).rows][0].startswith("0123456789")
+    assert next(row.text for row in frame.compose(20, 4).rows).startswith("0123456789")
 
 
 def test_closing_a_later_child_keeps_the_parents_id():
@@ -225,7 +225,7 @@ def test_close_refuses_a_root_a_container_a_second_close_and_a_loose_pane():
     root = frame.panes[0]
     with pytest.raises(RuntimeError):
         root.close()
-    left, right = root.split(Axis.X)
+    left, _right = root.split(Axis.X)
     with pytest.raises(RuntimeError):
         root.close()
     left.close()
@@ -238,7 +238,7 @@ def test_close_refuses_a_root_a_container_a_second_close_and_a_loose_pane():
 def test_closing_inside_a_nested_split_keeps_the_outer_tree():
     root = _pane("primary", Rect(x=0, y=0, width=40, height=8))
     frame = Frame([root])
-    left, right = root.split(Axis.X, weights=(1, 1))
+    _left, right = root.split(Axis.X, weights=(1, 1))
     top, bottom = right.split(Axis.Y, weights=(1, 1))
     frame.retile(Rect(x=0, y=0, width=40, height=8))
     bottom.close()
@@ -279,11 +279,17 @@ def test_retile_re_divides_the_tree_and_keeps_every_panes_state():
     spy = _spy_chrome("right", 1, [], "s")
     left.add_chrome(spy)
     frame.retile(Rect(x=0, y=0, width=40, height=4))
-    assert (left.rect, right.rect) == (Rect(x=0, y=0, width=20, height=4), Rect(x=20, y=0, width=20, height=4))
+    assert (left.rect, right.rect) == (
+        Rect(x=0, y=0, width=20, height=4),
+        Rect(x=20, y=0, width=20, height=4),
+    )
     assert frame.panes == (left, right) and left.chrome == (spy,)
     frame.retile(Rect(x=0, y=0, width=20, height=4))
-    assert (left.rect, right.rect) == (Rect(x=0, y=0, width=10, height=4), Rect(x=10, y=0, width=10, height=4))
-    top, bottom = right.split(Axis.Y, weights=(1, 1))
+    assert (left.rect, right.rect) == (
+        Rect(x=0, y=0, width=10, height=4),
+        Rect(x=10, y=0, width=10, height=4),
+    )
+    _top, _bottom = right.split(Axis.Y, weights=(1, 1))
     frame.retile(Rect(x=0, y=0, width=40, height=8))
     assert [pane.rect for pane in frame.panes] == [
         Rect(x=0, y=0, width=20, height=8),
@@ -311,7 +317,10 @@ def test_a_dock_composes_beneath_the_panes_and_never_takes_focus():
     right.document.add(Rows("r0", "r1", "r2"))
     dock = Pane("dock", Rect(x=0, y=3, width=20, height=1), Viewport(document("f0")))
     frame.set_dock("bottom", dock)
-    frame.retile(Rect(x=0, y=0, width=20, height=3), docks={"bottom": Rect(x=0, y=3, width=20, height=1)})
+    frame.retile(
+        Rect(x=0, y=0, width=20, height=3),
+        docks={"bottom": Rect(x=0, y=3, width=20, height=1)},
+    )
     frame.compose(20, 4)
     assert [row.text for row in frame.layout.rows] == [
         "l0" + " " * 8 + "r0" + " " * 8,
@@ -459,7 +468,7 @@ def test_an_unchanged_plan_still_hands_the_memoized_row_back():
     # band each write into every row -- so each row travels through the
     # memo: the same plan key hands back the very row the previous
     # composition built.
-    for before, after in zip(first.rows, again.rows):
+    for before, after in zip(first.rows, again.rows, strict=True):
         assert after is before
     assert [row.text for row in again.rows] == [
         "l0" + " " * 8 + "r0" + " " * 7 + "#",
@@ -656,10 +665,16 @@ def test_chrome_painters_read_the_pane_layout_and_the_strip_length():
     for edge, length, expected_rows in cases:
         seen: list[tuple[ScreenLayout, int]] = []
 
-        def paint(layout: ScreenLayout, strip_length: int) -> list[Line]:
-            seen.append((layout, strip_length))
-            rows = strip_length if edge in ("left", "right") else 1
-            width = 1 if edge in ("left", "right") else strip_length
+        def paint(
+            layout: ScreenLayout,
+            strip_length: int,
+            *,
+            _seen: list[tuple[ScreenLayout, int]] = seen,
+            _edge: str = edge,
+        ) -> list[Line]:
+            _seen.append((layout, strip_length))
+            rows = strip_length if _edge in ("left", "right") else 1
+            width = 1 if _edge in ("left", "right") else strip_length
             return [Line.from_text(" " * width) for _ in range(rows)]
 
         pane = _wrapping_pane("primary", Rect(x=0, y=0, width=6, height=3), "abcdef")
@@ -815,6 +830,6 @@ def test_with_pane_rows_splices_a_rewrite_back_at_the_pane():
 
 def test_split_children_are_adopted_the_moment_they_exist():
     frame = Frame([Pane("primary", Rect(x=0, y=0, width=20, height=4), Viewport(Document()))])
-    left, right = frame.panes[0].split(Axis.X)
+    _left, right = frame.panes[0].split(Axis.X)
     right.focus()
     assert frame.focused_pane is right

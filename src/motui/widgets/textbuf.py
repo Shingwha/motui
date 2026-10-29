@@ -7,16 +7,16 @@ preserves whitespace, and wrap geometry is memoized per line and per walk.
 
 from __future__ import annotations
 
+import itertools
 from collections import deque
+from collections.abc import Callable
 from typing import NamedTuple
 
-from collections.abc import Callable
-
-from ..kernel.events import Event, KeyEvent, PasteEvent
 from ..kernel.cell import Segment
+from ..kernel.events import Event, KeyEvent, PasteEvent
+from ..kernel.keymap import Keymap
 from ..kernel.style import Style
 from ..kernel.text import index_bounds_at_columns, visible_width, wrap_spans
-from ..kernel.keymap import Keymap
 
 __all__ = ["UNDO_LIMIT", "TextBuffer"]
 
@@ -634,7 +634,11 @@ class TextBuffer:
             for start, end in spans:
                 rows.append(
                     _VisualRow(
-                        base + start, base + end, normalized[start:end], base, base + len(normalized)
+                        base + start,
+                        base + end,
+                        normalized[start:end],
+                        base,
+                        base + len(normalized),
                     )
                 )
             base += len(normalized) + 1
@@ -750,7 +754,7 @@ class TextBuffer:
             bounds.update((column, column + 1))
         ordered = sorted(bound for bound in bounds if 0 <= bound <= length)
         segments: list[Segment] = []
-        for start, end in zip(ordered, ordered[1:]):
+        for start, end in itertools.pairwise(ordered):
             if start == end:
                 continue
             cell_style = style

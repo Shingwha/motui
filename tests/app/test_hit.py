@@ -3,12 +3,11 @@
 from __future__ import annotations
 
 from motui.kernel import Axis, RowSpan
-
-from motui.widgets.text import Text
-from motui.kernel.frame import Chrome
 from motui.kernel.cell import Line
-from motui.widgets import Column, TreeNode
 from motui.kernel.document import Placement
+from motui.kernel.frame import Chrome
+from motui.widgets import Column, TreeNode
+from motui.widgets.text import Text
 from tests.testing import Rows, headless_tui, many
 
 

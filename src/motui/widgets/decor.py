@@ -7,9 +7,9 @@ from the component's theme at render time.
 
 from __future__ import annotations
 
+from ..kernel.cell import Line, Segment, Surface
 from ..kernel.document import Component
 from ..kernel.glyphs import GLYPHS, Border, Glyphs
-from ..kernel.cell import Line, Segment, Surface
 from ..kernel.layout import Constraints
 from ..kernel.style import Style
 from ..kernel.text import WrapMode, ellipsize_tail, visible_width
@@ -220,7 +220,8 @@ class Panel(Widget):
         if lead == 0:
             return row.clip(WrapMode.ELLIPSIS, width)
         pad = ground
-        return (Line((Segment(" " * lead, pad),)) + row).clip(WrapMode.ELLIPSIS, width).fill(width, pad)
+        line = Line((Segment(" " * lead, pad),)) + row
+        return line.clip(WrapMode.ELLIPSIS, width).fill(width, pad)
 
     def child_at(self, row: int, col: int) -> tuple[Component, int, int] | None:
         """The child owning a content cell of the last render; panel cells answer ``None``."""

@@ -1,5 +1,7 @@
 """Diff: the line-level unified diff rows and their live inputs."""
 
+from dataclasses import replace
+
 import pytest
 
 from motui.kernel.cell import Surface
@@ -8,8 +10,6 @@ from motui.kernel.style import NONE
 from motui.kernel.text import WrapMode
 from motui.kernel.theme import DEFAULT_THEME
 from motui.widgets import Diff
-from dataclasses import replace
-
 from tests.testing import many, texts
 
 
@@ -122,7 +122,7 @@ def test_wrap_selects_how_a_long_diff_line_fits():
     # The height budget still truncates the natural-width surface.
     budgeted = overflow.render(Constraints(width=20, max_height=1))
     assert budgeted.width == 31 and budgeted.height == 1
-    assert list(budgeted)[0].text.startswith("@@")
+    assert next(iter(budgeted)).text.startswith("@@")
 
 
 def test_wrap_is_part_of_the_render_key_and_touches():

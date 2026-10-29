@@ -7,17 +7,18 @@ frame's overlays."""
 from __future__ import annotations
 
 import asyncio
+import contextlib
 import sys
 import time
 from collections.abc import Awaitable, Callable
 
 from ..kernel.events import Event, EventSource
 from ..kernel.theme import DEFAULT_THEME, Theme
+from ..terminal import RawTerminalKeys
 from ..terminal.ansi import cursor_shape, set_window_title
 from ..terminal.paint import Painter
 from ..terminal.screen import MouseMode, Screen
 from ..terminal.terminal import Terminal
-from ..terminal import RawTerminalKeys
 from .workspace import Workspace
 
 __all__ = ["Runtime"]
@@ -305,10 +306,9 @@ class Runtime:
         if running is loop:
             event.set()
         elif not loop.is_closed():
-            try:
+            # The loop may close between the check and the call.
+            with contextlib.suppress(RuntimeError):
                 loop.call_soon_threadsafe(event.set)
-            except RuntimeError:
-                pass  # the loop closed between the check and the call
 
     def _wake_up(self) -> asyncio.Event:
         """The pump's wake event, created lazily and bound to the running loop."""
@@ -375,10 +375,8 @@ class Runtime:
                     continue  # never leave a dirty frame waiting forever
                 await event.wait()
             else:
-                try:
+                with contextlib.suppress(TimeoutError):
                     await asyncio.wait_for(event.wait(), delay)
-                except asyncio.TimeoutError:
-                    pass
 
     # -- lifecycle ------------------------------------------------------------
 
@@ -420,7 +418,7 @@ class Runtime:
                 await body()
             except KeyboardInterrupt:
                 self.exit()
-            except BaseException as exc:  # noqa: BLE001 - re-raised after teardown
+            except BaseException as exc:
                 body_error = exc
         finally:
             pump_error = await self._teardown(pump_task)
@@ -429,7 +427,7 @@ class Runtime:
         if pump_error is not None:
             raise pump_error
 
-    async def run_session(self, body: Callable[["Runtime"], Awaitable[None]]) -> None:
+    async def run_session(self, body: Callable[[Runtime], Awaitable[None]]) -> None:
         """Run ``body(self)`` inside a full-screen session; entering resets the
         painter's diff base because the alternate screen starts blank."""
         await self._run(lambda: body(self))
@@ -441,10 +439,8 @@ class Runtime:
     def run(self) -> None:
         """The synchronous entry: own an event loop around :meth:`run_async`; a
         Ctrl+C interrupt is a quit, not a crash."""
-        try:
+        with contextlib.suppress(KeyboardInterrupt):
             asyncio.run(self.run_async())
-        except KeyboardInterrupt:
-            pass
 
     async def _teardown(self, pump_task: asyncio.Task[None] | None) -> BaseException | None:
         """Stop the pump and keyboard, bracket the screen and dump the final screen
@@ -454,7 +450,7 @@ class Runtime:
         if pump_task is not None:
             try:
                 await pump_task
-            except BaseException as exc:  # noqa: BLE001 - reported to the run method
+            except BaseException as exc:
                 pump_error = exc
         # The pump's loop is history: a post-run refresh must not poke a
         # closed loop when a host detaches its last overlay after the session.

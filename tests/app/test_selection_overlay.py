@@ -8,8 +8,8 @@ import pytest
 
 from motui.app import Runtime
 from motui.kernel import DEFAULT_THEME, Selection, Style
-from motui.widgets.text import Text
 from motui.terminal import HeadlessScreen, Terminal, TerminalOptions
+from motui.widgets.text import Text
 from tests.testing import Rows, headless_tui, many, marked, snapshot
 
 

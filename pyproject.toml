@@ -66,39 +66,21 @@ testpaths = ["tests"]
 [tool.ruff]
 line-length = 100
 target-version = "py312"
-# Ratchet: the 1.x tree is not lint-clean yet.  Each 2.0 wave removes the
-# entries it has cleaned; see the W0b and W1 handoffs.
-exclude = [
-    "specs",
-    "src/motui/widgets",
-    "src/motui/app",
-    "src/motui/__init__.py",
-    "tests/widgets",
-    "tests/app",
-    "tests/terminal",
-    "tests/golden",
-]
+# The 2.1.2 lint wave removed the widget/app/test tree excludes; only the
+# historical spec probes stay out of the check (they are not shipped source).
+exclude = ["specs", "dist"]
 
 [tool.ruff.lint]
 select = ["E", "F", "I", "UP", "B", "SIM", "RUF"]
 
 [tool.ruff.lint.per-file-ignores]
-# 1.x files the kernel migration moved without rewriting their prose/tables.
-# Each entry is one rule, not a tree exclude; later waves remove them.
+# Narrow, intentional exceptions only.
 "src/motui/kernel/text.py" = ["E501"]  # generated Unicode mark ranges
 "src/motui/kernel/theme.py" = ["RUF009"]  # frozen Style tokens are values, not factories
 "src/motui/kernel/cell.py" = ["RUF009"]
 "src/motui/kernel/glyphs.py" = ["RUF009"]
-"src/motui/kernel/frame.py" = ["E501", "RUF005"]
 "src/motui/kernel/selection.py" = ["B008"]  # public default Style(reverse=True)
-"tests/kernel/test_frame.py" = ["B023", "B905", "E501", "RUF015", "RUF059"]
-"tests/kernel/test_text.py" = ["E402", "E501"]
-"tests/kernel/test_layout.py" = ["F841"]
-"tests/kernel/test_events.py" = ["E501"]
-"tests/kernel/test_style.py" = ["B017"]
-"tests/test_invariants.py" = ["I001", "E501"]
-"src/motui/demo/sections/layout.py" = ["E501"]  # the drill's intentionally long source line
-"tools/framebench.py" = ["E402", "F401", "I001"]
+"tools/framebench.py" = ["E402", "F401"]  # sys.path bootstrap and the probe import
 
 [tool.pyright]
 include = [

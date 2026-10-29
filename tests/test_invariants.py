@@ -68,8 +68,8 @@ from motui.widgets import (
     StatusLine,
     Table,
     Tabs,
-    TreeNode,
     Tree,
+    TreeNode,
     Widget,
 )
 
@@ -185,7 +185,16 @@ def test_the_matrix_covers_every_public_component():
 
 def test_render_is_bounded_idempotent_and_drift_free():
     cases = [(name, factory) for name, factory in CASES.items()]
-    cases.append(("CommandPalette", lambda: CommandPalette(headless_tui(80, 8), [Option("/one")], glyphs=replace(GLYPHS, prompt=">"))))
+    cases.append(
+        (
+            "CommandPalette",
+            lambda: CommandPalette(
+                headless_tui(80, 8),
+                [Option("/one")],
+                glyphs=replace(GLYPHS, prompt=">"),
+            ),
+        )
+    )
 
     for name, factory in cases:
         for width in WIDTHS:
@@ -197,11 +206,15 @@ def test_render_is_bounded_idempotent_and_drift_free():
                     f"{name}@{width}: text {row.text!r} is too wide"
                 )
 
-            assert component.render(Constraints(width=width)) == first, f"{name}@{width}: not idempotent"
+            assert component.render(Constraints(width=width)) == first, (
+                f"{name}@{width}: not idempotent"
+            )
 
             other = 80 if width != 80 else 1
             component.render(Constraints(width=other))
-            assert component.render(Constraints(width=width)) == first, f"{name}@{width}: drifted"
+            assert component.render(Constraints(width=width)) == first, (
+                f"{name}@{width}: drifted"
+            )
 
 
 def test_text_renders_under_constraints_with_a_height_budget():

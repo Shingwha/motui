@@ -2,24 +2,22 @@
 
 from dataclasses import replace
 
-from motui.kernel.geom import Pos
 from motui.kernel.cell import Line, Segment, Surface
+from motui.kernel.geom import Pos
 from motui.kernel.layout import Constraints
 from motui.kernel.style import Style
 from motui.kernel.text import WrapMode
 from motui.kernel.theme import DEFAULT_THEME
 from motui.widgets import Markdown
 from motui.widgets.markdown import default_block_rules
-
 from tests.testing import texts
 
 
 def test_headings_strip_their_markers_and_keep_the_rules():
     assert texts(Markdown("## Title"), 80) == ["Title"]
     assert texts(Markdown("### Deep"), 80) == ["### Deep"]
-    assert Markdown("# H").render(Constraints(width=80))[0].segments[0].style == DEFAULT_THEME.content.headings[0].merge(
-        Style(underline=True)
-    )
+    style = Markdown("# H").render(Constraints(width=80))[0].segments[0].style
+    assert style == DEFAULT_THEME.content.headings[0].merge(Style(underline=True))
 
 
 def test_paragraphs_join_soft_breaks_and_blocks_are_separated_by_one_gap():
@@ -112,7 +110,10 @@ def test_a_link_click_leaves_its_url_pending_once():
 
 
 def test_a_link_hover_marks_the_span_and_clears_back():
-    theme = replace(DEFAULT_THEME, surfaces=replace(DEFAULT_THEME.surfaces, hover=Style(reverse=True)))
+    theme = replace(
+        DEFAULT_THEME,
+        surfaces=replace(DEFAULT_THEME.surfaces, hover=Style(reverse=True)),
+    )
     md = Markdown("[docs](u)", theme=theme)
     plain = md.render(Constraints(width=20))
     assert md.on_hover(Pos(x=0, y=0)) is True

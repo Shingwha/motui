@@ -9,13 +9,13 @@ from __future__ import annotations
 from collections.abc import Callable
 from typing import TYPE_CHECKING
 
+from ..kernel.cell import Line
 from ..kernel.events import Event, MouseEvent
 from ..kernel.frame import Pane
 from ..kernel.hit import Hit
-from ..kernel.cell import Line
+from ..kernel.layout import Constraints
 from ..kernel.selection import Selection, SelectionAnchor, extract
 from ..kernel.text import visible_width
-from ..kernel.layout import Constraints
 
 if TYPE_CHECKING:
     from .runtime import Runtime, Timer

@@ -12,10 +12,10 @@ from motui.app.runtime import Timer
 from motui.kernel import DEFAULT_THEME, Rect, RowSpan
 from motui.kernel.document import Placement, Sizing
 from motui.kernel.geom import Axis
-from motui.widgets.text import Text
 from motui.terminal import HeadlessScreen, Terminal, TerminalOptions
 from motui.terminal.ansi import copy_clipboard, enter_alt_screen, leave_alt_screen
 from motui.terminal.screen import TerminalScreen
+from motui.widgets.text import Text
 from tests.testing import (
     Clock,
     RecordingScreen,
@@ -30,7 +30,6 @@ from tests.testing import (
     snapshot,
     wheel,
 )
-
 
 # -- document facade ---------------------------------------------------------
 
@@ -614,7 +613,8 @@ def test_top_and_bottom_docks_compose_and_an_empty_dock_keeps_no_rows():
         "bottom",
     ]
     assert tui.frame.panes[0].rect == Rect(x=0, y=2, width=20, height=5)
-    assert top.rect == Rect(x=0, y=0, width=20, height=2) and bottom.rect == Rect(x=0, y=7, width=20, height=1)
+    assert top.rect == Rect(x=0, y=0, width=20, height=2)
+    assert bottom.rect == Rect(x=0, y=7, width=20, height=1)
     assert tui.visible_range() == RowSpan(2, 6)
     assert tui.visible_range("primary") == RowSpan(2, 6)
 

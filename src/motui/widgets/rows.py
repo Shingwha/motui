@@ -7,10 +7,10 @@ Three display-only one-row components fitted to the painting width:
 
 from __future__ import annotations
 
-from typing import Sequence
+from collections.abc import Sequence
 
-from ..kernel.glyphs import GLYPHS, Glyphs, seat
 from ..kernel.cell import Line, Segment, Surface, fuse
+from ..kernel.glyphs import GLYPHS, Glyphs, seat
 from ..kernel.layout import Constraints
 from ..kernel.style import NONE, Style
 from ..kernel.text import WrapMode, visible_width
