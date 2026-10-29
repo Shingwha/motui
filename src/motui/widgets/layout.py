@@ -1,15 +1,16 @@
-"""Layout containers: :class:`Row` and :class:`Column`.
+"""Layout containers: :class:`Row`, :class:`Column` and :class:`Stack`.
 
-Both are ordinary components of the component library
-(``render(Constraints) -> Surface``) that arrange child components
-instead of drawing: a ``Row`` places children side by side in columns of
-fixed or shared width, a ``Column`` stacks them vertically with optional
-blank rows between.  They nest one level deep (a ``Row`` child may be a
-``Column``); beyond that, prefer building blocks and padding by hand.
-Only the kernel is imported: :class:`~motui.kernel.document.Component` for the
-protocol, :class:`~motui.kernel.cell.Line` for assembly.  Import the
-containers from :mod:`motui.widgets.layout` or from
-:mod:`motui.widgets` / the package root.
+All are ordinary components of the component library
+(``render(Constraints) -> Surface``) that arrange child components instead
+of drawing: a ``Row`` places children side by side in columns of fixed or
+shared width, a ``Column`` stacks them vertically with optional blank rows
+between, and a ``Stack`` paints them on top of one another.  They nest (a
+``Row`` child may be a ``Column``); beyond that, prefer building blocks and
+padding by hand.  Only the kernel is imported:
+:class:`~motui.kernel.document.Component` for the protocol,
+:class:`~motui.kernel.cell.Line` / ``Surface`` for assembly.  Import the
+containers from :mod:`motui.widgets.layout` or from :mod:`motui.widgets` /
+the package root.
 
 Children still receive a bare width int while the library migrates (they may
 be 1.x components); the composed rows are clipped into a Surface, and a
@@ -21,12 +22,13 @@ whitespace around a child (optionally filled into a solid band).
 
 from __future__ import annotations
 
-from ..kernel.document import Component
 from ..kernel.cell import Line, Segment, Surface
+from ..kernel.document import Component
+from ..kernel.geom import Size
 from ..kernel.layout import Constraints
 from ..kernel.style import NONE, Style
-from ..kernel.theme import Styles, Theme
 from ..kernel.text import WrapMode
+from ..kernel.theme import Styles, Theme
 from ..widgets.base import Container, Widget
 
 __all__ = ["Column", "Padding", "Row", "Spacer"]
@@ -121,7 +123,7 @@ class Row(Container):
         x = 0
         geometry: list[tuple[int, int]] = []
         cell_rows: list[int] = []
-        for child, col_width in zip(self.children, col_widths):
+        for child, col_width in zip(self.children, col_widths, strict=False):
             inner = max(0, col_width)
             raw = list(child.render(Constraints(width=inner)))
             raw_cells.append(raw)
@@ -142,7 +144,7 @@ class Row(Container):
 
         cells = [
             [row.clip(WrapMode.ELLIPSIS, inner).fill(inner) for row in raw]
-            for raw, (_, inner) in zip(raw_cells, geometry)
+            for raw, (_, inner) in zip(raw_cells, geometry, strict=False)
         ]
         height = max(len(rows) for rows in cells)
         separator = Line.from_text(" " * self.gap) if self.gap > 0 else Line()
@@ -257,6 +259,110 @@ class Column(Container):
 
     def __repr__(self) -> str:
         return f"Column({self.children!r}, gap={self.gap})"
+
+
+def _interactive_at(component: Component, row: int, col: int) -> bool:
+    """Whether ``component`` has an interactive target at ``(row, col)``.
+
+    The capability flags count anywhere in the component's own extent; a
+    coordinate door (``child_at``) counts when the cell descends to a
+    component that is interactive.  The walk is pure geometry -- it never
+    calls ``render`` -- and depth-guarded like the kernel's ``descend``, so
+    a malformed container cannot hang a hit test.
+    """
+    for _ in range(64):
+        if (
+            getattr(component, "clickable", False)
+            or getattr(component, "focusable", False)
+            or getattr(component, "hoverable", False)
+        ):
+            return True
+        child_at = getattr(component, "child_at", None)
+        if child_at is None:
+            return False
+        hit = child_at(row, col)
+        if hit is None:
+            return False
+        component, row, col = hit
+    return False
+
+
+class Stack(Container):
+    """Children painted on top of one another, ``children[0]`` at the bottom.
+
+    Every layer renders with the **same** constraints -- the whole frame
+    width and the same height budget -- and the surfaces are composed bottom
+    to top with :meth:`motui.kernel.cell.Surface.overlay`: a transparent
+    cell lets the layer below show through, any other cell wins and merges
+    the underlying style.  The result is clipped to ``c.width`` and
+    ``c.max_height``.  With no children the stack answers the empty frame
+    :meth:`~motui.kernel.cell.Surface.blank` of that size.
+
+    **Hit testing prefers interaction over z-order.**  ``child_at`` walks
+    from the top layer down and answers the first layer that has an
+    interactive component at the cell -- a ``clickable``/``focusable``/
+    ``hoverable`` component, or a container whose own ``child_at`` descends
+    to one.  A non-interactive layer such as a background ``Canvas`` is
+    therefore not a click target even when it is on top.  When no layer has
+    an interactive node there, the topmost layer containing the cell wins
+    (so text selection and geometry-only hits keep their z semantics), and a
+    cell outside every layer answers ``None``.  The geometry comes from the
+    last render; before it, every cell answers ``None``.
+    """
+
+    __slots__ = ("_geometry",)
+
+    def __init__(
+        self,
+        children,
+        *,
+        theme: Theme | None = None,
+        styles: Styles | None = None,
+    ) -> None:
+        super().__init__(theme, styles)
+        # Bottom -> top; the assignment adopts widget children's ``parent``.
+        self.children = list(children)
+        #: Last render's per-layer ``(height, width)`` in its own frame.
+        self._geometry: list[tuple[int, int]] = []
+
+    def render(self, c: Constraints) -> Surface:
+        """Overlay the children bottom to top and clip the composed frame."""
+        if not self.children:
+            return Surface.blank(Size(width=c.width, height=c.max_height or 0))
+        layers = [
+            child.render(Constraints(width=c.width, max_height=c.max_height))
+            for child in self.children
+        ]
+        self._geometry = [(layer.height, layer.width) for layer in layers]
+        composed = layers[0]
+        for layer in layers[1:]:
+            composed = layer.overlay(composed)
+        rows = composed.rows
+        if c.max_height is not None:
+            rows = rows[: c.max_height]
+        return Surface.clipped(rows, c.width)
+
+    def child_at(self, row: int, col: int) -> tuple[Component, int, int] | None:
+        """The layer owning a cell: interactive top-down, else topmost.
+
+        Every layer shares the stack's origin, so the cell needs no offset.
+        """
+        if row < 0 or col < 0 or not self._geometry:
+            return None
+        topmost: tuple[Component, int, int] | None = None
+        for index in range(len(self.children) - 1, -1, -1):
+            height, width = self._geometry[index]
+            if row >= height or col >= width:
+                continue
+            child = self.children[index]
+            if topmost is None:
+                topmost = (child, row, col)
+            if _interactive_at(child, row, col):
+                return child, row, col
+        return topmost
+
+    def __repr__(self) -> str:
+        return f"Stack({self.children!r})"
 
 
 class Spacer(Widget):
@@ -385,7 +491,11 @@ class Padding(Widget):
         for _ in range(top):
             out.append(Line.filled(width, fill) if fill != NONE else Line())
         for row in child_rows:
-            out.append((left_pad + self._content_row(row, inner, fill)).clip(WrapMode.ELLIPSIS, width))
+            out.append(
+                (left_pad + self._content_row(row, inner, fill)).clip(
+                    WrapMode.ELLIPSIS, width
+                )
+            )
         for _ in range(bottom):
             out.append(Line.filled(width, fill) if fill != NONE else Line())
         self._memo = (key, out, child_rows)
