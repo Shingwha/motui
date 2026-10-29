@@ -1,22 +1,9 @@
 """ComboBox: an editable field over a filtered dropdown.
 
-:class:`ComboBox` is the form's pick-or-type -- the one component of the
-family that is a *field* and a *menu* at once: the field is the component's
-own :class:`~motui.widgets.textfield.Input` (:attr:`ComboBox.input`) and the
-menu is an :class:`~motui.widgets.autocomplete.Autocomplete`
-(:attr:`ComboBox.list`) filtered by the field's text.  The component lays the
-field's rows out and holds the dropdown's own state (:attr:`ComboBox.open`);
-where the dropdown goes on screen is the host's business -- the class
-docstring's recipe mounts a :class:`~motui.app.modal.Modal` over
-:attr:`ComboBox.list`, one row under the field.
-
-The combo is a wrapper, so it speaks the whole container vocabulary: a
-pointer cell maps to the field through :meth:`ComboBox.child_at`, the focus
-flag and the click delegate to the field, and every state change touches
-the widget.
-
-Only the kernel and this layer are imported: no ``app``, no ``interaction``,
-no ``Modal``.  A widget lays out rows; the modal owns the screen.
+Wraps an :class:`Input` (``.input``) and an :class:`Autocomplete`
+(``.list``) filtered by the field's text; ``open`` holds the dropdown state
+and rendering is the field's rows.  Where the dropdown paints is the host's
+business -- only kernel and widget layers are imported.
 """
 
 from __future__ import annotations
@@ -41,44 +28,12 @@ __all__ = ["ComboBox"]
 class ComboBox(ResultWidget):
     """An editable Input over a filtered dropdown -- the form's pick-or-type.
 
-    ``options`` are the candidate :class:`~motui.widgets.choice.Option` rows;
-    the field is the component's own
-    :class:`~motui.widgets.textfield.Input` (``.input``), and while the
-    dropdown is open the ``Autocomplete`` of the field's text (``.list``) is
-    painted under the field's row.  The assignable ``open`` flag drives
-    it; :meth:`on_key` routes: ``down``/``up`` step the list (consumed, the
-    cursor wraps like every menu), ``enter`` takes the highlighted option's
-    value as the one-shot result, closes and writes the option's label back
-    into the field, ``escape`` closes with nothing pending; every
-    other event is the field's, and a field change re-filters the list.  A
-    pointer report is the one event that is nobody's here: it is declined,
-    so the mounted modal keeps the mouse it owns (a ``MouseEvent`` is a
-    sibling of ``KeyEvent``, never one, so its button names are not editing
-    doors).  A :class:`~motui.kernel.events.PasteEvent` is never read as a
-    key: the open dropdown hands it straight to the field (the P0 this wave
-    fixed).  The result is read once through :meth:`take`.
-    ``render(c)`` is the field's rows; the dropdown paints through a
-    host-mounted :class:`~motui.app.modal.Modal` -- a widget lays
-    out rows, the modal owns the screen:
-
-    1. the host mounts it once -- ``drop = Modal(tui, combo.list,
-       anchor=(field_row + 1, field_col))`` -- the anchor put one row under
-       the field, so the dropdown hangs where a combobox's list belongs;
-    2. the host routes ``combo.on_key(event)`` **before** ``drop.handle``
-       (the combo takes the keyboard while open, the modal keeps everything
-       it declines: the mouse, the scrim, the dismissal);
-    3. opening and closing stay in step -- the host assigns ``drop.open``
-       from ``combo.open`` and syncs the other way after routing, so a
-       click outside the panel (the modal's own dismissal) closes the
-       dropdown with it.
-
-    The pending result is the taken option's value (its label when the
-    payload is ``None``), or ``None``: an ``escape``, a dismissal, or an
-    activation that matched nothing.  ``max_rows`` is the list's own window
-    (the family knob -- what a host embedding ``.list`` standalone gets) and
-    ``max_drop_rows`` the dropdown's own budget: while the dropdown is open
-    the list renders the smaller of the two.  ``text`` seeds the field, and
-    the list opens on the matches of it.
+    Open, ``down``/``up`` step the list, ``enter`` takes the highlighted
+    option's value (and writes its label into the field), ``escape`` closes
+    empty; every other event belongs to the field.  ``render`` paints the
+    field only -- the host mounts ``.list`` in a modal.  ``max_rows`` caps
+    the list, ``max_drop_rows`` the open dropdown (the smaller wins).
+    Pointer reports are declined.
     """
 
     #: The combo routes the field's keys through its own ``on_key``; the
@@ -161,11 +116,8 @@ class ComboBox(ResultWidget):
     def open(self, value: bool) -> None:
         """Show or hide the dropdown.
 
-        Opening is a fresh visit: the stale result goes, the list's window
-        becomes the dropdown's budget and its matches are recomputed from
-        whatever the field holds now.  Closing only hides: a pick already
-        landed stays pending (the ``enter`` path emits first and closes
-        after), and the list returns to its own cap.
+        Opening clears stale results, applies the dropdown budget and
+        re-filters; closing only hides, so a landed pick stays pending.
         """
         opened = bool(value)
         if opened:
@@ -183,13 +135,7 @@ class ComboBox(ResultWidget):
         return True
 
     def _drop_rows(self) -> int | None:
-        """The window the dropdown renders: the two budgets' smaller.
-
-        ``max_rows`` is the list's own cap and ``max_drop_rows`` the
-        dropdown's; ``None`` on either means "every row", and the smaller of
-        the two is what the open dropdown renders -- the list's own cap is
-        what a host embedding :attr:`list` standalone keeps.
-        """
+        """The open dropdown's window: the smaller of ``max_rows``/``max_drop_rows``."""
         if self.max_rows is None:
             return self.max_drop_rows
         if self.max_drop_rows is None:
@@ -199,20 +145,11 @@ class ComboBox(ResultWidget):
     # -- the event contract -----------------------------------------------------
 
     def on_key(self, event: Event) -> bool:
-        """Route one event; ``True`` when it was consumed.
+        """Route one event; ``True`` when consumed.
 
-        Open, the dropdown's four keys come first: ``down``/``up`` step the
-        list (the menu's own wrap), ``enter`` takes the highlighted option
-        (:meth:`_take`: its value pending, its label back into the field,
-        the dropdown closed) and ``escape`` closes with nothing pending.
-        Everything else is the field's -- a printable, an editing key, a
-        :class:`~motui.kernel.events.PasteEvent` -- and a consumed field
-        event re-filters the list on the new text, open or closed.  A paste
-        is never inspected for a ``key`` (it has none): it goes straight to
-        the field.  What the field declines is declined here too, so the
-        host's own dispatch still gets its turn; a pointer report is
-        declined outright (the host's tiers own the mouse, the mounted modal
-        above all).
+        Open, the four dropdown keys win; everything else is the field's,
+        and a consumed field event re-filters the list.  Mouse reports are
+        declined (the host's pointer tiers own them).
         """
         if isinstance(event, MouseEvent):
             return False  # the pointer tiers' door, never an editing key
@@ -280,25 +217,13 @@ class ComboBox(ResultWidget):
         return True
 
     def on_action(self, name: str) -> bool:
-        """Run one action: ``"activate"`` opens or takes the dropdown.
-
-        Closed, activation opens the dropdown; open, it is exactly the
-        ``enter`` key (:meth:`_take`).  Any other name is an editing action
-        and belongs to the field.
-        """
+        """``activate`` opens or takes the dropdown; other names belong to the field."""
         if name == "activate":
             return self.activate()
         return self.input.on_action(name)
 
     def child_at(self, row: int, col: int) -> tuple[Component, int, int] | None:
-        """Map one of the combo's own cells to the input row it belongs to.
-
-        The combo adds no chrome of its own: its rows **are** the field's
-        rows, so every cell of the last render maps to ``(self.input, row,
-        col)``.  Like every container the geometry is the last render's --
-        before the first render there are no rows and every cell is
-        ``None``.
-        """
+        """Map a rendered cell to the field row it belongs to; pre-render cells answer ``None``."""
         if 0 <= row < self._last_count:
             return self.input, row, col
         return None
@@ -306,10 +231,8 @@ class ComboBox(ResultWidget):
     def _skin(self) -> None:
         """Forward a theme/``Styles`` assigned on the combo to both children.
 
-        Construction already passed the skin down; this only acts when the
-        combo's own ``theme``/``styles`` changed afterwards, so a host that
-        restyled a child directly keeps that override until the combo's skin
-        itself moves.
+        Only acts when the combo's own skin moved, so direct child overrides
+        keep working until then.
         """
         if (self.theme, self.styles) != (self._skin_theme, self._skin_styles):
             self.input.theme = self.theme
@@ -322,14 +245,7 @@ class ComboBox(ResultWidget):
     # -- the render ---------------------------------------------------------------
 
     def render(self, c: Constraints) -> Surface:
-        """The field's rows -- the dropdown paints through the host's modal.
-
-        The field renders at the constraint's width.  ``_last_count`` keeps
-        the untruncated row count
-        :meth:`child_at` maps through (the W2a container precedent), while a
-        ``max_height`` budget truncates only the returned rows.  The surface
-        is clipped, not padded.
-        """
+        """The field's rows; the untruncated count feeds ``child_at``."""
         self._skin()
         self._last_width = c.width
         rows = list(self.input.render(Constraints(width=c.width)))

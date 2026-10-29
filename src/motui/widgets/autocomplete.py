@@ -1,17 +1,8 @@
-"""Autocomplete: a query-filtered :class:`~motui.widgets.choice.Select`.
+"""Autocomplete: a query-filtered :class:`Select`.
 
-``Autocomplete`` is the filter layer of the menu family: the host feeds it a
-query string with :meth:`Autocomplete.set_query` and it keeps the matching
-options -- prefix matches first, then substring matches, each group in the
-original order -- as the rows its inherited cursor, window, counter and row
-rendering work on.  Everything else (the ``"\\u2192 "`` cursor row, the
-description column, ``move`` wrapping, ``click``, the ``(i/n)`` counter) is
-:class:`~motui.widgets.choice.Select`'s, shared unmodified; this module
-only answers *which* rows are current.
-
-The component is pure: it reads no keys and mounts nowhere -- keyboard
-routing belongs to the host (:class:`~motui.app.command_palette.CommandPalette`
-is its consumer).
+``set_query`` keeps prefix matches first, then substring matches, each in
+original order (case-insensitive).  Cursor, window, rendering and verbs are
+the inherited ``Select`` ones; the component reads no keys itself.
 """
 
 from __future__ import annotations
@@ -31,18 +22,9 @@ __all__ = ["Autocomplete"]
 class Autocomplete(Select):
     """A ``Select`` whose rows are the matches of :attr:`query`.
 
-    ``options`` is the universe of :class:`Option` values, passed
-    positionally like ``Select``'s (keyword form keeps working); ``query``
-    (mutated only through :meth:`set_query`) filters it.  An **empty query
-    matches every option** in the original order -- the component starts as
-    a plain list.  Otherwise prefix matches rank before substring matches,
-    both groups keep the option order, and an option appears at most once.
-    Matching is **case-insensitive**: the query and the labels are compared
-    through ``casefold()`` while the rendered label keeps its own case.
-
-    The description column is measured over ``options`` -- the whole
-    universe, not the current matches -- so it holds still while the query
-    narrows the rows.
+    An empty query matches every option.  Otherwise prefix matches rank
+    before substring matches, both in original order, compared with
+    ``casefold()``.  The description column measures all ``options``.
     """
 
     __slots__ = ("_matches", "query")
@@ -76,15 +58,10 @@ class Autocomplete(Select):
         self._matches = list(self.options)
 
     def set_query(self, query: str) -> None:
-        """Filter ``options`` by ``query`` and reset the cursor to the top.
+        """Filter ``options`` by ``query`` and reset cursor, hover and result.
 
-        An empty query keeps every option; otherwise prefix matches come
-        first, then substring matches, both compared case-insensitively.
-        The cursor resets to ``0`` because the match list it indexes has just
-        been replaced; the pointer's row mark is cleared (the row numbering
-        it named no longer exists -- the P0 this method fixes) and the
-        pending result is cleared, so a re-filter never leaks an earlier
-        pick.
+        Prefix matches first, then substrings, case-insensitively.  The
+        reset prevents a stale row mark or pending pick after re-filtering.
         """
         self._hover_row = None
         self.query = query
@@ -108,23 +85,11 @@ class Autocomplete(Select):
         return self._matches
 
     def on_key(self, e: KeyEvent) -> bool:
-        """Forward one key to the inherited menu routing.
-
-        The filter layer adds no keys of its own: :class:`Select` owns the
-        cursor walk and activation, so this hook only keeps the typed door
-        available on the subclass (a Select that predates the hooks routes
-        through ``Widget.on_key`` -> ``handle`` unchanged).
-        """
+        """Forward a key to the inherited menu routing; the filter adds no keys."""
         return super().on_key(e)
 
     def render(self, c: Constraints) -> Surface:
-        """The inherited ``Select`` row trunk, under the render constraints.
-
-        The window, cursor row, description column and ``(i/n)`` counter all
-        stay :class:`~motui.widgets.choice.Select`'s; this layer forwards the
-        constraints, truncates by ``max_height`` and answers a clipped (never
-        padded) surface, so the painted bytes are unchanged.
-        """
+        """The inherited Select trunk, clipped to the constraints."""
         rows = list(super().render(c))
         if c.max_height is not None:
             rows = rows[: c.max_height]

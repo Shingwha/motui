@@ -1,43 +1,8 @@
 """Component library: renderers over the kernel.
 
-Every component renders through the frozen protocol
-``render(c: Constraints) -> Surface`` and depends only on the kernel
-(``block``/``lines``/``style``/``text``): no screen, painter, keys or app
-imports.  Pure renderers hold to that one method; the interactive ones add
-the typed hooks of the 2.0 interaction model beside it -- ``Input`` /
-``Editor`` consume events through ``on_key`` / ``on_paste`` (routed by the
-keymap they hold while the query is theirs), ``Select`` / ``Tabs`` /
-``NavList`` / ``Tree`` / ``Autocomplete`` / ``RadioGroup`` / ``Slider``
-move with ``move(delta)`` (``select(index)`` on the tab strip and the
-navigation rail) and answer a mouse hit through ``on_click(pos)``; the
-menus, the tree and the form widgets add ``on_action("activate")``,
-``Dialog`` runs its own button keys through ``on_key`` and presses a
-button on a click, and ``Spinner`` advances by hand -- never by reading a
-clock.  The action primitives
-(:class:`Button`, :class:`Checkbox`, :class:`Link`) are the minimal
-clickable units; the form widgets (:class:`RadioGroup`, :class:`Slider`)
-hold a
-group's one selection and a stepped value, :class:`Collapsible` folds its
-body away under a title row, :class:`ComboBox` is the editable field over a
-filtered dropdown, and :class:`ShortcutBar` is the chrome-only
-row of key hints.  :class:`Diff` renders two texts as one unified diff
-(the LCS runs once, at construction) and :class:`List` is the windowed
-cursor over a long sequence.  The pointer tier flips ``hover`` on any
-component that carries the flag and, for a component with
-``hoverable = True``, tells it the row through ``on_hover(pos)``.  The
-layout containers (:class:`Row`,
-:class:`Column`, :class:`Stack`, :class:`Align`, :class:`Spacer`,
-:class:`Padding`) are components too and
-live in :mod:`motui.widgets.layout`.  :class:`StatusLine` (a
-two-column status row) rounds out the library; this package is the import
-surface for the whole generic component library.
-
-:class:`Text` is the plain-text component (:mod:`motui.widgets.text`, beside
-the rows it renders through); it is part of this package's surface.  The
-built-in syntax-highlighting seam --
-:class:`Highlighter`, :class:`RegexHighlighter` and the :func:`highlight` /
-:func:`default_highlighter` entry points -- lives one level down, in
-:mod:`motui.widgets.syntax`, and is imported from there.
+Every component renders through ``render(c) -> Surface`` and depends only on
+the kernel; interactive components add typed hooks.  This package is the
+import surface for the generic library.
 """
 
 from .action import Button, ButtonKind, Checkbox, Link

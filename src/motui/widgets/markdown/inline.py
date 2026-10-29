@@ -1,15 +1,8 @@
 """The inline engine: ordered rules that each recognize one construct.
 
-An :class:`InlineRule` looks at one position in a line and either declines
-(``None``) or returns ``(end, segments)`` -- the offset just past the
-construct and the styled runs it produces.  :func:`inline_segments` walks the
-line left to right, handing every position to the registry in order and
-accumulating the unrecognized stretches (including half-open markers such as
-a lone ``**`` or backtick) as literal text.
-
-The registries themselves are dep-free module singletons -- a rule reads the
-styles it needs off the :class:`~.context.RenderContext` it is handed, so one
-instance serves every :class:`~.component.Markdown`.
+An :class:`InlineRule` matches at a position and returns ``(end, segments)``.
+``inline_segments`` walks left to right, trying the registry in order and
+keeping unmatched stretches literal.  Rules are stateless singletons.
 """
 
 from __future__ import annotations
@@ -39,12 +32,9 @@ _OPENER = re.compile("[`*~[]")
 class InlineRule(Protocol):
     """One inline construct: recognize at ``pos``, produce segments.
 
-    ``match`` returns ``(end, segments)`` when the construct starts at
-    ``pos`` (``end > pos`` always -- a rule must advance), else ``None``; it
-    reads the styles it needs off ``ctx``.  A segment style that sets a
-    color is absolute; an attribute-only style (bold/italic/...) is merged
-    onto the surrounding run's base style, so ``**x**`` inside an accent
-    heading stays accent.
+    ``match`` returns ``(end, segments)`` (``end > pos``) or ``None``.
+    Colored segment styles are absolute; attribute-only styles merge onto the
+    surrounding base.
     """
 
     name: str
@@ -59,20 +49,9 @@ def inline_segments(
 ) -> list[Segment]:
     """Split ``text`` into styled segments using ``ctx.inline_rules``.
 
-    Unrecognized stretches -- including half-open markers such as a lone
-    ``**`` or backtick -- accumulate as literal ``base`` text.  A rule's
-    segment keeps its own style when that style sets a color; an
-    attribute-only style is merged onto ``base`` (see :class:`InlineRule`).
-
-    Every position is tried when the registry might match anywhere; with the
-    built-in rules the scan visits only the *opener* characters instead
-    (``\\u0060``, ``*``, ``~``, ``[`` -- see :data:`_OPENER`), because each
-    built-in ``match`` rejects any other character first.  The decisions are
-    exactly the same either way, but a literal stretch costs one regex scan
-    rather than one Python loop step per character -- which is what a
-    streaming paragraph pays per frame (render-cost W4: a paragraph that only
-    grew re-parses in whole to stay byte-exact, so its scan had to stop being
-    the frame's dominant cost).
+    Unrecognized stretches stay literal ``base`` text.  With only built-in
+    rules the scan visits opener characters only, which is equivalent and
+    cheaper for streaming paragraphs.
     """
     rules = ctx.inline_rules
     out: list[Segment] = []
@@ -190,16 +169,10 @@ class ItalicInlineRule:
 
 
 class LinkInlineRule:
-    """Link: ``[label](url)`` -- the label in the theme's ``content.link`` style (colored
-    and underlined, never bold); the url is not rendered.
+    """Link: ``[label](url)`` in ``content.link``; the url is not rendered.
 
-    The label segment carries the url twice as a payload: ``link`` is what
-    the terminal is told (the OSC 8 pair :meth:`~motui.kernel.cell.Line
-    .styled` wraps around the label, so a terminal can open a real
-    hyperlink) and ``action`` is what the *application* hears -- a click on
-    the label leaves the url pending for
-    :meth:`Markdown.take <motui.widgets.markdown.Markdown.take>`.
-    Neither reaches the row's text: the label is all that renders.
+    The label carries the url as both ``link`` (OSC 8) and ``action`` (click
+    payload for ``Markdown.take``).
     """
 
     name = "link"
@@ -237,15 +210,7 @@ _OPENER_RULES: tuple[type, ...] = (
 
 
 def default_inline_rules() -> list[InlineRule]:
-    """A fresh built-in inline registry, dep-free and in match order.
-
-    Order matters: bold before italic (both open with ``*``).  Build a
-    custom registry by prepending your own rules:
-    ``[MyInline(), *default_inline_rules()]``.  The tuple singleton the
-    component ships with is :data:`INLINE_RULES`; the factory hands out new
-    instances so a caller can extend one without touching the shared
-    registry.
-    """
+    """A fresh built-in inline registry, in match order (bold before italic)."""
     return [
         CodeInlineRule(),
         BoldInlineRule(),

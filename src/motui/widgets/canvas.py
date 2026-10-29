@@ -1,36 +1,9 @@
 """Canvas: a mutable cell grid that answers immutable surfaces.
 
-A :class:`Canvas` is the toolkit's one drawing surface below the row model:
-a rectangular grid of :class:`~motui.kernel.cell.Cell` values written with
-``put``/``text``/``hline``/``vline``/``box``/``blit`` and read back as a
-:class:`~motui.kernel.cell.Surface`.  It is deliberately the only component
-that owns mutable render state: the surface it produces is frozen like every
-other render result, and no byte ever leaves this module -- a Canvas paints
-cells, and the painter above it turns those cells into terminal bytes.
-
-Rows are cached by identity.  Every write marks its row dirty; :meth:`surface`
-rebuilds only the dirty rows and reuses the previous ``Line`` objects for the
-rest, so a game that moves one sprite or a plot that appends a point pays for
-the rows that changed rather than for the canvas.  Adjacent cells sharing a
-style fuse into one segment (:func:`~motui.kernel.cell.fuse`), which keeps an
-80x24 monochrome canvas at one segment per row.
-
-Two marker vocabularies refine the grid for plots:
-
-* ``"cell"`` -- one cell per point, the full block glyph;
-* ``"half"`` -- two sub-rows per cell (``▀``, ``▄`` or ``█``);
-* ``"braille"`` -- two sub-columns by four sub-rows per cell, encoded as
-  ``U+2800 + bitset`` with the standard dot numbering (dot 1 at the cell's
-  top left, dot 7 at its bottom left).
-
-The marker is the *plot* resolution: ``put``/``text`` write whole cells
-whatever the marker, while :meth:`plot` projects value-space ``(x, y)``
-points onto the marker's grid.  Plotting into a cell combines with a half or
-braille mark already there; writing text into the cell replaces it.
-
-The canvas owns its width and height.  Assigning either one resizes the
-grid, preserving the cells in the overlapping rectangle (a wide character
-whose continuation column is cut becomes a space).
+Writes go through ``put``/``text``/``hline``/``vline``/``box``/``blit`` and
+``plot``; ``surface`` caches rows and rebuilds only dirty ones.  Markers
+``cell``/``half``/``braille`` set plot resolution.  No terminal bytes leave
+this module.
 """
 
 from __future__ import annotations
@@ -67,18 +40,9 @@ _DEFAULT_STYLE = Style()
 class Canvas(Drawing):
     """A mutable cell grid; :meth:`surface` answers its immutable image.
 
-    Coordinates are 0-based cells with the origin at the top left.  Writes
-    outside the canvas are ignored (``put``/``text`` clip at the edges rather
-    than raising), and a write that would split a double-width character is
-    dropped instead of half-written: an over-wide cell would corrupt every
-    row after it.  A wide character occupies its lead cell plus a
-    continuation cell whose ``char`` is empty, so a row's display width is
-    still one column per cell.
-
-    Sizing is the :class:`~motui.widgets.drawing.Drawing` lifecycle: the grid
-    is resized explicitly (``width``/``height`` assignment, :meth:`resize` or
-    :meth:`fit`) and ``render`` only clips the cached image.  The ``plot``
-    marker is ``plot_marker``; it affects :meth:`plot` alone, while
+    Writes outside the grid are ignored and a write that would split a wide
+    glyph is dropped.  Sizing follows the ``Drawing`` lifecycle (explicit
+    resize; ``render`` only clips).  ``plot_marker`` affects ``plot`` alone;
     ``put``/``text`` always write whole cells.
     """
 
@@ -139,7 +103,6 @@ class Canvas(Drawing):
     # -- geometry ----------------------------------------------------------
 
     def _resize_storage(self, width: int, height: int) -> None:
-        """Rebuild the grid for the base's new size, keeping the overlap."""
         cells: list[list[Cell]] = []
         segments: list[list[Segment | None]] = []
         for y in range(height):
@@ -204,10 +167,8 @@ class Canvas(Drawing):
     def put(self, x: int, y: int, char: str, style: Style = NONE) -> None:
         """Write one character (or cluster) at ``(x, y)``.
 
-        A double-width character occupies two columns (its continuation cell
-        carries the empty string); a write whose character would cross the
-        right edge is ignored.  Negative or out-of-range coordinates write
-        nothing.  The empty string is a no-op.
+        A wide character occupies two columns; a write crossing the right
+        edge or falling outside is ignored.  ``""`` is a no-op.
         """
         self._ensure_grid()
         if not char or y < 0 or y >= self._height or x < 0:
@@ -222,9 +183,7 @@ class Canvas(Drawing):
     def text(self, x: int, y: int, text: str, style: Style = NONE) -> None:
         """Write ``text`` left to right from ``(x, y)``, clipping at the edge.
 
-        Characters are written one codepoint at a time; a zero-width
-        continuation (a combining mark) attaches to the previous cell.  Text
-        running past the right edge is clipped, not wrapped.
+        A combining mark attaches to the previous cell; no wrapping.
         """
         self._ensure_grid()
         if y < 0 or y >= self._height:
@@ -271,9 +230,8 @@ class Canvas(Drawing):
     ) -> None:
         """Draw a box outline; ``border`` defaults to the glyph vocabulary.
 
-        A one-row box is drawn as a top edge; a one-column box as a left edge.
-        Every mark is written through :meth:`put`, so a box that leaves the
-        canvas is clipped exactly like its cells.
+        One-row/one-column boxes degrade to an edge; marks clip through
+        :meth:`put`.
         """
         if width <= 0 or height <= 0:
             return
@@ -299,10 +257,8 @@ class Canvas(Drawing):
     def blit(self, other: Canvas, x: int, y: int) -> None:
         """Copy ``other``'s cells onto this canvas with its top left at ``(x, y)``.
 
-        Only whole cells cross: the source's continuation cells are rebuilt
-        by :meth:`put` from their lead character, so a wide glyph blitted at
-        an edge is dropped rather than split.  The copy lands clipped to this
-        canvas.
+        Continuation cells are rebuilt from their lead, so a wide glyph
+        blitted at an edge is dropped rather than split.
         """
         for source_y in range(other.height):
             for source_x in range(other.width):
@@ -320,13 +276,10 @@ class Canvas(Drawing):
     ) -> None:
         """Plot value-space ``(x, y)`` points onto the marker's grid.
 
-        The points are normalized independently on both axes to the marker
-        resolution (one cell, 1x2 half-cells or 2x4 braille dots per cell),
-        with the larger ``y`` value at the top -- the usual math orientation
-        for charts.  A degenerate range (every point on one line) lands on the
-        first column and the bottom row.  Plotting combines with half/braille
-        marks already in a cell; with the ``"cell"`` marker a point overwrites
-        the cell with a full block.  An empty sequence is a no-op.
+        Axes normalize independently, with larger ``y`` at the top; a
+        degenerate range lands on the first column and bottom row.  Half and
+        braille marks combine with existing marks, ``cell`` overwrites with a
+        block.  An empty sequence is a no-op.
         """
         self._ensure_grid()
         mode = self.plot_marker if marker is None else marker
@@ -364,10 +317,8 @@ class Canvas(Drawing):
     def _build_surface(self) -> Surface:
         """Assemble the full-size surface; only dirty rows are rebuilt.
 
-        A rebuild reuses the ``Line`` object of every row that was not
-        written since the last one -- the row cache is identity, not
-        equality, so a caller can see which rows changed.  The base caches
-        the returned surface until the next :meth:`_invalidate`.
+        Unchanged rows keep their ``Line`` objects (identity cache); the base
+        caches the surface until the next invalidation.
         """
         self._ensure_grid()
         lines = self._lines
@@ -420,7 +371,6 @@ class Canvas(Drawing):
         self._touch(y)
 
     def _spare(self, char: str, style: Style) -> tuple[Cell, Segment]:
-        """The canonical ``(cell, segment)`` pair for ``char`` in ``style``."""
         key = (char, id(style))
         cached = self._spares.get(key)
         if cached is not None and cached[1].style is style:
@@ -432,7 +382,6 @@ class Canvas(Drawing):
         return value
 
     def _put_cell(self, y: int, index: int, cell: Cell, segment: Segment | None) -> None:
-        """Replace one cell and keep the row's segment census true."""
         segments = self._segments[y]
         counts = self._row_counts[y]
         old = segments[index]
@@ -454,7 +403,6 @@ class Canvas(Drawing):
             self._row_rep[y] = None
 
     def _blank_cells(self, y: int, start: int, stop: int) -> None:
-        """Blank the cells ``[start, stop)``, repairing their wide clusters."""
         for index in range(max(0, start), min(self._width, stop)):
             self._put_cell(y, index, _BLANK_CELL, _BLANK_SEGMENT)
 
@@ -494,16 +442,11 @@ class Canvas(Drawing):
 
 
 def _row_line(segments: list[Segment | None]) -> Line:
-    """One row's cached segments as a line, coalescing adjacent equal runs.
+    """One row's cached segments as a line, coalescing equal adjacent runs.
 
-    The row is built in one pass instead of through :func:`fuse`: a run that
-    is one cell reuses that cell's segment object, and a longer run builds
-    one segment from the joined text.  ``fuse`` would rebuild the growing
-    run on every merge (quadratic bytes per row); a full-colour canvas has
-    one segment per cell already, so coalescing must stay linear there.
-
-    Canvas cells carry no ``link``/``action`` payloads (the write API has no
-    slot for them), so style is the whole run key.
+    Built in one linear pass rather than through ``fuse`` (which is quadratic
+    on a per-cell-styled row).  Style identity is the run key; cells carry no
+    links or actions.
     """
     runs: list[Segment] = []
     current: Segment | None = None
@@ -539,10 +482,8 @@ def _row_line(segments: list[Segment | None]) -> Line:
 class Sparkline:
     """A one-row plot of ``values``: the thinnest wrapper over :class:`Canvas`.
 
-    Each value is plotted at its index with the configured marker, so the
-    natural height is one cell row (two half-cells or four braille rows).
-    A ``max_height`` budget makes the sparkline fill that many rows, which is
-    what a dashboard slot does with it.
+    Values plot at their indices with the chosen marker; ``max_height``
+    makes it fill that many rows.
     """
 
     __slots__ = ("glyphs", "marker", "style", "values")

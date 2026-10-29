@@ -1,27 +1,10 @@
 """PixelCanvas: a sub-cell pixel stage answered as one quantized surface.
 
-A :class:`PixelCanvas` owns two :class:`~motui.pixel.Raster` grids -- a
-``fill`` layer of background blocks folded at half-cell resolution and an
-``art`` layer of lines and sprites drawn at the marker's resolution -- and
-answers :meth:`surface` by handing both to the pixel engine's one quantizer.
-Every colour comes from the widget's
-:class:`~motui.pixel.PixelPalette`: a caller-provided palette wins, and the
-default is derived from the widget's theme
-(:meth:`~motui.pixel.PixelPalette.from_theme`).  The widget contributes the
-layer organization, geometry and draw/erase/fade verbs, and ``motui.pixel``
-contributes the pixels-to-cells semantics.
-
-The widget is the only drawing door: the rasters are private, the verbs
-take a :class:`LayerName`, and the marker is validated when assigned.  A
-surface is quantized once per invalidation (any verb, a palette or marker
-assignment, or a resize) and cached; :meth:`render` only clips it.  Sizing
-is explicit -- a host calls :meth:`resize` or :meth:`fit` before painting --
-so rendering at another width probes the image instead of dropping the ink.
-A real resize rebuilds both rasters empty, which a pixel scene refills on
-its next tick.
-
-Octant resolution is deliberately absent: the engine's marker vocabulary
-is half and braille, and the choice is an explicit host configuration.
+Owns two :class:`Raster` grids -- a half-cell ``fill`` under the marker-
+resolution ``art`` -- quantized through a :class:`PixelPalette` derived from
+the theme unless supplied.  The widget owns geometry and draw verbs; the
+pixel engine owns pixel-to-cell semantics.  Surfaces are cached per
+invalidation and ``render`` only clips.
 """
 
 from __future__ import annotations
@@ -46,12 +29,10 @@ class LayerName(StrEnum):
 class PixelCanvas(Drawing):
     """Two private rasters, fill under art, quantized through the palette.
 
-    ``width``/``height`` are cell dimensions; every cell is a 2x4 sub-cell
-    grid.  Drawing verbs take sub-cell positions on one layer, floats
-    truncated and out-of-range writes clipped.  A real resize rebuilds both
-    rasters empty -- a pixel scene redraws every tick, so losing the ink is
-    by contract.  The surface cache is dropped by every verb and by a
-    ``palette``/``marker`` assignment, and ``render`` never resizes.
+    Width/height are cells (each 2x4 sub-cells).  Verbs address sub-cell
+    positions on one layer; a real resize rebuilds both rasters empty.  Every
+    verb and a palette/marker assignment invalidate the cache; ``render``
+    never resizes.
     """
 
     __slots__ = ("_art", "_fill", "_marker", "_palette")
@@ -243,12 +224,7 @@ class PixelCanvas(Drawing):
     # -- the whole canvas --------------------------------------------------
 
     def _build_surface(self) -> Surface:
-        """Quantize both layers at the canvas's own size; a frozen surface.
-
-        The base caches the answer until the next invalidation.  A canvas
-        with no cells is an empty surface -- the quantizer has no grid to
-        walk -- and every other answer is exactly the canvas width.
-        """
+        """Quantize both layers at the canvas size; the base caches until invalidation."""
         if self._width == 0 or self._height == 0:
             return Surface(width=self._width, rows=())
         return Surface.of(quantize(self._layers(), self._palette), self._width)

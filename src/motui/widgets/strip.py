@@ -1,15 +1,8 @@
 """Strip internals: the keymap seam and the one-row label strip.
 
-The module is private to the widget package.  :class:`Keymap` lives in
-:mod:`motui.widgets.base` now and is re-exported here for the views that
-still import it from this module: reading it on the class answers the
-family's default table, reading it on an instance answers that instance's
-own copy, so ``lst.keymap["j"] = "next"`` rebinds one widget and never
-writes through to the class.  :class:`LabelStrip` is the one-row rendering
-skeleton behind :class:`~motui.widgets.tabs.Tabs` and
-:class:`~motui.widgets.menubar.MenuBar` -- the clamped selection over a
-label sequence, the span table of the last render, the hit walk and the
-hover marking.  Nothing here is re-exported from :mod:`motui.widgets`.
+Private to the widget package: re-exports ``Keymap`` and holds
+``LabelStrip``, the cursor/hit/render skeleton behind ``Tabs`` and
+``MenuBar``.  Nothing here is re-exported from ``motui.widgets``.
 """
 
 from __future__ import annotations
@@ -28,27 +21,10 @@ __all__ = ["Keymap", "LabelStrip"]
 class LabelStrip(CursorWidget):
     """The one-row label strip shared by ``Tabs`` and ``MenuBar``.
 
-    The class is a skeleton, not a component: subclasses provide
-    :attr:`_entries` (their label sequence) and :meth:`_layout` (the fitted
-    row plus its span table), keep their own state, and set the storage
-    documented below.  Every state change touches the widget, so a block's
-    row cache follows a moved selection or a hovered label.  Styles are read
-    through :meth:`Widget.group` at
-    layout time and stored nowhere; the base supplies ``theme``, ``styles``,
-    ``focused`` and ``hover``.  The shared half is the cursor, the
-    hit geometry of the last render -- the span table
-    ``(start, stop, index)`` per label, so ``on_click``/``on_hover`` never
-    re-render -- and the one-row :meth:`render`.
-
-    ``_last_width`` is the width the last :meth:`render` painted at -- the
-    geometry :meth:`on_click` maps a column against; until the first paint it
-    is 80, the same convention as ``TextBuffer.last_width``.  ``_spans`` is
-    the last render's span table (``None`` until the first paint, when a hit
-    builds it once without calling ``render``).  The marking starts
-    ``None``, so an un-hovered strip renders exactly the bytes it always
-    did.  A hit resolves only on row 0: the leading and trailing padding,
-    every divider gap, a cell past the last label and a truncating ``fit``
-    all answer no label.
+    Subclasses provide ``_entries`` and ``_layout`` (row plus span table).
+    The base owns the clamped cursor, the last render's span table for hits
+    and the one-row render.  Hits resolve only on row 0; padding, dividers
+    and truncation carry no label.
     """
 
     __slots__ = (
@@ -79,15 +55,12 @@ class LabelStrip(CursorWidget):
     # -- the cursor hooks -------------------------------------------------------
 
     def _entry_count(self) -> int:
-        """The number of labels the cursor walks."""
         return len(self._entries)
 
     def _entry_at(self, index: int) -> object | None:
-        """The label at visible row ``index`` (side-effect free)."""
         return self._entries[index]
 
     def _cursor_disabled(self) -> Iterable[int]:
-        """The labels a move steps over and ``select`` refuses."""
         return self._disabled_items
 
     def _cursor_wraps(self) -> bool:
@@ -95,20 +68,13 @@ class LabelStrip(CursorWidget):
         return False
 
     def _cursor_enabled(self) -> bool:
-        """The whole-strip disabled switch gates every cursor verb."""
         return not self.disabled
 
     def on_click(self, pos: Pos) -> bool:
-        """Select the label cell ``(pos.y, pos.x)`` covers; True on a hit.
+        """Select the label cell ``(pos.y, pos.x)`` covers; ``True`` on a hit.
 
-        The cell resolves through :meth:`_hit`, the walk over this
-        component's own last render: the column of the strip's one row, or
-        no label -- the leading and trailing padding, every divider gap, a
-        cell past the last label and a truncating ``fit`` all answer no
-        label, and so does any row but the first.  A hit on a **disabled**
-        label (or on a disabled strip) answers ``False`` and changes
-        nothing; a hit on an enabled one selects it -- even when it already
-        was active -- and answers ``True``.
+        Only row 0 hits; disabled labels, disabled strips and cells outside
+        a label decline.
         """
         if self.disabled:
             return False
@@ -119,14 +85,10 @@ class LabelStrip(CursorWidget):
         return True
 
     def on_hover(self, pos: Pos | None) -> bool:
-        """Mark the label under the pointer; ``True`` when the marking changed.
+        """Mark the label under the pointer; True when the marking changed.
 
-        The cell resolves through :meth:`_hit`, the same walk
-        :meth:`on_click` consumes, so the two can never disagree about which
-        label a cell covers -- a cell no label covers, and ``None`` (the
-        pointer left), answer "no label" and clear the marking.  Disabled
-        labels are marked like any other (the band is the pointer's echo,
-        not a selection).  The answer is whether the marked label changed.
+        Resolved like :meth:`on_click`; ``None`` clears it and disabled
+        labels still mark.
         """
         target = None if pos is None else self._hit(pos.y, pos.x)
         changed = target != self._hover_index
@@ -136,21 +98,15 @@ class LabelStrip(CursorWidget):
         return changed
 
     def _hit(self, row: int, col: int) -> int | None:
-        """The label index a cell covers on the strip's one row, or ``None``."""
         if row != 0:
             return None
         return self._label_at(col)
 
     def _label_at(self, col: int) -> int | None:
-        """The label index a column of the last render covers, or ``None``.
+        """The label index a column covers, from the last render's span table.
 
-        The hit reads the **span table** the last :meth:`render` recorded --
-        ``(start, stop, index)`` tuples in paint order, measured on the
-        fitted row, so the leading and trailing padding, every divider gap
-        and a truncating ``fit`` marker pass by exactly as they did when the
-        table was walked per hit.  Before the first paint the table is built
-        once at the default width (the old ``_last_width`` convention);
-        after it, no render runs from a hit (the P0).
+        Before the first paint the table is built once at the default
+        width; hits never render.
         """
         if not self._entries:
             return None
@@ -164,12 +120,9 @@ class LabelStrip(CursorWidget):
         return None
 
     def _spans_of(self, line: Line) -> tuple[tuple[int, int, int], ...]:
-        """The label spans of a fitted row, by the render's own segment walk.
+        """The label spans of a fitted row, by matching segment text to labels.
 
-        A label segment is recognized by its text matching the entry's
-        label, so padding, dividers and a truncating ellipsis (which changes
-        the segment's text) carry no span -- the walk the old per-hit table
-        ran, now recorded once per render.
+        Padding, dividers, ellipsis and truncated labels carry no span.
         """
         spans: list[tuple[int, int, int]] = []
         names = self._entries
@@ -183,15 +136,7 @@ class LabelStrip(CursorWidget):
         return tuple(spans)
 
     def render(self, c: Constraints) -> Surface:
-        """The strip's one row (or one empty row for an empty strip), ``fit``.
-
-        The subclass's :meth:`_layout` supplies the row and its span table,
-        and the render
-        records both for the hits.  A ``max_height`` of zero paints no row
-        at all (the strip's height budget is its one row), while
-        ``_last_width`` still records the width the cells were measured
-        against.  The surface is :meth:`Surface.clipped`, not padded.
-        """
+        """The strip's one row, with the span table recorded for hits."""
         self._last_width = c.width  # the geometry ``click`` maps a column against
         line, spans = self._layout(c.width)
         self._spans = spans
