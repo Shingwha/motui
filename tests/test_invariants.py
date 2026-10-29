@@ -98,7 +98,7 @@ CASES = {
         [Option("alpha"), Option("beta")], glyphs=replace(GLYPHS, cursor=">")
     ),
     "Button": lambda: Button("Ship it"),
-    "Canvas": lambda: Canvas(6, 3, marker="half"),
+    "Canvas": lambda: Canvas(width=6, height=3, plot_marker="half"),
     "Checkbox": lambda: Checkbox(
         "Trace", glyphs=replace(GLYPHS, check_on="[x]", check_off="[ ]")
     ),
@@ -138,7 +138,7 @@ CASES = {
     ),
     "Padding": lambda: Padding(Text("inner"), left=2, right=2, top=1),
     "Panel": lambda: Panel(Text("inner"), title="box", border=Border.double()),
-    "PixelCanvas": lambda: PixelCanvas(6, 3, palette=_PIXEL_PALETTE),
+    "PixelCanvas": lambda: PixelCanvas(width=6, height=3, palette=_PIXEL_PALETTE),
     "ProgressBar": lambda: ProgressBar(0.4, label="work"),
     "RadioGroup": lambda: RadioGroup(["one", _WIDE, "three"]),
     "Row": lambda: Row([Text("a"), Text("b")], gap=1),

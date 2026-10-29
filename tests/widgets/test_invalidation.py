@@ -82,7 +82,7 @@ def test_input_typing_moves_the_section_rows():
 
 
 def test_canvas_writes_move_the_section_rows():
-    canvas = Canvas(4, 2)
+    canvas = Canvas(width=4, height=2)
     block = Section("c", canvas)
     assert _rows(block) == ["    ", "    "]
     canvas.put(0, 0, "#")
