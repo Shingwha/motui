@@ -13,7 +13,7 @@ catalogue is in [WIDGETS](WIDGETS.md).
         ┌──────────────┬───────────────┬──────────────────┐
         │              │               │                  │
    motui.widgets   motui.app       motui.terminal     motui.testing
-     (48 names)    (19 names)        (17 names)         (5 names)
+     (51 names)    (19 names)        (17 names)         (5 names)
         │              │               │                  │
         │              │               └────────┐         │
         │              │                        │         │
@@ -78,22 +78,23 @@ the adapter; the demo never touches a raster byte array.
 
 ### widgets
 
-`base.py` (`Widget`, `Container`, `HasResult`, `Cursor`, `MarkSet`),
+`base.py` (`Widget`, `ResultWidget`, `ActionWidget`, `CursorWidget`,
+`Container`, `HasResult`, `Keymap`), `cursor.py` (`Cursor`), `mark.py`
+(`MarkSet`), `strip.py` (`Keymap`, `LabelStrip`), `drawing.py` (`Drawing`),
 `text.py` (`Text`), `markdown/` (`Markdown`, rule registries, syntax seam),
 `diff.py`, `rows.py` (`Notice`, `StatusLine`, `ShortcutBar`), `textfield.py`
 (`Input`, `Editor`), `textbuf.py` (the editing engine), `choice.py`,
 `list.py`, `table.py`, `tree.py`, `tabs.py`, `menubar.py`, `navlist.py`,
 `autocomplete.py`, `combobox.py`, `form.py`, `indicators.py`, `layout.py`,
 `decor.py`, `collapsible.py`, `action.py`, `dialog.py`, `scroll.py`,
-`canvas.py`, `pixel_canvas.py` (`PixelCanvas`, `LayerName`), `mark.py`,
-`syntax.py`, `strip.py` and `cursor.py`.
+`canvas.py`, `pixel_canvas.py` (`PixelCanvas`, `LayerName`), `syntax.py`.
 
 ### app
 
-`runtime.py` (706 lines) is the session: terminal, painter, clock, timers,
+`runtime.py` (715 lines) is the session: terminal, painter, clock, timers,
 pump, dirty flag and run lifecycle. `workspace.py` (894 lines) owns what is
 on screen: document, frame, panes, docks, hit testing and selection.
-`application.py` (643 lines) is `App`: it composes the runtime, the
+`application.py` (653 lines) is `App`: it composes the runtime, the
 workspace and the default controllers. `router.py` (357 lines) holds the
 default handler chain (`DEFAULT_HANDLERS`) and implements the wheel, drag,
 mouse, focus, page-key and binding tiers.
@@ -264,12 +265,63 @@ consumes. A host that needs a different policy passes its own
 - **Visible ranges** answer a `RowSpan(first, last)` (`motui.kernel.layout`),
   a frozen half-open range of screen rows.
 
-## 8. Extension points
+## 8. Composition and drawing
+
+### Overlay
+
+`Line.overlay(base)` and `Surface.overlay(base)` are the composition
+primitive. A cell is transparent when it is a plain space carrying
+`Style()`, no link and no action; a transparent cell keeps the base cell.
+Any other top cell replaces it and merges the styles
+`base_style.merge(top_style)`, so the lower color shows through while the
+top attributes win. The result is as wide and tall as the larger value; a
+missing row or a short row starts blank. A double-width glyph is replaced
+as a whole cluster: a non-transparent top cell over either half erases the
+entire base glyph (the uncovered column becomes a space in that glyph's
+style) instead of leaving a dangling continuation. An empty top row
+returns the base row itself.
+
+### Stack
+
+`Stack(children)` renders every layer with the same constraints --
+`children[0]` at the bottom -- and folds them with `Surface.overlay`,
+clipping to `c.width` and `c.max_height`. Hit testing is
+interaction-first: `child_at` walks top-down and answers the first layer
+with a clickable/focusable/hoverable node at the cell (or a container that
+descends to one), so a non-interactive backdrop is not a click target.
+When no layer has an interactive node there, the topmost layer containing
+the cell wins, which preserves text selection and geometric z-order.
+
+### Align
+
+`Align(child, horizontal=, vertical=)` renders the child once with the
+full constraints and measures the painted block: `len(rows)` high and the
+widest row wide, because the render contract allows short rows. It embeds
+that block at the anchor in a blank frame (`c.width` by `c.max_height`, or
+the child's own height for a natural constraint) and clips overflow.
+Invalid anchors raise `ValueError`. There is no measure phase and no
+second render: a child that fills the width shows no horizontal alignment.
+
+### Drawing
+
+`Drawing` is the internal base of `Canvas` and `PixelCanvas`. Sizing is
+explicit: assigning `width`/`height` calls `resize`, which clamps at zero
+and is a no-op for an unchanged size; `fit(c)` adopts `c.width` and
+`c.max_height`, keeping the current height under a natural constraint.
+`surface()` answers the full-size cached `Surface`, and `render(c)` clips
+it to the constraints without resizing. A host calls `resize`/`fit` before
+paint, so rendering at a probe width can never drop the ink. `Canvas`
+writes whole cells (`put`/`text`/`box`/`plot`) and `plot_marker` is its
+plot resolution. `PixelCanvas` quantizes its two private rasters through a
+palette and rebuilds them only on a real resize.
+
+## 9. Extension points
 
 | Add | Do this | Do not |
 |---|---|---|
 | a component | a new `Widget` subclass (or just `render`) in `widgets/`, plus tests | change the kernel |
 | a container | implement `children` and `Container.child_at` | guess children from attributes |
+| a drawing widget | subclass `Drawing`; implement `_resize_storage`, `_build_surface` and `_invalidate` | resize inside `render` |
 | a controller | a class taking the workspace host; register with `App.mount` | edit `DEFAULT_HANDLERS`' order |
 | a dispatch tier | a `Handler(app, event) -> bool` and `App(handlers=(...))` | monkey-patch `App.dispatch` |
 | a terminal switch | add it to `TerminalOptions` | add it to `App`, `Runtime` and `Screen` separately |
@@ -283,13 +335,13 @@ change. `tools/growth.py` proves that by adding temporary defaulted fields
 to `Surface`, `Constraints`, `ScrollAxis` and `Scroll` in a copy of the
 tree and running the gates there.
 
-## 9. Known limits in this release
+## 10. Known limits in this release
 
 These are real properties of the 2.1 tree, not aspirations:
 
-- The split stopped short of the design targets. `app/runtime.py` is 706
+- The split stopped short of the design targets. `app/runtime.py` is 715
   lines (target 450), `app/workspace.py` 894 (target 450) and
-  `app/application.py` 643 (target 250); `app/router.py` is 357 lines of
+  `app/application.py` 653 (target 250); `app/router.py` is 357 lines of
   migrated dispatch. The public seams are stable; the file split is not the
   design's final shape.
 - The workspace exposes six thin runtime delegates (`clock`, `every`,
@@ -310,7 +362,7 @@ These are real properties of the 2.1 tree, not aspirations:
 - `tools/framebench.py` is excluded from pyright; it is a benchmark
   harness rather than library code.
 
-## 10. Deliberate non-goals
+## 11. Deliberate non-goals
 
 Images and other terminal media protocols, horizontal scrolling of the
 document flow (horizontal windows are limited to `ScrollPanel` over
