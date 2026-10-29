@@ -26,7 +26,8 @@ cursor over a long sequence.  The pointer tier flips ``hover`` on any
 component that carries the flag and, for a component with
 ``hoverable = True``, tells it the row through ``on_hover(pos)``.  The
 layout containers (:class:`Row`,
-:class:`Column`, :class:`Spacer`, :class:`Padding`) are components too and
+:class:`Column`, :class:`Stack`, :class:`Align`, :class:`Spacer`,
+:class:`Padding`) are components too and
 live in :mod:`motui.widgets.layout`.  :class:`StatusLine` (a
 two-column status row) rounds out the library; this package is the import
 surface for the whole generic component library.
@@ -51,7 +52,7 @@ from .dialog import ButtonSpec, Dialog, confirm_dialog, prompt_dialog
 from .diff import Diff
 from .form import Field, Form
 from .indicators import ProgressBar, Slider, Spinner
-from .layout import Column, Padding, Row, Spacer
+from .layout import Align, Column, Padding, Row, Spacer, Stack
 from .list import List
 from .markdown import Markdown
 from .menubar import ContextMenu, MenuBar
@@ -61,11 +62,12 @@ from .rows import Notice, ShortcutBar, StatusLine
 from .scroll import ScrollPanel
 from .table import Table
 from .tabs import Tabs
-from .textfield import Editor, Input
 from .text import Text
+from .textfield import Editor, Input
 from .tree import Tree, TreeNode
 
 __all__ = [
+    "Align",
     "Autocomplete",
     "Button",
     "ButtonSpec",
@@ -105,6 +107,7 @@ __all__ = [
     "Spacer",
     "Sparkline",
     "Spinner",
+    "Stack",
     "StatusLine",
     "Table",
     "Tabs",
