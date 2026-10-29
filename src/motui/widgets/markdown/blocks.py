@@ -1,19 +1,8 @@
 """The block engine: ordered rules that classify a line, then render it.
 
-A :class:`BlockRule` looks at the cursor and either declines (``match``
-returns ``None``) or claims a number of lines starting there; it then renders
-exactly that slice into finished rows.  Matching never needs the render
-context -- the built-in rules classify on shape alone -- so ``match`` stays
-ctx-free, and every rule is a stateless dep-free singleton that reads
-``theme`` / ``highlighter`` / the live registries off the
-:class:`~.context.RenderContext` it is handed at render time.
-
-This module holds the protocol, the rules that own a single line or a
-delimiter-bounded run (headings, fences, thematic breaks, the paragraph
-catch-all), and :func:`_run_blocks` -- the shared loop every renderer of a
-document (and every quote body or list continuation) goes through.  The two
-rules whose bodies are themselves documents live in :mod:`.nested`; the GFM
-table lives in :mod:`.tables`.
+A rule matches a run of lines at the cursor and renders exactly that slice.
+Rules are stateless and dep-free; this module holds the protocol, the
+single-line/delimiter rules, paragraphs and the shared block loop.
 """
 
 from __future__ import annotations
@@ -44,12 +33,9 @@ __all__ = [
 class BlockRule(Protocol):
     """One block-level construct: classify at the cursor, then render.
 
-    ``match`` returns the number of lines the rule consumes starting at
-    ``lines[i]`` (``None`` -- or any falsy value -- when it declines);
-    ``render`` receives exactly that slice plus the
-    :class:`~.context.RenderContext` of the document being rendered and
-    returns finished rows.  Rules are stateless: the same instance serves
-    every :class:`~.component.Markdown`.
+    ``match`` returns the lines consumed at ``lines[i]`` (``None`` to
+    decline); ``render`` gets that slice and the document context.  Rules
+    are stateless and shared.
     """
 
     name: str
@@ -75,11 +61,9 @@ _BREAK_RE = re.compile(r"^ {0,3}(?:(?:-\s*){3,}|(?:\*\s*){3,})$")
 
 
 class HeadingRule:
-    """ATX heading: ``#``..``######`` + space, on the theme's heading ladder.
+    """ATX heading: ``#``..``######`` plus a space, on the heading ladder.
 
-    h1 and h2 strip their marker (h1 underlines, h2 stands alone); h3 and
-    deeper keep their hashes -- once every level shares one color, the
-    marker is the depth cue, the reference palette's convention.
+    h1/h2 strip the marker; h3+ keep it as the depth cue.
     """
 
     name = "heading"
@@ -100,17 +84,12 @@ class HeadingRule:
 
 
 def _fence_highlighter(theme: Theme | None) -> Highlighter:
-    """The engine a fence uses when none was injected: shared default, or a
-    theme-bound one for a custom theme."""
+    """The engine a fence uses: the shared default, or a theme-bound one."""
     return default_highlighter() if theme is None else RegexHighlighter(theme=theme)
 
 
 def _fence_lang(opening: str) -> str:
-    """The language tag of an opening fence line.
-
-    The first word of its info string -- the "```python title=x" line tags
-    as "python" -- or "" when the fence carries no info string at all.
-    """
+    """The language tag: the info string's first word, or ``""``."""
     matched = _INFO_RE.match(opening)
     info = matched.group(1).split() if matched else []
     return info[0] if info else ""
@@ -119,19 +98,9 @@ def _fence_lang(opening: str) -> str:
 def _scan_fences(text: str) -> list[tuple[str, str]]:
     """Every top-level fence of ``text`` as ``(lang, code)``, in source order.
 
-    The source-level twin of :class:`FenceRule`, sharing its two patterns
-    and its language rule: a line whose first non-space run is backticks
-    opens a fence, the next such line closes it, and the info string's
-    first word is the tag (``""`` when there is none).  An unclosed fence
-    runs to the end of the document -- the streaming-safe shape the rule
-    renders -- and yields its tail as the body.  ``code`` is the body's
-    source lines joined with ``"\\n"`` (no trailing newline): exactly what
-    the rule hands the highlighter.
-
-    The scan is the document's own line sequence, so a fenced block inside
-    a quote body (``> ``` ``) or a list continuation is not a *top-level*
-    fence line here: the quote body is a document of its own.  Used by the
-    component's ``Markdown.fences()`` accessor, which never reads a render
+    Same rules as :class:`FenceRule`: backtick runs open/close, the first
+    info word is the language, an unclosed fence runs to the end.  Fences
+    nested in quotes/lists are not top-level; this never reads a render
     cache.
     """
     lines = text.split("\n")
@@ -150,24 +119,13 @@ def _scan_fences(text: str) -> list[tuple[str, str]]:
 
 
 class FenceRule:
-    """Fenced code: ```` ``` ````-delimited lines, optional language tag.
+    """Fenced code: ```` ``` ````-delimited lines with an optional language.
 
-    The info string's first word after the opening fence (`` ```python ``)
-    is the language tag; the body goes through the context's highlighter, so
-    a tagged fence renders with syntax colors.  An unknown or missing tag
-    falls back to the theme's ``content.code`` monochrome, and ``highlighter``
-    injects a replacement engine (see :class:`~.component.Markdown`).  The
-    opening (`` ```python ``) and closing (`` ``` ``) fence lines stay
-    visible in the context theme's ``text.muted`` -- they name the language and
-    frame the block, the pi reference shows them too.  An unclosed fence runs
-    to the end of the buffer (streaming-safe): the opening marker renders,
-    the closing one appears only once the fence actually closes.  Only the
-    code lines' colors come from the highlighter -- the fence has no
-    container of its own.  The fence delimiter lines are single-row labels
-    and keep the ellipsis guard; the code lines take the context's
-    ``code_wrap`` (``WORD`` by default, so a long line wraps instead of
-    losing its tail), and a wrapped row keeps the highlighter's segment
-    styles because the wrap goes through :meth:`~motui.kernel.cell.Line.reflow`.
+    The info string's first word selects highlighting; unknown/missing tags
+    fall back to monochrome.  Delimiter lines stay visible in
+    ``text.muted`` and ellipsized; code lines use ``ctx.code_wrap`` and
+    keep the highlighter's segment styles.  An unclosed fence runs to the
+    end (streaming-safe).
     """
 
     name = "fence"
@@ -201,9 +159,7 @@ class FenceRule:
 class ThematicBreakRule:
     """Thematic break: a standalone ``---`` / ``***`` line, as a Divider.
 
-    The divider is capped at the context's ``divider_max_width`` (``None``
-    spans the whole width) -- what :class:`~.component.Markdown`'s
-    ``divider_max_width`` parameter sets.
+    Capped at the context's ``divider_max_width``.
     """
 
     name = "thematic_break"
@@ -220,30 +176,17 @@ class ThematicBreakRule:
 
 
 def _paragraph_text(lines: list[str]) -> str:
-    """The paragraph body's one text: the run's lines stripped and joined.
-
-    The soft-break rule every paragraph renderer shares (the catch-all rule
-    and the component's append-only tail render, which must agree byte for
-    byte): each line's leading and trailing whitespace is dropped and the
-    kept parts join with one space, so a source's line breaks never reach the
-    wrap.
-    """
+    """The paragraph body: the run's lines stripped and joined with one space."""
     return " ".join(raw.strip() for raw in lines)
 
 
 def _wrap_paragraph(
     text: str, width: int, ctx: RenderContext
 ) -> tuple[Line, list[tuple[int, int]], list[Line]]:
-    """A paragraph text's pieces: the parsed line, its wrap spans, its rows.
+    """A paragraph text's parsed line, wrap spans and rows.
 
-    The one body :class:`ParagraphRule` and the component's append-only tail
-    render both run -- the rule answers the rows, the component's memory also
-    keeps the spans and the parsed line, so a later append can reuse the rows
-    before the last break and rebuild only the tail (render-cost W4).  The
-    wrap works on the **rendered** text (:attr:`~motui.kernel.cell.Line.text`
-    -- the markup is gone: a link contributes its label, not its brackets) at
-    the tab-normalized offsets :func:`~motui.kernel.cell.slice_line` cuts
-    by, and every row is ``fit`` to ``width`` exactly as the rule fits it.
+    Shared by the rule and the append-only tail render, which need the same
+    spans; wrapping uses the rendered text's tab-normalized offsets.
     """
     line = Line(inline_segments(text, ctx))
     normalized = _normalize_tabs(line.text)
@@ -255,11 +198,9 @@ def _wrap_paragraph(
 class ParagraphRule:
     """The catch-all: soft-wrapped lines plus inline rules.
 
-    Consumes lines until a blank row; the block loop then trims the run at
-    the first line another rule of the same registry claims (see
-    :func:`_run_blocks`), so a custom block rule placed before the catch-all
-    interrupts a paragraph exactly like a built-in one.  Must stay last in
-    :data:`~.component.BLOCK_RULES`.
+    Consumes until a blank row; the loop trims the run at the first line
+    another rule claims, so custom rules interrupt it.  Must stay last in
+    ``BLOCK_RULES``.
     """
 
     name = "paragraph"
@@ -277,19 +218,10 @@ class ParagraphRule:
 class _BlockScan:
     """One walk over a document's lines: classify, render, record boundaries.
 
-    The shared loop behind :func:`_run_blocks` and the component's streaming
-    reuse.  ``rows`` accumulates the rendered rows; ``boundaries`` receives
-    ``(end, len(rows))`` after every block -- the source-line index just
-    past it and the row count so far -- which is how a caller finds where a
-    sealed prefix ends.  ``rules`` receives the rule that claimed each block,
-    in the same order as ``boundaries``: the component's streaming resume
-    reads the last entry to know whether the tail block is a paragraph it can
-    grow incrementally (render-cost W4).
-
-    The constructor's ``start``, ``rows``, ``boundaries`` and ``rules`` seed
-    a resume at a boundary an earlier render of these same lines closed: the
-    gap rule then reads exactly the state a from-scratch render has at that
-    cursor, so the two renders agree row for row.
+    ``boundaries`` records ``(end, len(rows))`` after each block and
+    ``rules`` the claiming rule, so a streaming resume can find a sealed
+    prefix; ``start``/``rows``/``boundaries``/``rules`` seed a resume that
+    matches a from-scratch render row for row.
     """
 
     __slots__ = ("boundaries", "ctx", "gap", "lines", "rows", "rules", "start", "width")
@@ -354,17 +286,9 @@ def _run_blocks(
 ) -> list[Line]:
     """Render ``lines`` through the context's registry -- the shared block loop.
 
-    One blank row separates adjacent blocks when ``gap`` > 0 (never before
-    the first or after the last; the source's blank rows are dropped, so
-    consecutive gaps cannot pile up).  :class:`~.component.Markdown` renders
-    its whole document through this, and quote bodies and list continuations
-    re-run their inner content through it at the indented width.
-
-    The paragraph catch-all yields to the rest of the registry: its run stops
-    at the first interior line another rule claims, so a custom block rule
-    placed before it cuts a soft-wrapped run exactly like a built-in one.
-    Every other rule owns its whole run -- a fence body is code, not markup
-    to split on.
+    One blank row separates blocks when ``gap`` > 0.  The paragraph
+    catch-all yields to any other rule at an interior line; other rules own
+    their whole run.
     """
     scan = _BlockScan(lines, width, ctx, gap)
     scan.run()
@@ -374,8 +298,7 @@ def _run_blocks(
 def _paragraph_end(
     lines: list[str], start: int, limit: int, interrupters: list[BlockRule]
 ) -> int:
-    """Where the paragraph run ends: ``limit``, or the first interior line
-    another rule of the registry claims."""
+    """Where the paragraph run ends: ``limit``, or the first interior line another rule claims."""
     for j in range(start + 1, limit):
         if any(rule.match(lines, j) for rule in interrupters):
             return j

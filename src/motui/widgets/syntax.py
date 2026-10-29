@@ -1,47 +1,9 @@
 """Built-in lightweight syntax highlighting for fenced code blocks.
 
-Zero dependencies by contract: this module is pure :mod:`re` over the kernel
-(:class:`motui.kernel.cell.Line`/:class:`motui.kernel.cell.Segment`,
-:class:`motui.kernel.style.Style`, :class:`motui.kernel.theme.Theme`).
-A :class:`Highlighter` turns ``(code, lang)`` into one
-:class:`~motui.kernel.cell.Line` per logical line; :class:`RegexHighlighter`
-is the built-in implementation -- an ordered table of per-language regex rules
-resolved against a theme's semantic colors.
-
-Five token classes, read from :class:`~motui.kernel.theme.Theme`'s
-``syntax`` group (``Theme()`` defaults in parentheses)::
-
-    comment   syntax.comment
-    string    syntax.string  (green)
-    number    syntax.number  (amber)
-    keyword   syntax.keyword (accent)
-    builtin   syntax.builtin (inline-code violet)
-
-No token carries weight: code blocks stay weight-neutral, so the only bold
-in a default render remains the ``**...**`` syntax itself.
-
-Rules match first-come, first-served at each scan position, and every line is
-matched on its own -- there is no cross-line state.  Block comments and
-multi-line strings are therefore an in-line approximation: a ``/*`` or a
-triple-quoted string whose partner sits on a later line is left uncolored
-(kept as plain code text) instead of guessed.  Text no rule claims stays in
-the theme's ``content.code`` style, which is also the whole-line style for an
-unknown or missing language tag.
-
-Because a line is matched on its own, one line's answer is a pure function of
-the line and the language tag -- nothing else -- so :class:`RegexHighlighter`
-remembers ``(line, tag) -> Line`` in a bounded table and :meth:`~RegexHighlighter.highlight`
-looks each line up (render-cost W4): re-highlighting a document -- a fence an
-open block re-renders every frame, the same code pasted twice -- pays for its
-lines once, and no cross-line state can be missed because none exists.  The
-table is a streaming working set, not a history: past its size bound it starts
-over, and a miss simply re-highlights the line.
-
-All patterns compile at construction time and ``highlight`` does no IO, so a
-highlighter instance is safe to build once and share.  Inject your own
-highlighter (any object with ``highlight(code, lang) -> list[Line]``) to
-replace the engine entirely, and your own language table via
-``RegexHighlighter(languages=...)`` to extend or override the built-ins.
+Pure :mod:`re` over the kernel: ``highlight`` turns ``(code, lang)`` into one
+``Line`` per logical line.  Rules are ordered per language and matched
+first-come on each line independently, so there is no cross-line state;
+unmatched text uses ``content.code``.  A bounded per-line memo caches answers.
 """
 
 from __future__ import annotations
@@ -69,9 +31,8 @@ __all__ = [
 class Highlighter(Protocol):
     """Turns ``(code, lang)`` into one :class:`Line` per logical line.
 
-    ``lang`` is the raw language tag from the caller (``RegexHighlighter``
-    normalizes it); an implementation may ignore it.  Returning an empty list
-    for a non-empty code is allowed but renders nothing.
+    ``lang`` is the raw tag; an implementation may ignore it.  An empty list
+    for non-empty code renders nothing.
     """
 
     def highlight(self, code: str, lang: str) -> list[Line]: ...
@@ -414,11 +375,7 @@ _BUILTIN_LANGUAGES: dict[str, list[tuple[str, str]]] = {
 
 
 def _normalize_lang(lang: str) -> str:
-    """Normalize a language tag: ``"  Py "`` -> ``"py"``.
-
-    Info strings sometimes carry attributes (`` ```python title=x ``), so
-    only the first whitespace-delimited word is used.
-    """
+    """Normalize a language tag: ``"  Py "`` -> ``"py"``; only the first word counts."""
     tag = lang.strip().lower()
     if not tag:
         return ""
@@ -454,12 +411,8 @@ def _highlight_line(
 ) -> Line:
     """Highlight one line: scan left to right, first matching rule wins.
 
-    Rules are tried in order at each position; a match advances the cursor to
-    its end, text between matches accumulates in ``plain``.  A zero-width
-    match is declined so the scan always advances (same guard the inline
-    markdown engine uses).  Adjacent runs sharing a style -- a builtin that
-    colors exactly like the plain code text, say -- are coalesced by
-    :func:`~motui.kernel.cell.fuse` before the row is built.
+    A match advances the cursor; a zero-width match is declined so the scan
+    always advances.  Adjacent equal-style runs are fused.
     """
     runs: list[Segment] = []
     plain_from = 0
@@ -504,21 +457,10 @@ _LINE_MEMO_MAX = 4096
 class RegexHighlighter:
     """The built-in highlighter: ordered regex rules per language.
 
-    ``theme`` supplies every token color (see the module docstring);
-    ``languages`` extends or overrides the built-in table
-    (``languages={"python": my_rules}`` replaces Python's rules,
-    ``languages={"ruby": ...}`` adds a language).  Each rule is a
-    ``(pattern, key)`` pair where ``key`` is a token name or an explicit
-    :class:`~motui.kernel.style.Style` (which overrides theme colors).
-
-    Patterns are compiled once, here; :meth:`highlight` is pure computation
-    with no IO, and its per-line answers are remembered (see the module
-    docstring: a line's colors depend on nothing but the line and the tag, so
-    the memory is complete) -- :data:`_LINE_MEMO_MAX` is how many lines one
-    instance keeps.  Build one instance and share it across components: the
-    default engine is exactly that, one shared instance
-    (:func:`default_highlighter`), whose memory every fence it highlights
-    feeds.
+    ``theme`` supplies token colors; ``languages`` extends/overrides the
+    built-in table.  Rules are ``(pattern, token-name-or-Style)`` pairs,
+    compiled once.  Per-line answers are memoized in a bounded working set,
+    so one shared instance is safe.
     """
 
     def __init__(
@@ -550,11 +492,8 @@ class RegexHighlighter:
     def highlight(self, code: str, lang: str) -> list[Line]:
         """One :class:`Line` per logical line of ``code``.
 
-        An unknown (or empty) ``lang`` renders every line in the theme's
-        ``content.code`` style, monochrome.  Every line is looked up in the
-        ``(line, tag)`` memory first and highlighted (and remembered) only on
-        a miss -- the answers cannot depend on the other lines, so a hit is
-        the whole truth.
+        An unknown/empty ``lang`` renders monochrome.  Each line is memoized
+        by ``(line, tag)``; a hit is the whole truth.
         """
         tag = _normalize_lang(lang)
         rules = self._languages.get(tag)
@@ -582,11 +521,7 @@ _DEFAULT: RegexHighlighter | None = None
 def default_highlighter() -> RegexHighlighter:
     """The shared default highlighter (``DEFAULT_THEME`` colors).
 
-    Built once on first call and reused afterwards: constructing a
-    highlighter compiles every built-in rule, so components that need the
-    stock engine should share this instance instead of rebuilding it -- and
-    sharing it shares the per-line memory, so the same document re-highlighted
-    by two components pays for its lines once.
+    Built once and reused, sharing its per-line memo.
     """
     global _DEFAULT
     if _DEFAULT is None:
@@ -603,9 +538,8 @@ def highlight(
 ) -> list[Line]:
     """Highlight ``code`` as ``lang``; convenience entry point.
 
-    ``highlighter`` wins when given (``theme`` is then ignored), otherwise a
-    :class:`RegexHighlighter` runs -- the shared default for ``theme=None``,
-    a fresh one for an explicit theme.
+    An explicit ``highlighter`` wins (``theme`` is ignored); ``theme=None``
+    uses the shared default, a theme builds a fresh engine.
     """
     if highlighter is not None:
         return highlighter.highlight(code, lang)

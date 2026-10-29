@@ -1,14 +1,9 @@
 """The mutable sub-cell raster and its drawing verbs.
 
-A :class:`Raster` owns two parallel ``bytearray`` grids over ``cols*2 x
-rows*4`` sub-cells: a slot id per sub-cell (``0`` empty, ``1..255``
-caller-chosen) and a heat value (``0..255``).  Drawing is "slot now, heat
-full"; :meth:`decay` cools the whole grid in one C-speed translate; the
-quantizer reads ``(slot, heat)`` and answers ordinary kernel ``Line`` values.
-
-The grids are private.  Callers draw through the verbs -- never by writing
-a byte array -- and the one read door is :meth:`at`, for tests and hosts
-that need to inspect a sub-cell without a quantize pass.
+A ``Raster`` owns parallel slot and heat byte grids over ``cols*2 x rows*4``
+sub-cells.  Drawing sets slot+full heat, ``decay`` cools in one translate,
+and the quantizer reads ``(slot, heat)``.  Grids are private; ``at`` and
+``grids`` are the read doors.
 """
 
 from __future__ import annotations
@@ -31,9 +26,8 @@ def _heat_step(amount: int) -> bytes:
 class Raster:
     """A ``cols x rows`` cell grid of ``cols*2 x rows*4`` sub-cells.
 
-    All coordinates are sub-cell positions; fractional values truncate and
-    out-of-range writes clip silently.  A slot must be ``1..255``; use
-    :meth:`erase` to clear a sub-cell.  ``heat`` is clamped to ``0..255``.
+    Fractions truncate, out-of-range writes clip, slots are ``1..255`` and
+    heat clamps to ``0..255``.
     """
 
     __slots__ = ("_heat", "_slot", "cols", "height", "rows", "width")
@@ -60,12 +54,7 @@ class Raster:
         return (self._slot[index], self._heat[index])
 
     def grids(self) -> tuple[memoryview, memoryview]:
-        """Read-only views of ``(slot, heat)`` for the quantizer.
-
-        The views are for reading, not drawing: mutation still goes through
-        the verbs.  They are cheap to take (two wrapper objects), so a
-        quantize pass can hold them for its whole scan.
-        """
+        """Read-only ``(slot, heat)`` views for the quantizer; cheap wrappers."""
         return (memoryview(self._slot).toreadonly(), memoryview(self._heat).toreadonly())
 
     # -- the verbs ---------------------------------------------------------
@@ -76,12 +65,7 @@ class Raster:
         self._heat[:] = bytes(len(self._heat))
 
     def decay(self, amount: int) -> None:
-        """Subtract ``amount`` from every heat value, in place.
-
-        Slot bytes are untouched -- objects keep their identity while their
-        ink cools -- and a non-positive ``amount`` does nothing.  The whole
-        grid cools through one cached ``bytes.translate`` table.
-        """
+        """Subtract ``amount`` from every heat value in place through one cached translate."""
         if amount <= 0:
             return
         amount = min(255, amount)

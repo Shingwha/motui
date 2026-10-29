@@ -1,24 +1,9 @@
 """Test helpers: a headless harness and a structured document snapshot.
 
-``headless_tui`` wires a :class:`~motui.terminal.screen.HeadlessScreen` (live by
-construction, every byte recorded) to a
-:class:`~motui.testing.ScriptedEvents` source with ``interactive`` forced
-off, so a test drives a real :class:`~motui.app.runtime.Runtime` and its
-:class:`~motui.app.workspace.Workspace` without touching a terminal.  It
-returns a :class:`Harness`.  ``snapshot`` renders the document as structured
-plain text for assertions that do not care about escape bytes.
-
-The harness is the **flat test driver**: content members (``add``, ``get``,
-``frame``, ``hit``, ``split``, ``dock`` ...) resolve to the workspace and
-session members (``paint``, ``refresh``, ``every``, ``screen`` ...) to the
-runtime.  Production code never imports it -- it exists so a test can write
-``tui.add(...)`` and ``tui._clock = ...`` against one object while the real
-split stays intact.
-
-``Emulator`` lives beside them in :mod:`motui.testing.emulator`: it consumes
-the bytes a :class:`~motui.terminal.paint.Painter` writes and rebuilds the cell
-grid, so a test can assert on what a terminal would actually show rather than
-on escape-string spellings.
+``headless_tui`` wires a recording ``HeadlessScreen`` to scripted events with
+``interactive`` off, returning a flat ``Harness`` over the workspace and
+runtime.  ``snapshot`` renders the document as stanza text; ``Emulator``
+rebuilds the cell grid from painter bytes.  Production never imports this.
 """
 
 from __future__ import annotations
@@ -40,11 +25,8 @@ __all__ = ["Emulator", "Harness", "ScriptedEvents", "headless_tui", "snapshot"]
 class ScriptedEvents:
     """An event source that replays a fixed sequence, then EOFs.
 
-    Handy for tests and demos: hand it events and every ``read()`` returns
-    the next item in order, until the sequence is exhausted -- after which
-    ``read()`` returns ``None`` forever.  A ``None`` item inside the sequence
-    is delivered as a one-shot end-of-stream signal, exactly like a real
-    source reporting EOF before more input arrives.
+    A ``None`` item is a one-shot end-of-stream signal; afterwards ``read``
+    returns ``None`` forever.
     """
 
     def __init__(self, events: Iterable[Event | None] = ()) -> None:
@@ -62,11 +44,9 @@ class ScriptedEvents:
 class Harness:
     """One flat test driver over a runtime and its workspace.
 
-    ``__getattr__`` resolves the workspace first and the runtime second, so
-    ``tui.add`` is the workspace's and ``tui.paint`` the runtime's.
-    ``__setattr__`` sends private names (``_clock`` and the other session
-    seams) to the runtime and public names to the workspace, matching the
-    order ``__getattr__`` uses.  Dunder lookups are never proxied.
+    Attribute reads resolve the workspace first, then the runtime; writes
+    send private names to the runtime and public names to the workspace.
+    Dunder lookups are never proxied.
     """
 
     __slots__ = ("runtime", "terminal", "workspace")
@@ -110,11 +90,9 @@ def headless_tui(
 ) -> Harness:
     """A harness wired for tests: recording screen, scripted events, no terminal.
 
-    ``script`` is a sequence of events replayed by
-    :class:`~motui.testing.ScriptedEvents`; ``keys`` overrides it with any
-    :class:`~motui.kernel.events.EventSource`.  The screen is a
-    :class:`~motui.terminal.screen.HeadlessScreen` whose every written byte is
-    readable from ``tui.screen.output``.
+    ``script`` replays through ``ScriptedEvents``; ``keys`` overrides it with
+    any ``EventSource``.  Written bytes are readable from
+    ``tui.screen.output``.
     """
     source = keys if keys is not None else ScriptedEvents(script or ())
     terminal = Terminal(
@@ -125,13 +103,10 @@ def headless_tui(
 
 
 def snapshot(tui: Harness) -> str:
-    """A structured plain-text view of the document: one stanza per block.
+    """A structured plain-text view: one stanza per block.
 
-    Each block renders as a ``[id]`` header -- ``[id | top]`` / ``[id |
-    bottom]`` for a block in the matching fixed region -- followed by its
-    rendered rows, each prefixed with ``  |``.  Rows are rendered at the
-    screen width, so the snapshot shows exactly what the viewport would lay
-    out.
+    Each block is a ``[id]`` (or ``[id | placement]``) header followed by
+    ``  |``-prefixed rows rendered at the screen width.
     """
     width = tui.screen.width
     out: list[str] = []

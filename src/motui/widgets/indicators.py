@@ -1,30 +1,8 @@
 """Value indicators: the progress bar, the slider and the spinner.
 
-Three components that show a value, one family file:
-
-* :class:`ProgressBar` -- the determinate bar: a single-row
-  ``[\u2588\u2588\u2588\u2591\u2591\u2591]`` track whose filled part is
-  :attr:`ProgressBar.fraction` of the whole.  ``value`` and ``maximum`` are
-  the state; ``fraction`` is the read-only quotient ``value / maximum``.
-  The host moves ``value`` over time -- ``render`` itself stays a pure
-  function of the component and ``width``.
-* :class:`Slider` -- the numeric control: ``[━━━━●───] 4``, a bracketed
-  track whose length follows the painting width, the value printed after the
-  closing bracket.  The value lives on the ``step`` grid the constructor
-  defines; :meth:`Slider.move`, :meth:`Slider.on_click` (mapped against the
-  track of the last render) and :meth:`Slider.on_action` are its controller
-  doors, and activation answers whether the control is available -- the
-  value itself is the only state (no one-shot result).
-* :class:`Spinner` -- the activity indicator: a frame index cycling around a
-  label.  :meth:`Spinner.advance` steps the cycle (wrapping around) and
-  :meth:`Spinner.render` paints the current ``frame`` followed by ``text``
-  -- a host adds it to a document like any other component.  The pump's
-  clock decides when ``advance`` is called; nothing here reads a clock or a
-  key.
-
-The two drawn components render through the frozen protocol and are ``fit``
-to the painting width; styles resolve once, at construction, as explicit >
-theme field > :data:`~motui.kernel.theme.DEFAULT_THEME`.
+``ProgressBar`` shows a determinate fraction, ``Slider`` edits a stepped
+integer and ``Spinner`` cycles frames.  Rendering is pure and width-fit;
+styles resolve at render time.
 """
 
 from __future__ import annotations
@@ -47,19 +25,12 @@ DEFAULT_WIDTH = 80
 
 
 class ProgressBar(Widget):
-    """A determinate progress bar: label, ``[``, filled blocks, ``]``.
+    """A determinate progress bar: label, brackets and filled blocks.
 
-    ``value`` clamps into ``[0, maximum]`` on construction and on every
-    later assignment, so ``bar.value = 1.4`` reads back ``1.0`` with the
-    default maximum.  ``maximum`` must be positive (``ValueError``
-    otherwise) and re-clamps the value when assigned.  :attr:`fraction` is
-    the read-only quotient ``value / maximum``.  The track is
-    ``width_chars`` columns wide when that is given, otherwise it fills the
-    available width minus the label prefix and the two frame cells; the
-    filled part is ``round(inner * fraction)`` blocks.  The filled blocks
-    carry ``status.success`` and the empty ones ``text.faint``, resolved at
-    render time from ``styles`` (when given) or the theme; the
-    label plus frame stay unstyled.
+    ``value`` clamps into ``[0, maximum]`` on every write; ``maximum`` must
+    be positive.  ``fraction`` is the read-only quotient.  The track is
+    ``width_chars`` when given, else the remaining width; filled blocks are
+    ``status.success``, empty ones ``text.faint``.
     """
 
     __slots__ = (
@@ -119,13 +90,7 @@ class ProgressBar(Widget):
         return self._value / self._maximum
 
     def render(self, c: Constraints) -> Surface:
-        """The label-plus-track row, under the render constraints.
-
-        A ``max_height`` budget truncates the single row (``0`` paints
-        nothing).  The answer is
-        :meth:`~motui.kernel.cell.Surface.clipped`, not padded, so the bytes
-        match the old list answer.
-        """
+        """The label-plus-track row, clipped to the width (``max_height`` may drop it)."""
         done_style = self.group("status").success
         todo_style = self.group("text").faint
         lead = f"{self.label} " if self.label else ""
@@ -158,32 +123,12 @@ class ProgressBar(Widget):
 class Slider(Widget):
     """A one-row ``[━━━━●───] value`` control over a stepped integer range.
 
-    ``value`` is a read-write attribute: assigning clamps into
-    ``[minimum, maximum]`` and snaps onto the ``step`` grid, so the value
-    is always one the arrows can reach (an empty range -- ``maximum <=
-    minimum`` -- pins it to ``minimum``).  ``minimum``, ``maximum`` and
-    ``step`` are property setters too: assigning any of them re-clamps and
-    re-snaps the current value, so the invariant survives a range change.
-    :meth:`move` steps ``delta`` whole ``step``s (clamped at the ends),
-    :meth:`on_click` maps a column of the track onto the grid, and
-    :meth:`activate` answers whether the control is available -- the value
-    is the only state, so there is no one-shot result to take.  A disabled
-    slider refuses all three doors and merges ``text.faint`` over every
-    segment.
-
-    The track's length follows the painting width: ``[`` and ``]`` plus one
-    space and the value's digits are the fixed part, the rest is track
-    (a width too narrow for even the brackets truncates through ``fit``).
-    ``on_hover`` marks the row (any other row answers "no row" and clears
-    the marking; a negative row clears it too).  The marking starts ``None``
-    -- or, equivalently, unmarked -- so an un-hovered slider renders
-    byte-for-byte what it always did.  ``focused`` is the focus flag the
-    focus tier sets.  Hover, focus and disabled all merge the shared
-    ``controls.overlay`` over every segment (so focus is a visible
-    bold+underline+reverse band, and disabled is faint+dim); the bands are
-    read at render time from ``styles`` (when given) or the theme: filled
-    ``content.accent``, empty ``text.faint``, hover/focus/disabled
-    ``controls.overlay`` and disabled additionally ``text.faint``.
+    ``value`` clamps into range and snaps onto the ``step`` grid; assigning
+    ``minimum``/``maximum``/``step`` re-clamps it.  ``move`` steps whole
+    steps, ``on_click`` maps a track column to the grid, ``activate`` only
+    reports availability (the value is the sole state).  A disabled slider
+    refuses the doors and merges ``text.faint``; hover/focus merge the
+    shared control overlay.  The track fills the painting width.
     """
 
     __slots__ = (
@@ -291,10 +236,7 @@ class Slider(Widget):
         self.touch()
 
     def move(self, delta: int) -> bool:
-        """Step the value ``delta`` whole ``step``s, clamped; ``True`` when it moved.
-
-        A disabled slider moves nowhere.
-        """
+        """Step the value ``delta`` whole steps, clamped; ``True`` when it moved."""
         if self.disabled:
             return False
         target = self._align(self._value + delta * self._step)
@@ -309,12 +251,9 @@ class Slider(Widget):
         return not self.disabled
 
     def on_key(self, e: KeyEvent) -> bool:
-        """Route one key: the arrows step the value, ``enter`` confirms it.
+        """Arrows step the value, ``enter`` activates; other keys decline.
 
-        ``left``/``up`` step back and ``right``/``down`` step on, exactly
-        the 1.x focus tier's mapping; a step at the end of the range answers
-        ``False`` (nothing moved), so the host keeps the key.  ``enter``
-        answers :meth:`activate`.  Every other key declines.
+        A step at an endpoint answers ``False`` so the host keeps the key.
         """
         if e.key in ("left", "up"):
             return self.move(-1)
@@ -325,12 +264,7 @@ class Slider(Widget):
         return False
 
     def on_action(self, name: str) -> bool:
-        """Run one named action: activation or a one-step move.
-
-        ``"activate"`` delegates :meth:`activate` (the value is not a
-        one-shot result); ``"prev"`` / ``"next"`` (and the arrow spellings)
-        step the value one ``step``.  Unknown names decline.
-        """
+        """``activate`` reports availability; prev/next/arrow names step one step."""
         if name == "activate":
             return self.activate()
         if name in ("prev", "left", "up", "move_left", "move_up"):
@@ -340,17 +274,10 @@ class Slider(Widget):
         return False
 
     def on_click(self, pos: Pos) -> bool:
-        """Position the value by the clicked cell; ``True`` on a hit.
+        """Position the value by the clicked track cell; ``True`` on a hit.
 
-        The slider paints one row, so any other ``pos.y`` answers ``False``.
-        ``pos.x`` is a 0-based cell of this component's own render, resolved
-        against the track of the **last render** (``_last_width``): the
-        cell's position over the track's columns becomes the fraction of
-        the range, and the value lands on the nearest grid point -- a cell
-        at or left of the opening bracket lands on ``minimum``, a cell at
-        or past the closing bracket on the largest grid point.  A hit
-        answers ``True`` even when the value did not move (a click is a hit
-        whether or not it changed anything).
+        Only row 0 hits; ``pos.x`` maps against the last render's track.
+        Cells outside the track clamp to the range ends.
         """
         if pos.y != 0:
             return False
@@ -366,15 +293,7 @@ class Slider(Widget):
         return True
 
     def on_hover(self, pos: Pos | None) -> bool:
-        """Mark the row under the pointer; ``True`` when the marking changed.
-
-        The pointer tier's row-level half: row 0 is the slider's single row
-        and every other row -- ``None`` (the pointer left) included --
-        clears the marking.  The column is ignored.  The answer is whether
-        the marking changed, so a motion inside the row answers ``False``
-        (nothing to repaint); :meth:`render` merges the theme's ``hover``
-        over the marked row.
-        """
+        """Mark the single row while the pointer is on it; True when that changed."""
         target = pos is not None and pos.y == 0
         changed = target != self._marked
         if changed:
@@ -401,12 +320,7 @@ class Slider(Widget):
         return min(track, max(0, int(fraction * track + 0.5)))
 
     def render(self, c: Constraints) -> Surface:
-        """The track row, under the render constraints.
-
-        ``_last_width`` is the constrained width :meth:`on_click` maps a column
-        against (seeded even by a zero height budget).  ``max_height``
-        truncates the single row and the surface is clipped, not padded.
-        """
+        """The track row, clipped to the width; seeds the click geometry."""
         width = c.width
         self._last_width = width  # the geometry ``click`` maps a column against
         text = self.group("text")
@@ -465,14 +379,9 @@ class Slider(Widget):
 class Spinner(Widget):
     """A frame-cycling activity indicator with an optional label.
 
-    ``render(c)`` is the current ``frame`` followed by ``text``, ``fit``
-    to the painting width -- the spinner is a component like every other,
-    so ``tui.add(Spinner(...))`` paints it.  ``advance`` steps the cycle;
-    the pump's clock decides when.  The frame and text carry
-    ``content.accent``, resolved at render time from ``styles`` (when given)
-    or the theme.  :meth:`advance` touches the widget, so a block's row
-    cache follows an advanced frame; assigning ``text`` or ``theme`` touches
-    through :class:`~motui.widgets.base.Widget`.
+    ``frame`` plus ``text`` render as one row in ``content.accent``.
+    ``advance`` wraps the cycle and touches the widget; the host's clock
+    decides when.
     """
 
     __slots__ = ("_frame", "frames", "glyphs", "text")
@@ -506,11 +415,7 @@ class Spinner(Widget):
             self.touch()
 
     def render(self, c: Constraints) -> Surface:
-        """One fitted row: the current frame followed by the label.
-
-        ``max_height`` truncates the single row and the surface is clipped,
-        not padded.
-        """
+        """One fitted row: the current frame followed by the label."""
         style = self.group("content").accent
         rows = [Line.from_text(self.frame + self.text, style).clip(WrapMode.ELLIPSIS, c.width)]
         if c.max_height is not None:

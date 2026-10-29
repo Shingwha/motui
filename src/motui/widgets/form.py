@@ -1,30 +1,8 @@
 """Form: labelled fields, navigation, validation and one-shot submission.
 
-A :class:`Form` composes ordinary components into a vertical form.  Each
-:class:`Field` pairs a component with a name, an optional label and two
-hooks: ``validate(value) -> str | None`` for the submit check and
-``value() -> object`` for a custom extractor.  Without an extractor the
-value comes from the component's own state by duck typing -- the first of
-``value``, ``text``, ``checked``, ``selected`` or ``marked`` that the
-component exposes (a callable attribute is called).  ``take()`` is
-never touched: reading a field must not consume its pending result.
-
-Rendering is one vertical stack per field -- an optional label row, the
-component's rows at the form width, and an error row after a failed
-submit -- with ``gap`` blank rows between fields.  Every row is fitted to
-the painting width, and the geometry of the last render feeds
-``child_at`` so a host's hit test descends into the field component.
-
-Focus is the form's own: :meth:`Form.focus` and :meth:`Form.move` track
-``index`` and mirror it onto every focusable
-field (the new one ``True``, all others ``False``).  The keyboard routes
-the focused field first -- its own typed hook wins over navigation -- then
-``tab``/``down`` step forward, ``s-tab``/``up`` step back and ``enter``
-runs :meth:`Form.activate`: validate every field, write each error back to
-its :class:`Field`, and on success leave ``{name: value}`` pending for
-:meth:`Form.take` and call ``on_submit`` once.  Navigation answers
-``True`` only when the index moved, so a host keeps Tab at the ends.
-``focus_scope`` says the form routes its subtree's focus itself.
+A form stacks :class:`Field` components with optional labels, mirrors the
+cursor onto their ``focused`` flags, validates on activate and leaves a
+``{name: value}`` mapping pending.  ``child_at`` descends into fields.
 """
 
 from __future__ import annotations
@@ -48,11 +26,8 @@ __all__ = ["Field", "Form"]
 class Field:
     """One form field: a component plus its name, label and hooks.
 
-    ``validate`` receives the extracted value and answers an error string
-    (``None`` when valid); :class:`Form` stores the answer back in
-    ``error``.  ``value``, when given, is the extractor and wins over the
-    component's own attributes.  ``error`` is form-managed state -- a host
-    may read it after a failed submit and clear it by editing the field.
+    ``validate`` returns an error string or ``None`` and the form stores it
+    in ``error``; ``value`` overrides the component's own extractor.
     """
 
     name: str
@@ -67,12 +42,11 @@ class Field:
 class Form(CursorWidget):
     """A vertical stack of fields with focus, validation and a submit result.
 
-    ``fields`` is copied to a tuple at construction; the :class:`Field`
-    values stay live, because ``error`` is form-managed.  ``index`` is the
-    shared cursor over the fields (clamped; ``0`` for an empty form);
-    :meth:`focus` and :meth:`move` also mirror the position onto the
-    fields' ``focused`` flags.  A form without fields consumes nothing and
-    submits an empty mapping when activated directly.
+    ``index`` walks the fields and is mirrored onto their ``focused`` flags.
+    Values come from ``Field.value`` or the component's ``value``/``text``/
+    ``checked``/``selected``/``marked``; ``take()`` is never called.
+    ``activate`` validates every field, writes errors back and emits the
+    mapping (or returns ``False``).  An empty form submits ``{}``.
     """
 
     __slots__ = (
@@ -146,9 +120,8 @@ class Form(CursorWidget):
     def focus(self, target: int | str) -> bool:
         """Focus a field by position or name; ``True`` when the focus moved.
 
-        An unknown name or an out-of-range position answers ``False`` and
-        moves nothing; focusing the current field answers ``False`` too
-        (nothing changed), like :meth:`~motui.app.focus.FocusManager.focus`.
+        Unknown names, out-of-range positions and the current field answer
+        ``False``.
         """
         if isinstance(target, str):
             position = next(
@@ -181,9 +154,7 @@ class Form(CursorWidget):
     def _event_handler(component: Component, event: Event):
         """The typed hook one child answers ``event`` with, or ``None``.
 
-        The tree routes by event kind: a key goes to ``on_key``, a paste to
-        ``on_paste`` and a mouse report to ``on_mouse``.  ``None`` means the
-        component takes no events.
+        Keys go to ``on_key``, pastes to ``on_paste``, mouse to ``on_mouse``.
         """
         hook = None
         if isinstance(event, KeyEvent):
@@ -197,13 +168,8 @@ class Form(CursorWidget):
     def on_key(self, event: Event) -> bool:
         """Route one event; ``True`` when the form consumed it.
 
-        The focused field's own typed hook goes first (a controller keeps
-        its keys -- including a ``PasteEvent``, which the field's own paste
-        hook consumes).  Then the form's navigation: ``tab``/``down``
-        and ``s-tab``/``up`` move the field cursor and answer ``True`` only
-        on a real move, so the ends hand Tab back to the host; ``enter``
-        activates the form and is always consumed (a validation failure is
-        still the form's answer -- the errors are now on screen).
+        The focused field's typed hook wins; then tab/down and s-tab/up move
+        (True only on a real move) and ``enter`` activates and is consumed.
         """
         if not self._fields:
             return False
@@ -224,13 +190,7 @@ class Form(CursorWidget):
         return False
 
     def on_focus(self, gained: bool) -> None:
-        """Take or lose the form focus, mirroring it onto the fields.
-
-        Gaining re-applies the cursor's field ``focused`` flag (the flags
-        can have been cleared while the form was out of the ring); losing
-        clears every field's flag, so no field keeps a stale caret after
-        the form left the ring.
-        """
+        """Take or lose focus, mirroring it onto the fields (losing clears all)."""
         self.focused = gained
         if gained:
             self._sync_focus()
@@ -246,10 +206,8 @@ class Form(CursorWidget):
     def _value(field: Field) -> object:
         """Extract a field's value: its hook first, then the component's state.
 
-        The attribute fallback is the read-only duck-typing order
-        ``value``, ``text``, ``checked``, ``selected``, ``marked``; a
-        callable attribute is called.  A field with none of them answers
-        ``None``.  ``take()`` is deliberately not consulted.
+        The fallback order is ``value``/``text``/``checked``/``selected``/
+        ``marked`` (callables are called); ``take()`` is never consulted.
         """
         if field.value is not None:
             return field.value()
@@ -263,10 +221,8 @@ class Form(CursorWidget):
     def activate(self) -> bool:
         """Validate every field and submit: the form's one action.
 
-        Each field's error is written back (``None`` clears it).  Any
-        error answers ``False`` and leaves no pending result.  Otherwise the
-        ``{name: value}`` mapping becomes the one-shot result and
-        ``on_submit`` runs once, with the same mapping.
+        Errors are written back; any error clears the result and answers
+        ``False``.  Success emits ``{name: value}`` and calls ``on_submit``.
         """
         values: dict[str, object] = {}
         failed = False
@@ -291,12 +247,8 @@ class Form(CursorWidget):
     def render(self, c: Constraints) -> Surface:
         """Stack label, component and error rows per field, with gaps between.
 
-        The label and error styles are the theme's ``content.accent`` and
-        ``status.danger`` read on every call, so a rethemed form repaints.
-        The field components render at the constraint's width.  ``_spans`` records the untruncated
-        component-row geometry :meth:`child_at` maps through (the W2a
-        container precedent), while a ``max_height`` budget truncates only
-        the returned rows.  The surface is clipped, not padded.
+        The untruncated component-row spans feed ``child_at``; ``max_height``
+        truncates only the returned rows.
         """
         width = c.width
         label_style = self.group("content").accent

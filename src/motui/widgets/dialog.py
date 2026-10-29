@@ -1,29 +1,9 @@
 """Dialog: the modal's pure component -- a title, a body and a row of buttons.
 
-A :class:`Dialog` is everything a modal box *is* and nothing about where it
-goes: a single-line frame around a body component, a row of
-:class:`~motui.widgets.action.Button` values built from :class:`ButtonSpec`
-descriptions, a button cursor, and the small keyboard state machine those
-buttons answer to -- ``enter`` takes the focused button's value, ``escape``
-cancels, ``tab`` / ``shift+tab`` / ``left`` / ``right`` walk the row.  It
-reads no keys of its own and paints nothing outside its own rows: the host
-(interaction's ``Modal``) decides where the box sits, what the scrim behind
-it looks like, and which keys reach the body first.  This module imports the
-kernel and :class:`~motui.widgets.action.Button` -- no app, no screen, no
-frame.
-
-The button row's order is the caller's, and it **is** the keyboard order:
-``enter`` takes the focused button, ``escape`` is always the cancel
-(nothing pending), and a ``danger`` dialog opens on its last non-dangerous
-button -- the GNOME rule that a destructive action is never the one a stray
-return lands on.  The dangerous button is not disabled: it still takes
-``enter`` when the user focuses it (D3).  A taken button's
-:attr:`ButtonSpec.value` is the dialog's one-shot result, read once through
-:meth:`Dialog.take` -- and a click inside the box presses the button
-under the pointer, the one gesture a pointer has in a modal.  The dialog is
-a :class:`~motui.kernel.document.Container`: :meth:`Dialog.child_at` maps body
-cells to the body component and button cells to the corresponding
-:class:`~motui.widgets.action.Button`.
+A framed body with a button row, button cursor and keyboard state machine
+(``enter`` takes, ``escape`` cancels, tab/arrows walk).  The host decides
+placement, scrim and key routing; this module imports only the kernel and
+:class:`Button`.
 """
 
 from __future__ import annotations
@@ -52,13 +32,8 @@ __all__ = ["ButtonSpec", "Dialog", "confirm_dialog", "prompt_dialog"]
 class ButtonSpec:
     """One dialog button: a label, the value it returns, and its role.
 
-    ``label`` is the button's text and ``value`` what
-    :meth:`Dialog.take` answers when the button is taken.  ``styles``
-    overrides whole role groups on the rendered
-    :class:`~motui.widgets.action.Button`; ``kind`` is the button's
-    :class:`~motui.widgets.action.ButtonKind` role -- ``DANGER`` is the
-    destructive one, and a ``danger`` dialog will not focus it on open
-    (D3).
+    ``kind=DANGER`` is the destructive role; a ``danger`` dialog opens on
+    the last non-dangerous button.
     """
 
     label: str
@@ -70,58 +45,16 @@ class ButtonSpec:
 class Dialog(CursorWidget):
     """A titled box with a body component and a row of buttons.
 
-    The box is drawn inside the width the render is handed: ``width`` when
-    the constructor pins one, else ``3/5`` of the painting width, never
-    below 24 nor above 72 columns -- and never wider than the pane, however
-    small it is.  The top edge embeds the title (``\u250c\u2500 title
-    \u2500\u2500\u2510``; an over-wide title is ellipsized, an empty one
-    leaves the bare rule), the body renders one column in from each side
-    (``\u2502 body \u2502``), the button row is the buttons joined by single
-    spaces and aligned ``"center"`` (the default) or ``"right"`` inside the
-    same interior, and every box row is padded solid while ``shade`` is
-    ``True``.  The interior cells -- pads, body, buttons and the shade
-    fill -- sit on ``surfaces.raised`` (the content styles merge on top),
-    while the border glyphs keep their border color.  ``border`` swaps the
-    whole frame vocabulary (a
-    :class:`~motui.kernel.glyphs.Border`, ``glyphs.box`` by default),
-    the border color defaults to ``borders.base`` -- ``status.danger`` while
-    ``danger`` -- and the title to ``content.headings[1]`` (D5); both are
-    resolved at render time from ``styles`` (when given) or the theme.
-
-    **``frame=False`` drops the box and keeps the dialog.**  No frame rows
-    are drawn and no title with them -- there is no edge to embed it in, so
-    the host composes its own heading -- while the rest of the geometry
-    holds: the body renders inset one column per side (at ``box - 2``), the
-    button row keeps its ``align`` and its cursor, and a click still lands
-    the button under the cell (the hit columns shift with the missing
-    border).  ``border`` and the border styles are accepted and unused: no
-    frame is drawn, and no ground is invented in its place -- the dialog's
-    own cells stay plain -- and the ``danger`` cue rides the dangerous
-    button's own ``surfaces.danger`` floor, which its
-    :class:`~motui.widgets.action.ButtonKind.DANGER` role supplies.  ``frame``
-    is a plain mutable attribute like ``shade``.
-
-    ``index`` is the button cursor: assigning clamps into range (a
-    buttonless dialog keeps ``0``) and drives the buttons' own ``focused``
-    flags, so :attr:`focused_button` -- the button the keys act on, ``None``
-    when there is none -- always agrees with the cursor.  It is deliberately
-    not called ``focused``: the dialog itself is not a focus target, and
-    :class:`~motui.app.focus.FocusManager` must not mistake it for one.
-
-    :meth:`on_key` is the dialog's whole keyboard surface: ``escape``
-    cancels, ``enter`` takes the focused button's value, the tab/arrow pair
-    walks the cursor, everything else is declined (``False``) for the host
-    -- which routes the body's keys first.  :meth:`on_click` presses the
-    button under a rendered cell and declines every other cell.  Both leave
-    the taken button's :attr:`ButtonSpec.value` pending -- the one-shot
-    result the host reads once through :meth:`take`; ``escape`` leaves a
-    pending ``None``, the cancel.  A press goes through the button's own
-    :meth:`~motui.widgets.action.Button.on_action` /
-    :meth:`~motui.widgets.action.Button.take`, so the button and the
-    dialog share one activation rule.  :meth:`render`
-    remembered nothing itself: its rows are a pure function of the body's
-    rows and the frame's parameters, and the block's row cache keys on this widget's
-    ``generation``.
+    The box is ``width`` when pinned, else 3/5 of the painting width clamped
+    to 24..72 and never wider than the pane; the title is embedded in its
+    top rule.  The body renders inset one column per side; buttons are
+    joined by spaces and aligned ``center``/``right``.  ``frame=False``
+    drops the box and title but keeps the body/button geometry.
+    ``index`` is the button cursor (never the dialog's own focus flag) and
+    drives each button's ``focused``.  ``enter``/clicks leave the chosen
+    :attr:`ButtonSpec.value` pending for :meth:`take`; ``escape`` leaves a
+    pending ``None``.  A danger dialog opens on its last non-dangerous
+    button.  ``child_at`` maps body and button cells.
     """
 
     __slots__ = (
@@ -219,11 +152,7 @@ class Dialog(CursorWidget):
 
     @staticmethod
     def _spec(button: ButtonSpec | tuple | str) -> ButtonSpec:
-        """One button argument as a :class:`ButtonSpec`.
-
-        A plain string is a label; a tuple is ``(label, value)`` or
-        ``(label, value, styles)``; a spec is itself.
-        """
+        """One button argument as a spec: a label, ``(label, value)`` or the spec itself."""
         if isinstance(button, ButtonSpec):
             return button
         if isinstance(button, tuple):
@@ -237,24 +166,13 @@ class Dialog(CursorWidget):
         return ButtonSpec(str(button))
 
     def _new_button(self, spec: ButtonSpec) -> Button:
-        """The :class:`Button` one spec renders as (groups resolve in Button).
-
-        ``spec.styles`` is the override the button receives verbatim and
-        ``spec.kind`` its role, so a dangerous button wears the
-        ``surfaces.danger`` floor from :func:`~motui.widgets.action.action_band`
-        without re-aiming any control token.
-        """
+        """The :class:`Button` one spec renders as; styles and kind pass through."""
         return Button(
             spec.label, kind=spec.kind, styles=spec.styles, theme=self.theme
         )
 
     def _default_index(self) -> int:
-        """The button the dialog opens focused on (D3).
-
-        ``danger=True`` focuses the **last non-dangerous** button -- a
-        confirm dialog therefore opens on its cancel -- and a dialog
-        without the flag focuses the first button.
-        """
+        """The initial cursor: the last non-dangerous button on a danger dialog, else 0."""
         if self.danger:
             for index in range(len(self._specs) - 1, -1, -1):
                 if self._specs[index].kind is not ButtonKind.DANGER:
@@ -262,7 +180,6 @@ class Dialog(CursorWidget):
         return 0
 
     def _sync_focus(self) -> None:
-        """Drive the buttons' own ``focused`` flags from the cursor."""
         current = self.index
         for position, button in enumerate(self._buttons):
             button.focused = position == current
@@ -283,10 +200,7 @@ class Dialog(CursorWidget):
     def focused_button(self) -> Button | None:
         """The button the keys act on, or ``None`` for a buttonless dialog.
 
-        The cursor's own view: ``index`` names it and this hands the
-        :class:`Button` itself out, so a host can read the label of the
-        button a stray return would take without re-building the row.  The
-        name keeps the dialog outside focus ring must not register a modal box as a target.
+        The dialog is deliberately not a focus-ring target itself.
         """
         button = self.selected
         return button if isinstance(button, Button) else None
@@ -294,18 +208,10 @@ class Dialog(CursorWidget):
     # -- the keyboard and the pointer -------------------------------------------
 
     def on_key(self, event: Event) -> bool:
-        """Consume the dialog's own keys; ``True`` when one is taken.
+        """Consume the dialog's keys: ``escape`` cancels, ``enter`` activates, tab/arrows move.
 
-        ``escape`` is the cancel: it leaves a pending ``None`` and answers
-        ``True``.  ``enter`` takes the focused button's
-        ``value`` (a dangerous button included -- the keyboard rule is "not
-        the default focus", never "disabled").  ``tab`` / ``right`` step
-        the cursor on and ``s-tab`` / ``left`` step it back, clamped and
-        never wrapping -- in a two-button dialog that is the left/right
-        swap.  Every other key answers ``False``: the body's keys are the
-        host's to route (W3's ``Modal`` hands the body the keyboard first).
-        A non-key event (the modal may hand a bodyless panel a paste) is
-        declined.
+        Every other key, and non-key events, answer ``False`` so the host
+        keeps routing to the body.
         """
         if not isinstance(event, KeyEvent):
             return False
@@ -324,10 +230,7 @@ class Dialog(CursorWidget):
         return False
 
     def activate(self) -> bool:
-        """Take the focused button's value as the dialog's result.
-
-        ``False`` for a buttonless dialog (there is nothing to take).
-        """
+        """Take the focused button's value as the dialog's result; ``False`` without buttons."""
         if not self._buttons:
             return False
         self._take_button(self.index)
@@ -336,11 +239,8 @@ class Dialog(CursorWidget):
     def focus_at(self, row: int, col: int) -> bool:
         """Move the button cursor onto the button under a cell; ``True`` on a hit.
 
-        The focus half of a click: the leaf button still takes its own
-        action, while the dialog updates :attr:`index` and the button flags.
-        This is what the focus tier calls when a click bubbles through the
-        dialog; :meth:`on_click` remains the direct one-gesture door for a
-        modal that routes its own pointer.
+        The focus tier's half of a click; the leaf button still runs its own
+        action.
         """
         hit = self._button_at(row, col)
         if hit is None:
@@ -351,12 +251,8 @@ class Dialog(CursorWidget):
     def on_click(self, pos: Pos) -> bool:
         """Press the button under a cell; ``True`` on a hit.
 
-        ``pos`` is a 0-based cell of this component's own render, resolved
-        against the **last render's** button row (the ``Tabs`` precedent): a
-        cell on a button takes that button's value (a click presses it: in a
-        modal the pointer has one gesture, not the focus-then-activate pair
-        a ring gives) and moves the cursor onto it; every other cell (the
-        title, the body, the border) answers ``False`` and consumes nothing.
+        A modal click is one gesture: it moves the cursor and takes the
+        button.  Any other cell declines.
         """
         hit = self._button_at(pos.y, pos.x)
         if hit is None:
@@ -366,13 +262,10 @@ class Dialog(CursorWidget):
         return True
 
     def _take_button(self, index: int) -> None:
-        """Activate one button and carry its spec's value into the result.
+        """Activate one button and emit its spec's value (the one activation rule).
 
-        The dialog's one activation rule, shared by ``enter`` and a click:
-        the button's own ``on_action("activate")`` lands its pending flag,
-        :meth:`~motui.widgets.action.Button.take` clears it, and the dialog
-        emits the :class:`ButtonSpec.value` the button stands for -- so the
-        component and its button never drift.
+        The button's own ``on_action("activate")`` + ``take()`` keep the
+        component and its button in step.
         """
         button = self._buttons[index]
         button.on_action("activate")
@@ -380,27 +273,19 @@ class Dialog(CursorWidget):
         self._emit(self._specs[index].value)
 
     def _arm_result(self) -> None:
-        """Discard any pending result (the modal's arm step, before routing)."""
         self._clear_result()
 
     def _take_decision(self) -> tuple[bool, object]:
-        """Read the routing's decision as ``(made, value)``; clear it.
+        """Read the routing's decision as ``(made, value)`` and clear it.
 
-        The distinction :meth:`take` cannot carry -- a decision whose
-        value is ``None`` versus no decision at all -- for a routing layer
-        that must know whether to close.  Internal: hosts use
-        :meth:`take`.
+        Distinguishes a made decision carrying ``None`` from no decision.
         """
         value = self._result
         object.__setattr__(self, "_result", _MISSING)
         return (False, None) if value is _MISSING else (True, value)
 
     def _button_at(self, row: int, col: int) -> int | None:
-        """The button index a rendered cell lands on, or ``None``.
-
-        The geometry comes from the last :meth:`render`: the button row's
-        index and each button's ``[start, stop)`` columns inside the box.
-        """
+        """The button index a rendered cell lands on, from the last render's geometry."""
         if self._hit is None:
             return None
         hit_row, spans = self._hit
@@ -414,11 +299,8 @@ class Dialog(CursorWidget):
     def child_at(self, row: int, col: int) -> tuple[Component, int, int] | None:
         """Map a rendered cell to the dialog child that owns it.
 
-        The geometry is the last :meth:`render`'s: body rows are the body
-        component's own rows (top edge and one pad column in, when framed)
-        and the button row's spans are the buttons' own cells.  The frame
-        cells, the pad columns, the join spaces and every row outside the
-        box answer ``None`` -- the dialog owns those.
+        Body cells map to the body component, button cells to their button;
+        frame, pads and gaps answer ``None`` (the dialog owns them).
         """
         body_row = row - self._body_start
         if 0 <= body_row < len(self._body_rows):
@@ -435,22 +317,11 @@ class Dialog(CursorWidget):
     # -- rendering ---------------------------------------------------------------
 
     def render(self, c: Constraints) -> Surface:
-        """The box: the title edge, the body, the button row, the bottom edge.
+        """The box: top edge with title, inset body, button row, bottom edge.
 
-        The box's width is ``width`` when the constructor pinned one, else
-        ``3/5`` of the painted width, floored at 24 and capped at 72 -- and
-        the pane's own width always wins, so no row ever exceeds it.  The
-        body renders one pad column in from each edge (at ``box - 4``
-        columns framed, ``box - 2`` with ``frame=False``); every row is
-        closed with :meth:`~motui.kernel.cell.Line.clip`
-        (``WrapMode.ELLIPSIS``) so a squeezed box truncates instead of
-        overflowing.  Borderless, the frame rows and
-        the title are gone and the body is the box's first row.
-
-        The body and buttons render at their inner widths.  A ``max_height`` budget truncates
-        the assembled rows, the body/button geometry (:attr:`_body_rows`,
-        :attr:`_hit`) stays the untruncated table :meth:`child_at` maps
-        through, and the surface is clipped, not padded.
+        The width is pinned/3-5ths clamped to the pane; every row is
+        ellipsized to it.  ``max_height`` truncates the painted rows, while
+        the body/button hit geometry stays untruncated for :meth:`child_at`.
         """
         width = c.width
         box = self.width if self.width is not None else min(72, max(24, width * 3 // 5))
@@ -531,18 +402,11 @@ class Dialog(CursorWidget):
     def _interior_row(
         self, content: Line, box: int, lead: int, border_style: Style
     ) -> Line:
-        """``\u2502 content \u2502``: one pad column each side of ``content``.
+        """``│ content │``: one pad column each side.
 
-        ``shade=True`` fills the gap between the content and the closing
-        edge (so every row is exactly ``box`` columns wide and the box is a
-        solid rectangle); ``shade=False`` leaves the row ending right after
-        its content plus the two pads, the closing pad travelling with it
-        (the closing border, framed).  Borderless (``lead == 1``) the same
-        row loses the border cells and keeps the pads.
-
-        Every interior cell sits on ``surfaces.raised``: the pads, the
-        content and the shade fill merge the surface under their own styles,
-        while the border glyphs keep ``border_style`` untouched.
+        ``shade=True`` fills to the closing edge so every row is exactly
+        ``box`` wide; borderless keeps the pads only.  Interior cells rest
+        on ``surfaces.raised`` under their own styles.
         """
         raised = self.group("surfaces").raised
         fill = max(0, box - 2 * lead - content.width) if self.shade else 0
@@ -574,10 +438,8 @@ class Dialog(CursorWidget):
     ) -> Line:
         """The buttons joined by single spaces, aligned inside the interior.
 
-        Each button renders at its own natural width (``label`` plus its two
-        padding cells), the row is placed ``center`` or ``right`` in the
-        interior, and the columns it lands on -- ``lead`` cells in from the
-        box's left edge -- are remembered for :meth:`on_click`.
+        Each button renders at its natural width; the landing columns are
+        remembered for :meth:`on_click`.
         """
         lines = [
             button.render(Constraints(width=visible_width(button.label) + 2))[0]
@@ -616,19 +478,11 @@ def confirm_dialog(
     glyphs: Glyphs = GLYPHS,
     theme: Theme | None = None,
 ) -> Dialog:
-    """The Yes/No confirmation: a plain message and two buttons (thin builder).
+    """The Yes/No confirmation: a plain message and two buttons.
 
-    Always the same shape -- an untitled box, a :class:`~motui.kernel.cell.Text`
-    body, the confirm button first and the cancel second (D3: the main
-    action on the left, the cancel on the right).  With ``danger`` the
-    **confirm** button takes the ``surfaces.danger`` floor (its
-    :class:`~motui.widgets.action.ButtonKind.DANGER` role), the cancel never
-    does, and the dialog opens focused on the cancel -- the last
-    non-dangerous button -- so a stray return never lands the destructive
-    action.  Both labels are text a host can rewrite; they default to the
-    classic ``"Yes"``/``"No"`` pair.  ``frame=False`` forwards the dialog's
-    own borderless mode: the message and the row, no box around them (the
-    danger floor on the confirm button is then the whole cue).
+    Confirm is first, cancel second; ``danger`` makes the confirm button
+    DANGER and opens the cursor on the cancel.  ``frame=False`` drops the
+    box.
     """
     return Dialog(
         Text(message),
@@ -660,36 +514,14 @@ def prompt_dialog(
     glyphs: Glyphs = GLYPHS,
     theme: Theme | None = None,
 ) -> Dialog:
-    """The one-line prompt: a field body and the OK / Cancel row (thin builder).
+    """The one-line prompt: an :class:`Input` body and the OK / Cancel row.
 
-    The prompt is a :class:`Dialog` whose body is a single-line
-    :class:`~motui.widgets.textfield.Input`: ``title`` heads the box,
-    ``placeholder`` is the field's empty-state hint and ``mask`` its
-    display-only mask -- both forwarded verbatim, so the buffer's text stays
-    plain however it renders.  ``confirm_text`` / ``cancel_text`` are the two
-    buttons' labels (D3: the main action on the left, the cancel on the
-    right), and ``styles`` are the **field's** group overrides, resolved through
-    the component charter -- ``styles`` > ``theme`` field > :data:`DEFAULT_THEME
-    <motui.kernel.theme.DEFAULT_THEME>` -- while the buttons keep their own
-    (the focused button's accent band, from ``theme``).  ``danger=True``
-    marks the box -- the error border -- and opens focused on the **cancel**:
-    a stray return never lands a destructive edit, the same GNOME rule
-    :func:`confirm_dialog` keeps.  ``frame=False`` forwards the dialog's own
-    borderless mode -- the field and the button row, no box -- and the title
-    goes with the frame: there is no edge to embed it in, so the host
-    composes its own heading (the danger cue is then the confirm button's
-    ``error`` band).
-
-    **Enter reaches the dialog's buttons, not the field.**  The field's
-    keymap binds no ``enter`` at all, so when a
-    :class:`~motui.app.modal.Modal` routes the keyboard body-first
-    the key falls through to the button row and activates the focused button
-    -- the modal's contract working exactly as intended.  The host reads the
-    outcome the usual way: ``dialog.take()`` is ``"ok"`` when the
-    confirm button was taken -- read the payload off the field,
-    ``dialog.body.text`` -- and ``None`` for the cancel, an ``escape`` or a
-    click outside.  There is deliberately no extra value on the prompt: the
-    field is the payload, and the text is the host's to read and clear.
+    ``placeholder``/``mask`` pass to the field; ``styles`` are the field's
+    overrides.  ``danger`` marks the box and opens on the cancel.
+    ``frame=False`` drops the box and the title.  The field binds no
+    ``enter``, so it falls through to activate the focused button;
+    ``take()`` is ``"ok"`` on confirm, else ``None``.  The payload is
+    ``dialog.body.text``.
     """
     return Dialog(
         Input(

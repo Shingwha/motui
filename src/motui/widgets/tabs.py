@@ -1,55 +1,9 @@
 """Tabs: the horizontal content strip -- one row, one underline indicator.
 
-:class:`Tabs` is the strip a content view switch wears: exactly one row of
-``" a \u2502 b \u2502 c "`` -- one space of breathing room at both ends,
-the labels joined by ``" " + glyphs.vertical_rule + " "``, the whole row ``fit`` to the
-painting width so a narrow screen truncates with an ellipsis instead of
-wrapping.  The active label is the strip's **indicator**: it carries
-``content.accent`` **and the underline mark** -- the indicator's shape, which
-survives every color mode as an SGR attribute, so an active label reads as
-active even with the colors off -- and the shared
-``controls.overlay(focused=...)`` on top, so the strip's focus is visible.
-The other labels wear ``text.faint``, the
-dividers ``text.muted`` -- a separator is never
-accent -- and the label under the pointer merges ``surfaces.hover``;
-a disabled label wears ``text.faint`` plus the disabled overlay.
-
-``focused`` is the focus flag the focus tier sets.  The active label keeps
-its accent hue whether or not the strip is focused; the focus overlay adds
-the extra emphasis (bold, underline, reverse by default), so an unfocused
-strip is still readable as the selected strip.
-
-``disabled_items`` names the indices that are visible but not selectable:
-their label renders in ``text.faint``, so a
-disabled label is quiet by default, :meth:`on_click` answers ``False``
-without touching the selection, and :meth:`move` **steps over** them --
-a step towards a disabled index lands on the next enabled one, and a step
-with no enabled index left in that direction stays put.  :meth:`select`
-onto a disabled index answers ``False`` and changes nothing.  A pointer
-over a disabled label still marks it (the hover band is the pointer's
-echo, not a selection), and a disabled index passed as the constructor's
-``index`` is kept -- the constructor rewrites no explicit request, the
-four verbs above are what refuse.  The ``disabled`` flag is the whole-strip
-switch: every selection gesture is refused.
-
-Inactive and disabled labels share ``text.faint`` by default: the
-state difference is carried by what the label *can do* (the 2.0 role set
-has no separate disabled token; a ``styles=`` override of ``text`` moves
-both).
-
-The strip is horizontal, period: the second axis this class used to take
-(a one-label-per-row rail) is gone, not aliased -- the vertical navigation
-rail is :class:`~motui.widgets.navlist.NavList`.  Pure component: the
-host routes keys and cells, ``render`` only draws.  ``_last_width`` is
-the width the last :meth:`render` painted at -- the geometry
-:meth:`on_click` maps a column against; until the first paint it is 80, the
-same convention as ``TextBuffer.last_width``.  :meth:`on_click` and the
-pointer tier's :meth:`on_hover` resolve a cell through the one walk
-:meth:`_hit` runs over this component's own last render, so the host
-never resolves a tab itself: the leading and trailing padding, every
-``" rule "`` gap, a cell past the last label and a truncating ``fit``
-answer no tab.  The marking starts ``None``, so an un-hovered strip
-renders exactly the bytes it always did.
+One fitted row of labels joined by `` " │ " ``; the active label carries
+accent plus underline and the focus overlay, inactive labels faint, hover
+wins.  The cursor clamps, skips disabled items and never wraps; activation
+emits the active label.  The host routes keys and cells.
 """
 
 from __future__ import annotations
@@ -75,27 +29,10 @@ UNDERLINE = Style(underline=True)
 class Tabs(LabelStrip):
     """A horizontal content strip: one row, a clamped, non-wrapping selection.
 
-    ``tabs`` is a list of labels; ``index`` is the selected index (assignable), clamped
-    into ``0..len(tabs)-1`` on construction (a disabled index passed there
-    is kept: see the module docstring) and on every later
-    :meth:`select`/:meth:`move`.  ``disabled_items`` is an iterable of indices
-    that render but refuse :meth:`on_click`/:meth:`select` and are stepped
-    over by :meth:`move`; the ``disabled`` flag refuses every gesture.
-
-    Styles resolve at render time from the theme (or a ``styles=`` group
-    override): ``content.accent`` paints the active label,
-    ``text.faint`` the inactive and disabled ones,
-    ``surfaces.hover`` the label under the pointer, ``text.muted`` the
-    dividers and the separator glyph is ``glyphs.vertical_rule``.  The
-    active label always carries the underline mark and merges
-    ``controls.overlay(focused=...)`` (bold+underline+reverse by default)
-    while the strip is focused; a disabled label merges
-    ``controls.overlay(disabled=True)``.  ``focused`` starts ``True``, the
-    old default.  ``_last_width`` is the width the last :meth:`render`
-    painted at -- the geometry :meth:`on_click` maps a column against;
-    until the first paint it is 80, the same convention as
-    ``TextBuffer.last_width``.  The marking starts ``None``, so an
-    un-hovered strip renders exactly the bytes it always did.
+    ``index`` is the selected label (assignment clamps); disabled items
+    render with the disabled overlay and are stepped over.  Styles resolve
+    at render time: accent+underline for active, faint for others, muted
+    dividers, hover merged.  Hits read the last render's span table.
     """
 
     __slots__ = ("items",)
@@ -156,12 +93,7 @@ class Tabs(LabelStrip):
     # -- the activation verb ----------------------------------------------------
 
     def activate(self) -> bool:
-        """Leave the active label pending; ``False`` on no pick.
-
-        A disabled strip, an empty strip and a disabled active label answer
-        ``False`` and leave nothing pending.  A real pick writes the label
-        through the shared result slot (read once by ``take``).
-        """
+        """Leave the active label pending; disabled/empty strips refuse."""
         if self.disabled or not self.items:
             return False
         index = self.index

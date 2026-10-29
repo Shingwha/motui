@@ -1,10 +1,8 @@
 """The two block rules whose body is itself a document.
 
-A block quote and a list item carry inner markup: the quote's ``>`` lines
-and the lines indented past an item's marker are re-run through the shared
-block loop (:func:`~.blocks._run_blocks`) at the narrowed width, using the
-live registry carried by the context, so a custom block rule reaches inside
-a quote or a list item exactly like a built-in one.
+A quote's ``>`` lines and a list item's indented continuation re-run the
+shared block loop at the narrowed width through the context's live registry,
+so custom rules reach inside them.
 """
 
 from __future__ import annotations
@@ -53,15 +51,10 @@ TASK_ACTION = "todo:"
 
 
 class QuoteRule:
-    """Block quote: ``> `` lines re-run as blocks behind a ``text.muted`` ``│ `` bar.
+    """Block quote: ``> `` lines re-run as blocks behind a ``text.muted`` bar.
 
-    One ``>`` level is stripped and the body re-renders through the
-    context's live block registry at the bar-narrowed width, so nested
-    quotes stack a bar per level and quotes hold lists, fenced code and
-    tables like any document.  The body renders tight -- a ``>``-blank ends
-    a paragraph but emits no blank row (block gaps stay a top-level document
-    rhythm; the pi reference's quote bodies are compact).  Body text renders
-    italic (colored and bold segments keep their own emphasis).
+    One level is stripped; nested quotes stack bars.  The body renders tight
+    (no block gaps) at the bar-narrowed width, italicized where uncolored.
     """
 
     name = "quote"
@@ -101,37 +94,13 @@ class QuoteRule:
 
 
 class ListRule:
-    """List: a run of ``-``/``*``/``N.`` items, markers kept verbatim.
+    """List: a run of ``-``/``*``/``N.`` items with hanging indents.
 
-    A blank row ends the run, so a tight list is a single block and only
-    blank-line-separated items end up in separate blocks -- the component's
-    block gap then spaces a loose list apart, with no list-specific code.
-    Lines indented past their item's marker are that item's continuation
-    and re-render as blocks (through the context's registry) at the
-    content-narrowed width: a quote, fenced code or table nested in an item
-    indents under the marker, the pi reference's nested look.  Nested
-    content renders tight (no blank rows inside an item).  The marker is
-    rendered as typed (no bullet substitution); nesting follows the source
-    indent, two spaces per level, deeper indents capped at
-    :data:`_LIST_MAX_LEVEL`.  The marker carries the theme's
-    ``content.marker``.
-
-    **Task items.**  A *bullet* item whose content opens with ``[ ]`` or
-    ``[x]`` (one space of separation, as in GFM; a half-typed ``- [x`` is
-    an ordinary item) is a task: the bullet is replaced by a one-column box
-    -- the context's ``glyphs.check_off`` / ``check_on`` -- and that marker
-    rides its own segment, carrying the bare
-    :data:`TASK_ACTION` placeholder as its ``action``: the whole
-    ``"\\u2610 "`` seat run is the click span, styled like any list marker.
-    The marker is seated through :func:`~motui.kernel.glyphs.pair_seat`, so
-    a host's two glyphs share the wider state's column; an empty pair seats
-    nothing and the task body starts at the item's indent.  The *ordinal* is
-    not the rule's to know (the rule is a stateless singleton and the count
-    is the document's): the component stamps ``"todo:<flat index>"`` onto
-    the finished rows, flat across the whole document in draw order.
-    Ordered items (``1. [ ]``) never take the marker -- the bullet is what
-    it replaces -- and an item with no body (``- [ ]``) still renders its
-    marker.
+    Markers stay verbatim (the ``glyphs.bullets`` override excepted); a
+    blank row ends the run.  Indented continuation re-renders as nested
+    blocks at the content width, two spaces per level up to
+    ``_LIST_MAX_LEVEL``.  A task item's box marker is one action span
+    carrying ``TASK_ACTION``; the component stamps the ordinal later.
     """
 
     name = "list"
@@ -217,18 +186,9 @@ class ListRule:
     ) -> list[Line]:
         """One task item: the box marker as the action span, then the body.
 
-        The bullet is gone (the box replaces it); the box and its trailing
-        space are **one segment** carrying :data:`TASK_ACTION`, so the whole
-        ``"\\u2610 "`` seat run is the click span and the ordinal stamping in
-        the component has exactly one segment per item to count.  The two
-        marks are the context's ``check_off`` / ``check_on``, each seated through
-        :func:`~motui.kernel.glyphs.pair_seat` so the checked and unchecked
-        rows share one column; a pair of two empty glyphs seats nothing, and
-        the task then renders as its body alone (no marker segment, nothing
-        to click).  The hanging indent matches a bullet item's at the same
-        level (the box is one column, the space another), and the
-        continuation blocks -- a task item may carry nested content like any
-        other -- indent by the same width.
+        The box and its space are one segment carrying ``TASK_ACTION``;
+        checked and unchecked boxes share the pair's wider seat.  An empty
+        pair renders the body alone.  Continuations indent like a bullet's.
         """
         theme = ctx.theme
         checked = task.group(1) in "xX"

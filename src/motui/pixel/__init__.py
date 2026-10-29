@@ -1,15 +1,9 @@
 """The optional pixel medium: sub-cell rasters quantized into cell rows.
 
-``motui.pixel`` depends on the kernel only.  It knows nothing about widgets,
-terminals or the demo; :class:`Raster` is a mutable drawing surface, the
-verbs are the only way to write it, and :func:`quantize` answers ordinary
-:class:`~motui.kernel.cell.Line` values.  ``PixelCanvas`` in
-:mod:`motui.widgets` is the thin widget adapter over this engine.
-
-A layer is a :class:`PixelLayer` value -- one raster plus its
-:class:`Marker` family.  A cell belongs to the first layer in the sequence
-that has ink in it, so a ``"half"`` fill under a ``"braille"`` line layer
-is expressed as two layers, never as a mixed marker.
+Depends on the kernel only.  ``Raster`` is the mutable drawing surface and
+``quantize`` answers ``Line`` values; ``PixelCanvas`` is the widget adapter.
+A layer is a raster plus its ``Marker``, and the first layer with ink owns a
+cell.
 """
 
 from __future__ import annotations

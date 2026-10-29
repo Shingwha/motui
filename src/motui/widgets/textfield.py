@@ -1,54 +1,7 @@
-"""The text fields: :class:`Input` and :class:`Editor` over one editing shell.
+"""The text fields, :class:`Input` and :class:`Editor`, over one editing shell.
 
-The editing state -- the text, the cursor, the keymap routing, the wrapped-row
-geometry, the undo history and the selection -- lives in one
-:class:`~motui.widgets.textbuf.TextBuffer`, and the shared editing shell --
-buffer composition, event routing, the render trunk -- in
-:class:`_TextField`; this module carries both shells and that shell.
-
-The two public fields are one component twice:
-
-* :class:`Input` leads its **one** row with a prompt and keeps the text on a
-  single line: a row wider than the field scrolls horizontally under the
-  cursor (``WrapMode.OVERFLOW``, the default) instead of wrapping or losing
-  its tail; a :class:`~motui.kernel.events.PasteEvent` entering a
-  **single-line** field has every run of newlines folded into one space, so a
-  pasted paragraph stays one row (the editor's paste path keeps its newlines,
-  and so does an explicit ``insert``).
-* :class:`Editor` spans the full width and slides an optional ``max_rows``
-  window around the cursor.
-
-No key is read here: the host feeds events to the typed hooks
-(``on_key`` / ``on_paste`` / ``on_mouse``), which route them through the
-component's ``keymap``
-(:data:`~motui.kernel.keymap.DEFAULT_INPUT_KEYMAP` /
-:data:`~motui.kernel.keymap.DEFAULT_EDITOR_KEYMAP` unless overridden) and
-return ``False`` for every key it leaves to the host's own routing.  The
-wrap geometry comes from the width of the last ``render`` call (80 before
-the first render), so up/down cursor movement follows the wrapped rows the
-user sees.  A pure ``cursor_position`` reports where the block cursor sits
-in the rendered rows, for hosts that park the terminal cursor there (an IME
-anchor on a real console).
-
-An empty focused field with a placeholder renders the hint in the theme's
-``dim`` and **no cursor cell**: the hint is a label for the empty state, not
-content, and a block painted over or after it reads as an artifact.  The
-cursor block appears with the first typed character; an empty field *without*
-a placeholder shows the block alone, exactly as a typed row does.
-
-``mask`` is the display-only secret input: non-empty, every rendered
-character is replaced by the mask's own glyph while :attr:`~Input.text`
-stays plain, the caret geometry is measured against the masked width and
-the block cursor still covers the cell under it.  Reveal/hide switching is
-the host's own -- it re-draws from ``text`` -- and deliberately not a
-component feature.
-
-Styles resolve at render time from the theme's role groups: every row sits
-on ``surfaces.control`` with the state ``controls.overlay`` (hover) or the
-read-only ``text.faint`` floor; the text uses ``text.base``, ``text.caret``,
-``text.faint`` and ``text.selection`` and, for an :class:`Input`,
-``content.accent`` for the prompt.  Whole groups are overridable through
-``styles=Styles(...)``.
+Editing state lives in :class:`~motui.widgets.textbuf.TextBuffer`; the shell
+routes typed events through the field's keymap and renders the buffer rows.
 """
 
 from __future__ import annotations
@@ -84,55 +37,14 @@ _NEWLINE_RUN = re.compile(r"(?:\r\n|\r|\n)+")
 
 
 class _TextField(Widget):
-    """The shared editing shell: buffer, routing, geometry, render trunk.
+    """The shared editing shell: buffer, routing, geometry and render trunk.
 
-    A shell supplies the keymap, the theme/``Styles`` and four policy hooks:
-    the row indent (:meth:`_indent`), the row window
-    (:meth:`_window_start`, :meth:`_row_cap`) and the row prefix
-    (:meth:`_row_prefix`).  Everything else -- the text, the cursor,
-    ``(self)``, the typed hooks (``on_key`` / ``on_paste`` / ``on_mouse``),
-    the editing methods, ``click`` and ``render`` -- is one
-    implementation here.
-
-    ``focused`` is the flag the focus tier writes
-    (:class:`~motui.app.focus.FocusManager`, through
-    the focus tier) -- the same flag a shell
-    takes at construction; the shell only renders by it (the block cursor
-    and the empty-field hint).  ``hover`` is the pointer tier's flag
-    : the fields take the
-    **block-level** hover only -- the whole rendered row (prompt included)
-    merges the theme's ``hover`` while it is ``True`` -- and implement no
-    ``on_hover``: a text row has no sub-row items to mark.
-
-    ``mask`` is the display-only mask: non-empty, every character of every
-    rendered row is replaced by glyphs of its first character while the
-    buffer's text stays plain (:meth:`_mask_row`); the caret's cell and the
-    selection band are remapped through the same table, so the block cursor
-    covers the masked cell exactly where it always sat.  The mask is a
-    construction parameter -- there is no setter, and a host that wants a
-    reveal switch redraws from :attr:`text` itself.
-
-    The selection is rendered here too: the shell asks the buffer for the
-    selected character range of each visual row and hands it to the
-    buffer's one row-body builder, which merges ``selection_style`` (the
-    theme's ``selection``) over it -- the block cursor included, with the
-    selection band on top ("selection outranks the cursor") and the cursor
-    still there underneath.  The prompt is never selected: the band starts
-    at the text.
-
-    **The memory.**  Rendering walks the buffer's whole visual geometry --
-    a 3000-line buffer wraps every line to show twenty -- and a host
-    repaints the same field frame after frame (every mouse move repaints),
-    so :meth:`render` remembers its last answer: while the width and the
-    widget's ``generation`` are unchanged, the remembered rows come back as
-    a list copy.  Every row input touches: a content write fires the
-    buffer's ``on_change`` hook (wired to :meth:`~motui.widgets.base.Widget.touch`),
-    a cursor or selection move touches in the hooks and editing methods,
-    and the public fields touch through ``Widget.__setattr__``.  The wrap
-    geometry underneath is remembered
-    by the buffer itself, per line, so a keystroke in a 3000-line editor
-    re-wraps one line and a move re-wraps none -- and a sealed field's caret
-    still reaches the screen (D4).
+    Subclasses supply the keymap and four policy hooks: row indent, row
+    window, row cap and row prefix.  ``focused`` renders the block cursor
+    (a placeholder takes its place on an empty focused field); ``hover``
+    paints the whole-row hover band.  ``mask`` is display-only: every
+    rendered character becomes its first glyph while ``text`` stays plain.
+    ``render`` is memoized on width and ``generation``.
     """
 
     __slots__ = (
@@ -211,12 +123,10 @@ class _TextField(Widget):
 
     @text.setter
     def text(self, value: str) -> None:
-        """Replace the whole text; the buffer's undo/redo history is cleared.
+        """Replace the whole text; undo history is cleared and the cursor parks at the start.
 
-        The cursor parks at the start (the constructor's own rule), so an
-        assignment is a fresh buffer rather than an undoable edit.  A
-        read-only field accepts it: the flag guards routed input, not the
-        host's own writes.
+        A read-only field still accepts it: the flag guards routed input,
+        not programmatic writes.
         """
         self._buf.set_text(value)
 
@@ -224,11 +134,7 @@ class _TextField(Widget):
     def read_only(self) -> bool:
         """Whether routed events are refused without touching the buffer.
 
-        ``on_key`` answers ``False`` for every event while this is set, so
-        a host can route keys into a field it has made read-only and the
-        text never changes.  The direct editing methods (``insert``,
-        ``backspace``, the moves, ``text =``) are programmatic writes and
-        remain available -- the host owns the flag.
+        Direct editing methods and ``text =`` remain programmatic writes.
         """
         return self._buf.read_only
 
@@ -238,11 +144,10 @@ class _TextField(Widget):
 
     @property
     def mask(self) -> str:
-        """The display mask (``""`` = the text renders itself).
+        """The display mask (``""`` renders the text itself).
 
-        A construction parameter: there is no setter, and the property is
-        read-only so a host never mistakes it for a reveal switch (that is
-        the host's own render off ``text``).
+        Read-only construction parameter; a reveal switch redraws from
+        :attr:`text`.
         """
         return self._mask
 
@@ -280,12 +185,7 @@ class _TextField(Widget):
     # -- editing --------------------------------------------------------------
 
     def _route(self, event: Event) -> bool:
-        """Send one event to the buffer; ``False`` while read-only.
-
-        The one body the typed hooks share.  The buffer applies the keymap
-        (printables, bound actions and paste insertion), so the 1.x routing
-        is preserved verbatim while the hooks become the public doors.
-        """
+        """Send one event to the buffer; ``False`` while read-only."""
         if self.read_only:
             return False
         consumed = self._buf.handle(event)
@@ -308,12 +208,9 @@ class _TextField(Widget):
         return self._route(e)
 
     def on_action(self, name: str) -> bool:
-        """Run one keymap action by name, as the buffer's router would.
+        """Run one keymap action by name; ``False`` when unbound or ``"activate"``.
 
-        Only a name bound in the field's current keymap is an action (the
-        buffer's routing calls the same-named no-argument method); an
-        unbound name -- including ``"activate"``, which a field does not
-        take -- answers ``False`` so a host keeps routing the key.
+        A field has no activation; unknown names stay with the host.
         """
         if name == "activate":
             return False  # a field has no activation of its own
@@ -404,7 +301,6 @@ class _TextField(Widget):
         return self._moved(self._buf.select_down())
 
     def _moved(self, moved: bool) -> bool:
-        """Touch when a cursor/selection move changed the rendered rows."""
         if moved:
             self.touch()
         return moved
@@ -412,25 +308,9 @@ class _TextField(Widget):
     def on_click(self, pos: Pos) -> bool:
         """Dock the block cursor at this field's own rendered cell; True on a hit.
 
-        ``pos`` is a 0-based cell of the component's own ``render`` output
-        -- exactly what :meth:`~motui.app.TUI.hit` reports -- so the shell
-        first undoes its own row policy and then lets the buffer resolve
-        the column.  An :class:`Editor` adds the ``max_rows`` window's first
-        rendered row back onto ``pos.y`` (the same window :meth:`render`
-        slices by, read off the current cursor, via :meth:`_window`), so
-        "the third row on screen" is the third row of the window whatever
-        the buffer's length; an :class:`Input` hands ``pos.x`` straight
-        through, the prompt's width already being the buffer's indent, so a
-        click on the prompt or on a wrapped row's indent folds onto that
-        row's first character.  A row outside the rendered rows answers
-        ``False`` and changes nothing; a hit docks the cursor -- even when
-        it already sat there -- and answers ``True``.  ``focused`` is
-        deliberately not consulted: moving the focus on a click is the
-        host's (or a :class:`~motui.app.focus.FocusManager`'s) policy, never
-        the field's.  A multi-row residue (an explicit :meth:`insert` of
-        ``"\\n"`` into an ``Input``) is accepted row by row like any other
-        buffer.  A mask covers the cells, not the geometry: a click lands
-        on the same logical character it would without one.
+        The shell undoes its row window (and an Editor's ``max_rows`` offset)
+        before the buffer resolves the column.  A row outside the rendered
+        rows answers ``False``; ``focused`` is not consulted.
         """
         rows = self._buf.visual_rows(self._buf.last_width, self._indent())
         start, count = self._window(rows, self._buf.locate(rows)[0])
@@ -444,26 +324,19 @@ class _TextField(Widget):
     # -- visual geometry -------------------------------------------------------
 
     def _indent(self) -> int:
-        """The columns every visual row is inset by (0 without a prompt)."""
         return 0
 
     def _window_start(self, total: int, cursor_index: int) -> int:
-        """The first rendered row (0 without a ``max_rows`` window)."""
         return 0
 
     def _row_cap(self) -> int | None:
-        """The rendered-row cap (``None`` renders every row)."""
         return None
 
     def _window(self, rows: list[_VisualRow], cursor_index: int) -> tuple[int, int]:
-        """The rendered window as ``(start, count)`` -- the shell's row policy.
+        """The rendered window as ``(start, count)``: one expression of the row policy.
 
-        ``start`` is the first rendered row that keeps the cursor's visual
-        row (:meth:`_window_start`) and ``count`` how many rows are shown
-        from there (:meth:`_row_cap`, clamped to the rows that remain).
-        :meth:`render` slices by it, :meth:`cursor_position` shifts the
-        cursor's row by ``start`` and :meth:`on_click` rejects a row outside
-        it: one expression of the window, so the three cannot disagree.
+        ``render``, :meth:`cursor_position` and :meth:`on_click` all read it,
+        so they cannot disagree.
         """
         start = self._window_start(len(rows), cursor_index)
         cap = self._row_cap()
@@ -473,15 +346,8 @@ class _TextField(Widget):
     def cursor_position(self, width: int) -> tuple[int, int]:
         """The cursor cell as ``(visual_row, col)`` of a ``render(c)``.
 
-        The geometry is the one ``render`` uses, so the reported cell is
-        exactly the cell the render paints as the block cursor: the
-        character under the cursor, or the reverse-video space at a row
-        end.  ``col`` is the 0-based cell offset from the row's left edge
-        -- row 0 counts a shell's prompt, continuation rows indent by it.
-        A ``max_rows`` window is applied, so ``visual_row`` indexes the
-        rows ``render`` actually returns.  A mask preserves the display
-        width of every cell, so the reported cell is the masked render's
-        too.  Pure query: no state changes, no rendering.
+        Same geometry as ``render``, window applied; pure query.  A mask
+        preserves display width, so the cell is the masked render's too.
         """
         indent = self._indent()
         rows = self._buf.visual_rows(width, indent)
@@ -491,23 +357,16 @@ class _TextField(Widget):
     # -- rendering ---------------------------------------------------------------
 
     def _row_prefix(self, index: int, indent: int) -> Segment | None:
-        """The row's leading segment, or ``None`` when the shell has none."""
         return None
 
     def _mask_row(
         self, text: str, column: int, selection: tuple[int, int] | None
     ) -> tuple[str, int, tuple[int, int] | None]:
-        """One row's text with every character masked, and the caret remapped.
+        """One row's text masked, with caret and selection remapped.
 
-        The mask replaces each character with whole glyphs of its first
-        character, repeated to fill the character's own display width (a
-        cell narrower than a wide glyph takes one glyph and spaces fill the
-        rest), so the row's width -- and with it the caret geometry -- is
-        the unmasked row's.  ``column`` and ``selection`` are character
-        indices into the row, so both are remapped through the same table:
-        the block cursor and the selection band land on the very cells they
-        would without the mask.  A zero-width mask cannot stand for a cell
-        and leaves the row alone.
+        Each character becomes whole glyphs of the mask's first character
+        filling its display width, so row width -- and caret geometry -- are
+        the unmasked row's.  A zero-width mask leaves the row alone.
         """
         glyph = self._mask[0]
         width = visible_width(glyph)
@@ -529,26 +388,11 @@ class _TextField(Widget):
         return "".join(pieces), caret, band
 
     def render(self, c: Constraints) -> Surface:
-        """The rendered rows at the constrained width, remembered while the generation holds.
+        """The rendered rows at the constrained width, memoized on width and generation.
 
-        While the width and the
-        widget's ``generation`` are unchanged, the remembered rows of the last
-        render come back as a list copy -- no re-walk over the buffer's
-        visual geometry, no row bodies rebuilt (the component's memory).  A
-        keystroke bumps the buffer's version and a move changes the cursor,
-        so either one misses; a miss builds the rows, remembers them and
-        moves the key.  ``last_width`` is seeded on every call, hit or miss:
-        it is the geometry the buffer's own moves and clicks read, not part
-        of the rendered bytes.
-
-        The memo keys on the width alone (never on ``max_height``): a
-        smaller budget truncates the returned rows without repainting the
-        buffer, so the remembered table stays whole for the next call.  The
-        surface width is :meth:`_surface_width`'s answer -- ``c.width`` for
-        every shell but an Editor in ``OVERFLOW`` mode, whose rows keep
-        their natural width for a horizontal scroll container -- and the
-        builder is :meth:`~motui.kernel.cell.Surface.of` with ``pad=False``,
-        which is byte-for-byte ``Surface.clipped`` at ``c.width``.
+        ``max_height`` truncates the returned rows without invalidating the
+        memo.  ``last_width`` is seeded on every call for the buffer's own
+        moves and clicks.
         """
         width = c.width
         self._buf.last_width = width
@@ -570,22 +414,14 @@ class _TextField(Widget):
         return Surface.of(out, surface_width, pad=False)
 
     def _surface_width(self, rows: list[Line], width: int) -> int:
-        """The width the surface carries: the constraint's, unless a policy widens it.
-
-        The shared shells answer ``width``, so their surfaces keep the 1.x
-        bytes exactly.  :class:`Editor` overrides this in ``OVERFLOW`` mode,
-        whose logical rows keep their natural width (``max(width, widest
-        row)``) because a container owns the visible columns.
-        """
+        """The constraint width; an OVERFLOW editor widens to the natural rows."""
         return width
 
     def _field_floor(self) -> Style:
-        """The row floor: the control surface plus the field's state overlay.
+        """The row floor: ``surfaces.control`` plus the field's state overlay.
 
-        Every rendered row is painted on ``surfaces.control``.  A
-        ``read_only`` field merges ``text.faint`` and the disabled overlay
-        (which wins over hover and dims the row); a hovered field merges the
-        hover overlay.  Focus adds nothing: the caret is the focus signal.
+        Read-only merges ``text.faint`` and the disabled overlay (it wins
+        over hover); focus adds nothing because the caret is the signal.
         """
         floor = self.group("surfaces").control
         controls = self.group("controls")
@@ -601,16 +437,13 @@ class _TextField(Widget):
     def _on_floor(line: Line, floor: Style) -> Line:
         """``line`` with ``floor`` under every segment's own style.
 
-        The floor is the base: caret, selection, prompt and placeholder
-        styles merge on top, so their attributes and colours still win while
-        the whole row keeps the field's background.
+        Caret, selection, prompt and placeholder styles still win on top.
         """
         if floor == NONE:
             return line
         return Line(seg.with_style(floor.merge(seg.style)) for seg in line.segments)
 
     def _rows_for(self, width: int) -> list[Line]:
-        """The freshly built rows at ``width``: :meth:`render`'s miss path."""
         text_styles = self.group("text")
         floor = self._field_floor()
         indent = self._indent()
@@ -669,50 +502,13 @@ class _TextField(Widget):
 
 
 class Input(_TextField):
-    """A prompt-led text field with a reverse-video block cursor.
+    """A prompt-led, single-line text field with a block cursor.
 
-    An unfocused field (``field.focused = False``) renders the text plainly
-    (no cursor); an empty focused
-    field shows ``placeholder`` in a faint style, with no cursor cell riding it
-    -- the block appears with the first typed character.  ``prompt`` defaults
-    to ``seat(glyphs.prompt)`` (the vocabulary's ``\u276f`` plus one separator
-    column); an explicit prompt wins and may be ``""``.  The cursor is drawn
-    by re-styling the character under it as ``style.merge(caret_style)``, or,
-    at a row end, by appending a reverse-video space -- skipped when the row
-    is already full so no row ever exceeds ``width``.  The prompt's accent,
-    the caret and the placeholder's faint style are read off the theme's
-    ``content.accent`` / ``text.caret`` / ``text.faint`` at render time, and
-    a ``Styles`` value overrides those groups.  ``keymap`` (default
-    :data:`~motui.kernel.keymap.DEFAULT_INPUT_KEYMAP`) is the table
-    :meth:`on_key` routes through; it carries no ``enter`` binding, so
-    the return key reaches the host untouched.  A multi-line paste is
-    folded into the single line at :meth:`on_paste`: a paste fills a field,
-    and a field whose keymap cannot even bind ``enter`` must not let the
-    paste smuggle in a row break.  ``hover`` is the pointer tier's
-    block-level band: while it is ``True`` every rendered row (prompt
-    included) merges the theme's ``hover``; there is no row-level
-    ``on_hover`` -- a text row has no sub-row items to mark.  ``mask``
-    (``""`` = plain) replaces every rendered character with its own glyph
-    while :attr:`~_TextField.text` stays plain: the display-only secret
-    field, set at construction (a host that wants a reveal switch redraws
-    from ``text``).  The class declares ``cursor_shape = "beam"``: a text
-    field reads best with the terminal's bar cursor, and the host reads the
-    attribute off the focused leaf and passes it to
-    :meth:`~motui.app.TUI.set_cursor_shape`.
-
-    ``wrap`` defaults to :data:`~motui.kernel.text.WrapMode.OVERFLOW`: the
-    field renders **exactly one row** (placeholder included) and slides a
-    visible window under the cursor instead of wrapping, so a 200-character
-    value stays one editable line and the cursor is always on screen.  The
-    window is a display-column range mapped back to character indices
-    (:func:`~motui.kernel.text.index_pair_at_columns`); the prompt keeps its
-    width, and a prompt wider than the field leaves no room for text (the
-    clipped prompt is the row).  Logical newlines cannot paint a control
-    character, so each one is replaced by one space **in place** -- the
-    display string stays as long as the buffer's value and the cursor's
-    character offset stays 1:1.  The mask replaces every displayed character
-    with its one glyph, also 1:1.  A non-OVERFLOW mode hands the row back to
-    the shared shell (the old wrap/ellipsis behavior).
+    ``prompt`` defaults to ``seat(glyphs.prompt)``; its width is the row
+    indent.  The default ``wrap=OVERFLOW`` renders one horizontally sliding
+    row under the cursor; a paste folds every newline run into one space so
+    nothing can submit.  ``mask`` masks the display only.  ``cursor_shape``
+    is ``"beam"`` for the host's terminal cursor.
     """
 
     __slots__ = ("_prompt",)
@@ -763,12 +559,10 @@ class Input(_TextField):
 
     @property
     def wrap(self) -> WrapMode:
-        """How a value wider than the field responds to ``render``'s width.
+        """How an over-wide row responds to ``render``'s width.
 
-        ``OVERFLOW`` (the default) renders one horizontally sliding row;
-        any other mode delegates to the shared shell's row guard.  A write
-        drops the row memory and touches the widget, so the very next render
-        answers under the new policy.
+        ``OVERFLOW`` (default) slides one row; other modes delegate to the
+        shared shell's row guard.
         """
         return self._wrap
 
@@ -783,13 +577,7 @@ class Input(_TextField):
 
     @property
     def cursor(self) -> tuple[int, int]:
-        """The cursor as ``(row, col)``: a single-line field reports row 0.
-
-        ``col`` is the flat character offset into :attr:`text` -- the
-        single-line view of the buffer position.  A paste is folded to one
-        space per newline run at :meth:`on_paste`, so only an explicit
-        ``insert("\\n")`` can keep a newline in the buffer.
-        """
+        """The cursor as ``(0, col)``, ``col`` being the flat character offset."""
         return 0, self._buf.offset
 
     # -- routing ----------------------------------------------------------------
@@ -797,24 +585,12 @@ class Input(_TextField):
     def on_paste(self, e: PasteEvent) -> bool:
         """Fold every newline run of a paste into one space, then insert it.
 
-        The one policy this shell adds over the shared routing: a
-        :class:`~motui.kernel.events.PasteEvent` entering a single-line field
-        has every run of ``\\r\\n`` / ``\\r`` / ``\\n`` -- consecutive empty
-        lines included -- collapsed to one space before the buffer sees it,
-        so a multi-line paste is one input row and nothing about it can
-        submit.  The editor's paste path and an explicit :meth:`insert`
-        keep their newlines.
+        The editor's paste path and an explicit ``insert`` keep newlines.
         """
         return super().on_paste(PasteEvent(_NEWLINE_RUN.sub(" ", e.text)))
 
     def on_key(self, event: Event) -> bool:
-        """Consume one event; a paste's newline runs fold into single spaces.
-
-        A ``PasteEvent`` routed through the key door folds exactly like
-        :meth:`on_paste`; everything else goes through the shared shell's
-        routing (``False`` when the buffer declines it, so the host keeps
-        its submit gesture).
-        """
+        """Consume one event; a ``PasteEvent`` folds like :meth:`on_paste`."""
         if isinstance(event, PasteEvent):
             return self.on_paste(event)
         return super().on_key(event)
@@ -824,12 +600,8 @@ class Input(_TextField):
     def cursor_position(self, width: int) -> tuple[int, int]:
         """The cursor cell as ``(0, col)`` of the single-row render.
 
-        The OVERFLOW view paints one row, so the shared buffer geometry
-        would report a wrapped row the user cannot see.  The reported cell
-        is the one :meth:`_rows_for` paints: the prompt's columns plus the
-        cursor's display offset inside the visible window, clamped to the
-        field.  A prompt that leaves no text column reports the last cell.
-        Non-OVERFLOW modes keep the shared answer.
+        A prompt wider than the field reports the last cell.  Non-OVERFLOW
+        modes keep the shared answer.
         """
         if self._wrap is not WrapMode.OVERFLOW or width <= 0:
             return super().cursor_position(width)
@@ -842,19 +614,9 @@ class Input(_TextField):
     def _single_line_geometry(self, width: int) -> tuple[str, int, int]:
         """The visible window, the cursor's index in it, and its start index.
 
-        ``display`` is the buffer's value with one printable stand-in per
-        character: the mask glyph when a mask is set, a space for every
-        ``\\r`` / ``\\n`` otherwise.  The replacement is **in place**, so the
-        display index space is exactly the buffer's character offset space
-        and the caret cannot drift across a folded logical break (a
-        ``\\r\\n`` pair is two buffer characters and paints two spaces).
-        ``cursor_col`` is the cursor's display column; once it reaches the
-        field's inner width the window starts one column past the point
-        that would hide it, and :func:`~motui.kernel.text.index_pair_at_columns`
-        maps the display range back to character indices (flooring a
-        boundary inside a wide cluster).  A window ending exactly at the
-        cursor with no cell left for the block drops leading clusters until
-        the cursor's space fits.
+        Newlines become spaces in place so display indices equal buffer
+        offsets; the window slides to keep the cursor visible and never ends
+        exactly at the cursor without a cell for the block.
         """
         inner = max(0, width - self._indent())
         value = self._buf.value
@@ -877,7 +639,6 @@ class Input(_TextField):
     def _window_selection(
         selection: tuple[int, int] | None, start: int, length: int
     ) -> tuple[int, int] | None:
-        """A flat selection mapped into the visible window's character range."""
         if selection is None:
             return None
         lo = min(max(selection[0] - start, 0), length)
@@ -891,16 +652,10 @@ class Input(_TextField):
     def _rows_for(self, width: int) -> list[Line]:
         """The single row of the horizontal-overflow view.
 
-        The OVERFLOW policy is the Input's own: the shared shell wraps the
-        buffer geometry, which is exactly what a single-line field must not
-        show.  The prompt takes its columns; the visible text is the
-        display-column window :meth:`_single_line_geometry` computes, and
-        the buffer's row-body builder draws the base run, the caret and the
-        selection band.  The row is hard-clipped to ``width`` (never
-        ellipsized), and a prompt wider than the field leaves only the
-        clipped prompt.  An empty focused field's placeholder is a label,
-        not content: it takes the row's text slots and carries no cursor
-        cell, exactly as the shared shell paints it.
+        The prompt takes its columns; the rest is the column window from
+        :meth:`_single_line_geometry`, hard-clipped (never ellipsized).  A
+        placeholder is a label without a cursor cell.  Other modes use the
+        shared rows.
         """
         if self._wrap is not WrapMode.OVERFLOW:
             return super()._rows_for(width)
@@ -945,41 +700,14 @@ class Input(_TextField):
 
 
 class Editor(_TextField):
-    """A multi-line text buffer with a reverse-video block cursor.
+    """A multi-line text buffer with a block cursor.
 
-    ``text`` seeds the buffer (the cursor parks at its start);
-    ``placeholder`` shows dim on the first row of an empty focused editor,
-    with no cursor cell riding it -- the block appears with the first typed
-    character.  An unfocused editor (``editor.focused = False``) renders the
-    text plainly (no cursor, no placeholder).
-    The cursor is drawn by re-styling the character under it as
-    ``style.merge(caret_style)``, or, at a row end, by appending a
-    reverse-video space -- skipped when the row is already full so no row
-    ever exceeds ``width``.  The caret and the placeholder's faint style are
-    the theme's ``text.caret`` / ``text.faint``.  ``max_rows`` (``None`` =
-    unlimited) caps the rendered rows with a sliding window that keeps the
-    cursor's visual row visible.
-    ``mask`` (``""`` = plain) replaces every rendered character with its own
-    glyph while :attr:`~_TextField.text` stays plain -- the display-only
-    secret field, set at construction.  ``hover`` is the pointer tier's
-    block-level band: while it is ``True`` every rendered row merges the
-    theme's ``hover``; there is no row-level ``on_hover``.  The class
-    declares ``cursor_shape = "beam"``: a text buffer reads best with the
-    terminal's bar cursor, and the host reads the attribute off the focused
-    leaf and passes it to :meth:`~motui.app.TUI.set_cursor_shape`.
-
-    ``wrap`` (``WrapMode.WORD``, the current behavior) is the final row
-    guard: ``WORD`` / ``CHAR`` reflow a row wider than the field, the
-    single-row modes truncate it (``ELLIPSIS`` marks, ``CLIP`` cuts hard),
-    while ``OVERFLOW`` turns the field into a **logical-line view**: every
-    ``"\\n"``-separated buffer line is one rendered row at its natural width
-    (no wrapping), the cursor's ``(row, col)`` index those rows directly,
-    and the surface carries the widest row so a horizontal scroll container
-    can window it.  Up/down (and their selection variants) then step logical
-    lines instead of wrapped visual rows, and a click resolves through the
-    same logical geometry.  The buffer's word-aware geometry is untouched
-    for every other mode, so the default cursor always reads the rows the
-    editor paints.
+    ``text`` seeds the buffer with the cursor at its start; ``max_rows``
+    caps the rendered rows with a window that keeps the cursor visible.
+    ``mask`` masks the display only; ``cursor_shape`` is ``"beam"``.
+    ``wrap=WORD`` is the default final row guard.  ``OVERFLOW`` instead
+    renders one natural-width row per logical line for a horizontal scroll
+    container, and up/down step logical lines.
     """
 
     __slots__ = ("max_rows",)
@@ -1014,11 +742,7 @@ class Editor(_TextField):
 
     @property
     def wrap(self) -> WrapMode:
-        """How a row wider than the field responds to ``render``'s width.
-
-        A write only changes this policy: it touches the widget, so the next
-        render rebuilds the guard while the buffer geometry stays put.
-        """
+        """How an over-wide row responds to ``render``'s width."""
         return self._wrap
 
     @wrap.setter
@@ -1033,13 +757,8 @@ class Editor(_TextField):
     def on_click(self, pos: Pos) -> bool:
         """Dock the cursor on a logical-line cell in ``OVERFLOW`` mode.
 
-        The OVERFLOW render has one row per logical line, so the shared
-        shell's wrapped-row walk would answer the wrong line.  ``pos.y`` is
-        a row of :meth:`render`'s ``max_rows`` window and ``pos.x`` a
-        display column of the line; the cell resolves through the kernel's
-        boundary resolver and the buffer's flat-offset setter, the same pair
-        :meth:`TextBuffer.place` uses.  Every other mode keeps the shared
-        implementation.
+        ``pos.y`` indexes the rendered window and ``pos.x`` a display column
+        of the line.  Other modes keep the shared implementation.
         """
         if self._wrap is not WrapMode.OVERFLOW:
             return super().on_click(pos)
@@ -1081,13 +800,9 @@ class Editor(_TextField):
     def _step_logical(self, delta: int, *, extend: bool) -> bool:
         """Walk ``delta`` logical lines, keeping the character column.
 
-        The one cursor write of the OVERFLOW navigation.  A step past the
-        buffer's ends moves nowhere (``False``), exactly the buffer's own
-        edge rule; a plain step drops the selection, while an extending one
-        anchors at the starting offset the first time -- the two rules
-        :meth:`~motui.widgets.textbuf.TextBuffer.move_up` and
-        ``select_up`` apply.  The column clamps to the target line's
-        length, so a short line between long ones costs no position.
+        A step past the ends moves nowhere; a plain step drops the selection
+        and an extending one anchors at the start; the column clamps to the
+        target line's length.
         """
         buf = self._buf
         if not extend:
@@ -1110,11 +825,9 @@ class Editor(_TextField):
     def cursor_position(self, width: int) -> tuple[int, int]:
         """The cursor cell as ``(logical row, content column)`` in ``OVERFLOW``.
 
-        The row indexes the rendered ``max_rows`` window; the column is the
-        display width of the logical line's prefix, so it may reach past
-        ``width`` -- the surface's own width is the content width and the
-        container maps the cell into the visible columns.  Every other mode
-        keeps the shared wrapped answer.
+        The row indexes the rendered ``max_rows`` window; the column may
+        reach past ``width`` because the surface carries the content width.
+        Other modes keep the shared answer.
         """
         if self._wrap is not WrapMode.OVERFLOW:
             return super().cursor_position(width)
@@ -1126,11 +839,8 @@ class Editor(_TextField):
     def _logical_rows(self) -> list[_VisualRow]:
         """One natural-width row per logical buffer line.
 
-        The OVERFLOW geometry.  Every line is tab-normalized exactly as
-        :meth:`TextBuffer.visual_rows` normalizes it (a tab becomes one
-        space), so character offsets and the cursor's column stay valid;
-        the flat offsets address the joined text.  The visual row index
-        equals the logical line index by construction.
+        Tabs become one space exactly as the buffer's visual geometry does,
+        keeping character offsets and the cursor column valid.
         """
         rows: list[_VisualRow] = []
         base = 0
@@ -1155,17 +865,7 @@ class Editor(_TextField):
         return max(width, max((row.width for row in rows), default=0))
 
     def _rows_for(self, width: int) -> list[Line]:
-        """The logical-line rows in ``OVERFLOW``; the shared wrapped rows otherwise.
-
-        Every logical line is drawn whole: the base run keeps its trailing
-        spaces, the block cursor rides the character under ``_buf.col`` (or
-        a reverse-video space at the line's end, which the ``inner``
-        argument always leaves room for), the selection band and the mask
-        reuse the buffer's row-body builder, and the ``max_rows`` window
-        still slides around the cursor.  ``width`` is deliberately unused:
-        the natural width is the answer, and :meth:`_surface_width` hands it
-        to the container.
-        """
+        """The logical-line rows in ``OVERFLOW``; the shared rows otherwise."""
         if self._wrap is not WrapMode.OVERFLOW:
             return super()._rows_for(width)
         text_styles = self.group("text")

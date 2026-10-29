@@ -1,36 +1,8 @@
 """Row-shaped furniture: the status row, the shortcut bar and the notice.
 
-Three one-row components a host pins around its content, one family file:
-
-* :class:`StatusLine` -- a two-column status row: a left part left-aligned,
-  a right part right-aligned, a computed gutter between them and one trailing
-  column of right margin, so a host that pins it below a viewport keeps a
-  constant height no matter what the two sides say.  Each side is a sequence
-  of elements, a bare ``str`` or a ``(str, Style)`` tuple, and the whole row
-  defaults to ``text.faint`` (a status bar whispers; it never shouts).
-* :class:`ShortcutBar` -- the key hints: one row listing the session's keys
-  and what each does -- ``c-n next \u00b7 c-p prev \u00b7 / palette`` -- every
-  key in ``content.accent``, every label in
-  ``text.faint``, the pairs joined by ``separator``.
-* :class:`Notice` -- one message row led by a level glyph
-  (``i``/``✓``/``!``/``×``), the inline announcement a form or a panel
-  carries.
-
-All three render through the frozen protocol and are ``fit`` to the painting
-width, so a row too wide for its pane truncates with the usual ``\u2026``
-rather than wrapping: a status row, a shortcut bar and a notice own exactly
-one row each.  None of them is interactive -- no ``chosen``, no controller
-methods, no capability flags.  Only the kernel is imported: layout is
-computed here, never drawn.
-
-Overflow ruling for the status row (decided and documented here): the **left
-part is preserved first** and the **right part is cut from its tail** -- the
-row is composed at full length and closed with the kernel's
-:meth:`~motui.kernel.cell.Line.clip` (``WrapMode.ELLIPSIS``), which
-ellipsizes the end.  A narrow
-terminal therefore drops the tail of the right-hand information -- typically
-the end of a model name or mode -- while the left-hand counters stay
-readable.
+Three display-only one-row components fitted to the painting width:
+``StatusLine`` (left/right with a gutter), ``ShortcutBar`` (key hints) and
+``Notice`` (level glyph plus message).  Only the kernel is imported.
 """
 
 from __future__ import annotations
@@ -59,10 +31,7 @@ def _element_text(element: Element) -> str:
 def _row(elements, default: Style, gap: tuple[str, Style] | None = None) -> Line:
     """One row from ``str | (str, Style)`` elements with an optional middle.
 
-    ``elements`` is one side (or the whole row, see :meth:`StatusLine.render`);
-    ``default`` styles the bare strings.  Adjacent elements sharing one
-    style are fused into a single segment, so a row of plain text renders
-    as one styled run instead of a stutter of identical escapes.
+    Adjacent equal-style elements are fused into one segment.
     """
     parts = list(elements)
     if gap is not None:
@@ -85,15 +54,9 @@ def _width(elements, default: Style) -> int:
 class StatusLine(Widget):
     """A dim two-sided status row: left text, right text, gutter between.
 
-    ``left``/``right`` are sequences of :data:`Element` values updated in
-    place by the host; the bare elements and the gutter share the
-    ``text.faint`` band, resolved at render time from ``styles`` (when
-    given) or the theme.  Rendering always
-    yields exactly one row, ``fit`` to ``width``: the left part starts at
-    column 0, the right part ends one column short of ``width`` (the right
-    margin), and the gutter absorbs the difference -- at least one column
-    wide, so the two sides never touch.  An over-wide row keeps the left
-    part and ellipsizes the right part's tail (see the module docstring).
+    Always exactly one row fitted to the width; the left side is preserved
+    and the right tail ellipsized when narrow.  Bare elements use
+    ``text.faint``.
     """
 
     __slots__ = ("left", "right")
@@ -119,11 +82,7 @@ class StatusLine(Widget):
         self.right = tuple(right)
 
     def render(self, c: Constraints) -> Surface:
-        """The one status row, fitted to the constraint width.
-
-        The row is :meth:`Surface.clipped`, so short rows keep the bytes
-        they always had, and a ``max_height`` of zero paints no row.
-        """
+        """The one status row, fitted to the constraint width."""
         default = self.group("text").faint
         gap_style = default
         used = _width(self.left, default) + _width(self.right, default)
@@ -141,14 +100,8 @@ class StatusLine(Widget):
 class ShortcutBar(Widget):
     """One row of ``(key, label)`` hints, truncated to the painting width.
 
-    ``items`` is a sequence of ``(key, label)`` pairs; each pair renders as
-    the key, one space and the label, and neighbouring pairs are joined by
-    ``separator`` (``" \u00b7 "`` by default: one space, the middot, one
-    space).  An empty bar renders one empty row -- a bar is chrome; it owns
-    exactly one row whatever it holds (the ``Tabs`` precedent).  The key
-    band is ``content.accent`` and the label band ``text.faint``, resolved
-    at render time from ``styles`` (when given) or the theme; the separator
-    renders unstyled.
+    Keys use ``content.accent``, labels ``text.faint``; pairs join with
+    ``glyphs.separator``.  An empty bar still owns one row.
     """
 
     __slots__ = (
@@ -176,11 +129,7 @@ class ShortcutBar(Widget):
         self.glyphs = glyphs
 
     def render(self, c: Constraints) -> Surface:
-        """The one hint row, fitted to the constraint width.
-
-        The row is :meth:`Surface.clipped`, so short rows keep the bytes
-        they always had, and a ``max_height`` of zero paints no row.
-        """
+        """The one hint row, fitted to the constraint width."""
         key_style = self.group("content").accent
         label_style = self.group("text").faint
         segments: list[Segment] = []
@@ -201,15 +150,9 @@ class ShortcutBar(Widget):
 class Notice(Widget):
     """A one-row message with a level glyph.
 
-    Every level leads with the vocabulary's glyph seated in one column:
-    ``notice_info`` for ``info`` (and any unknown level, which degrades to
-    info rather than raising), ``notice_success`` for ``success``,
-    ``notice_warn`` for ``warn`` and ``notice_error`` for ``error``.  The
-    glyph carries the level's semantic style (``text.base`` for info,
-    ``status.success`` / ``status.warning`` / ``status.danger`` otherwise),
-    resolved at render time from ``styles`` (when given) or the theme;
-    the message text stays plain.  The row is a single line: it is truncated
-    (never wrapped) to ``width``.
+    ``info`` (and unknown levels), ``success``, ``warn`` and ``error`` map
+    to their vocabulary glyph and semantic style; the message stays plain.
+    The row is truncated, never wrapped.
     """
 
     __slots__ = ("glyphs", "level", "text")
@@ -247,11 +190,7 @@ class Notice(Widget):
         return self.glyphs.notice_info, self.group("text").base
 
     def render(self, c: Constraints) -> Surface:
-        """The one message row, fitted to the constraint width.
-
-        The row is :meth:`Surface.clipped`, so short rows keep the bytes
-        they always had, and a ``max_height`` of zero paints no row.
-        """
+        """The one message row, fitted to the constraint width."""
         glyph, style = self._level_style()
         prefix = seat(glyph)
         if not prefix:

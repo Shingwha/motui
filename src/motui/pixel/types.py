@@ -32,9 +32,8 @@ SlotColors = tuple[RGB, RGB]
 class Marker(StrEnum):
     """The glyph family a raster layer quantizes to.
 
-    ``HALF`` folds the four sub-rows into two half blocks; ``BRAILLE``
-    spends the eight braille dots.  A future octant marker is a new member
-    here, not a new quantizer.
+    ``HALF`` folds four sub-rows into two half blocks; ``BRAILLE`` spends
+    eight dots.  A new marker is a member, not a new quantizer.
     """
 
     HALF = "half"

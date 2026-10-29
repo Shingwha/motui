@@ -1,40 +1,8 @@
 """The action primitives: :class:`Button`, :class:`Checkbox` and :class:`Link`.
 
-The three smallest interactive units the toolkit ships, one family file:
-``Button`` renders its label as ``" label "``, ``Checkbox`` a ``[x] label`` /
-``[ ] label`` toggle beside it, and ``Link`` a one-row text in the theme's
-``link`` band that only the mouse and an activation follow.  Each holds state
-and answers controller methods like every component (D1): ``on_click`` and
-``on_action("activate")`` land the operation in a one-shot result the host reads through
-``take()`` -- there is no callback, no event bus and no public
-``chosen``.
-
-The family shares :class:`~motui.widgets.base.ActionWidget`: ``disabled``,
-``hint``, the pending-result bookkeeping, :meth:`~ResultWidget.take` and the
-``activate``/``toggle`` action routing live there once, and each control
-implements only the verbs it has.  ``hover`` and ``focused`` are the flags
-the pointer and focus tiers write (the pointer's and the focus tier's
-flags); they only change how the row renders, and a component that is
-neither hovered nor focused renders exactly the base style.  The three
-resolve their row band through one rule -- the kind's floor, then the
-shared :meth:`~motui.kernel.theme.ControlStyles.overlay` -- so one
-implementation (:func:`action_band`) carries the styling contract of the
-whole family.  ``hint`` is the tooltip's protocol:
-the :class:`~motui.app.overlays.Tooltip` overlay reads it off the leaf under
-the pointer, and the empty default means no hint -- a page assigns its own,
-and nothing renders by it.
-
-The family is the first :class:`~motui.widgets.base.Widget` generation: the
-theme value and the :class:`~motui.kernel.theme.Styles` group overrides stay
-on the instance, and every render reads ``self.group(...)`` then.  A theme
-or ``styles`` assignment therefore repaints a mounted control instead of
-requiring a reconstruction, and the four per-token style parameters the
-1.x constructors took are gone.
-
-Every action carries ``disabled``: a disabled control refuses clicks and
-activations (both answer ``False``) and renders the theme's faint text band
-(``text.faint``, or the ``styles.text`` override) instead of the
-interactive bands.
+Each is a one-row control whose activation leaves a one-shot result for
+``take()``.  ``disabled``/``hint`` and result bookkeeping live in
+``ActionWidget``; ``action_band`` is the family's single styling rule.
 """
 
 from __future__ import annotations
@@ -73,14 +41,9 @@ def action_band(
 ) -> Style:
     """The one action-family band: the kind's floor plus the state overlay.
 
-    ``NEUTRAL`` sits on ``surfaces.control`` with ``text.base``,
-    ``PRIMARY`` on ``surfaces.accent`` with ``text.inverse``, ``GHOST``
-    has no floor and takes ``content.accent``, and ``DANGER`` sits on
-    ``surfaces.danger`` with ``text.inverse``.  A disabled control merges
-    ``text.faint`` over the floor before the shared
-    :meth:`~motui.kernel.theme.ControlStyles.overlay` (which then adds the
-    ``dim``), so ``disabled`` always wins, then ``pressed``, ``focused``
-    and ``hovered``.
+    NEUTRAL: control+text.base; PRIMARY: accent+inverse; GHOST: no floor,
+    content.accent; DANGER: danger+inverse.  Disabled merges faint before
+    the overlay, so its precedence wins.
     """
     kinds = ButtonKind(kind)
     base = {
@@ -100,21 +63,9 @@ def action_band(
 class Button(ActionWidget):
     """A one-row action: a label a click or an activation takes.
 
-    The row renders as ``" label "``, ``fit`` to the painting width.  The
-    base is the :class:`ButtonKind` floor -- ``NEUTRAL`` on
-    ``surfaces.control`` with ``text.base``, ``PRIMARY`` on
-    ``surfaces.accent`` with ``text.inverse``, ``GHOST`` without a floor in
-    ``content.accent`` and ``DANGER`` on ``surfaces.danger`` with
-    ``text.inverse`` -- and every state merges the shared
-    ``controls.overlay`` on top, so hover, focus, pressed and disabled are
-    plainly visible against it.  The groups resolve on every render, as
-    ``styles`` override > theme group > :data:`DEFAULT_THEME`.
-
-    :meth:`on_click` (inherited) and :meth:`activate` are the two doors to
-    the same operation -- a button always has a main one, so neither ever
-    answers ``False`` while enabled -- and both write ``True`` pending for
-    the host to read once through :meth:`take`.  A disabled button
-    refuses both doors and renders the faint, dim floor.
+    Renders ``" label "`` fitted to the width, on the kind's floor plus the
+    shared control overlay.  Activation leaves ``True`` pending; a disabled
+    button refuses and renders faint.
     """
 
     __slots__ = ("kind", "label")
@@ -146,11 +97,9 @@ class Button(ActionWidget):
         return True
 
     def _resolved_theme(self) -> Theme:
-        """The theme with this button's ``styles`` groups applied.
+        """The theme with this button's ``styles`` groups folded in.
 
-        :func:`action_band` takes one theme value; the widget's per-group
-        overrides are folded in here so ``styles`` keeps winning over the
-        theme exactly as on every other render path.
+        ``action_band`` takes one theme, so overrides must win here too.
         """
         return replace(
             self._theme,
@@ -161,14 +110,7 @@ class Button(ActionWidget):
         )
 
     def render(self, c: Constraints) -> Surface:
-        """The one fitted row, under the render constraints.
-
-        The constraint carries the width; a ``max_height`` budget truncates
-        the single row (``0`` paints nothing).  The answer is
-        :meth:`~motui.kernel.cell.Surface.clipped`, not padded: the row keeps
-        the natural width of the fitted label, so the bytes match the old
-        list answer.
-        """
+        """The one fitted row, clipped to the width."""
         style = action_band(
             self.kind,
             self._resolved_theme(),
@@ -192,22 +134,11 @@ class Button(ActionWidget):
 class Checkbox(ActionWidget):
     """A one-row checked/unchecked toggle with a ``[x]`` / ``[ ]`` mark.
 
-    ``checked`` starts ``False`` (or at the constructor's value) and is
-    flipped by :meth:`toggle` -- reached through :meth:`activate` or the
-    inherited :meth:`on_click`, both the same operation and always landing
-    ``True`` while enabled (a checkbox always has a main one) -- which
-    leaves the new state pending for :meth:`take`.  The row renders
-    ``"{mark} label"`` with the checkbox's styling: the mark in
-    ``styles.content.accent`` and the label in ``styles.text.base``, with
-    the shared ``controls.overlay`` merged while the pointer tier holds
-    :attr:`hover` or the focus tier holds :attr:`focused`.  The groups
-    resolve on every render (``styles`` override > theme group).
-    :attr:`glyphs` is the vocabulary the mark comes from: ``check_on`` /
-    ``check_off``, with an empty glyph collapsing the mark and its
-    separator.  A disabled checkbox refuses both doors and renders the
-    faint text band.  :attr:`hint` is the tooltip's protocol:
-    ``chrome.Tooltip`` reads it off the leaf under the pointer, and the
-    empty default means no hint.
+    The mark uses ``content.accent`` and the label ``text.base``, with the
+    shared control overlay for hover/focus/disabled.  ``toggle`` flips
+    ``checked`` and leaves it pending; a disabled checkbox refuses and
+    renders faint.  ``glyphs.check_on``/``check_off`` supply the mark; an
+    empty glyph drops the mark and its separator.
     """
 
     __slots__ = (
@@ -251,11 +182,7 @@ class Checkbox(ActionWidget):
         return True
 
     def render(self, c: Constraints) -> Surface:
-        """The mark-plus-label row, under the render constraints.
-
-        See :meth:`Button.render`: ``max_height`` truncates (``0`` paints
-        nothing) and the surface is clipped, not padded.
-        """
+        """The mark-plus-label row, clipped to the width."""
         overlay = self.group("controls").overlay(
             hovered=self.hover, focused=self.focused, disabled=self.disabled
         )
@@ -287,18 +214,9 @@ class Checkbox(ActionWidget):
 class Link(ActionWidget):
     """A one-row clickable and activable text in the theme's ``link`` band.
 
-    The row is ``text``, ``fit`` to the painting width; the base style is
-    ``styles.content.link``.  While :attr:`hover` or :attr:`focused` (the
-    pointer and focus tiers' flags, writable by contract) it merges the
-    shared ``controls.overlay`` -- so focus is a visible bold+underline
-    reverse band on the link itself.
-    A click anywhere on the row (the inherited :meth:`on_click`) or
-    :meth:`activate` leaves ``True`` pending for :meth:`take`; a disabled
-    link refuses both doors and renders the faint, dim band.  :attr:`hint`
-    is the tooltip's protocol -- the ``chrome.Tooltip`` overlay reads it off
-    the leaf under the pointer, and the empty default means no hint -- and
-    the groups resolve on every render, as ``styles`` override > theme group
-    > ``DEFAULT_THEME``.
+    Renders ``text`` in ``content.link``; hover/focus merge the shared
+    control overlay.  A click or activation leaves ``True`` pending; a
+    disabled link refuses and renders faint.
     """
 
     __slots__ = ("text",)
@@ -328,11 +246,7 @@ class Link(ActionWidget):
         return True
 
     def render(self, c: Constraints) -> Surface:
-        """The fitted row, under the render constraints.
-
-        See :meth:`Button.render`: ``max_height`` truncates (``0`` paints
-        nothing) and the surface is clipped, not padded.
-        """
+        """The fitted link row, clipped to the width."""
         overlay = self.group("controls").overlay(
             hovered=self.hover, focused=self.focused, disabled=self.disabled
         )

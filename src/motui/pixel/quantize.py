@@ -30,12 +30,7 @@ _BOTTOM_MASK = 0xE4
 
 
 def _majority(stats: dict[int, list[int]]) -> tuple[int, int]:
-    """The majority slot's ``(id, peak heat)`` among a cell's lit sub-cells.
-
-    Majority by lit count, ties broken by peak heat then by the lower slot
-    id -- deterministic frame over frame.  Only mixed-slot cells pay for
-    this: a single-slot cell (the common case) skips the dict entirely.
-    """
+    """The majority slot's ``(id, peak heat)``; ties break by heat then lower id."""
     slot_id, entry = max(
         stats.items(), key=lambda item: (item[1][0], item[1][1], -item[0])
     )
@@ -45,17 +40,9 @@ def _majority(stats: dict[int, list[int]]) -> tuple[int, int]:
 def quantize(layers: Sequence[PixelLayer], palette: PixelPalette) -> list[Line]:
     """Quantize layered rasters into one :class:`Line` per cell row.
 
-    ``layers`` share one geometry; ``palette`` maps their slot ids to
-    colors.  A cell belongs to the first layer in the sequence with ink in
-    it.  ``"braille"`` spends the eight dots (:data:`BRAILLE_BITS` order)
-    with one fg from the majority lit slot; ``"half"`` folds four sub-rows
-    into two half blocks and carries the palette background for an unlit
-    sub-row.  A cell with no ink anywhere is a plain transparent space.
-
-    Adjacent cells with the same character and the very same style object
-    fuse into one ``Segment``.  The scan walks the eight sub-cells through
-    one flat offset table and uses bit masks for the half-block shape, so
-    the braille and half paths share one loop.
+    Layers share geometry and the first with ink owns a cell.  Braille uses
+    the eight dots with the majority slot's fg; half folds four sub-rows and
+    carries the palette bg.  Adjacent identical cells fuse by style identity.
     """
     if not layers:
         return []

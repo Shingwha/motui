@@ -1,9 +1,6 @@
 """The GFM pipe table: header row plus a matching delimiter row.
 
-Splitting a pipe row is its own small grammar -- a pipe preceded by a
-backslash is escaped, leading and trailing pipes are dropped, alignment
-markers live in the delimiter row -- so the splitter and the
-:class:`TableRule` that uses it sit together, apart from the other blocks.
+Escaped pipes, edge pipes and alignment markers live here with the rule.
 """
 
 from __future__ import annotations
@@ -32,15 +29,9 @@ _ROW_SPLIT_RE = re.compile(r"(?<!\\)\|")
 class TableRule:
     """GFM pipe table: header row + delimiter row, aligned per column.
 
-    The table is only a table once *both* the header and a matching
-    delimiter row are present (a half-typed table degrades to a paragraph
-    -- the streaming-safety rule).  Cells render the document's inline
-    markup (bold, code, links); every cell's segments carry no base style,
-    and the :class:`~motui.widgets.table.Table` injects the column base
-    (header style, first-column style).  Alignment (``:--`` / ``--:`` /
-    ``:-:``) is computed from the delimiter row and handed to the grid as its
-    ``aligns``; a cell's escaped ``\\|`` stays a literal pipe and never
-    splits the row.
+    Both rows must be present (a half-typed table degrades to a paragraph).
+    Cells render inline markup; alignment comes from the delimiter row and
+    escaped ``\\|`` stays literal.
     """
 
     name = "table"
@@ -84,12 +75,8 @@ class TableRule:
 def _split_row(line: str) -> list[str] | None:
     """Split a pipe row into stripped cells, or ``None`` without a pipe.
 
-    Splits on unescaped pipes only (``(?<!\\\\)\\|``) and restores a cell's
-    ``\\|`` to a literal ``|``; leading and trailing pipes are dropped
-    first.  A backslash right before a pipe always reads as an escape: a
-    double backslash next to a pipe is not distinguished from a single
-    one (documented simplification -- the fixture does not cover that
-    corner).
+    Splits on unescaped pipes and restores ``\\|``; edge pipes are dropped.
+    A double backslash next to a pipe is a documented simplification.
     """
     stripped = line.strip()
     if "|" not in stripped:

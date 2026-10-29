@@ -1,15 +1,8 @@
 """Decor components: :class:`Divider` and :class:`Panel`.
 
-Framing furniture that marks or wraps content rows.  ``Divider`` renders a
-horizontal rule capped at ``max_width`` columns when given (full ``width``
-otherwise; optionally embedding a label -- the ``── label ───`` inline status
-row) and ``Panel`` a boxed border around any child component, padding it back
-to the inner width so the grid stays aligned -- or, with ``frame=False``, the
-same panel without the box (see :class:`Panel`).  The row-shaped furniture --
-the one-row ``Notice`` with it -- lives beside this module, in
-:mod:`motui.widgets.rows`.  Only the kernel is imported: layout is computed
-here, never drawn.  The divider / panel border color comes from the
-:class:`~motui.kernel.theme.Theme` the component was built with.
+``Divider`` draws a horizontal rule (optionally with a label); ``Panel``
+frames or pads any child.  Only the kernel is imported and colors resolve
+from the component's theme at render time.
 """
 
 from __future__ import annotations
@@ -27,11 +20,9 @@ __all__ = ["Divider", "Panel"]
 
 
 def _answer(rows: list[Line], c: Constraints) -> Surface:
-    """The decorated rows as the 2.0 answer, honouring the height budget.
+    """The decorated rows as a clipped surface, honouring ``max_height``.
 
-    ``Surface.clipped`` truncates only, so rows already fitted to the width
-    pass through unchanged; a ``max_height`` slices a copy and leaves the
-    component's memo untouched.
+    The memo keeps the untruncated rows for a later, larger budget.
     """
     if c.max_height is not None:
         rows = rows[: c.max_height]
@@ -49,13 +40,9 @@ def _labelled_rule(
 ) -> list[Segment]:
     """The segments of a labelled rule over ``span`` columns.
 
-    ``char * lead``, a space, the label, a space, then the closing run of
-    ``char`` -- ``char * fill``, floored so the row never exceeds ``span``
-    columns.  The label is expected to fit already (each caller ellipsizes
-    it against the span it has room for); an empty label degrades to the
-    pure rule, and ``span <= 0`` -- or a zero-width ``char`` -- yields no
-    segments.  :class:`Divider` renders the segments as built;
-    :class:`Panel` fuses them into its one-segment border row.
+    ``char * lead``, a space, the label, a space, then the closing run,
+    floored to ``span``.  The caller has already ellipsized the label; an
+    empty label degrades to the pure rule.
     """
     char_w = visible_width(char)
     if span <= 0 or char_w <= 0:
@@ -79,21 +66,10 @@ def _labelled_rule(
 class Divider(Widget):
     """A horizontal rule built from one repeated character.
 
-    With a ``label`` the rule embeds it: ``char * 2 + " " + label + " " +
-    char * fill`` spanning ``max(0, min(width, max_width))`` columns -- the
-    shape of an inline working-status line parked on an input box's top
-    border.  ``max_width`` caps that span (``None``, the default,
-    spans the whole ``width``): the rule comes out left-aligned and the
-    shorter row is legal, since a painter clears the tail past it.  The
-    label carries ``text.muted``; the rules and the two spaces carry
-    ``borders.base`` (both from the widget's :class:`Styles` override or its
-    theme, resolved at render time).  A label that
-    does not fit the capped width minus 4 is truncated with
-    :func:`~motui.kernel.text.ellipsize_tail`; when nothing survives
-    the truncation the row degrades to the pure rule, exactly like an empty
-    ``label``.  ``label`` / ``max_width`` are plain
-    mutable attributes, so a host can re-label one divider in place (the
-    demo's working spinner does), re-cap it, and invalidate.
+    A ``label`` embeds as ``char * 2 + " " + label + " " + fill`` within
+    ``min(width, max_width)``; it is tail-ellipsized when it does not fit
+    (degrading to the pure rule when nothing survives).  ``borders.base``
+    draws the rule, ``text.muted`` the label.
     """
 
     __slots__ = (
@@ -120,11 +96,7 @@ class Divider(Widget):
         self.max_width = max_width
 
     def render(self, c: Constraints) -> Surface:
-        """The rule at the constraints' width, as a clipped surface.
-
-        A bare ``int`` is the 1.x spelling; ``max_height`` truncates (a rule
-        is one row, so a zero budget answers an empty surface).
-        """
+        """The rule at the constraints' width, as a clipped surface."""
         width = c.width
         style = self.group("borders").base
         label_style = self.group("text").muted
@@ -144,50 +116,13 @@ class Divider(Widget):
 class Panel(Widget):
     """A child component inside a single-line box border.
 
-    The child renders at ``width - 4`` (two border columns plus one padding
-    column per side); its rows are padded back to the inner width so the
-    right border stays aligned.  ``title`` is embedded in the top border
-    when it fits (``width >= 6``); below ``width < 4`` the frame degrades to
-    the bare child, still ``fit`` to ``width``.  The border color is
-    ``borders.base`` (resolved at render time through the widget's
-    ``styles`` override, else its theme).  The container
-    implements ``Container.child_at`` over the geometry of its last render:
-    only the content cells map to the child -- the border rows and the
-    border/padding columns belong to the ``Panel`` itself.  The child is
-    also the panel's one ``children`` entry, so ``walk()`` sees it and a
-    widget child's ``parent`` points back at the panel.
-
-    **``frame=False`` drops the box and keeps the panel.**  The child
-    renders at ``width - 2`` -- the same one padding column per side, with
-    the pad cells beside it, every row still exactly ``width`` columns --
-    and no title row is drawn: a title has nowhere to sit without the edge
-    it was embedded in, so the host composes its own heading (the Rich
-    reading of a box-less panel).  ``surfaces.base`` is then the panel's
-    **ground** instead of its frame color: a non-``NONE`` ground paints the
-    panel's own cells and merges *under* the child's segments -- the child's
-    colors win, the ground shows through wherever it has none, the
-    ``Padding`` ``fill_style`` rule -- so the block reads as one continuous
-    band (geometrically what ``Padding(child, left=1, right=1,
-    fill_style=style)`` spells; the switch is for a host that flips its
-    chrome on one component instead of swapping two).  The default
-    ``surfaces.base`` is ``NONE`` (no ground), and ``borders.base`` is never
-    consulted in this mode: there is no frame to color, and a themed ground
-    would repaint the child's own unstyled runs.  Below ``width < 2`` the
-    padding drops too and the bare child keeps the width, the frame's own
-    degradation.  ``frame`` is a plain mutable attribute like ``title``,
-    and it is part of the wrap memo's key, so flipping it re-wraps instead
-    of serving the other mode's rows.
-
-    The frame is a pure function of the child's rows and the frame's own
-    parameters, so the framed answer is remembered per **child-row identity**
-    (the child's rows, by object, plus the width, the title and the resolved
-    border style): a host that repaints the same child frame after frame (a
-    long document inside a box) wraps the rows once, and the child's own
-    memory is what it keeps re-reading (render-cost W4: the box used to
-    re-fit, re-pad and re-splice every child row on every frame).  A hit
-    hands back a fresh list of the remembered rows -- the same immutable
-    ``Line`` values -- and refreshes the ``child_at`` geometry exactly as a
-    miss does, so navigation is unaffected.
+    The child renders at ``width - 4`` and rows are padded back so the right
+    border aligns; ``title`` embeds in the top border when it fits.  Below
+    ``width < 4`` the frame degrades to the bare child.  ``child_at`` maps
+    content cells only.  ``frame=False`` drops the box and title: the child
+    renders at ``width - 2`` with one pad column per side, and
+    ``surfaces.base`` becomes a ground merged under the child's styles.
+    The framed answer is memoized on child-row identity.
     """
 
     __slots__ = (
@@ -236,12 +171,7 @@ class Panel(Widget):
         self._memo: tuple[tuple, list[Line], list[Line]] | None = None
 
     def render(self, c: Constraints) -> Surface:
-        """Wrap the child in the panel and answer a clipped surface.
-
-        The 1.x bare width is accepted and the child still receives an inner
-        width as an int; ``max_height`` truncates the final rows (the wrap
-        memo keeps the untruncated ones).
-        """
+        """Wrap the child in the panel and return the clipped surface."""
         width = c.width
         if self.frame:
             style = self.group("borders").base
@@ -282,23 +212,10 @@ class Panel(Widget):
         return _answer(out, c)
 
     def _bare_row(self, row: Line, width: int, lead: int, ground: Style) -> Line:
-        """One unwrapped row: the lead pad, the child, the fill to ``width``.
+        """One unwrapped row: lead pad, child, fill to ``width``.
 
-        The borderless panel spans the width it is handed exactly as the
-        framed one does, its own cells (the pads and the cells the child
-        leaves blank) carrying ``ground`` -- and the ground merges *under*
-        the child's segments, so the block reads as
-        one continuous band.  A ``NONE`` ground (the default) leaves the pads
-        plain and the child's styles untouched.  ``lead == 0`` is the
-        bare-child degradation (the frame's below four columns, the
-        borderless panel's below two): the row is the child's, fitted,
-        ground or not.
-
-        The composition is ``(lead pad + row).clip(WrapMode.ELLIPSIS, width).fill(width, pad)``:
-        ``fill`` grows the row to the full width and merges the ground
-        underneath (the Rich ``Padding(style=...)`` rule), taking the
-        ``NONE`` fast path when there is no band -- and it never truncates,
-        which the fit already handled.
+        The ground merges under the child's segments (``NONE`` leaves them
+        untouched); ``lead == 0`` is the bare-child degradation.
         """
         if lead == 0:
             return row.clip(WrapMode.ELLIPSIS, width)
@@ -306,15 +223,7 @@ class Panel(Widget):
         return (Line((Segment(" " * lead, pad),)) + row).clip(WrapMode.ELLIPSIS, width).fill(width, pad)
 
     def child_at(self, row: int, col: int) -> tuple[Component, int, int] | None:
-        """The child owning a content cell of the last render, in its coords.
-
-        The panel's own cells answer ``None`` -- the border rows and the
-        border/padding columns when framed, the pad columns when the frame
-        is off -- and so does every cell before the first render.  Below the
-        minimum width of either mode (four columns framed, two borderless)
-        the panel degrades to the bare child, and then the whole block is
-        the child's.
-        """
+        """The child owning a content cell of the last render; panel cells answer ``None``."""
         if row < 0 or col < 0:
             return None
         if self.frame:

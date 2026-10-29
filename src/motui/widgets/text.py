@@ -1,9 +1,7 @@
 """Text: the plain-text component, verbatim text wrapped into rows.
 
-The simplest component: its wrap is :func:`motui.kernel.text.wrap_text` and
-each wrapped row becomes a :class:`~motui.kernel.cell.Line`.  Measurement
-stays in :mod:`motui.kernel.text`; the row model stays in
-:mod:`motui.kernel.cell`; this module only binds them into a component.
+The wrap is the kernel's word wrap; each wrapped row becomes a ``Line``.
+The module only binds measurement and the row model into a component.
 """
 
 from __future__ import annotations
@@ -22,48 +20,12 @@ __all__ = ["Text"]
 class Text(ResultWidget):
     """A block of plain text rendered verbatim, line by line.
 
-    ``text`` is a mutable attribute (streaming text assigns to it).  Each
-    logical line (``split("\\n")``) is word-wrapped with
-    :meth:`motui.kernel.cell.Line.reflow` (``WrapMode.WORD``) into rows of at
-    most ``width`` columns, so blank lines survive as blank rows.  Every row
-    carries ``style``; the wrap itself is the final width guard.
-
-    ``style`` defaults to ``None``, which renders as the unstyled default
-    (``NONE``).  ``theme`` is read for exactly one thing: the ``hover`` band
-    a hovered inline span merges (:meth:`on_hover`); verbatim text has no
-    other theme-able style of its own.
-
-    **Caching.**  Wrapping a long text is the most expensive render the
-    toolkit has, and a host re-renders the same component frame after frame
-    (every mouse move repaints).  The cache lives in **one** place:
-    :meth:`motui.kernel.document.Section.rows`, which remembers a widget
-    section's rows by width and ``generation``.  ``render``
-    itself is pure -- every standalone call re-wraps -- so a component
-    handed straight to a caller never serves a stale row; behind a section,
-    the section's cache answers the repeats.  The hit table :attr:`_rows`
-    keeps its "last render" meaning and is geometry, not a cache.
-
-    **Inline actions.**  ``Text`` is ``hoverable`` and ``clickable``:
-    the row table of its last render lives in ``self._rows``, and a click or
-    a hover resolves the cell against it through
-    :func:`motui.kernel.cell.action_at`.  ``on_click(pos)`` leaves the
-    segment's ``action`` payload pending -- the host reads it once through
-    :meth:`take`, which clears it -- and answers ``True`` only when a payload
-    was hit; a miss declines, so the host's own policies still get their
-    turn.  ``on_hover(pos)`` remembers the span under the pointer and answers
-    whether the render changed; the span merges the theme's ``hover`` band
-    over that segment **on a copy**, so the row's own text and payloads are
-    never rewritten.  The typed ``on_click(pos)`` / ``on_hover(pos)``
-    verbs are thin aliases until W3b3 deletes them.
-    The component-level :attr:`hover` flag is the protocol's peer of
-    ``focused`` and changes nothing by itself: this component's visual is
-    the span, so a whole-row band would be wrong (``Pointer`` sets the flag
-    and calls ``on_hover`` on the same move).
-
-    The default rows carry no payloads -- a plain row is verbatim text --
-    so a subclass that wants spans renders its own ``Line`` values through
-    :meth:`_rows_for` and inherits the hit testing, the hover transform and
-    the one-shot result unchanged.
+    Each logical line word-wraps to ``width``; blank lines survive.  Every
+    row carries ``style`` (``None`` = unstyled).  ``render`` is pure; the
+    one row cache is the section's.  Inline ``action`` spans are clickable
+    and hoverable: ``on_click`` leaves the payload pending, ``on_hover``
+    marks the span (merged on a copy).  Subclasses can render spans through
+    :meth:`_rows_for`.
     """
 
     __slots__ = (
@@ -98,14 +60,7 @@ class Text(ResultWidget):
         self._hover_span: tuple[int, int, int] | None = None
 
     def _rows_for(self, width: int) -> list[Line]:
-        """The rows ``text`` renders to: the subclass seam for inline spans.
-
-        The default is verbatim text: one ``Line`` per wrapped piece.  A
-        subclass that wants clickable/hoverable spans returns ``Line`` values
-        whose segments carry ``link`` / ``action`` payloads instead -- the
-        inherited ``render`` keeps the table it returns for ``on_click`` and
-        ``on_hover``, with no further wiring.
-        """
+        """The rows ``text`` renders to: the subclass seam for inline spans."""
         out: list[Line] = []
         for row in self.text.split("\n"):
             out.extend(Line.from_text(row, self.style).reflow(WrapMode.WORD, width))
@@ -114,25 +69,8 @@ class Text(ResultWidget):
     def render(self, c: Constraints) -> Surface:
         """Wrap ``text`` to the constraints and return a clipped surface.
 
-        A ``max_height`` budget
-        truncates the wrapped rows (a text block never grows past the height
-        it was offered).  The surface is :meth:`Surface.clipped`, not padded:
-        short rows keep their natural width, so the bytes a layout paints are
-        the same ones the 1.x list answer produced.
-
-        The render is pure: every call runs :meth:`_rows_for`, and the one
-        row cache in the stack is :meth:`motui.kernel.document.Section.rows`
-        (which keys on this widget's ``generation``).  The hover
-        transform follows on a copy, so the last-render table never carries
-        the band.
-
-        The row table is also kept on ``self`` (``_rows``), because the
-        hit testing of ``on_click`` / ``on_hover`` reads the geometry of the
-        **last render**: with no hovered span that table is the hover-free
-        rows, byte-for-byte what this component always rendered, and a
-        hovered span answers that row rebuilt with the theme's ``hover``
-        merged onto the span -- a copy, so the last-render row itself stays
-        hover-free.
+        The last-render row table is kept for hit testing; a hovered span
+        is merged on a copy, so the table itself stays hover-free.
         """
         rows = self._rows_for(c.width)
         if c.max_height is not None:
@@ -148,15 +86,9 @@ class Text(ResultWidget):
         return Surface.clipped(out, c.width)
 
     def on_hover(self, pos: Pos | None) -> bool:
-        """Mark the cell under the pointer; answer whether the render changed.
+        """Mark the action span under the pointer; True when the render changed.
 
-        ``None`` (the pointer left) clears the mark.  The cell resolves
-        against the last render's row table through
-        :func:`motui.kernel.cell.action_at`: a column inside a segment with
-        an ``action`` remembers ``(row, start, end)``, anything else -- a
-        plain run, a column past the row -- clears it.  The answer is whether
-        that span differs from the one remembered, which is exactly whether
-        the frame repaints.
+        Resolved against the last render's rows; ``None`` clears it.
         """
         span: tuple[int, int, int] | None = None
         if pos is not None and 0 <= pos.y < len(self._rows):
@@ -170,16 +102,7 @@ class Text(ResultWidget):
         return changed
 
     def on_click(self, pos: Pos) -> bool:
-        """Take the action under ``pos`` as the pending result; hit?
-
-        The hit is :func:`motui.kernel.cell.action_at` against the last
-        render's row table, so the column must land inside a segment that
-        carries an ``action``.  A hit leaves that payload pending -- read
-        once through :meth:`take`, which clears it -- and answers ``True``;
-        a miss -- a plain run, a column outside the row -- answers ``False``
-        and consumes nothing, leaving the cell to whatever the host does
-        next.
-        """
+        """Leave the action under ``pos`` pending; ``False`` off every span."""
         if 0 <= pos.y < len(self._rows):
             hit = action_at(self._rows[pos.y], pos.x)
             if hit is not None:

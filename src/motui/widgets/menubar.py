@@ -1,45 +1,8 @@
 """Menus: the horizontal :class:`MenuBar` and the :class:`ContextMenu` preset.
 
-:class:`MenuBar` is the one-row horizontal menu strip -- a desktop menu bar's
-top level: ``" File │ Edit │ View "``, the labels separated by ``" " + glyphs.vertical_rule + " "``,
-leading and trailing one-column padding, the whole
-row ``fit`` to the painting width.  Exactly one label is the bar's *active*
-label: it wears ``content.accent`` with **an underline** and the
-``controls.overlay(focused=...)`` while the bar has focus -- the colour and
-the mark together are the indicator -- while every other label
-rests in ``text.faint``, a disabled label in
-``text.faint`` plus the disabled overlay, and every divider in
-``text.muted`` (a separator is never accent).  The
-label under the pointer merges ``surfaces.hover`` over
-its own style; a disabled label keeps its disabled style (the stricter state
-wins over the pointer's echo).
-
-The cursor is clamped, never wrapping -- a menu bar is a data strip, not
-:class:`~motui.widgets.choice.Select`'s cycling menu: :meth:`MenuBar.move`
-stops at the ends, steps over ``disabled_items`` and clears a stale pending
-result, :meth:`MenuBar.select` clamps and refuses a disabled index, and
-:meth:`MenuBar.on_click` / :meth:`MenuBar.on_hover` resolve a cell against the
-span table of the component's **last render** (the leading and trailing
-padding, every divider gap, a row other than the first and a truncating
-``fit`` all carry no label).  ``disabled=True`` refuses every gesture.
-
-:meth:`MenuBar.on_action` is the bar's activation: it leaves the active
-label's text pending, and :meth:`MenuBar.take` reads that value once
-and clears it.  An empty bar and a disabled bar (or a disabled active label)
-answer ``False`` and leave nothing pending.  ``focused`` is the focus flag
-the focus tier sets: the active label merges ``controls.overlay(
-focused=...)`` on top of its accent+underline indicator, so a focused bar
-is visibly different from an unfocused one.
-
-:class:`ContextMenu` is :class:`~motui.widgets.choice.Select`'s desktop-menu
-preset: a vertical option list with the menu cursor, ``wrap=True`` (the
-ends cycle) and ``window=False`` (the list window hangs at the top).  An
-activation leaves the
-option under the cursor pending and :meth:`~motui.widgets.choice.Select.take`
-reads it once.  The menu itself neither opens nor positions itself; a host
-mounts it over a click with a modal controller --
-``Modal(tui, menu, anchor=(y, x))`` -- routes the pointer through the modal
-and calls ``menu.on_action("activate")`` on the return key.
+``MenuBar`` is a one-row label strip: the active label wears accent plus
+underline, hover merges ``surfaces.hover`` and the cursor clamps.  Activation
+emits the active label.  ``ContextMenu`` is a vertical ``Select`` preset.
 """
 
 from __future__ import annotations
@@ -64,30 +27,11 @@ UNDERLINE = Style(underline=True)
 class MenuBar(LabelStrip):
     """A horizontal menu bar: one row, one active label, a clamped cursor.
 
-    ``items`` is the label sequence; ``index`` is the active label
-    (assignable) and is clamped into ``0..len(items)-1`` on construction and
-    on every later :meth:`select`/:meth:`move` (a disabled index passed to
-    the
-    constructor is kept -- the constructor rewrites no explicit request, the
-    verbs refuse).  ``disabled_items`` names the labels that are visible but
-    refuse :meth:`select`/:meth:`on_click`/:meth:`on_action` and are stepped over
-    by :meth:`move`; the ``disabled`` flag refuses every gesture.
-
-    Styles resolve at render time from the theme (or a ``styles=`` group
-    override): ``content.accent`` paints the active label with the
-    underline mark and, while the bar is focused, the
-    ``controls.overlay(focused=...)`` emphasis; ``text.faint`` the inactive
-    labels, a disabled label ``text.faint`` plus the disabled overlay,
-    ``surfaces.hover`` the label under the pointer and ``text.muted`` the
-    dividers.
-    ``glyphs.vertical_rule`` is the separator between labels, padded with one
-    space per side; an empty glyph collapses the gap.  ``focused`` starts
-    ``True``, the old default.
-
-    ``_last_width`` is the width the last :meth:`render` painted at -- the
-    geometry :meth:`on_click` maps a column against; until the first paint it is
-    80, the same convention as ``Tabs``/``TextBuffer.last_width``.  The span
-    table is recorded once per render, so a hit never re-renders the bar.
+    ``index`` is the active label; movement clamps and skips disabled
+    items.  The active label is accent+underline, inactive labels faint,
+    dividers muted, and hover wins (unless disabled).  ``disabled`` refuses
+    every gesture; activation emits the active label.  Click/hover resolve
+    against the last render's span table.
     """
 
     __slots__ = ("items",)
@@ -147,12 +91,7 @@ class MenuBar(LabelStrip):
     # -- the activation verb ----------------------------------------------------
 
     def activate(self) -> bool:
-        """Leave the active label pending; ``False`` on no pick.
-
-        A disabled bar, an empty bar and a disabled active label answer
-        ``False`` and leave nothing pending.  A real pick writes the label
-        through the shared result slot (read once by ``take``).
-        """
+        """Leave the active label pending; disabled/empty bars refuse."""
         if self.disabled or not self.items:
             return False
         index = self.index
@@ -199,23 +138,10 @@ class MenuBar(LabelStrip):
 
 
 class ContextMenu(Select):
-    """A :class:`~motui.widgets.choice.Select` preset for a desktop context menu.
+    """A :class:`Select` preset for a desktop context menu.
 
-    ``options`` are :class:`~motui.widgets.choice.Option` values (a payload
-    rides through untouched), ``title`` is the optional heading row and
-    ``glyphs.cursor`` the cursor row's glyph (the vocabulary's ``"\u2192"``).
-    The preset's knobs are a desktop menu's: ``wrap=True`` (the ends cycle)
-    and ``window=False`` (a window longer than ``max_rows`` hangs at the
-    top).  Every other :class:`~motui.widgets.choice.Select` parameter is
-    spelled out on the preset itself; there is no ``**kwargs`` pass-through.
-
-    The menu neither opens nor positions itself: a host mounts it with the
-    modal controller at the click cell -- ``Modal(tui, menu, anchor=(y, x))``
-    -- routes the pointer reports through the modal (a click inside the panel
-    lands the cursor, a click outside dismisses), calls ``menu.on_action("activate")``
-    on the return key and reads the choice once through
-    :meth:`~motui.widgets.choice.Select.take`, which answers the
-    pending :class:`~motui.widgets.choice.Option` (or ``None`` for a cancel).
+    ``wrap=True``, ``window=False``; options/title pass through.  The host
+    mounts it over the click with a modal and reads ``take()``.
     """
 
     __slots__ = ()

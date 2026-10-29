@@ -1,54 +1,9 @@
 """Diff component: two texts, one line-level unified diff view.
 
-:class:`Diff` computes a line-level longest-common-subsequence between
-``before`` and ``after`` at construction, and again whenever a host assigns
-one of the inputs (``before`` / ``after`` / ``context`` / ``numbers`` /
-``theme`` are read-write; see the class docstring), storing the result as
-the unified-diff rows it renders: an ``@@ -a,b +c,d @@`` header per hunk,
-one row per changed line prefixed ``-`` or ``+``, the context lines around a
-change prefixed with one space, and a ``\u2026 N lines`` row wherever hunks
-skip lines between them (the count is the lines left out).  The styles are
-the theme's own bands: deletions render in ``status.danger``'s hue with the
-weight stripped, insertions in ``status.success``, the ``@@`` headers and
-the ``\u2026`` markers in ``text.muted``, context rows in the default
-style.  ``numbers=True``
-puts each content row's line number in a ``text.muted`` cell in front of its
-text; ``numbers=False`` (the default) renders no gutter at all.  Every row
-is ``fit`` to the painting width like any other component's.
-
-The view is **display only**: it implements no interaction protocol -- no
-``chosen``, no cursor, no keys.  A host that wants a scrolling window keeps
-the rendered rows in a scrollback; the component never changes on its own --
-every change it has is an assignment to an input, and that change is
-immediate.
-
-**The trimmed walk.**  The LCS table costs one cell per *line pair*, so it
-never runs over the whole texts: the common head and the common tail are
-stripped line for line first, and only the middle -- the stretch that really
-differs -- reaches the table, where it fits :data:`LCS_LIMIT` line pairs.
-Trimming is what turns a real file's one-line edit back into one small hunk:
-the unchanged hundreds of lines around the edit never enter a table, so the
-budget is spent on the region that differs.  Two texts that split to the same
-lines trim to an empty middle and render **no rows at all**.
-
-**Anchors.**  A middle past the budget is split before it is walked: a line
-that appears exactly once on each side is an *anchor* -- whatever else moved
-around it, that one line can only pair with its one counterpart -- and the
-middle is cut at every anchor whose pairing keeps the walk monotone.  Each
-piece between two anchors is then the very same problem on a strictly shorter
-stretch, so the rule recurses and must terminate.  A piece with no anchor to
-cut is **replaced** wholesale: every ``before`` line, then every ``after``
-line, one hunk -- which is correct (if unhelpful) for two files that share
-almost nothing, and the exact shape to rely on in a test.  The ceiling is the
-honest part: no region ever costs more edits than the ``n + m`` lines it
-holds, so the pipeline can never be worse than the whole-text fallback it
-replaces.  No timing assumption is made anywhere: the degradation is the
-documented contract, not a performance accident.
-
-Two lines-of-a-line notes that keep the diff honest: the texts are split with
-``str.splitlines()``, so a trailing newline adds no line (and ``""`` is no
-lines at all), and two texts that split to the same lines render **no rows**
--- a diff with nothing to say is empty, not a row of dots.
+``Diff`` computes an LCS-based unified diff at construction and on input
+assignment.  The walk trims common head/tail and only tables the differing
+middle; past :data:`LCS_LIMIT` line pairs it splits at lines unique to both
+sides and replaces an anchorless piece wholesale.  The view is display only.
 """
 
 from __future__ import annotations
@@ -90,23 +45,15 @@ _Row = tuple[str, str, str | None]
 
 
 def _split_lines(text: str) -> list[str]:
-    """The text's logical lines, as ``str.splitlines`` reads them.
-
-    The one line rule of the component: every line break ends a line, so a
-    trailing newline adds none and ``""`` is no lines at all.
-    """
+    """The text's logical lines; a trailing newline adds none and ``""`` is empty."""
     return text.splitlines()
 
 
 def _lcs_ops(before: list[str], after: list[str]) -> list[tuple[str, str]]:
     """The edit script of two line lists as ``(kind, text)`` ops, in order.
 
-    One walk of the classic LCS table: equal lines pair off as ``same`` ops,
-    everything else is a ``del`` (from ``before``) or an ``ins`` (from
-    ``after``).  Ties prefer the deletion, so a modified line reads as its
-    ``-`` row before its ``+`` row -- the shape a unified diff shows.  The
-    table is one cell per line pair; the caller has already bounded the
-    product (:data:`LCS_LIMIT`).
+    Classic LCS table; ties prefer the deletion, so a modified line reads as
+    its ``-`` row before its ``+`` row.  The caller bounds the table size.
     """
     n, m = len(before), len(after)
     # ``lengths[i][j]`` is the LCS length of before[i:] and after[j:].
@@ -141,29 +88,18 @@ def _lcs_ops(before: list[str], after: list[str]) -> list[tuple[str, str]]:
 def _replaced(before: list[str], after: list[str]) -> list[tuple[str, str]]:
     """Every line of one region, both sides in order: the honest degradation.
 
-    The shape a unified diff spells a rewritten region with -- all the
-    ``before`` lines, then all the ``after`` lines -- and the shape today's
-    whole-text fallback already has.  It costs ``n + m`` edits, the most a
-    replacement can cost, so a region that takes this path is never *worse*
-    than a walk that would have run over it, only coarser.  Its ops are one
-    uninterrupted non-``same`` run, so the row stage renders it as one hunk
-    with no special case anywhere.
+    Costs exactly ``n + m`` edits, so it is never worse than the walk it
+    replaces -- only coarser.  Its ops form one non-``same`` run.
     """
     return [(_DEL, line) for line in before] + [(_INS, line) for line in after]
 
 
 def _anchors(before: list[str], after: list[str]) -> list[tuple[int, int]]:
-    """The ``(i, j)`` pairs of lines occurring exactly once on **both** sides.
+    """The ``(i, j)`` pairs of lines occurring exactly once on both sides.
 
-    A line unique within the region is an *anchor*: whatever else moved, it
-    can only pair with its one counterpart, so the region may be split there
-    with no table at all.  The pairs come back ordered by ``i`` with ``j``
-    strictly increasing -- a candidate whose ``j`` would step backwards is
-    dropped, because pairing across it would reorder the diff.  That
-    monotone walk is what makes the split sound: every anchor's piece lies
-    entirely before the next anchor's piece on both sides, so the pieces
-    partition the region.  Uniqueness is checked **within the region**, never
-    against the whole file -- a region is the only thing the walk sees.
+    Anchors allow splitting without a table.  Pairs are ordered by ``i``
+    with strictly increasing ``j`` (a backwards pairing is dropped), so
+    pieces partition the region.  Uniqueness is within the region only.
     """
     counts_before = Counter(before)
     counts_after = Counter(after)
@@ -184,19 +120,12 @@ def _anchors(before: list[str], after: list[str]) -> list[tuple[int, int]]:
 
 
 def _middle_ops(before: list[str], after: list[str]) -> list[tuple[str, str]]:
-    """The edit script of one region's middle: the budgeted walk or the replacement.
+    """The edit script of one region's middle: budgeted walk or replacement.
 
-    The middle is what the head/tail trimming left: the stretch where the
-    two texts really differ.  An empty side needs no walk at all (the other
-    side is all insertions, or all deletions); a middle whose line pairs fit
-    :data:`LCS_LIMIT` goes through the table.  Past that budget the middle is
-    split at its anchors first -- each piece between two anchors is the same
-    problem on a strictly shorter stretch, so this recursion terminates --
-    and only a piece that still has no anchor, the honest end of the line, is
-    replaced.  Because a replacement costs exactly its ``n + m`` lines and a
-    split only ever partitions the region, the total edit cost never exceeds
-    ``n + m``: the degradation is never worse than today's whole-text
-    replacement, only coarser.
+    Empty sides are pure insertions/deletions; a middle fitting
+    :data:`LCS_LIMIT` pairs goes through the table; otherwise split at
+    anchors and recurse, replacing only an anchorless piece.  Total cost
+    never exceeds ``n + m``.
     """
     if not before:
         return [(_INS, line) for line in after]
@@ -218,16 +147,10 @@ def _middle_ops(before: list[str], after: list[str]) -> list[tuple[str, str]]:
 
 
 def _ops(before: list[str], after: list[str]) -> list[tuple[str, str]]:
-    """The edit script of two line lists: trim the common ends, walk the middle.
+    """The edit script of two line lists: trim common ends, walk the middle.
 
-    The head and the tail are stripped while the two sides are strictly
-    equal, line for line, and the ``same`` ops they contribute are emitted
-    verbatim; only the middle goes through :func:`_middle_ops`.  Trimming is
-    what turns a real file's one-line edit back into one small hunk: the
-    unchanged lines around the edit never enter a table, so the
-    :data:`LCS_LIMIT` budget is spent where the two texts differ.  Two
-    identical texts trim to an empty middle and produce no ops at all, and
-    the hunk/window stage reads the stream exactly as it always did.
+    Trimming keeps unchanged lines out of the table, spending the budget on
+    the differing region; identical texts produce no ops.
     """
     head = 0
     while head < len(before) and head < len(after) and before[head] == after[head]:
@@ -251,11 +174,7 @@ def _ops(before: list[str], after: list[str]) -> list[tuple[str, str]]:
 
 
 def _regions(ops: list[tuple[str, str]]) -> list[tuple[int, int]]:
-    """The op-index ranges of every change run, as ``[start, stop)`` pairs.
-
-    One region is a maximal stretch of non-``same`` ops: the op window a
-    hunk has to cover, however many deletions and insertions it holds.
-    """
+    """The ``[start, stop)`` op ranges of every maximal non-``same`` run."""
     regions: list[tuple[int, int]] = []
     index = 0
     total = len(ops)
@@ -271,13 +190,7 @@ def _regions(ops: list[tuple[str, str]]) -> list[tuple[int, int]]:
 
 
 def _line_counts(ops: list[tuple[str, str]], count: int) -> tuple[int, int]:
-    """The ``(before, after)`` line indices after the first ``count`` ops.
-
-    Every op advances its own side: a ``same`` both, a ``del`` the before
-    side, an ``ins`` the after side.  The constructor tracks neither while
-    emitting, so this walk turns an op index into the two 0-based line
-    indices a hunk header needs.
-    """
+    """The ``(before, after)`` line indices after the first ``count`` ops."""
     b = a = 0
     for kind, _text in ops[:count]:
         if kind != _INS:
@@ -288,106 +201,38 @@ def _line_counts(ops: list[tuple[str, str]], count: int) -> tuple[int, int]:
 
 
 def _range(start: int, count: int) -> str:
-    """One side of a hunk header: ``"start,count"`` with unified-diff numbers.
-
-    A non-empty range starts at its first line (1-based); an empty one
-    starts at the line *before* the gap (0 when the gap is at the top),
-    which is the canonical ``-0,0`` / ``-N,0`` spelling.
-    """
+    """One side of a hunk header: ``"start,count"`` with unified-diff numbering."""
     return f"{start + 1 if count else start},{count}"
 
 
 def _elision_text(skipped: int) -> str:
-    """The elision row's text for ``skipped`` lines: ``"… 7 lines"``, ``"… 1 line"``.
-
-    The marker first, then the count of lines the neighbouring hunks leave
-    out -- the one thing a skipped stretch cannot show by itself, and the
-    reason the row earns its place.  The text always starts with
-    :data:`ELISION`: the constant stays the marker, and hosts and tests keep
-    matching rows on it.  ``skipped`` is at least 1 -- two hunks are separate
-    only when some ``same`` op lies between them -- so the plural is the
-    ordinary spelling and the singular is exactly one line.
-    """
+    """The elision row's text: ``"… 7 lines"`` / ``"… 1 line"``."""
     return f"{ELISION} {skipped} line" + ("" if skipped == 1 else "s")
 
 
 def _gutter(number: int, width: int) -> str:
-    """The line-number cell for one row: ``number`` right-aligned in ``width``.
+    """The line-number cell: ``number`` right-aligned in one width, plus a space.
 
-    One string -- the digits, the padding to the component's one width, and
-    the space that separates the cell from the row's own text.  The number
-    is the row's **own side's** line: the before side for a kept or deleted
-    line, the after side for an inserted one, which is what makes a modified
-    line's ``-`` and ``+`` rows show different numbers once the versions
-    have drifted apart.  Built once, per row, at construction: ``render``
-    only has to paint what the row already carries, and the cell's width can
-    never vary hunk by hunk.
+    A row shows its own side's number, so drifted versions differ.
     """
     return f"{number:>{width}} "
 
 
 def _checked_context(value: int) -> int:
-    """``value`` when it is a legal context count, ``ValueError`` when it is not.
-
-    One home for the rule, run *before* either the constructor or the setter
-    writes anything: a rejected ``context`` must leave a component's context
-    -- and the rows built from it -- exactly as they were.
-    """
+    """Validate a context count before any state moves; ``ValueError`` when negative."""
     if value < 0:
         raise ValueError(f"context must be >= 0, got {value}")
     return value
 
 
 class Diff(Widget):
-    """A line-level unified diff of two texts, computed once at construction.
+    """A line-level unified diff of two texts, rebuilt when an input is assigned.
 
-    ``before`` and ``after`` are the two versions; ``context`` (default 3)
-    is how many unchanged lines surround each change -- a change group is
-    rendered as one hunk with that much context, hunks closer than twice the
-    context merge into one, and hunks that skip lines have a :data:`ELISION`
-    row between them, carrying the number of lines they skip (``"… 7
-    lines"``).  ``context=0`` renders the changes alone.
-
-    The rows, in order: ``@@ -a,b +c,d @@`` per hunk, then that hunk's rows
-    -- a leading space for a kept line, ``-`` for a deletion, ``+`` for an
-    insertion (a modified line is one ``-`` row and one ``+`` row).  The
-    styles resolve at render time from the widget's theme (or its
-    ``styles`` overrides): ``status.danger`` / ``status.success`` /
-    ``text.muted``; context rows keep the default style.  Weight is the
-    *text's*, not the band's: a
-    deletion shows the ``status.danger`` hue with its weight stripped, so
-    the context, ``-`` and ``+``
-    rows all read weight-neutral, and bold stays what it is everywhere else
-    in the toolkit -- the markdown ``**...**`` syntax (the rule
-    ``kernel/style.py``'s palette note spells out).  ``render(c)`` reflows
-    every row under ``wrap`` (``WrapMode.ELLIPSIS`` by default, so a long
-    line is truncated with ``\u2026`` like anywhere else; ``WORD`` / ``CHAR``
-    wrap, ``CLIP`` cuts hard, ``OVERFLOW`` keeps the row whole) and caches
-    the rows for that width: a repaint answers from the cache, a resize
-    rebuilds it.
-
-    A middle past :data:`LCS_LIMIT` line pairs is split at the lines unique
-    to both sides, each piece is walked on its own, and a piece that has no
-    such anchor is replaced wholesale, one hunk (see the module docstring).
-    Two texts that split to the same lines render **no rows**.
-
-    ``before``, ``after``, ``context``, ``numbers``, ``glyphs``, ``theme``
-    and ``styles`` are
-    read-write: each text/row setter recomputes the rows on
-    assignment (and drops the render cache), so a host that streams a new
-    assignment into the component renders it, never a
-    stale frame.  A negative ``context`` is rejected before any state moves,
-    and a theme or styles assigned later re-resolves the bands on the next
-    render.  The reads are the ordinary ones.
-
-    ``numbers`` (default ``False``) gives every content row a line-number
-    cell in front of its text: the number, right-aligned to the width the
-    longest line number of either side needs (one width for the whole view,
-    so the column never jumps between hunks), then a space.  The cell is
-    ``text.muted``; a kept or deleted row shows the before side's line, an
-    inserted one the after side's, and the ``@@`` headers and elision rows
-    carry no cell at all.  With ``numbers=False`` the rows are the
-    single-segment lines they have always been, byte for byte.
+    ``context`` (default 3) merges nearby hunks and surrounds each with
+    unchanged lines; skipped stretches become ``… N lines`` rows.  Rows are
+    ``@@`` headers, space/``-``/``+`` prefixed lines; deletions lose the
+    danger band's weight.  ``numbers`` adds a muted right-aligned gutter.
+    ``render`` reflows under ``wrap`` and caches the width's rows.
     """
 
     __slots__ = (
@@ -481,12 +326,7 @@ class Diff(Widget):
         self._rebuild()
 
     def _rebuild(self) -> None:
-        """Recompute the rows for the current inputs and drop the cached render.
-
-        The one rebuild the setters share (and the constructor calls):
-        the rows are a pure function of the inputs, so recomputing them here
-        is all an assignment owes the next render.
-        """
+        """Recompute the rows for the current inputs and drop the cached render."""
         self._rows = self._build()
         # The one cached render: the inputs it was computed for (width,
         # theme, styles) and its rows.  ``None`` is "nothing fitted yet" --
@@ -497,13 +337,9 @@ class Diff(Widget):
         self._rendered_rows = None
 
     def _build(self) -> list[_Row]:
-        """The diff as its rows, ``(kind, text, gutter)`` triples, one per line.
+        """The diff as ``(kind, text, gutter)`` rows; one gutter width for the view.
 
-        The gutter cell is the row's line number, right-aligned to the width
-        the whole texts need (the longest of the two sides' line counts), so
-        a 9-line file and a 10-line one line their columns up the same way
-        and a hunk's width never jumps mid-view.  Only the ``@@`` headers and
-        the elision rows answer ``None``: they carry no line number.
+        Only ``@@`` and elision rows carry no gutter.
         """
         before = _split_lines(self._before)
         after = _split_lines(self._after)
@@ -567,36 +403,11 @@ class Diff(Widget):
         return rows
 
     def render(self, c: Constraints) -> Surface:
-        """The diff rows, each reflowed to the width under ``wrap``.
+        """The diff rows reflowed under ``wrap``, cached per width/theme/styles.
 
-        One render is cached, the way :class:`~.markdown.Markdown` caches its
-        own: the rows are a pure function of the width, ``wrap`` and the
-        resolved bands, a host repaints the
-        same frame many times (the pointer tier re-renders every frame) and
-        resizes rarely, so a repeated key answers from the cache and a new
-        one rebuilds it.  One entry, not a history -- the previous width's
-        rows are dropped when the pane moves on.  Every hand-out is a copy of
-        the cache: the rows are immutable, but the caller's copy is its own,
-        because the viewport treats a returned sequence as its own.
-
-        The cache key stays the width (never ``max_height``), so a smaller budget truncates the
-        returned rows without rebuilding them.  The surface is
-        :meth:`~motui.kernel.cell.Surface.clipped`, not padded.  Long lines
-        still truncate with ``\u2026`` by default (the W2.5 decision);
-        ``wrap`` selects another response without changing the default
-        bytes.
-
-        With ``numbers`` the content rows carry one more segment in front of
-        their own: the muted line-number cell :meth:`_build` already made.
-        The ``@@`` headers and the elision rows have no cell, and with
-        ``numbers`` left at ``False`` the rows are the single-segment lines
-        they have always been, byte for byte.
-
-        ``OVERFLOW`` hands the whole rows back: the surface width is the
-        widest row the built view carries (``c.width`` when every row fits),
-        so a container can scroll the columns ``ELLIPSIS`` would have cut --
-        the ``@@`` and elision rows included.  Every other mode stays
-        :meth:`Surface.clipped` at ``c.width``.
+        ``max_height`` truncates the returned copy without invalidating the
+        cache.  ``OVERFLOW`` widens the surface to the widest row; other
+        modes clip at ``c.width``.  The danger band loses its weight here.
         """
         key = (c.width, self.wrap, self.theme, self.styles)
         if self._rendered_rows is None or self._rendered_key != key:
