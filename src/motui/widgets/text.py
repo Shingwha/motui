@@ -14,12 +14,12 @@ from ..kernel.layout import Constraints
 from ..kernel.style import Style
 from ..kernel.text import WrapMode
 from ..kernel.theme import Theme
-from .base import Widget
+from .base import ResultWidget
 
 __all__ = ["Text"]
 
 
-class Text(Widget):
+class Text(ResultWidget):
     """A block of plain text rendered verbatim, line by line.
 
     ``text`` is a mutable attribute (streaming text assigns to it).  Each
@@ -69,7 +69,6 @@ class Text(Widget):
     __slots__ = (
         "_hover_span",
         "_hover_style",
-        "_pending",
         "_rows",
         "style",
         "text",
@@ -90,9 +89,6 @@ class Text(Widget):
         super().__init__(theme)
         self.text = text
         self.style = style
-        #: The pending pick: ``on_click`` lands a hit segment's action here
-        #: and the host reads it once through :meth:`take`.
-        self._pending: str | None = None
         # The one themed style: the pointer-hover band, resolved once (there
         # is no explicit hover_style= parameter to win over it).
         self._hover_style = self.group("surfaces").hover
@@ -187,15 +183,9 @@ class Text(Widget):
         if 0 <= pos.y < len(self._rows):
             hit = action_at(self._rows[pos.y], pos.x)
             if hit is not None:
-                self._pending = hit[0]
+                self._emit(hit[0])
                 return True
         return False
-
-    def take(self) -> str | None:
-        """Read the pending action payload once and clear it."""
-        value = self._pending
-        self._pending = None
-        return value
 
     def __repr__(self) -> str:
         return f"Text({self.text!r})"

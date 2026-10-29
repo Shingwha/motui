@@ -13,12 +13,14 @@ from __future__ import annotations
 from collections.abc import Sequence
 from dataclasses import replace
 
-from ...kernel.glyphs import GLYPHS, Glyphs
 from ...kernel.cell import Line, Segment, Surface, slice_line
+from ...kernel.geom import Pos
+from ...kernel.glyphs import GLYPHS, Glyphs
 from ...kernel.layout import Constraints
 from ...kernel.text import WrapMode, _normalize_tabs, wrap_spans
 from ...kernel.theme import Styles, Theme
-from ...widgets.base import Widget
+from ...widgets.base import ResultWidget
+from ..syntax import Highlighter
 from .blocks import (
     BlockRule,
     FenceRule,
@@ -33,8 +35,7 @@ from .blocks import (
 )
 from .context import RenderContext
 from .inline import INLINE_RULES, InlineRule, inline_segments
-from .nested import ListRule, QuoteRule, TASK_ACTION
-from ..syntax import Highlighter
+from .nested import TASK_ACTION, ListRule, QuoteRule
 from .tables import TableRule
 
 __all__ = ["BLOCK_RULES", "Markdown", "default_block_rules"]
@@ -176,8 +177,8 @@ class _Paragraph:
 
     @classmethod
     def render(
-        cls, text: str, width: int, ctx: RenderContext, previous: "_Paragraph | None" = None
-    ) -> "tuple[list[Line], _Paragraph]":
+        cls, text: str, width: int, ctx: RenderContext, previous: _Paragraph | None = None
+    ) -> tuple[list[Line], _Paragraph]:
         """The rows for ``text`` and the memory to keep: full or suffix render.
 
         ``previous`` is the memory of the same paragraph's earlier render
@@ -196,7 +197,7 @@ class _Paragraph:
 
     def _grow(
         self, text: str, width: int, ctx: RenderContext
-    ) -> "tuple[list[Line], _Paragraph] | None":
+    ) -> tuple[list[Line], _Paragraph] | None:
         """The appended-text path, or ``None`` when ``text`` is not a growth."""
         if not text.startswith(self.text):
             return None
@@ -514,8 +515,8 @@ class _StreamCache:
         memo.start = start
         memo.end = end
         rows = self._rows[:block_start] + rows
-        boundaries = self._boundaries[:-1] + [(end, len(rows))]
-        rules = self._rules[:-1] + [self._rules[-1]]
+        boundaries = [*self._boundaries[:-1], (end, len(rows))]
+        rules = [*self._rules[:-1], self._rules[-1]]
         scan = _BlockScan(
             lines, width, ctx, gap, start=end, rows=rows, boundaries=boundaries, rules=rules
         )
@@ -621,7 +622,7 @@ def _stamp_tasks(rows: list[Line]) -> list[Line]:
     return rows if out is None else out
 
 
-class Markdown(Widget):
+class Markdown(ResultWidget):
     """A Markdown document rendered as rows, rule-registry driven.
 
     ``text`` is a mutable attribute (streaming text assigns to it);
@@ -743,7 +744,6 @@ class Markdown(Widget):
         "_fences_text",
         "_gap",
         "_hover_span",
-        "_pending",
         "_rows",
         "_stamp",
         "_stamp_key",
@@ -779,10 +779,6 @@ class Markdown(Widget):
         #: The injected engine (``None``: the built-in one is derived from the
         #: effective theme in :meth:`_sync_theme`).
         self._user_highlighter = highlighter
-        #: The pending pick: ``click`` leaves a hit span's action (the url of
-        #: a link) here, and the host reads it once through
-        #: :meth:`take`.
-        self._pending: str | None = None
         #: The last render's rows (the viewport's copy is its own; these are
         #: the base rows the hit testing reads) and the span index derived
         #: from them, one entry per row: ``(action, start, end)``.
@@ -1027,14 +1023,8 @@ class Markdown(Widget):
         hit = self._hit(pos.y, pos.x)
         if hit is None:
             return False
-        self._pending = hit[0]
+        self._emit(hit[0])
         return True
-
-    def take(self) -> str | None:
-        """Read the pending action payload once and clear it."""
-        value = self._pending
-        self._pending = None
-        return value
 
     def _hit(self, row: int, col: int) -> tuple[str, int, int] | None:
         """The action span at ``(row, col)``, off the last render's index."""
